@@ -1,0 +1,26 @@
+name: Build Windows
+
+on:
+  push:
+    branches:
+      - windows
+    paths:
+      - windows/**
+      - .github/workflows/windows-build.yml
+  pull_request:
+    branches:
+      - windows
+    paths:
+      - windows/**
+      - .github/workflows/windows-build.yml
+
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 8.0.x
+      - run: dotnet build windows/Macshot.Windows.sln --configuration Release --warnaserror
+      - run: dotnet test windows/Macshot.Windows.sln --configuration Release --no-build

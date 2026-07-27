@@ -1,0 +1,30 @@
+Microsoft Visual Studio Solution File, Format Version 12.00
+# Visual Studio Version 17
+VisualStudioVersion = 17.0.31903.59
+MinimumVisualStudioVersion = 10.0.40219.1
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Macshot.Windows.Core", "src\Macshot.Windows.Core\Macshot.Windows.Core.csproj", "{C2225D86-8C00-459B-8AC1-EE89E3B05CA6}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Macshot.Windows", "src\Macshot.Windows\Macshot.Windows.csproj", "{A32D481E-378A-4D68-9918-991766AA8F52}"
+EndProject
+Project("{FAE04EC0-301F-11D3-BF4B-00C04F79EFBC}") = "Macshot.Windows.Core.Tests", "tests\Macshot.Windows.Core.Tests\Macshot.Windows.Core.Tests.csproj", "{635D217B-D5E3-4277-B085-783C422E011D}"
+EndProject
+Global
+	GlobalSection(SolutionConfigurationPlatforms) = preSolution
+		Debug|Any CPU = Debug|Any CPU
+		Release|Any CPU = Release|Any CPU
+	EndGlobalSection
+	GlobalSection(ProjectConfigurationPlatforms) = postSolution
+		{C2225D86-8C00-459B-8AC1-EE89E3B05CA6}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{C2225D86-8C00-459B-8AC1-EE89E3B05CA6}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{C2225D86-8C00-459B-8AC1-EE89E3B05CA6}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{C2225D86-8C00-459B-8AC1-EE89E3B05CA6}.Release|Any CPU.Build.0 = Release|Any CPU
+		{A32D481E-378A-4D68-9918-991766AA8F52}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{A32D481E-378A-4D68-9918-991766AA8F52}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{A32D481E-378A-4D68-9918-991766AA8F52}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{A32D481E-378A-4D68-9918-991766AA8F52}.Release|Any CPU.Build.0 = Release|Any CPU
+		{635D217B-D5E3-4277-B085-783C422E011D}.Debug|Any CPU.ActiveCfg = Debug|Any CPU
+		{635D217B-D5E3-4277-B085-783C422E011D}.Debug|Any CPU.Build.0 = Debug|Any CPU
+		{635D217B-D5E3-4277-B085-783C422E011D}.Release|Any CPU.ActiveCfg = Release|Any CPU
+		{635D217B-D5E3-4277-B085-783C422E011D}.Release|Any CPU.Build.0 = Release|Any CPU
+	EndGlobalSection
+EndGlobal

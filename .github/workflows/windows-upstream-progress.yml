@@ -1,0 +1,73 @@
+name: Track Windows Upstream Progress
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  issues: write
+
+jobs:
+  create-progress-issues:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Create one progress issue per upstream commit
+        uses: actions/github-script@v8
+        with:
+          script: |
+            const commits = context.payload.commits ?? [];
+
+            for (const commit of commits) {
+              const marker = `<!-- windows-upstream-commit:${commit.id} -->`;
+              const query = [
+                `repo:${context.repo.owner}/${context.repo.repo}`,
+                'is:issue',
+                'in:body',
+                `"${marker}"`,
+              ].join(' ');
+              const existing = await github.rest.search.issuesAndPullRequests({ q: query });
+
+              if (existing.data.total_count > 0) {
+                core.info(`Progress issue already exists for ${commit.id}`);
+                continue;
+              }
+
+              const details = await github.rest.repos.getCommit({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                ref: commit.id,
+              });
+              const changedFiles = details.data.files
+                .map(file => `- \`${file.filename}\` (${file.status})`)
+                .join('\n');
+              const shortSha = commit.id.slice(0, 7);
+              const subject = commit.message.split('\n', 1)[0];
+
+              await github.rest.issues.create({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                title: `[Windows progress] ${shortSha}: ${subject}`,
+                body: [
+                  marker,
+                  '',
+                  '## Upstream commit',
+                  `- main: [\`${shortSha}\`](${commit.url})`,
+                  `- Author: ${commit.author.name}`,
+                  '',
+                  '## Changed files',
+                  changedFiles || '- GitHub did not return a file list for this commit.',
+                  '',
+                  '## Windows progress',
+                  '- [ ] Assessed whether this commit changes Windows-visible behavior.',
+                  '- [ ] Decided: no Windows work needed, deferred, or implementation required.',
+                  '- [ ] Windows implementation completed when required.',
+                  '- [ ] Windows build and relevant tests passed.',
+                  '',
+                  '## Completion rule',
+                  'Close this issue only after the commit has a documented Windows disposition. Do not record a `windows` to `main` version mapping here: that mapping is written only after the Windows product reaches full feature parity.',
+                ].join('\n'),
+              });
+            }
