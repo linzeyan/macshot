@@ -142,7 +142,9 @@ public sealed class NativeScreenCaptureService
         var pixels = new byte[checked(width * height * 4)];
         for (var row = 0; row < height; row++)
         {
-            Buffer.BlockCopy(
+            // Qualified: Windows.Storage.Streams is imported for the PNG encoder and
+            // also defines a Buffer type, so the simple name is ambiguous here.
+            System.Buffer.BlockCopy(
                 frame.BgraPixels,
                 ((top + row) * frame.Width + left) * 4,
                 pixels,
