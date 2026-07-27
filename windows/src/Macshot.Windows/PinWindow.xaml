@@ -1,0 +1,32 @@
+<Window
+    x:Class="Macshot.Windows.PinWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Macshot Pin">
+    <Grid
+        x:Name="PinRoot"
+        Background="#101010"
+        IsTabStop="True"
+        PointerPressed="PinRoot_PointerPressed"
+        PointerMoved="PinRoot_PointerMoved"
+        PointerReleased="PinRoot_PointerReleased"
+        KeyDown="PinRoot_KeyDown">
+        <Grid.ContextFlyout>
+            <MenuFlyout>
+                <MenuFlyoutItem Text="Copy" Click="Copy_Click" />
+                <MenuFlyoutItem Text="Save" Click="Save_Click" />
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="Close" Click="Close_Click" />
+            </MenuFlyout>
+        </Grid.ContextFlyout>
+
+        <!-- Fill, not None: the window is sized to the capture in physical pixels,
+             so filling the client area reproduces it 1:1 on any display scale. -->
+        <Image x:Name="PinImage" Stretch="Fill" />
+
+        <Border
+            BorderBrush="#66FFFFFF"
+            BorderThickness="1"
+            IsHitTestVisible="False" />
+    </Grid>
+</Window>

@@ -75,9 +75,20 @@ public sealed partial class MainWindow : Window
         await RunAsync("Screen capture failed", _controller.CaptureAllScreensAsync);
     }
 
-    private async void SavePng_Click(object sender, RoutedEventArgs e)
+    private async void Save_Click(object sender, RoutedEventArgs e)
     {
-        await RunAsync("Save failed", SavePngAsync);
+        await RunAsync("Save failed", SaveAsync);
+    }
+
+    private async void Copy_Click(object sender, RoutedEventArgs e)
+    {
+        await RunAsync("Copy failed", async () =>
+        {
+            if (SelectedFrame() is { } output)
+            {
+                await ImageDelivery.CopyToClipboardAsync(output);
+            }
+        });
     }
 
     private void Clear_Click(object sender, RoutedEventArgs e)
@@ -89,15 +100,31 @@ public sealed partial class MainWindow : Window
         Bindings.Update();
     }
 
-    private async Task SavePngAsync()
+    private async Task SaveAsync()
     {
-        if (_capturedFrame is null)
+        if (SelectedFrame() is not { } output)
         {
             return;
         }
 
-        var path = await NativeScreenCaptureService.SavePngAsync(_capturedFrame, _selection);
+        var path = await ImageDelivery.SaveAsync(output, _controller.Settings);
         await ShowMessageAsync("Saved", path);
+    }
+
+    /// <summary>
+    /// The pixels an output action should act on: the drag selection when there is
+    /// one, otherwise the whole capture.
+    /// </summary>
+    private CapturedFrame? SelectedFrame()
+    {
+        if (_capturedFrame is null)
+        {
+            return null;
+        }
+
+        return _selection is { IsEmpty: false } region
+            ? NativeScreenCaptureService.Crop(_capturedFrame, region)
+            : _capturedFrame;
     }
 
     private void PreviewCanvas_PointerPressed(object sender, PointerRoutedEventArgs e)

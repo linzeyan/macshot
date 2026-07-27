@@ -1,7 +1,5 @@
 using System.Runtime.InteropServices;
 using Macshot.Windows.Core.Capture;
-using Windows.Graphics.Imaging;
-using Windows.Storage.Streams;
 
 namespace Macshot.Windows.Services;
 
@@ -87,42 +85,6 @@ public sealed class NativeScreenCaptureService
         }
     }
 
-    public static async Task<string> SavePngAsync(CapturedFrame frame, CaptureRegion? selection)
-    {
-        ArgumentNullException.ThrowIfNull(frame);
-
-        var output = selection is { IsEmpty: false }
-            ? Crop(frame, selection.Value)
-            : frame;
-        var outputDirectory = Path.Combine(
-            Environment.GetFolderPath(Environment.SpecialFolder.MyPictures),
-            "Macshot");
-        Directory.CreateDirectory(outputDirectory);
-        var outputPath = Path.Combine(outputDirectory, $"Macshot-{DateTimeOffset.Now:yyyyMMdd-HHmmss}.png");
-
-        using var stream = new InMemoryRandomAccessStream();
-        var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.PngEncoderId, stream);
-        encoder.SetPixelData(
-            BitmapPixelFormat.Bgra8,
-            // BitBlt produces BGRX pixels. The alpha byte is undefined and must not
-            // make otherwise opaque screenshots transparent during encoding.
-            BitmapAlphaMode.Ignore,
-            (uint)output.Width,
-            (uint)output.Height,
-            96,
-            96,
-            output.BgraPixels);
-        await encoder.FlushAsync();
-
-        stream.Seek(0);
-        using var reader = new DataReader(stream.GetInputStreamAt(0));
-        var length = await reader.LoadAsync((uint)stream.Size);
-        var bytes = new byte[length];
-        reader.ReadBytes(bytes);
-        await File.WriteAllBytesAsync(outputPath, bytes);
-        return outputPath;
-    }
-
     /// <summary>Cuts a frame-space region out of a capture, keeping its virtual-screen origin.</summary>
     public static CapturedFrame Crop(CapturedFrame frame, CaptureRegion region)
     {
@@ -142,9 +104,7 @@ public sealed class NativeScreenCaptureService
         var pixels = new byte[checked(width * height * 4)];
         for (var row = 0; row < height; row++)
         {
-            // Qualified: Windows.Storage.Streams is imported for the PNG encoder and
-            // also defines a Buffer type, so the simple name is ambiguous here.
-            System.Buffer.BlockCopy(
+            Buffer.BlockCopy(
                 frame.BgraPixels,
                 ((top + row) * frame.Width + left) * 4,
                 pixels,

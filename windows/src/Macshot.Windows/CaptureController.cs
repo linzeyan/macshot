@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Macshot.Windows.Core.Capture;
+using Macshot.Windows.Core.Output;
 using Macshot.Windows.Services;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
@@ -21,7 +22,8 @@ public sealed class CaptureController : IDisposable
 {
     private const int CommandCaptureArea = 1;
     private const int CommandCaptureAllScreens = 2;
-    private const int CommandQuit = 3;
+    private const int CommandPreferences = 3;
+    private const int CommandQuit = 4;
 
     private const int HotkeyCaptureArea = 1;
     private const int HotkeyCaptureAllScreens = 2;
@@ -29,12 +31,16 @@ public sealed class CaptureController : IDisposable
     private const uint MessageBoxIconError = 0x00000010;
 
     private readonly NativeScreenCaptureService _screenCapture = new();
+    private readonly SettingsStore _settings = new();
     private readonly DispatcherQueue _dispatcher;
     private readonly MessageWindow _messageWindow;
     private readonly GlobalHotkeyService _hotkeys;
     private readonly TrayIconService _trayIcon;
     private readonly List<CaptureOverlayWindow> _overlays = [];
+    private readonly List<PinWindow> _pins = [];
     private MainWindow? _preview;
+    private ThumbnailWindow? _thumbnail;
+    private PreferencesWindow? _preferences;
     private bool _disposed;
 
     public CaptureController()
@@ -46,12 +52,13 @@ public sealed class CaptureController : IDisposable
 
         _hotkeys = new GlobalHotkeyService(_messageWindow);
         _hotkeys.RegisterControlShift(HotkeyCaptureArea, 'X', () => Post(BeginAreaCaptureAsync));
-        _hotkeys.RegisterControlShift(HotkeyCaptureAllScreens, 'F', () => Post(CaptureAllScreensAndSaveAsync));
+        _hotkeys.RegisterControlShift(HotkeyCaptureAllScreens, 'F', () => Post(CaptureAllScreensAsync));
 
         _trayIcon = new TrayIconService(_messageWindow, "macshot");
         _trayIcon.AddMenuItem(CommandCaptureArea, "Capture area\tCtrl+Shift+X");
-        _trayIcon.AddMenuItem(CommandCaptureAllScreens, "Capture all screens");
+        _trayIcon.AddMenuItem(CommandCaptureAllScreens, "Capture all screens\tCtrl+Shift+F");
         _trayIcon.AddSeparator();
+        _trayIcon.AddMenuItem(CommandPreferences, "Preferences...");
         _trayIcon.AddMenuItem(CommandQuit, "Quit macshot");
         _trayIcon.CommandInvoked += OnTrayCommandInvoked;
         _trayIcon.DefaultActionInvoked += (_, _) => Post(BeginAreaCaptureAsync);
@@ -87,15 +94,11 @@ public sealed class CaptureController : IDisposable
 
     public Task CaptureAllScreensAsync()
     {
-        return ShowPreviewAsync(_screenCapture.CaptureVirtualDesktop(), selection: null);
+        return DeliverAsync(_screenCapture.CaptureVirtualDesktop());
     }
 
-    /// <summary>Captures everything and writes it out without showing any UI.</summary>
-    public async Task CaptureAllScreensAndSaveAsync()
-    {
-        var frame = _screenCapture.CaptureVirtualDesktop();
-        await NativeScreenCaptureService.SavePngAsync(frame, selection: null);
-    }
+    /// <summary>The preferences the delivery path is currently using.</summary>
+    public CaptureSettings Settings => _settings.Current;
 
     public void Dispose()
     {
@@ -106,6 +109,14 @@ public sealed class CaptureController : IDisposable
 
         _disposed = true;
         DismissOverlays();
+
+        _thumbnail?.Close();
+        _preferences?.Close();
+        foreach (var pin in _pins.ToArray())
+        {
+            pin.Close();
+        }
+
         _trayIcon.Dispose();
         _hotkeys.Dispose();
         _messageWindow.Dispose();
@@ -121,6 +132,9 @@ public sealed class CaptureController : IDisposable
             break;
         case CommandCaptureAllScreens:
             Post(CaptureAllScreensAsync);
+            break;
+        case CommandPreferences:
+            _dispatcher.TryEnqueue(ShowPreferences);
             break;
         case CommandQuit:
             _dispatcher.TryEnqueue(() =>
@@ -160,14 +174,90 @@ public sealed class CaptureController : IDisposable
 
         try
         {
-            // The overlay has already cropped the selection and burned in the
-            // annotations, so there is nothing left to select from.
-            await ShowPreviewAsync(result, null);
+            await DeliverAsync(result);
         }
         catch (Exception exception)
         {
             ReportError(exception);
         }
+    }
+
+    /// <summary>
+    /// Hands a finished capture to whatever the preferences ask for. The overlay has
+    /// already cropped the selection and burned in the annotations, so this stage
+    /// only decides where the pixels go.
+    /// </summary>
+    private async Task DeliverAsync(CapturedFrame frame)
+    {
+        var settings = _settings.Current;
+
+        if (settings.CopyToClipboard)
+        {
+            await ImageDelivery.CopyToClipboardAsync(frame);
+        }
+
+        if (settings.AutoSave)
+        {
+            await ImageDelivery.SaveAsync(frame, settings);
+        }
+
+        if (settings.ShowThumbnail)
+        {
+            await ShowThumbnailAsync(frame);
+            return;
+        }
+
+        // With every delivery turned off the capture would otherwise vanish, which
+        // is indistinguishable from macshot being broken. The preview window is the
+        // fallback that keeps the pixels reachable.
+        if (!settings.CopyToClipboard && !settings.AutoSave)
+        {
+            await ShowPreviewAsync(frame, null);
+        }
+    }
+
+    private async Task ShowThumbnailAsync(CapturedFrame frame)
+    {
+        // Only the newest capture is offered: a stack of panels would cover the
+        // corner of the screen the user is trying to work in.
+        _thumbnail?.Close();
+
+        var thumbnail = new ThumbnailWindow(frame, _settings);
+        thumbnail.PinRequested += (_, pinned) => Post(() => PinAsync(pinned));
+        thumbnail.EditRequested += (_, captured) => Post(() => ShowPreviewAsync(captured, null));
+        thumbnail.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_thumbnail, thumbnail))
+            {
+                _thumbnail = null;
+            }
+        };
+
+        _thumbnail = thumbnail;
+        await thumbnail.ShowAsync();
+    }
+
+    private async Task PinAsync(CapturedFrame frame)
+    {
+        var pin = new PinWindow(frame, _settings);
+
+        // Tracked so quitting takes the always-on-top windows with it instead of
+        // leaving them stranded over everything else.
+        pin.Closed += (_, _) => _pins.Remove(pin);
+        _pins.Add(pin);
+        await pin.ShowPinnedAsync();
+    }
+
+    private void ShowPreferences()
+    {
+        if (_preferences is null)
+        {
+            var preferences = new PreferencesWindow(_settings);
+            preferences.Closed += (_, _) => _preferences = null;
+            _preferences = preferences;
+        }
+
+        _preferences.Activate();
     }
 
     private void OnCaptureCancelled(object? sender, EventArgs args) => DismissOverlays();

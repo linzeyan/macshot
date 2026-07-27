@@ -63,11 +63,22 @@ public static class MonitorEnumerator
             return false;
         }
 
+        var workArea = CaptureRegion.FromPoints(
+            info.Work.Left,
+            info.Work.Top,
+            info.Work.Right,
+            info.Work.Bottom);
+
         monitor = new CaptureMonitor(
             string.IsNullOrWhiteSpace(info.DeviceName) ? monitorHandle.ToString() : info.DeviceName,
             bounds,
             GetScale(monitorHandle),
-            (info.Flags & MonitorInfoPrimary) != 0);
+            (info.Flags & MonitorInfoPrimary) != 0)
+        {
+            // A display that reports no work area falls back to its full bounds
+            // rather than to nothing, so panel placement stays on screen.
+            WorkArea = workArea.IsEmpty ? bounds : workArea,
+        };
         return true;
     }
 

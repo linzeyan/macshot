@@ -12,7 +12,8 @@
             <!-- OneTime, not OneWay: HasCapture raises no change notification, and the
                  code-behind already calls Bindings.Update() at every point that changes
                  it, which re-evaluates these. -->
-            <AppBarButton Icon="Save" Label="Save PNG" IsEnabled="{x:Bind HasCapture, Mode=OneTime}" Click="SavePng_Click" />
+            <AppBarButton Icon="Copy" Label="Copy" IsEnabled="{x:Bind HasCapture, Mode=OneTime}" Click="Copy_Click" />
+            <AppBarButton Icon="Save" Label="Save" IsEnabled="{x:Bind HasCapture, Mode=OneTime}" Click="Save_Click" />
             <AppBarButton Icon="Clear" Label="Clear" IsEnabled="{x:Bind HasCapture, Mode=OneTime}" Click="Clear_Click" />
         </CommandBar>
 

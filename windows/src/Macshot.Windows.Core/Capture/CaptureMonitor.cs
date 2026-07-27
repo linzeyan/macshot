@@ -20,6 +20,21 @@ namespace Macshot.Windows.Core.Capture;
 /// </remarks>
 public sealed record CaptureMonitor(string DeviceName, CaptureRegion Bounds, double Scale, bool IsPrimary = false)
 {
+    private readonly CaptureRegion? _workArea;
+
+    /// <summary>
+    /// The part of the display not covered by the taskbar, in virtual space. It is
+    /// an opt-in property rather than a constructor parameter so the existing call
+    /// sites, which only care about geometry, keep working; when it is not supplied
+    /// it falls back to <see cref="Bounds"/>, which is correct for a full-screen
+    /// overlay and only slightly wrong for a floating panel.
+    /// </summary>
+    public CaptureRegion WorkArea
+    {
+        get => _workArea ?? Bounds;
+        init => _workArea = value;
+    }
+
     public void Validate()
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(DeviceName, nameof(DeviceName));
