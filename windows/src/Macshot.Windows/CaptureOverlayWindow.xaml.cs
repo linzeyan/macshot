@@ -1,8 +1,13 @@
+using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
+using Macshot.Windows.Core.Imaging;
+using Macshot.Windows.Rendering;
 using Macshot.Windows.Services;
+using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
 
@@ -12,6 +17,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Foundation;
 using Windows.Graphics;
 using Windows.System;
+using Windows.UI.Core;
 
 namespace Macshot.Windows;
 
@@ -23,14 +29,20 @@ namespace Macshot.Windows;
 /// </summary>
 public sealed partial class CaptureOverlayWindow : Window
 {
+    private readonly CapturedFrame _desktopFrame;
     private readonly MonitorLayout _layout;
     private readonly CaptureMonitor _monitor;
     private readonly CapturedFrame _monitorFrame;
+    private readonly AnnotationEditor _editor = new(new AnnotationDocument());
+    private readonly Dictionary<AnnotationTool, ToggleButton> _toolButtons = [];
+
+    private ShapeAnnotationRenderer? _renderer;
     private Point? _selectionStart;
+    private CaptureRegion? _selection;
 
     public CaptureOverlayWindow(CapturedFrame desktopFrame, MonitorLayout layout, CaptureMonitor monitor)
     {
-        ArgumentNullException.ThrowIfNull(desktopFrame);
+        _desktopFrame = desktopFrame ?? throw new ArgumentNullException(nameof(desktopFrame));
         _layout = layout ?? throw new ArgumentNullException(nameof(layout));
         _monitor = monitor ?? throw new ArgumentNullException(nameof(monitor));
         _monitorFrame = NativeScreenCaptureService.Crop(desktopFrame, layout.FrameRegionOf(monitor));
@@ -38,21 +50,33 @@ public sealed partial class CaptureOverlayWindow : Window
     }
 
     /// <summary>
-    /// Reports the selection in frame space, meaning pixels of the whole virtual
-    /// desktop capture rather than this display's local pixels, so the owner can
-    /// crop from the frame it captured.
+    /// Raised with the finished image: the selection cropped out of the capture with
+    /// every annotation already burned in. The owner receives pixels rather than a
+    /// region because only this window knows what was drawn on it.
     /// </summary>
-    public event EventHandler<CaptureRegion>? SelectionCompleted;
+    public event EventHandler<CapturedFrame>? CaptureCompleted;
+
+    /// <summary>
+    /// Raised once this overlay owns the capture, so the owner can close the
+    /// overlays on the other displays instead of leaving always-on-top windows
+    /// covering them while the user annotates.
+    /// </summary>
+    public event EventHandler? SelectionCommitted;
 
     public event EventHandler? Cancelled;
 
     public CaptureMonitor Monitor => _monitor;
+
+    /// <summary>True once a region is chosen and the window is accepting annotations.</summary>
+    private bool IsAnnotating => _selection is not null;
 
     public async Task ShowAsync()
     {
         var source = new SoftwareBitmapSource();
         await source.SetBitmapAsync(_monitorFrame.ToSoftwareBitmap());
         PreviewImage.Source = source;
+        _renderer = new ShapeAnnotationRenderer(AnnotationLayer, _layout, _monitor);
+        BuildToolButtons();
 
         var appWindow = this.GetAppWindow();
         if (appWindow.Presenter is OverlappedPresenter presenter)
@@ -75,53 +99,238 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private void SelectionCanvas_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        _selectionStart = e.GetCurrentPoint(SelectionCanvas).Position;
         SelectionCanvas.CapturePointer(e.Pointer);
-        UpdateSelection(_selectionStart.Value, _selectionStart.Value);
+
+        if (IsAnnotating)
+        {
+            _editor.PointerPressed(ToFrame(e), ToModifiers(e));
+            RenderAnnotations();
+            return;
+        }
+
+        _selectionStart = e.GetCurrentPoint(SelectionCanvas).Position;
+        DrawMarquee(_selectionStart.Value, _selectionStart.Value);
     }
 
     private void SelectionCanvas_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
+        if (IsAnnotating)
+        {
+            if (e.Pointer.IsInContact)
+            {
+                _editor.PointerMoved(ToFrame(e), ToModifiers(e));
+                RenderAnnotations();
+            }
+
+            return;
+        }
+
         if (_selectionStart is { } start && e.Pointer.IsInContact)
         {
-            UpdateSelection(start, e.GetCurrentPoint(SelectionCanvas).Position);
+            DrawMarquee(start, e.GetCurrentPoint(SelectionCanvas).Position);
         }
     }
 
     private void SelectionCanvas_PointerReleased(object sender, PointerRoutedEventArgs e)
     {
+        SelectionCanvas.ReleasePointerCaptures();
+
+        if (IsAnnotating)
+        {
+            _editor.PointerReleased(ToFrame(e), ToModifiers(e));
+            RenderAnnotations();
+            return;
+        }
+
         if (_selectionStart is not { } start)
         {
             return;
         }
 
         var end = e.GetCurrentPoint(SelectionCanvas).Position;
-        UpdateSelection(start, end);
+        DrawMarquee(start, end);
         _selectionStart = null;
-        SelectionCanvas.ReleasePointerCaptures();
 
-        var region = ToFrameRegion(start, end);
+        var region = _layout.PointerToFrame(_monitor, CaptureRegion.FromPoints(start.X, start.Y, end.X, end.Y));
         if (!region.IsEmpty)
         {
-            SelectionCompleted?.Invoke(this, region);
+            EnterAnnotationPhase(region);
         }
+    }
+
+    private void EnterAnnotationPhase(CaptureRegion region)
+    {
+        _selection = region;
+        AnnotationToolbar.Visibility = Visibility.Visible;
+        HintText.Text = "Draw to annotate • Ctrl+Z undo • Enter to finish • Esc to cancel";
+
+        // The other displays' overlays are always on top, so they have to go before
+        // the user can see anything but this one.
+        SelectionCommitted?.Invoke(this, EventArgs.Empty);
     }
 
     private void OverlayRoot_KeyDown(object sender, KeyRoutedEventArgs e)
     {
-        if (e.Key == VirtualKey.Escape)
-        {
-            e.Handled = true;
+        var control = IsDown(VirtualKey.Control);
+        var shift = IsDown(VirtualKey.Shift);
 
-            // Escape cancels the whole capture, not just this display's overlay, so
-            // the owner tears every window down instead of this one closing itself
-            // and stranding the overlays on the other monitors.
-            Cancelled?.Invoke(this, EventArgs.Empty);
+        switch (e.Key)
+        {
+            case VirtualKey.Escape:
+                e.Handled = true;
+
+                // The first Escape abandons a half-drawn mark; only an Escape with
+                // nothing in flight throws the whole capture away.
+                if (_editor.Cancel())
+                {
+                    RenderAnnotations();
+                    return;
+                }
+
+                // Cancelling ends the whole capture, not just this display's overlay,
+                // so the owner tears every window down instead of this one closing
+                // itself and stranding the overlays on the other monitors.
+                Cancelled?.Invoke(this, EventArgs.Empty);
+                return;
+
+            case VirtualKey.Enter when IsAnnotating:
+                e.Handled = true;
+                Complete();
+                return;
+
+            case VirtualKey.Delete or VirtualKey.Back when IsAnnotating:
+                e.Handled = true;
+                if (_editor.DeleteSelected())
+                {
+                    RenderAnnotations();
+                }
+
+                return;
+
+            case VirtualKey.Z when control:
+                e.Handled = true;
+                _ = shift ? _editor.Redo() : _editor.Undo();
+                RenderAnnotations();
+                return;
+
+            case VirtualKey.Y when control:
+                e.Handled = true;
+                _editor.Redo();
+                RenderAnnotations();
+                return;
+
+            default:
+                return;
         }
     }
 
+    private void Undo_Click(object sender, RoutedEventArgs e)
+    {
+        _editor.Undo();
+        RenderAnnotations();
+    }
+
+    private void Redo_Click(object sender, RoutedEventArgs e)
+    {
+        _editor.Redo();
+        RenderAnnotations();
+    }
+
+    private void Confirm_Click(object sender, RoutedEventArgs e) => Complete();
+
+    private void Complete()
+    {
+        if (_selection is not { } region)
+        {
+            return;
+        }
+
+        CaptureCompleted?.Invoke(this, Bake(region));
+    }
+
+    /// <summary>
+    /// Burns the annotations into the cropped image using the same Core rasterizer
+    /// the tests cover, so what is delivered does not depend on the XAML preview.
+    /// </summary>
+    private CapturedFrame Bake(CaptureRegion region)
+    {
+        var cropped = NativeScreenCaptureService.Crop(_desktopFrame, region);
+        var annotations = _editor.Document.Annotations;
+        if (annotations.Count == 0)
+        {
+            return cropped;
+        }
+
+        // Annotations are stored against the whole virtual desktop, and the crop
+        // moves the origin, so they have to move with it.
+        var moved = annotations.Select(annotation => annotation.Translate(-region.X, -region.Y));
+        var pixels = AnnotationRasterizer.Render(cropped.Width, cropped.Height, cropped.BgraPixels, moved);
+        return new CapturedFrame(cropped.VirtualX, cropped.VirtualY, cropped.Width, cropped.Height, pixels);
+    }
+
+    private void BuildToolButtons()
+    {
+        foreach (var tool in ShapeAnnotationRenderer.SupportedTools)
+        {
+            var button = new ToggleButton
+            {
+                Content = Label(tool),
+                Tag = tool,
+                IsChecked = tool == _editor.Tool,
+            };
+            button.Click += ToolButton_Click;
+            _toolButtons[tool] = button;
+            ToolButtons.Children.Add(button);
+        }
+    }
+
+    private void ToolButton_Click(object sender, RoutedEventArgs e)
+    {
+        if (sender is not ToggleButton { Tag: AnnotationTool tool })
+        {
+            return;
+        }
+
+        _editor.Tool = tool;
+
+        // Behaves as a radio group: a tool is always active, so re-clicking the
+        // current tool must not leave the toolbar with nothing selected.
+        foreach (var (candidate, button) in _toolButtons)
+        {
+            button.IsChecked = candidate == tool;
+        }
+
+        RenderAnnotations();
+    }
+
+    private static string Label(AnnotationTool tool) => tool switch
+    {
+        AnnotationTool.Arrow => "Arrow",
+        AnnotationTool.Rectangle => "Box",
+        AnnotationTool.Ellipse => "Ellipse",
+        AnnotationTool.Line => "Line",
+        AnnotationTool.Pencil => "Pen",
+        AnnotationTool.Marker => "Marker",
+        AnnotationTool.FilledRectangle => "Redact",
+        _ => tool.ToString(),
+    };
+
+    private void RenderAnnotations() => _renderer?.Render(_editor.VisibleAnnotations);
+
+    private CapturePoint ToFrame(PointerRoutedEventArgs e)
+    {
+        var position = e.GetCurrentPoint(SelectionCanvas).Position;
+        return _layout.PointerToFrame(_monitor, position.X, position.Y);
+    }
+
+    private static EditorModifiers ToModifiers(PointerRoutedEventArgs e) =>
+        e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift) ? EditorModifiers.Constrain : EditorModifiers.None;
+
+    private static bool IsDown(VirtualKey key) =>
+        InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(CoreVirtualKeyStates.Down);
+
     /// <summary>Draws the marquee, which stays in layout units because it is chrome.</summary>
-    private void UpdateSelection(Point start, Point end)
+    private void DrawMarquee(Point start, Point end)
     {
         var region = CaptureRegion.FromPoints(start.X, start.Y, end.X, end.Y);
         Canvas.SetLeft(SelectionRectangle, region.X);
@@ -129,14 +338,5 @@ public sealed partial class CaptureOverlayWindow : Window
         SelectionRectangle.Width = region.Width;
         SelectionRectangle.Height = region.Height;
         SelectionRectangle.Visibility = Visibility.Visible;
-    }
-
-    private CaptureRegion ToFrameRegion(Point start, Point end)
-    {
-        // Scaling by the displayed image's ActualWidth would silently go wrong the
-        // moment the image is letterboxed or the window is not exactly the display
-        // size; the monitor's own scale is the authoritative conversion.
-        var dipRegion = CaptureRegion.FromPoints(start.X, start.Y, end.X, end.Y);
-        return _layout.PointerToFrame(_monitor, dipRegion);
     }
 }

@@ -18,6 +18,11 @@
                 StrokeThickness="2"
                 Fill="#334CC2FF" />
         </Canvas>
+
+        <!-- Above SelectionCanvas so marks are not tinted by the selection fill, and
+             never hit testable so pointer input keeps reaching the canvas below. -->
+        <Canvas x:Name="AnnotationLayer" IsHitTestVisible="False" />
+
         <Border
             HorizontalAlignment="Center"
             VerticalAlignment="Top"
@@ -25,7 +30,26 @@
             Padding="14,8"
             Background="#CC202020"
             CornerRadius="6">
-            <TextBlock Text="Drag to capture • Esc to cancel" Foreground="White" />
+            <TextBlock x:Name="HintText" Text="Drag to capture • Esc to cancel" Foreground="White" />
+        </Border>
+
+        <Border
+            x:Name="AnnotationToolbar"
+            Visibility="Collapsed"
+            HorizontalAlignment="Center"
+            VerticalAlignment="Bottom"
+            Margin="0,0,0,32"
+            Padding="8"
+            Background="#EE202020"
+            CornerRadius="8">
+            <StackPanel Orientation="Horizontal" Spacing="8">
+                <!-- Populated in code from ShapeAnnotationRenderer.SupportedTools so the
+                     toolbar cannot offer a tool the preview would refuse to draw. -->
+                <StackPanel x:Name="ToolButtons" Orientation="Horizontal" Spacing="4" />
+                <Button Content="Undo" Click="Undo_Click" />
+                <Button Content="Redo" Click="Redo_Click" />
+                <Button Content="Done" Click="Confirm_Click" Style="{StaticResource AccentButtonStyle}" />
+            </StackPanel>
         </Border>
     </Grid>
 </Window>

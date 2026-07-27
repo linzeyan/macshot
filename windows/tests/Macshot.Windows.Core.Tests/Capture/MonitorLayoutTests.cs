@@ -20,6 +20,36 @@ public sealed class MonitorLayoutTests
     }
 
     [TestMethod]
+    public void FrameToPointer_ReturnsAnnotationsToTheDisplayTheyWereDrawnOn()
+    {
+        // An annotation is stored once, in frame space, but is drawn on whichever
+        // overlay it sits on. If the return trip did not use that display's scale,
+        // a mark drawn on the 200% monitor would render at half its size and in the
+        // wrong place, so this is a round trip rather than a fixed expectation.
+        var layout = MixedDpiLayout();
+
+        foreach (var monitor in layout.Monitors)
+        {
+            var frame = layout.PointerToFrame(monitor, 320, 180);
+            var pointer = layout.FrameToPointer(monitor, frame);
+
+            Assert.AreEqual(new CapturePoint(320, 180), pointer, $"round trip on {monitor.DeviceName}");
+        }
+    }
+
+    [TestMethod]
+    public void FrameToPointer_MapsTheSameFramePointDifferentlyPerDisplay()
+    {
+        // Guards against an implementation that ignores the monitor argument and
+        // still passes the round trip above by cancelling its own error out.
+        var layout = MixedDpiLayout();
+        var highDpi = layout.Monitors[1];
+
+        Assert.AreEqual(new CapturePoint(100, 100), layout.FrameToPointer(layout.Monitors[0], new CapturePoint(100, 100)));
+        Assert.AreEqual(new CapturePoint(50, 50), layout.FrameToPointer(highDpi, new CapturePoint(2020, 100)));
+    }
+
+    [TestMethod]
     public void PointerToFrame_KeepsFrameCoordinatesNonNegativeForDisplaysLeftOfPrimary()
     {
         // Virtual space puts the primary at the origin, so a display to its left has

@@ -95,4 +95,20 @@ public sealed class MonitorLayout
         ArgumentNullException.ThrowIfNull(monitor);
         return VirtualToFrame(monitor.PointerToVirtual(dipRegion));
     }
+
+    public CapturePoint FrameToVirtual(CapturePoint framePoint) =>
+        new(framePoint.X + VirtualBounds.X, framePoint.Y + VirtualBounds.Y);
+
+    /// <summary>
+    /// The inverse of <see cref="PointerToFrame(CaptureMonitor, double, double)"/>,
+    /// used to place an annotation stored in frame space back onto one display's
+    /// overlay. Drawing has to go through the same per-display scale that input
+    /// came through, or a mark lands away from where it was drawn on any display
+    /// that is not at 100%.
+    /// </summary>
+    public CapturePoint FrameToPointer(CaptureMonitor monitor, CapturePoint framePoint)
+    {
+        ArgumentNullException.ThrowIfNull(monitor);
+        return monitor.VirtualToPointer(FrameToVirtual(framePoint));
+    }
 }

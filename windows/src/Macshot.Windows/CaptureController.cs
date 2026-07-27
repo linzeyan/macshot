@@ -34,7 +34,6 @@ public sealed class CaptureController : IDisposable
     private readonly GlobalHotkeyService _hotkeys;
     private readonly TrayIconService _trayIcon;
     private readonly List<CaptureOverlayWindow> _overlays = [];
-    private CapturedFrame? _pendingDesktopFrame;
     private MainWindow? _preview;
     private bool _disposed;
 
@@ -70,12 +69,12 @@ public sealed class CaptureController : IDisposable
         // DPI cannot map pointer input to pixels. See the architecture notes, D6.
         var layout = MonitorEnumerator.Enumerate();
         var desktopFrame = _screenCapture.CaptureVirtualDesktop();
-        _pendingDesktopFrame = desktopFrame;
 
         foreach (var monitor in layout.Monitors)
         {
             var overlay = new CaptureOverlayWindow(desktopFrame, layout, monitor);
-            overlay.SelectionCompleted += OnSelectionCompleted;
+            overlay.CaptureCompleted += OnCaptureCompleted;
+            overlay.SelectionCommitted += OnSelectionCommitted;
             overlay.Cancelled += OnCaptureCancelled;
             _overlays.Add(overlay);
         }
@@ -135,20 +134,35 @@ public sealed class CaptureController : IDisposable
         }
     }
 
-    private async void OnSelectionCompleted(object? sender, CaptureRegion selection)
+    /// <summary>
+    /// One overlay has taken the capture, so the rest are closed. They are always on
+    /// top, and leaving them up would cover the other displays for the whole time
+    /// the user spends annotating.
+    /// </summary>
+    private void OnSelectionCommitted(object? sender, EventArgs args)
     {
-        var desktopFrame = _pendingDesktopFrame;
-        DismissOverlays();
-        if (desktopFrame is null)
+        foreach (var overlay in _overlays.ToArray())
         {
-            return;
+            if (ReferenceEquals(overlay, sender))
+            {
+                continue;
+            }
+
+            _overlays.Remove(overlay);
+            Unsubscribe(overlay);
+            overlay.Close();
         }
+    }
+
+    private async void OnCaptureCompleted(object? sender, CapturedFrame result)
+    {
+        DismissOverlays();
 
         try
         {
-            // The selection is already in frame space for the whole virtual desktop,
-            // so it indexes the captured frame directly whichever display it came from.
-            await ShowPreviewAsync(desktopFrame, selection);
+            // The overlay has already cropped the selection and burned in the
+            // annotations, so there is nothing left to select from.
+            await ShowPreviewAsync(result, null);
         }
         catch (Exception exception)
         {
@@ -162,14 +176,19 @@ public sealed class CaptureController : IDisposable
     {
         var overlays = _overlays.ToArray();
         _overlays.Clear();
-        _pendingDesktopFrame = null;
 
         foreach (var overlay in overlays)
         {
-            overlay.SelectionCompleted -= OnSelectionCompleted;
-            overlay.Cancelled -= OnCaptureCancelled;
+            Unsubscribe(overlay);
             overlay.Close();
         }
+    }
+
+    private void Unsubscribe(CaptureOverlayWindow overlay)
+    {
+        overlay.CaptureCompleted -= OnCaptureCompleted;
+        overlay.SelectionCommitted -= OnSelectionCommitted;
+        overlay.Cancelled -= OnCaptureCancelled;
     }
 
     private async Task ShowPreviewAsync(CapturedFrame frame, CaptureRegion? selection)
