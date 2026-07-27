@@ -6,6 +6,11 @@
     <UseWinUI>true</UseWinUI>
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+    <!-- A self-contained Windows App SDK app must resolve a concrete architecture.
+         A solution build comes through as AnyCPU, which the SDK rejects. ARM64 is
+         deliberately left for the distribution milestone rather than carried as an
+         unbuilt second RID here. -->
+    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>

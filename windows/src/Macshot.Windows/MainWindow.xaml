@@ -9,8 +9,11 @@
             <AppBarButton Icon="Camera" Label="Capture area" Click="CaptureArea_Click" />
             <AppBarButton Icon="FullScreen" Label="Capture all screens" Click="CaptureAllScreens_Click" />
             <AppBarSeparator />
-            <AppBarButton Icon="Save" Label="Save PNG" IsEnabled="{x:Bind HasCapture, Mode=OneWay}" Click="SavePng_Click" />
-            <AppBarButton Icon="Clear" Label="Clear" IsEnabled="{x:Bind HasCapture, Mode=OneWay}" Click="Clear_Click" />
+            <!-- OneTime, not OneWay: HasCapture raises no change notification, and the
+                 code-behind already calls Bindings.Update() at every point that changes
+                 it, which re-evaluates these. -->
+            <AppBarButton Icon="Save" Label="Save PNG" IsEnabled="{x:Bind HasCapture, Mode=OneTime}" Click="SavePng_Click" />
+            <AppBarButton Icon="Clear" Label="Clear" IsEnabled="{x:Bind HasCapture, Mode=OneTime}" Click="Clear_Click" />
         </CommandBar>
 
         <Grid Grid.Row="1" Padding="16" RowDefinitions="*,Auto" RowSpacing="12">
