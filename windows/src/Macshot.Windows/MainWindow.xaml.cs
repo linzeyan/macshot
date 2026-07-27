@@ -5,6 +5,11 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
 
+// Imported rather than written out at each use site: inside namespace Macshot.Windows
+// the name "Windows" binds to Macshot.Windows, so a qualified Point
+// resolves to Macshot.Point and does not compile.
+using Windows.Foundation;
+
 namespace Macshot.Windows;
 
 /// <summary>
@@ -21,7 +26,7 @@ public sealed partial class MainWindow : Window
     private readonly CaptureController _controller;
     private CapturedFrame? _capturedFrame;
     private CaptureRegion? _selection;
-    private Windows.Foundation.Point? _selectionStart;
+    private Point? _selectionStart;
 
     public MainWindow(CaptureController controller)
     {
@@ -126,7 +131,7 @@ public sealed partial class MainWindow : Window
         PreviewCanvas.ReleasePointerCaptures();
     }
 
-    private void UpdateSelection(Windows.Foundation.Point start, Windows.Foundation.Point end)
+    private void UpdateSelection(Point start, Point end)
     {
         var region = CaptureRegion.FromPoints(start.X, start.Y, end.X, end.Y);
         _selection = region;

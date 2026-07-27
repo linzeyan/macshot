@@ -5,6 +5,11 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
+
+// Imported rather than written out at each use site: inside namespace Macshot.Windows
+// the name "Windows" binds to Macshot.Windows, so a qualified Point
+// resolves to Macshot.Point and does not compile.
+using Windows.Foundation;
 using Windows.Graphics;
 using Windows.System;
 
@@ -21,7 +26,7 @@ public sealed partial class CaptureOverlayWindow : Window
     private readonly MonitorLayout _layout;
     private readonly CaptureMonitor _monitor;
     private readonly CapturedFrame _monitorFrame;
-    private Windows.Foundation.Point? _selectionStart;
+    private Point? _selectionStart;
 
     public CaptureOverlayWindow(CapturedFrame desktopFrame, MonitorLayout layout, CaptureMonitor monitor)
     {
@@ -116,7 +121,7 @@ public sealed partial class CaptureOverlayWindow : Window
     }
 
     /// <summary>Draws the marquee, which stays in layout units because it is chrome.</summary>
-    private void UpdateSelection(Windows.Foundation.Point start, Windows.Foundation.Point end)
+    private void UpdateSelection(Point start, Point end)
     {
         var region = CaptureRegion.FromPoints(start.X, start.Y, end.X, end.Y);
         Canvas.SetLeft(SelectionRectangle, region.X);
@@ -126,7 +131,7 @@ public sealed partial class CaptureOverlayWindow : Window
         SelectionRectangle.Visibility = Visibility.Visible;
     }
 
-    private CaptureRegion ToFrameRegion(Windows.Foundation.Point start, Windows.Foundation.Point end)
+    private CaptureRegion ToFrameRegion(Point start, Point end)
     {
         // Scaling by the displayed image's ActualWidth would silently go wrong the
         // moment the image is letterboxed or the window is not exactly the display
