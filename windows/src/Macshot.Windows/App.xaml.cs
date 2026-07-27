@@ -4,7 +4,7 @@ namespace Macshot.Windows;
 
 public partial class App : Application
 {
-    private Window? _window;
+    private CaptureController? _controller;
 
     public App()
     {
@@ -13,7 +13,9 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
-        _window = new MainWindow();
-        _window.Activate();
+        // No window at startup. macshot lives in the notification area and shows UI
+        // only once the user asks for a capture, so the controller, not a window, is
+        // what keeps the process alive.
+        _controller = new CaptureController();
     }
 }

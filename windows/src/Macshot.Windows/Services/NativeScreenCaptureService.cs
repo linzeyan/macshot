@@ -87,7 +87,7 @@ public sealed class NativeScreenCaptureService
         }
     }
 
-    public async Task<string> SavePngAsync(CapturedFrame frame, CaptureRegion? selection)
+    public static async Task<string> SavePngAsync(CapturedFrame frame, CaptureRegion? selection)
     {
         ArgumentNullException.ThrowIfNull(frame);
 

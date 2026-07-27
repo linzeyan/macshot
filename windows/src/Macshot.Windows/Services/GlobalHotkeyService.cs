@@ -2,33 +2,32 @@ using System.Runtime.InteropServices;
 
 namespace Macshot.Windows.Services;
 
+/// <summary>
+/// Registers process-wide hotkeys against a <see cref="MessageWindow"/>.
+/// </summary>
+/// <remarks>
+/// This used to subclass a visible window's <c>WndProc</c>, which meant the
+/// hotkey stopped working the moment that window closed. Owning the messages
+/// through the process-lifetime message window is what lets macshot behave like
+/// the background tool it is.
+/// </remarks>
 public sealed class GlobalHotkeyService : IDisposable
 {
-    private const int GwlWndProc = -4;
     private const uint WmHotkey = 0x0312;
     private const uint ModControl = 0x0002;
     private const uint ModShift = 0x0004;
 
-    private readonly IntPtr _windowHandle;
-    private readonly WindowProcedure _windowProcedure;
+    /// <summary>Stops the shortcut repeating while the key is held down.</summary>
+    private const uint ModNoRepeat = 0x4000;
+
+    private readonly MessageWindow _window;
     private readonly Dictionary<int, Action> _handlers = [];
-    private IntPtr _previousWindowProcedure;
     private bool _disposed;
 
-    public GlobalHotkeyService(IntPtr windowHandle)
+    public GlobalHotkeyService(MessageWindow window)
     {
-        if (windowHandle == IntPtr.Zero)
-        {
-            throw new ArgumentException("A valid window handle is required.", nameof(windowHandle));
-        }
-
-        _windowHandle = windowHandle;
-        _windowProcedure = ProcessWindowMessage;
-        _previousWindowProcedure = SetWindowLongPtr(_windowHandle, GwlWndProc, _windowProcedure);
-        if (_previousWindowProcedure == IntPtr.Zero)
-        {
-            throw new InvalidOperationException("Unable to attach the global hotkey message handler.");
-        }
+        _window = window ?? throw new ArgumentNullException(nameof(window));
+        _window.MessageReceived += OnMessageReceived;
     }
 
     public void RegisterControlShift(int id, char key, Action handler)
@@ -43,9 +42,10 @@ public sealed class GlobalHotkeyService : IDisposable
         }
 
         var virtualKey = char.ToUpperInvariant(key);
-        if (!RegisterHotKey(_windowHandle, id, ModControl | ModShift, virtualKey))
+        if (!RegisterHotKey(_window.Handle, id, ModControl | ModShift | ModNoRepeat, virtualKey))
         {
-            throw new InvalidOperationException($"Unable to register Ctrl+Shift+{virtualKey}.");
+            throw new InvalidOperationException(
+                $"Unable to register Ctrl+Shift+{virtualKey}. Another application may already own it.");
         }
 
         _handlers.Add(id, handler);
@@ -58,36 +58,27 @@ public sealed class GlobalHotkeyService : IDisposable
             return;
         }
 
+        _disposed = true;
+        _window.MessageReceived -= OnMessageReceived;
         foreach (var id in _handlers.Keys)
         {
-            UnregisterHotKey(_windowHandle, id);
+            UnregisterHotKey(_window.Handle, id);
         }
 
         _handlers.Clear();
-        SetWindowLongPtr(_windowHandle, GwlWndProc, _previousWindowProcedure);
-        _disposed = true;
         GC.SuppressFinalize(this);
     }
 
-    private IntPtr ProcessWindowMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam)
+    private void OnMessageReceived(object? sender, WindowMessageEventArgs args)
     {
-        if (message == WmHotkey && _handlers.TryGetValue(wParam.ToInt32(), out var handler))
+        if (args.Message != WmHotkey || !_handlers.TryGetValue(args.WParam.ToInt32(), out var handler))
         {
-            handler();
-            return IntPtr.Zero;
+            return;
         }
 
-        return CallWindowProc(_previousWindowProcedure, window, message, wParam, lParam);
+        args.Handled = true;
+        handler();
     }
-
-    [UnmanagedFunctionPointer(CallingConvention.Winapi)]
-    private delegate IntPtr WindowProcedure(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
-
-    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
-    private static extern IntPtr SetWindowLongPtr(IntPtr window, int index, WindowProcedure procedure);
-
-    [DllImport("user32.dll", EntryPoint = "SetWindowLongPtrW", SetLastError = true)]
-    private static extern IntPtr SetWindowLongPtr(IntPtr window, int index, IntPtr procedure);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -96,12 +87,4 @@ public sealed class GlobalHotkeyService : IDisposable
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool UnregisterHotKey(IntPtr window, int id);
-
-    [DllImport("user32.dll")]
-    private static extern IntPtr CallWindowProc(
-        IntPtr previousWindowProcedure,
-        IntPtr window,
-        uint message,
-        IntPtr wParam,
-        IntPtr lParam);
 }
