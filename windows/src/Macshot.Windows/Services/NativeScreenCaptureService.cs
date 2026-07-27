@@ -123,8 +123,11 @@ public sealed class NativeScreenCaptureService
         return outputPath;
     }
 
-    private static CapturedFrame Crop(CapturedFrame frame, CaptureRegion region)
+    /// <summary>Cuts a frame-space region out of a capture, keeping its virtual-screen origin.</summary>
+    public static CapturedFrame Crop(CapturedFrame frame, CaptureRegion region)
     {
+        ArgumentNullException.ThrowIfNull(frame);
+
         var left = Math.Clamp((int)Math.Floor(region.X), 0, frame.Width);
         var top = Math.Clamp((int)Math.Floor(region.Y), 0, frame.Height);
         var right = Math.Clamp((int)Math.Ceiling(region.X + region.Width), left, frame.Width);

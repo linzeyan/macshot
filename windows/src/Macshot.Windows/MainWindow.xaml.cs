@@ -15,7 +15,8 @@ public sealed partial class MainWindow : Window
     private CaptureRegion? _selection;
     private Windows.Foundation.Point? _selectionStart;
     private GlobalHotkeyService? _globalHotkeys;
-    private CaptureOverlayWindow? _captureOverlay;
+    private readonly List<CaptureOverlayWindow> _captureOverlays = [];
+    private CapturedFrame? _pendingDesktopFrame;
 
     public MainWindow()
     {
@@ -58,34 +59,59 @@ public sealed partial class MainWindow : Window
 
     private async Task BeginAreaCaptureAsync()
     {
-        if (_captureOverlay is not null)
+        if (_captureOverlays.Count > 0)
         {
             return;
         }
 
-        var overlay = new CaptureOverlayWindow(_screenCaptureService.CaptureVirtualDesktop());
-        _captureOverlay = overlay;
-        overlay.SelectionCompleted += CaptureOverlay_SelectionCompleted;
-        overlay.Closed += CaptureOverlay_Closed;
-        await overlay.ShowAsync();
+        // One overlay per display: a single window spanning displays with different
+        // DPI cannot map pointer input to pixels. See the architecture notes, D6.
+        var layout = MonitorEnumerator.Enumerate();
+        var desktopFrame = _screenCaptureService.CaptureVirtualDesktop();
+        _pendingDesktopFrame = desktopFrame;
+
+        foreach (var monitor in layout.Monitors)
+        {
+            var overlay = new CaptureOverlayWindow(desktopFrame, layout, monitor);
+            overlay.SelectionCompleted += CaptureOverlay_SelectionCompleted;
+            overlay.Cancelled += CaptureOverlay_Cancelled;
+            _captureOverlays.Add(overlay);
+        }
+
+        foreach (var overlay in _captureOverlays)
+        {
+            await overlay.ShowAsync();
+        }
     }
 
-    private async void CaptureOverlay_SelectionCompleted(object sender, CaptureRegion selection)
+    private async void CaptureOverlay_SelectionCompleted(object? sender, CaptureRegion selection)
     {
-        if (sender is not CaptureOverlayWindow overlay)
+        var desktopFrame = _pendingDesktopFrame;
+        DismissCaptureOverlays();
+        if (desktopFrame is null)
         {
             return;
         }
 
-        await PresentCapturedFrameAsync(overlay.Frame, selection);
+        // The selection is already in frame space for the whole virtual desktop, so
+        // it indexes the captured frame directly no matter which display it came from.
+        await PresentCapturedFrameAsync(desktopFrame, selection);
         Activate();
     }
 
-    private void CaptureOverlay_Closed(object sender, WindowEventArgs args)
+    private void CaptureOverlay_Cancelled(object? sender, EventArgs args) => DismissCaptureOverlays();
+
+    private void DismissCaptureOverlays()
     {
-        if (ReferenceEquals(sender, _captureOverlay))
+        var overlays = _captureOverlays.ToArray();
+        _captureOverlays.Clear();
+        _pendingDesktopFrame = null;
+
+        foreach (var overlay in overlays)
         {
-            _captureOverlay = null;
+            overlay.SelectionCompleted -= CaptureOverlay_SelectionCompleted;
+            overlay.Cancelled -= CaptureOverlay_Cancelled;
+            overlay.Close();
         }
     }
 

@@ -1,4 +1,5 @@
 using Macshot.Windows.Core.Annotations;
+using Macshot.Windows.Core.Capture;
 
 namespace Macshot.Windows.Core.Tests.Annotations;
 

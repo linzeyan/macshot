@@ -10,25 +10,43 @@ using Windows.System;
 
 namespace Macshot.Windows;
 
+/// <summary>
+/// The capture overlay for one display. One window is created per monitor because
+/// a WinUI window has a single rasterization scale, so a window spanning displays
+/// with different DPI cannot map pointer input to pixels correctly. See
+/// <c>docs/windows-port/architecture.md</c>, decision D6.
+/// </summary>
 public sealed partial class CaptureOverlayWindow : Window
 {
-    private readonly CapturedFrame _frame;
+    private readonly MonitorLayout _layout;
+    private readonly CaptureMonitor _monitor;
+    private readonly CapturedFrame _monitorFrame;
     private Windows.Foundation.Point? _selectionStart;
 
-    public CaptureOverlayWindow(CapturedFrame frame)
+    public CaptureOverlayWindow(CapturedFrame desktopFrame, MonitorLayout layout, CaptureMonitor monitor)
     {
-        _frame = frame ?? throw new ArgumentNullException(nameof(frame));
+        ArgumentNullException.ThrowIfNull(desktopFrame);
+        _layout = layout ?? throw new ArgumentNullException(nameof(layout));
+        _monitor = monitor ?? throw new ArgumentNullException(nameof(monitor));
+        _monitorFrame = NativeScreenCaptureService.Crop(desktopFrame, layout.FrameRegionOf(monitor));
         InitializeComponent();
     }
 
+    /// <summary>
+    /// Reports the selection in frame space, meaning pixels of the whole virtual
+    /// desktop capture rather than this display's local pixels, so the owner can
+    /// crop from the frame it captured.
+    /// </summary>
     public event EventHandler<CaptureRegion>? SelectionCompleted;
 
-    public CapturedFrame Frame => _frame;
+    public event EventHandler? Cancelled;
+
+    public CaptureMonitor Monitor => _monitor;
 
     public async Task ShowAsync()
     {
         var source = new SoftwareBitmapSource();
-        await source.SetBitmapAsync(_frame.ToSoftwareBitmap());
+        await source.SetBitmapAsync(_monitorFrame.ToSoftwareBitmap());
         PreviewImage.Source = source;
 
         var appWindow = this.GetAppWindow();
@@ -38,7 +56,14 @@ public sealed partial class CaptureOverlayWindow : Window
             presenter.IsAlwaysOnTop = true;
         }
 
-        appWindow.MoveAndResize(new RectInt32(_frame.VirtualX, _frame.VirtualY, _frame.Width, _frame.Height));
+        // AppWindow positions in physical pixels, so the display's virtual-space
+        // bounds go in unchanged. Converting to layout units here would misplace
+        // the overlay on every display that is not at 100%.
+        appWindow.MoveAndResize(new RectInt32(
+            (int)_monitor.Bounds.X,
+            (int)_monitor.Bounds.Y,
+            (int)_monitor.Bounds.Width,
+            (int)_monitor.Bounds.Height));
         Activate();
         OverlayRoot.Focus(FocusState.Programmatic);
     }
@@ -65,15 +90,15 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
 
-        UpdateSelection(start, e.GetCurrentPoint(SelectionCanvas).Position);
+        var end = e.GetCurrentPoint(SelectionCanvas).Position;
+        UpdateSelection(start, end);
         _selectionStart = null;
         SelectionCanvas.ReleasePointerCaptures();
 
-        var region = ToFrameRegion(start, e.GetCurrentPoint(SelectionCanvas).Position);
+        var region = ToFrameRegion(start, end);
         if (!region.IsEmpty)
         {
             SelectionCompleted?.Invoke(this, region);
-            Close();
         }
     }
 
@@ -82,10 +107,15 @@ public sealed partial class CaptureOverlayWindow : Window
         if (e.Key == VirtualKey.Escape)
         {
             e.Handled = true;
-            Close();
+
+            // Escape cancels the whole capture, not just this display's overlay, so
+            // the owner tears every window down instead of this one closing itself
+            // and stranding the overlays on the other monitors.
+            Cancelled?.Invoke(this, EventArgs.Empty);
         }
     }
 
+    /// <summary>Draws the marquee, which stays in layout units because it is chrome.</summary>
     private void UpdateSelection(Windows.Foundation.Point start, Windows.Foundation.Point end)
     {
         var region = CaptureRegion.FromPoints(start.X, start.Y, end.X, end.Y);
@@ -98,15 +128,10 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private CaptureRegion ToFrameRegion(Windows.Foundation.Point start, Windows.Foundation.Point end)
     {
-        if (SelectionCanvas.ActualWidth <= 0 || SelectionCanvas.ActualHeight <= 0)
-        {
-            return default;
-        }
-
-        return CaptureRegion.FromPoints(
-            start.X * _frame.Width / SelectionCanvas.ActualWidth,
-            start.Y * _frame.Height / SelectionCanvas.ActualHeight,
-            end.X * _frame.Width / SelectionCanvas.ActualWidth,
-            end.Y * _frame.Height / SelectionCanvas.ActualHeight);
+        // Scaling by the displayed image's ActualWidth would silently go wrong the
+        // moment the image is letterboxed or the window is not exactly the display
+        // size; the monitor's own scale is the authoritative conversion.
+        var dipRegion = CaptureRegion.FromPoints(start.X, start.Y, end.X, end.Y);
+        return _layout.PointerToFrame(_monitor, dipRegion);
     }
 }
