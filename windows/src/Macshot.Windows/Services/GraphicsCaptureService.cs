@@ -84,7 +84,7 @@ public sealed class GraphicsCaptureService : IDisposable
 
         // One device for every display and every capture: creating one per frame
         // would spend more time initializing D3D than capturing.
-        var device = _device ??= CreateDevice();
+        var device = _device ??= CreateDirect3DDevice();
         var composer = new FrameComposer(displays.Layout);
 
         foreach (var monitor in displays.Layout.Monitors)
@@ -131,7 +131,7 @@ public sealed class GraphicsCaptureService : IDisposable
             throw new InvalidOperationException("Windows no longer reports bounds for that window.");
         }
 
-        var device = _device ??= CreateDevice();
+        var device = _device ??= CreateDirect3DDevice();
 
         // Windows.UI.WindowId is what the capture API takes, and its value is the
         // HWND, so the id is built here rather than fetched: going out to
@@ -159,19 +159,30 @@ public sealed class GraphicsCaptureService : IDisposable
         _device = null;
     }
 
-    private static Task<(int Width, int Height, byte[] Pixels)> CaptureDisplayAsync(
-        IDirect3DDevice device,
-        nint monitorHandle)
+    /// <summary>
+    /// Opens the capture item for one display.
+    /// </summary>
+    /// <remarks>
+    /// Internal rather than private because screen recording opens the same item and
+    /// keeps it running, and the bridge between the two <c>DisplayId</c> types is
+    /// exactly the sort of thing that should exist once.
+    /// </remarks>
+    internal static GraphicsCaptureItem OpenDisplay(nint monitorHandle)
     {
         var displayId = new GraphicsDisplayId
         {
             Value = Win32Interop.GetDisplayIdFromMonitor(monitorHandle).Value,
         };
 
-        var item = GraphicsCaptureItem.TryCreateFromDisplayId(displayId)
+        return GraphicsCaptureItem.TryCreateFromDisplayId(displayId)
             ?? throw new InvalidOperationException("Windows would not open a capture item for the display.");
+    }
 
-        return CaptureItemAsync(device, item);
+    private static Task<(int Width, int Height, byte[] Pixels)> CaptureDisplayAsync(
+        IDirect3DDevice device,
+        nint monitorHandle)
+    {
+        return CaptureItemAsync(device, OpenDisplay(monitorHandle));
     }
 
     /// <summary>
@@ -227,7 +238,7 @@ public sealed class GraphicsCaptureService : IDisposable
     /// renderer as a dependency to obtain one object is a worse trade than this much
     /// interop.
     /// </remarks>
-    private static IDirect3DDevice CreateDevice()
+    internal static IDirect3DDevice CreateDirect3DDevice()
     {
         var result = D3D11CreateDevice(
             IntPtr.Zero,

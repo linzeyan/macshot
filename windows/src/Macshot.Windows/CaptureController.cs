@@ -25,6 +25,7 @@ public sealed class CaptureController : IDisposable
     private const int CommandCaptureAllScreens = 2;
     private const int CommandPreferences = 3;
     private const int CommandQuit = 4;
+    private const int CommandRecordScreen = 5;
 
     private const int HotkeyCaptureArea = 1;
     private const int HotkeyCaptureAllScreens = 2;
@@ -36,11 +37,22 @@ public sealed class CaptureController : IDisposable
     /// </summary>
     private const int HotkeyStopScrollCapture = 3;
 
+    private const int HotkeyRecordScreen = 4;
+
+    /// <summary>
+    /// Held only while a recording runs, and bare for the same reason as the scroll
+    /// capture's: whatever is being demonstrated has the foreground, not macshot.
+    /// </summary>
+    private const int HotkeyStopRecording = 5;
+
     private const uint VirtualKeyEscape = 0x1B;
 
     private const uint MessageBoxIconError = 0x00000010;
 
+    private const string RecordingExtension = ".mp4";
+
     private readonly ScreenCaptureService _screenCapture = new();
+    private readonly ScreenRecorder _recorder = new();
     private readonly SettingsStore _settings = new();
     private readonly DispatcherQueue _dispatcher;
     private readonly MessageWindow _messageWindow;
@@ -51,6 +63,13 @@ public sealed class CaptureController : IDisposable
     private MainWindow? _preview;
     private ThumbnailWindow? _thumbnail;
     private PreferencesWindow? _preferences;
+
+    /// <summary>
+    /// Held for the length of a recording, and the only sign one is running: asking
+    /// to record while this is set stops the recording instead of starting a second.
+    /// </summary>
+    private CancellationTokenSource? _recording;
+
     private bool _reportedCaptureFallback;
     private bool _disposed;
 
@@ -64,10 +83,12 @@ public sealed class CaptureController : IDisposable
         _hotkeys = new GlobalHotkeyService(_messageWindow);
         _hotkeys.RegisterControlShift(HotkeyCaptureArea, 'X', () => Post(BeginAreaCaptureAsync));
         _hotkeys.RegisterControlShift(HotkeyCaptureAllScreens, 'F', () => Post(CaptureAllScreensAsync));
+        _hotkeys.RegisterControlShift(HotkeyRecordScreen, 'R', () => Post(ToggleRecordingAsync));
 
         _trayIcon = new TrayIconService(_messageWindow, "macshot");
         _trayIcon.AddMenuItem(CommandCaptureArea, "Capture area\tCtrl+Shift+X");
         _trayIcon.AddMenuItem(CommandCaptureAllScreens, "Capture all screens\tCtrl+Shift+F");
+        _trayIcon.AddMenuItem(CommandRecordScreen, "Record screen\tCtrl+Shift+R");
         _trayIcon.AddSeparator();
         _trayIcon.AddMenuItem(CommandPreferences, "Preferences...");
         _trayIcon.AddMenuItem(CommandQuit, "Quit macshot");
@@ -162,6 +183,10 @@ public sealed class CaptureController : IDisposable
         _disposed = true;
         DismissOverlays();
 
+        // Stopped rather than abandoned: a recording in flight owns a file, and
+        // quitting out from under the encoder would leave it unplayable.
+        _recording?.Cancel();
+
         _thumbnail?.Close();
         _preferences?.Close();
         foreach (var pin in _pins.ToArray())
@@ -170,6 +195,7 @@ public sealed class CaptureController : IDisposable
         }
 
         _screenCapture.Dispose();
+        _recorder.Dispose();
         _trayIcon.Dispose();
         _hotkeys.Dispose();
         _messageWindow.Dispose();
@@ -185,6 +211,9 @@ public sealed class CaptureController : IDisposable
             break;
         case CommandCaptureAllScreens:
             Post(CaptureAllScreensAsync);
+            break;
+        case CommandRecordScreen:
+            Post(ToggleRecordingAsync);
             break;
         case CommandPreferences:
             _dispatcher.TryEnqueue(ShowPreferences);
@@ -401,6 +430,114 @@ public sealed class CaptureController : IDisposable
         await DeliverAsync(result.Frame);
     }
 
+    /// <summary>
+    /// Starts recording the display the pointer is on, or stops the recording that is
+    /// already running.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One shortcut both ways. A recording is started to demonstrate something, which
+    /// means the screen fills with whatever is being demonstrated; the panel's Stop
+    /// button cannot be the only way out when a full-screen app is over it.
+    /// </para>
+    /// <para>
+    /// The display is taken from the pointer rather than asked for. Putting a
+    /// selection overlay up first would record the moment of choosing which display
+    /// to record, and macshot already knows which one is being worked on.
+    /// </para>
+    /// </remarks>
+    public async Task ToggleRecordingAsync()
+    {
+        if (_recording is { } running)
+        {
+            running.Cancel();
+            return;
+        }
+
+        if (!ScreenRecorder.IsSupported)
+        {
+            throw new InvalidOperationException(
+                "This build of Windows does not offer the screen recording API.");
+        }
+
+        var displays = MonitorEnumerator.Enumerate();
+        var monitor = displays.Layout.MonitorAt(PointerPosition()) ?? displays.Layout.Primary;
+        if (!displays.Handles.TryGetValue(monitor.DeviceName, out var handle))
+        {
+            throw new InvalidOperationException($"No display handle for '{monitor.DeviceName}'.");
+        }
+
+        using var cancellation = new CancellationTokenSource();
+        var hud = new RecordingHudWindow();
+        hud.StopRequested += (_, _) => cancellation.Cancel();
+        hud.ShowHud();
+
+        var holdsEscape = _hotkeys.TryRegisterBareKey(
+            HotkeyStopRecording,
+            VirtualKeyEscape,
+            cancellation.Cancel);
+
+        _recording = cancellation;
+
+        try
+        {
+            var result = await _recorder.RecordDisplayAsync(handle, ResolveRecordingPath(), cancellation.Token);
+
+            // The panel outlives the recording by a few seconds to say where the file
+            // went. Video has no thumbnail and no clipboard to land in, so this is
+            // the only thing that says the recording exists.
+            hud.ShowSaved(Path.GetFileName(result.Path));
+        }
+        catch (Exception)
+        {
+            // A failure has nothing to report there; the message box reports it.
+            hud.Close();
+            throw;
+        }
+        finally
+        {
+            _recording = null;
+            if (holdsEscape)
+            {
+                _hotkeys.Unregister(HotkeyStopRecording);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Where the next recording is written.
+    /// </summary>
+    /// <remarks>
+    /// A recording is always saved, whatever <see cref="CaptureSettings.AutoSave"/>
+    /// says, because there is nowhere else for it to go: minutes of video do not
+    /// belong on the clipboard and there is no editor to hand it to yet.
+    /// </remarks>
+    private string ResolveRecordingPath()
+    {
+        var settings = _settings.Current;
+        var directory = ImageDelivery.ResolveDirectory(settings);
+        Directory.CreateDirectory(directory);
+
+        var name = FilenameTemplate.ResolveUnique(
+            settings.FilenameTemplate,
+            DateTimeOffset.Now,
+            RecordingExtension,
+            candidate => File.Exists(Path.Combine(directory, candidate)));
+
+        return Path.Combine(directory, name);
+    }
+
+    /// <summary>The pointer, in virtual-desktop pixels.</summary>
+    private static CapturePoint PointerPosition()
+    {
+        // A pointer Windows will not report is treated as the origin, which resolves
+        // to the primary display: recording the wrong display is a better failure
+        // than refusing to record.
+        return GetCursorPos(out var point)
+            ? new CapturePoint(point.X, point.Y)
+            : new CapturePoint(0, 0);
+    }
+
     private async Task ShowPreviewAsync(CapturedFrame frame, CaptureRegion? selection)
     {
         if (_preview is null)
@@ -441,4 +578,15 @@ public sealed class CaptureController : IDisposable
 
     [DllImport("user32.dll", EntryPoint = "MessageBoxW", CharSet = CharSet.Unicode)]
     private static extern int MessageBox(IntPtr window, string text, string caption, uint type);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorPos(out CursorLocation point);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct CursorLocation
+    {
+        public int X;
+        public int Y;
+    }
 }

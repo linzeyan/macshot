@@ -1,0 +1,33 @@
+<Window
+    x:Class="Macshot.Windows.RecordingHudWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Macshot Recording">
+    <Grid Background="#EE202020" Padding="12" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+        <!-- The dot every recorder has. It is the one part of this panel readable
+             across a room, which is what the panel is for. -->
+        <Ellipse
+            Width="10"
+            Height="10"
+            Fill="#FF4A4A"
+            VerticalAlignment="Center" />
+
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+            <!-- Foreground is set rather than inherited: the panel is dark whatever
+                 the system theme is, so a light-theme default would be invisible. -->
+            <TextBlock x:Name="StatusText" Foreground="#FFFFFF" Text="Recording 0:00" />
+            <TextBlock
+                x:Name="HintText"
+                Foreground="#B0B0B0"
+                FontSize="12"
+                Text="Esc or Stop ends the recording and keeps the file" />
+        </StackPanel>
+
+        <Button
+            x:Name="StopButton"
+            Grid.Column="2"
+            Content="Stop"
+            VerticalAlignment="Center"
+            Click="Stop_Click" />
+    </Grid>
+</Window>
