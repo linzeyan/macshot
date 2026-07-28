@@ -11,6 +11,17 @@
             PointerPressed="SelectionCanvas_PointerPressed"
             PointerMoved="SelectionCanvas_PointerMoved"
             PointerReleased="SelectionCanvas_PointerReleased">
+            <!-- Declared before the marquee so a selection being dragged out draws
+                 over the window highlight it is replacing, not under it. -->
+            <Rectangle
+                x:Name="SnapHighlight"
+                Visibility="Collapsed"
+                Stroke="#4CC2FF"
+                StrokeThickness="2"
+                RadiusX="4"
+                RadiusY="4"
+                Fill="#144CC2FF" />
+
             <Rectangle
                 x:Name="SelectionRectangle"
                 Visibility="Collapsed"
@@ -40,7 +51,10 @@
             Padding="14,8"
             Background="#CC202020"
             CornerRadius="6">
-            <TextBlock x:Name="HintText" Text="Drag to capture • Esc to cancel" Foreground="White" />
+            <TextBlock
+                x:Name="HintText"
+                Text="Drag to capture • Click a window to take it • Esc to cancel"
+                Foreground="White" />
         </Border>
 
         <Border

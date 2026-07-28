@@ -12,6 +12,7 @@ using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Microsoft.UI.Xaml.Shapes;
 
 // Imported rather than written out at each use site: inside namespace Macshot.Windows
 // the name "Windows" binds to Macshot.Windows, so a qualified Point
@@ -38,17 +39,27 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private const string AnnotationHint = "Draw to annotate • Ctrl+Z undo • Enter to finish • Esc to cancel";
 
+    /// <summary>
+    /// How far, in layout units, the pointer may travel between press and release
+    /// and still count as a click rather than a drag.
+    /// </summary>
+    private const double ClickSlop = 4;
+
     private readonly CapturedFrame _desktopFrame;
     private readonly MonitorLayout _layout;
     private readonly CaptureMonitor _monitor;
     private readonly CapturedFrame _monitorFrame;
     private readonly SettingsStore _settings;
+    private readonly IReadOnlyList<CaptureRegion> _snapCandidates;
     private readonly AnnotationEditor _editor = new(new AnnotationDocument());
     private readonly Dictionary<AnnotationTool, ToggleButton> _toolButtons = [];
 
     private RasterAnnotationPreview? _annotationPreview;
     private Point? _selectionStart;
     private CaptureRegion? _selection;
+
+    /// <summary>The window under the pointer, in frame space, while none is chosen yet.</summary>
+    private CaptureRegion? _hoveredWindow;
     private TextBox? _textEntry;
     private CapturePoint _textEntryOrigin;
     private string _stampEmoji = StampGlyph.Default;
@@ -69,12 +80,14 @@ public sealed partial class CaptureOverlayWindow : Window
         CapturedFrame desktopFrame,
         MonitorLayout layout,
         CaptureMonitor monitor,
-        SettingsStore settings)
+        SettingsStore settings,
+        IReadOnlyList<CaptureRegion> snapCandidates)
     {
         _desktopFrame = desktopFrame ?? throw new ArgumentNullException(nameof(desktopFrame));
         _layout = layout ?? throw new ArgumentNullException(nameof(layout));
         _monitor = monitor ?? throw new ArgumentNullException(nameof(monitor));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _snapCandidates = snapCandidates ?? throw new ArgumentNullException(nameof(snapCandidates));
         _monitorFrame = NativeScreenCaptureService.Crop(desktopFrame, layout.FrameRegionOf(monitor));
         InitializeComponent();
     }
@@ -153,6 +166,10 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         _selectionStart = e.GetCurrentPoint(SelectionCanvas).Position;
+
+        // The highlight has done its job the moment a drag begins: what the pointer
+        // is over stops mattering once the user is drawing their own edges.
+        SnapHighlight.Visibility = Visibility.Collapsed;
         DrawMarquee(_selectionStart.Value, _selectionStart.Value);
     }
 
@@ -172,8 +189,47 @@ public sealed partial class CaptureOverlayWindow : Window
         if (_selectionStart is { } start && e.Pointer.IsInContact)
         {
             DrawMarquee(start, e.GetCurrentPoint(SelectionCanvas).Position);
+            return;
         }
+
+        TrackHoveredWindow(ToFrame(e));
     }
+
+    /// <summary>
+    /// Offers the window under the pointer, so a click can take it whole. The
+    /// candidates were enumerated when the screenshot was, which is what lets this
+    /// run on every pointer move without asking Windows anything.
+    /// </summary>
+    private void TrackHoveredWindow(CapturePoint point)
+    {
+        _hoveredWindow = WindowSnapper.Snap(_snapCandidates, point, FrameBounds);
+        if (_hoveredWindow is not { } window)
+        {
+            SnapHighlight.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        PlaceChrome(SnapHighlight, window);
+    }
+
+    /// <summary>
+    /// Puts a piece of overlay chrome over a frame-space region. Chrome is laid out
+    /// in this display's layout units while the region is in desktop pixels, so it
+    /// has to come back through the same per-display scale input went out through.
+    /// </summary>
+    private void PlaceChrome(Rectangle target, CaptureRegion region)
+    {
+        var origin = _layout.FrameToPointer(_monitor, new CapturePoint(region.X, region.Y));
+        Canvas.SetLeft(target, origin.X);
+        Canvas.SetTop(target, origin.Y);
+        target.Width = region.Width / _monitor.Scale;
+        target.Height = region.Height / _monitor.Scale;
+        target.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>The whole capture, in frame space: what a window rect is clipped to.</summary>
+    private CaptureRegion FrameBounds =>
+        new(0, 0, _layout.VirtualBounds.Width, _layout.VirtualBounds.Height);
 
     private void SelectionCanvas_PointerReleased(object sender, PointerRoutedEventArgs e)
     {
@@ -195,7 +251,16 @@ public sealed partial class CaptureOverlayWindow : Window
         DrawMarquee(start, end);
         _selectionStart = null;
 
-        var region = _layout.PointerToFrame(_monitor, CaptureRegion.FromPoints(start.X, start.Y, end.X, end.Y));
+        var dragged = CaptureRegion.FromPoints(start.X, start.Y, end.X, end.Y);
+
+        // A press that never became a drag is a click on the highlighted window.
+        // The slop is what makes that reachable: a click carries a pixel or two of
+        // movement, and without it the user would get a 2px selection instead of
+        // the window they were being shown.
+        var region = dragged.Width < ClickSlop && dragged.Height < ClickSlop
+            ? _hoveredWindow ?? default
+            : _layout.PointerToFrame(_monitor, dragged);
+
         if (!region.IsEmpty)
         {
             EnterAnnotationPhase(region);
@@ -205,6 +270,13 @@ public sealed partial class CaptureOverlayWindow : Window
     private void EnterAnnotationPhase(CaptureRegion region)
     {
         _selection = region;
+        _hoveredWindow = null;
+        SnapHighlight.Visibility = Visibility.Collapsed;
+
+        // Brings the marquee onto the region actually taken, which is the whole
+        // point when the region came from a snapped window rather than from a drag
+        // that already left it in the right place.
+        PlaceChrome(SelectionRectangle, region);
 
         // The preview covers the selection with the pixels that will be delivered,
         // which also hides the selection tint inside it: from here on, what is inside

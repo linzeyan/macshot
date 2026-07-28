@@ -24,6 +24,24 @@ public readonly record struct CaptureRegion(double X, double Y, double Width, do
     /// </summary>
     public bool Contains(double x, double y) => x >= X && x < Right && y >= Y && y < Bottom;
 
+    /// <summary>
+    /// The overlap with <paramref name="other"/>, or an empty region when the two
+    /// do not meet. Built from edges rather than through <see cref="FromPoints"/>,
+    /// which takes absolute widths and would turn a miss into a plausible-looking
+    /// rectangle in the gap between them.
+    /// </summary>
+    public CaptureRegion Intersect(CaptureRegion other)
+    {
+        var left = Math.Max(X, other.X);
+        var top = Math.Max(Y, other.Y);
+        var right = Math.Min(Right, other.Right);
+        var bottom = Math.Min(Bottom, other.Bottom);
+
+        return right <= left || bottom <= top
+            ? default
+            : new CaptureRegion(left, top, right - left, bottom - top);
+    }
+
     public CaptureRegion Union(CaptureRegion other)
     {
         if (IsEmpty)

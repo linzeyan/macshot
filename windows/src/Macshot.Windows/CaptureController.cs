@@ -79,9 +79,16 @@ public sealed class CaptureController : IDisposable
         var layout = displays.Layout;
         var desktopFrame = await CaptureDesktopAsync(displays);
 
+        // Taken once, next to the screenshot and before any overlay exists, so the
+        // windows offered for snapping are the ones in the frozen pixels the user is
+        // about to look at — and so macshot's own overlays cannot be among them.
+        var snapCandidates = WindowEnumerator.EnumerateFrontToBack()
+            .Select(window => layout.VirtualToFrame(window))
+            .ToArray();
+
         foreach (var monitor in layout.Monitors)
         {
-            var overlay = new CaptureOverlayWindow(desktopFrame, layout, monitor, _settings);
+            var overlay = new CaptureOverlayWindow(desktopFrame, layout, monitor, _settings, snapCandidates);
             overlay.CaptureCompleted += OnCaptureCompleted;
             overlay.SelectionCommitted += OnSelectionCommitted;
             overlay.Cancelled += OnCaptureCancelled;
