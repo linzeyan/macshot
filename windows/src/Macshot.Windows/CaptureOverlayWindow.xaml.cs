@@ -1,6 +1,7 @@
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
+using Macshot.Windows.Core.Recognition;
 using Macshot.Windows.Rendering;
 using Macshot.Windows.Services;
 using Microsoft.UI.Input;
@@ -265,6 +266,69 @@ public sealed partial class CaptureOverlayWindow : Window
     }
 
     private void Confirm_Click(object sender, RoutedEventArgs e) => Complete();
+
+    private async void ReadText_Click(object sender, RoutedEventArgs e)
+    {
+        await RunRecognitionAsync(lines =>
+        {
+            var window = new TextRecognitionWindow(TextRecognizer.ToText(lines));
+
+            // The overlay is always on top, so the results window would open behind
+            // it. Reading the text ends the capture, the same way it does on macOS.
+            Cancelled?.Invoke(this, EventArgs.Empty);
+            window.Activate();
+        });
+    }
+
+    private async void RedactPii_Click(object sender, RoutedEventArgs e)
+    {
+        await RunRecognitionAsync(lines =>
+        {
+            var annotations = AutoRedactor.Redact(lines);
+            if (annotations.Count == 0)
+            {
+                // Silence here would be indistinguishable from a broken button, and
+                // "nothing found" is a useful answer on a screenshot about to be
+                // shared.
+                HintText.Text = "No personal data found in the selection";
+                return;
+            }
+
+            // One AddRange rather than a loop, so a single Ctrl+Z takes the whole
+            // run back off. This is what the document's snapshot history buys.
+            _editor.Document.AddRange(annotations);
+            RenderAnnotations();
+            HintText.Text = $"Redacted {annotations.Count} • Ctrl+Z to undo • Enter to finish";
+        });
+    }
+
+    /// <summary>
+    /// Runs OCR over the selection and hands the result to the caller. Failures land
+    /// in the hint line rather than a dialog: the overlay is a borderless
+    /// always-on-top window covering the screen, and it already has somewhere to say
+    /// things.
+    /// </summary>
+    private async Task RunRecognitionAsync(Action<IReadOnlyList<RecognizedLine>> handle)
+    {
+        if (_selection is not { } region)
+        {
+            return;
+        }
+
+        var previousHint = HintText.Text;
+        HintText.Text = "Reading text...";
+        try
+        {
+            var frame = NativeScreenCaptureService.Crop(_desktopFrame, region);
+            var lines = await TextRecognizer.RecognizeAsync(frame, region.X, region.Y);
+            HintText.Text = previousHint;
+            handle(lines);
+        }
+        catch (Exception exception)
+        {
+            HintText.Text = exception.Message;
+        }
+    }
 
     /// <summary>
     /// Delivers the pixels the preview is already showing. There is no separate

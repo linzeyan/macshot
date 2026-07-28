@@ -49,6 +49,8 @@
                     <StackPanel x:Name="ToolButtons" Orientation="Horizontal" Spacing="4" />
                     <Button Content="Undo" Click="Undo_Click" />
                     <Button Content="Redo" Click="Redo_Click" />
+                    <Button Content="Read text" Click="ReadText_Click" />
+                    <Button Content="Redact" Click="RedactPii_Click" />
                     <Button Content="Done" Click="Confirm_Click" Style="{StaticResource AccentButtonStyle}" />
                 </StackPanel>
 
