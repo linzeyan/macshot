@@ -51,6 +51,49 @@ public sealed class GlobalHotkeyService : IDisposable
         _handlers.Add(id, handler);
     }
 
+    /// <summary>
+    /// Claims a key with no modifiers, for as long as the caller keeps it. Answers
+    /// whether the claim succeeded rather than throwing.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This exists for the stretches when macshot is driving the desktop rather than
+    /// watching it — a scroll capture turning someone else's wheel — where the key
+    /// that stops it has to arrive even though the foreground belongs to the window
+    /// being captured. Taking a bare key process-wide is only defensible because it
+    /// is given straight back, so <see cref="Unregister"/> is not optional.
+    /// </para>
+    /// <para>
+    /// A refusal is survivable and so is not thrown on: another app already owning
+    /// the key costs the shortcut, not the capture, which still ends on its own.
+    /// </para>
+    /// </remarks>
+    public bool TryRegisterBareKey(int id, uint virtualKey, Action handler)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+        ArgumentOutOfRangeException.ThrowIfLessThan(id, 1);
+        ArgumentNullException.ThrowIfNull(handler);
+
+        if (_handlers.ContainsKey(id) || !RegisterHotKey(_window.Handle, id, ModNoRepeat, virtualKey))
+        {
+            return false;
+        }
+
+        _handlers.Add(id, handler);
+        return true;
+    }
+
+    /// <summary>Gives a hotkey back, doing nothing when it was never held.</summary>
+    public void Unregister(int id)
+    {
+        if (_disposed || !_handlers.Remove(id))
+        {
+            return;
+        }
+
+        UnregisterHotKey(_window.Handle, id);
+    }
+
     public void Dispose()
     {
         if (_disposed)

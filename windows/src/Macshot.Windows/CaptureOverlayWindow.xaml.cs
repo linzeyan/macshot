@@ -39,6 +39,16 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private const string AnnotationHint = "Draw to annotate • Ctrl+Z undo • Enter to finish • Esc to cancel";
 
+    /// <summary>The standing instruction before anything is chosen. Matches the XAML default.</summary>
+    private const string SelectionHint = "Drag to capture • Click a window to take it • Esc to cancel";
+
+    /// <summary>
+    /// Shown while a window is highlighted. Scroll capture is otherwise unfindable:
+    /// there is no toolbar yet at hover time, and a gesture nobody is told about is
+    /// a feature nobody has.
+    /// </summary>
+    private const string WindowHint = "Click to take this window • Shift+click to scroll-capture it • Esc to cancel";
+
     /// <summary>
     /// How far, in layout units, the pointer may travel between press and release
     /// and still count as a click rather than a drag.
@@ -116,6 +126,14 @@ public sealed partial class CaptureOverlayWindow : Window
     public event EventHandler? SelectionCommitted;
 
     public event EventHandler? Cancelled;
+
+    /// <summary>
+    /// Raised when the user asks for a window to be scroll-captured. The overlay
+    /// hands over the window rather than running it: scroll capture hides every
+    /// overlay and drives the desktop, which is the owner's business, not one
+    /// display's.
+    /// </summary>
+    public event EventHandler<CaptureWindow>? ScrollCaptureRequested;
 
     public CaptureMonitor Monitor => _monitor;
 
@@ -215,10 +233,12 @@ public sealed partial class CaptureOverlayWindow : Window
         if (_hoveredWindow is not { } window)
         {
             SnapHighlight.Visibility = Visibility.Collapsed;
+            HintText.Text = SelectionHint;
             return;
         }
 
         PlaceChrome(SnapHighlight, window.Bounds);
+        HintText.Text = WindowHint;
     }
 
     /// <summary>
@@ -270,6 +290,15 @@ public sealed partial class CaptureOverlayWindow : Window
         {
             if (_hoveredWindow is { } window && !window.Bounds.IsEmpty)
             {
+                // Shift asks for the whole page rather than the screenful of it that
+                // is showing. The window is the same one either way, which is why the
+                // gesture hangs off the same click rather than off a mode.
+                if (e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift))
+                {
+                    ScrollCaptureRequested?.Invoke(this, window);
+                    return;
+                }
+
                 // Awaited inside rather than by the caller: a pointer event handler
                 // cannot be, and the capture it waits on is the only asynchronous
                 // step between the click and the annotation phase.

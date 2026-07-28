@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using Macshot.Windows.Core.Capture;
+using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Output;
 using Macshot.Windows.Services;
 using Microsoft.UI.Dispatching;
@@ -27,6 +28,15 @@ public sealed class CaptureController : IDisposable
 
     private const int HotkeyCaptureArea = 1;
     private const int HotkeyCaptureAllScreens = 2;
+
+    /// <summary>
+    /// Held only while a scroll capture runs. Escape is taken bare, and process-wide,
+    /// because the foreground during a scroll capture belongs to the window being
+    /// captured rather than to macshot.
+    /// </summary>
+    private const int HotkeyStopScrollCapture = 3;
+
+    private const uint VirtualKeyEscape = 0x1B;
 
     private const uint MessageBoxIconError = 0x00000010;
 
@@ -98,6 +108,7 @@ public sealed class CaptureController : IDisposable
             overlay.CaptureCompleted += OnCaptureCompleted;
             overlay.SelectionCommitted += OnSelectionCommitted;
             overlay.Cancelled += OnCaptureCancelled;
+            overlay.ScrollCaptureRequested += OnScrollCaptureRequested;
             _overlays.Add(overlay);
         }
 
@@ -321,6 +332,73 @@ public sealed class CaptureController : IDisposable
         overlay.CaptureCompleted -= OnCaptureCompleted;
         overlay.SelectionCommitted -= OnSelectionCommitted;
         overlay.Cancelled -= OnCaptureCancelled;
+        overlay.ScrollCaptureRequested -= OnScrollCaptureRequested;
+    }
+
+    private void OnScrollCaptureRequested(object? sender, CaptureWindow window) =>
+        Post(() => ScrollCaptureAsync(window));
+
+    /// <summary>
+    /// Runs a scroll capture of one window and delivers the tall image it produces.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The overlays go first and the panel comes up second, and the order is not
+    /// cosmetic. The wheel lands on whatever sits under the pointer, so an
+    /// always-on-top overlay covering the desktop would take every notch itself;
+    /// and Windows only hands the foreground to a process that already has it, so
+    /// activating the panel is what leaves macshot able to bring the target window
+    /// forward a moment later.
+    /// </para>
+    /// <para>
+    /// Stopping early is not a failure. Whatever was scrolled through is delivered
+    /// the same way a whole page would be.
+    /// </para>
+    /// </remarks>
+    private async Task ScrollCaptureAsync(CaptureWindow window)
+    {
+        DismissOverlays();
+
+        using var cancellation = new CancellationTokenSource();
+        var hud = new ScrollCaptureHudWindow();
+        hud.StopRequested += (_, _) => cancellation.Cancel();
+        hud.ShowHud();
+
+        var holdsEscape = _hotkeys.TryRegisterBareKey(
+            HotkeyStopScrollCapture,
+            VirtualKeyEscape,
+            cancellation.Cancel);
+
+        var session = new ScrollCaptureSession(_screenCapture.TryCaptureWindowAsync);
+        session.Progressed += (_, progress) => hud.Report(progress.Frames, progress.Rows);
+
+        ScrollCaptureResult result;
+        try
+        {
+            result = await session.RunAsync(window, cancellation.Token);
+        }
+        finally
+        {
+            if (holdsEscape)
+            {
+                _hotkeys.Unregister(HotkeyStopScrollCapture);
+            }
+
+            // Before delivery, so the panel is not still claiming to be scrolling
+            // while the thumbnail for the finished capture appears next to it.
+            hud.Close();
+        }
+
+        if (result.Stop == ScrollCaptureStop.HeightLimit)
+        {
+            MessageBox(
+                _messageWindow.Handle,
+                "That page was longer than macshot will capture in one go, so the bottom of it is missing.",
+                "macshot",
+                MessageBoxIconError);
+        }
+
+        await DeliverAsync(result.Frame);
     }
 
     private async Task ShowPreviewAsync(CapturedFrame frame, CaptureRegion? selection)

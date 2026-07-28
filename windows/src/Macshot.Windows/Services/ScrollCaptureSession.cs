@@ -6,6 +6,9 @@ namespace Macshot.Windows.Services;
 /// <summary>One finished scroll capture, and why it ended.</summary>
 public sealed record ScrollCaptureResult(CapturedFrame Frame, ScrollCaptureStop Stop, int Frames);
 
+/// <summary>How far a scroll capture has got.</summary>
+public sealed record ScrollCaptureProgress(int Frames, int Rows);
+
 /// <summary>
 /// Captures a window taller than the screen, by taking frames of it while scrolling
 /// it and stitching what each one reveals.
@@ -48,6 +51,13 @@ public sealed class ScrollCaptureSession
         _captureWindow = captureWindow ?? throw new ArgumentNullException(nameof(captureWindow));
         _driver = driver ?? new ScrollDriver();
     }
+
+    /// <summary>
+    /// Raised after each frame is taken in, so something on screen can say the
+    /// desktop is being driven on purpose. Raised on whichever thread the capture is
+    /// running on, which for the only caller is the UI thread.
+    /// </summary>
+    public event EventHandler<ScrollCaptureProgress>? Progressed;
 
     /// <summary>
     /// Scrolls <paramref name="window"/> to its end, or until
@@ -102,6 +112,8 @@ public sealed class ScrollCaptureSession
                 && frame.Height == stitcher.FrameHeight
                     ? stitcher.Add(frame.BgraPixels)
                     : ScrollStitchOutcome.Rejected;
+
+            Progressed?.Invoke(this, new ScrollCaptureProgress(frames, stitcher.Height));
 
             var stop = policy.Observe(outcome, stitcher.Height);
             if (stop != ScrollCaptureStop.None)
