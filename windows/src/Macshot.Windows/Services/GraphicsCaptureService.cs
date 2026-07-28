@@ -12,6 +12,12 @@ using Windows.Graphics.DirectX;
 using Windows.Graphics.DirectX.Direct3D11;
 using Windows.Graphics.Imaging;
 
+// There are two DisplayId types with the same shape and no conversion between them:
+// the Windows App SDK's Microsoft.UI.DisplayId, which Win32Interop hands back, and
+// the system's Windows.Graphics.DisplayId, which the capture API takes. Aliased so
+// the difference is visible where it is bridged rather than looking like a typo.
+using GraphicsDisplayId = Windows.Graphics.DisplayId;
+
 namespace Macshot.Windows.Services;
 
 /// <summary>
@@ -110,7 +116,12 @@ public sealed class GraphicsCaptureService : IDisposable
         IDirect3DDevice device,
         nint monitorHandle)
     {
-        var item = GraphicsCaptureItem.TryCreateFromDisplayId(Win32Interop.GetDisplayIdFromMonitor(monitorHandle))
+        var displayId = new GraphicsDisplayId
+        {
+            Value = Win32Interop.GetDisplayIdFromMonitor(monitorHandle).Value,
+        };
+
+        var item = GraphicsCaptureItem.TryCreateFromDisplayId(displayId)
             ?? throw new InvalidOperationException("Windows would not open a capture item for the display.");
 
         var arrival = new TaskCompletionSource<Direct3D11CaptureFrame>(
