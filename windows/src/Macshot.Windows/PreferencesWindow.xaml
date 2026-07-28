@@ -35,6 +35,14 @@
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
 
+                <TextBlock Text="Recording" Style="{StaticResource SubtitleTextBlockStyle}" />
+
+                <ComboBox x:Name="RecordingFormatBox" Header="Recording format" />
+                <TextBlock
+                    Text="GIF is written smaller and slower than MP4, because every GIF frame is a whole image."
+                    TextWrapping="Wrap"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
                 <TextBlock Text="After a capture" Style="{StaticResource SubtitleTextBlockStyle}" />
 
                 <ToggleSwitch x:Name="ClipboardSwitch" Header="Copy to the clipboard" />

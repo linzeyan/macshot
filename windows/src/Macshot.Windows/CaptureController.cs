@@ -49,8 +49,6 @@ public sealed class CaptureController : IDisposable
 
     private const uint MessageBoxIconError = 0x00000010;
 
-    private const string RecordingExtension = ".mp4";
-
     private readonly ScreenCaptureService _screenCapture = new();
     private readonly ScreenRecorder _recorder = new();
     private readonly SettingsStore _settings = new();
@@ -479,9 +477,15 @@ public sealed class CaptureController : IDisposable
 
         _recording = cancellation;
 
+        var format = _settings.Current.RecordingFormat;
+
         try
         {
-            var result = await _recorder.RecordDisplayAsync(handle, ResolveRecordingPath(), cancellation.Token);
+            var result = await _recorder.RecordDisplayAsync(
+                handle,
+                ResolveRecordingPath(format),
+                format,
+                cancellation.Token);
 
             // The panel outlives the recording by a few seconds to say where the file
             // went. Video has no thumbnail and no clipboard to land in, so this is
@@ -512,7 +516,7 @@ public sealed class CaptureController : IDisposable
     /// says, because there is nowhere else for it to go: minutes of video do not
     /// belong on the clipboard and there is no editor to hand it to yet.
     /// </remarks>
-    private string ResolveRecordingPath()
+    private string ResolveRecordingPath(RecordingFormat format)
     {
         var settings = _settings.Current;
         var directory = ImageDelivery.ResolveDirectory(settings);
@@ -521,7 +525,7 @@ public sealed class CaptureController : IDisposable
         var name = FilenameTemplate.ResolveUnique(
             settings.FilenameTemplate,
             DateTimeOffset.Now,
-            RecordingExtension,
+            format.FileExtension(),
             candidate => File.Exists(Path.Combine(directory, candidate)));
 
         return Path.Combine(directory, name);

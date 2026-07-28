@@ -34,6 +34,8 @@ public sealed partial class PreferencesWindow : Window
         FormatBox.ItemsSource = Enum.GetValues<CaptureImageFormat>().Select(format => format.ToString()).ToList();
         FormatBox.SelectedIndex = (int)settings.Format;
         QualitySlider.Value = settings.Quality;
+        RecordingFormatBox.ItemsSource = Enum.GetValues<RecordingFormat>().Select(format => format.ToString()).ToList();
+        RecordingFormatBox.SelectedIndex = (int)settings.RecordingFormat;
         DirectoryBox.Text = settings.SaveDirectory ?? string.Empty;
         TemplateBox.Text = settings.FilenameTemplate;
         ClipboardSwitch.IsOn = settings.CopyToClipboard;
@@ -50,6 +52,9 @@ public sealed partial class PreferencesWindow : Window
         {
             Format = SelectedFormat(),
             Quality = (int)QualitySlider.Value,
+            RecordingFormat = RecordingFormatBox.SelectedIndex >= 0
+                ? (RecordingFormat)RecordingFormatBox.SelectedIndex
+                : RecordingFormat.Mp4,
             SaveDirectory = DirectoryBox.Text,
             FilenameTemplate = TemplateBox.Text,
             CopyToClipboard = ClipboardSwitch.IsOn,

@@ -44,6 +44,13 @@ public sealed record CaptureSettings
 
     public bool ShowThumbnail { get; init; } = true;
 
+    /// <summary>
+    /// What a screen recording is written as. MP4 by default because it is what a
+    /// recording should be; GIF costs size and colour, and is chosen for where the
+    /// file has to go rather than for what it is.
+    /// </summary>
+    public RecordingFormat RecordingFormat { get; init; } = RecordingFormat.Mp4;
+
     public int ThumbnailSeconds { get; init; } = 6;
 
     /// <summary>
@@ -88,6 +95,7 @@ public sealed record CaptureSettings
         return this with
         {
             Format = Enum.IsDefined(Format) ? Format : CaptureImageFormat.Png,
+            RecordingFormat = Enum.IsDefined(RecordingFormat) ? RecordingFormat : RecordingFormat.Mp4,
             Quality = Math.Clamp(Quality, MinQuality, MaxQuality),
             SaveDirectory = string.IsNullOrWhiteSpace(SaveDirectory) ? null : SaveDirectory.Trim(),
             FilenameTemplate = string.IsNullOrWhiteSpace(FilenameTemplate)
