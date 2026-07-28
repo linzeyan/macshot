@@ -1,8 +1,41 @@
+using System.Globalization;
 using Macshot.Windows.Core.Capture;
 
 namespace Macshot.Windows.Core.Annotations;
 
-public readonly record struct AnnotationColor(byte Red, byte Green, byte Blue, byte Alpha = byte.MaxValue);
+public readonly record struct AnnotationColor(byte Red, byte Green, byte Blue, byte Alpha = byte.MaxValue)
+{
+    /// <summary>
+    /// <c>#AARRGGBB</c>, the form the settings file stores. Alpha is always written
+    /// so a round trip cannot quietly turn a translucent marker opaque.
+    /// </summary>
+    public string ToHex() => $"#{Alpha:X2}{Red:X2}{Green:X2}{Blue:X2}";
+
+    /// <summary>
+    /// Accepts <c>#AARRGGBB</c> and <c>#RRGGBB</c>, with or without the hash, because
+    /// the settings file is meant to be hand-editable and six digits is what a person
+    /// will type.
+    /// </summary>
+    public static bool TryParseHex(string? text, out AnnotationColor color)
+    {
+        color = default;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        var digits = text.Trim().TrimStart('#');
+        if (digits.Length is not (6 or 8)
+            || !uint.TryParse(digits, NumberStyles.HexNumber, CultureInfo.InvariantCulture, out var value))
+        {
+            return false;
+        }
+
+        var alpha = digits.Length == 8 ? (byte)(value >> 24) : byte.MaxValue;
+        color = new AnnotationColor((byte)(value >> 16), (byte)(value >> 8), (byte)value, alpha);
+        return true;
+    }
+}
 
 public sealed record AnnotationStyle(
     AnnotationColor Color,

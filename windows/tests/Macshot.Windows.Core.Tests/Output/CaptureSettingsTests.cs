@@ -1,3 +1,4 @@
+using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Output;
 
 namespace Macshot.Windows.Core.Tests.Output;
@@ -50,6 +51,37 @@ public sealed class CaptureSettingsTests
         var settings = new CaptureSettings { FilenameTemplate = " " }.Normalized();
 
         Assert.AreEqual(FilenameTemplate.Default, settings.FilenameTemplate);
+    }
+
+    /// <summary>
+    /// The drawing style is remembered across captures, so an unreadable value has
+    /// to become the default here instead of reaching the renderer.
+    /// </summary>
+    [TestMethod]
+    public void Normalized_RepairsAnUnreadableAnnotationStyle()
+    {
+        var settings = new CaptureSettings
+        {
+            AnnotationColor = "not a colour",
+            AnnotationStrokeWidth = 0,
+            AnnotationLineStyle = (LineStyle)42,
+        }.Normalized();
+
+        Assert.AreEqual(AnnotationStyle.Default.Color.ToHex(), settings.AnnotationColor);
+        Assert.AreEqual(CaptureSettings.MinStrokeWidth, settings.AnnotationStrokeWidth);
+        Assert.AreEqual(LineStyle.Solid, settings.AnnotationLineStyle);
+    }
+
+    [TestMethod]
+    public void AnnotationStyle_RoundTripsThroughTheSettings()
+    {
+        var style = new AnnotationStyle(new AnnotationColor(255, 0, 0, 128), 7, LineStyle.Dotted);
+
+        var restored = CaptureSettings.Default.WithAnnotationStyle(style).Normalized().ToAnnotationStyle();
+
+        Assert.AreEqual(style.Color, restored.Color);
+        Assert.AreEqual(style.StrokeWidth, restored.StrokeWidth);
+        Assert.AreEqual(style.LineStyle, restored.LineStyle);
     }
 
     [TestMethod]

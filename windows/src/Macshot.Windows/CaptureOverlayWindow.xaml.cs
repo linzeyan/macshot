@@ -9,6 +9,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 
 // Imported rather than written out at each use site: inside namespace Macshot.Windows
@@ -17,6 +18,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Foundation;
 using Windows.Graphics;
 using Windows.System;
+using Windows.UI;
 using Windows.UI.Core;
 
 namespace Macshot.Windows;
@@ -33,6 +35,7 @@ public sealed partial class CaptureOverlayWindow : Window
     private readonly MonitorLayout _layout;
     private readonly CaptureMonitor _monitor;
     private readonly CapturedFrame _monitorFrame;
+    private readonly SettingsStore _settings;
     private readonly AnnotationEditor _editor = new(new AnnotationDocument());
     private readonly Dictionary<AnnotationTool, ToggleButton> _toolButtons = [];
 
@@ -40,11 +43,21 @@ public sealed partial class CaptureOverlayWindow : Window
     private Point? _selectionStart;
     private CaptureRegion? _selection;
 
-    public CaptureOverlayWindow(CapturedFrame desktopFrame, MonitorLayout layout, CaptureMonitor monitor)
+    /// <summary>The style the toolbar started from, so only a real change is written back.</summary>
+    private AnnotationStyle _loadedStyle = AnnotationStyle.Default;
+
+    private bool _isLoadingStyle;
+
+    public CaptureOverlayWindow(
+        CapturedFrame desktopFrame,
+        MonitorLayout layout,
+        CaptureMonitor monitor,
+        SettingsStore settings)
     {
         _desktopFrame = desktopFrame ?? throw new ArgumentNullException(nameof(desktopFrame));
         _layout = layout ?? throw new ArgumentNullException(nameof(layout));
         _monitor = monitor ?? throw new ArgumentNullException(nameof(monitor));
+        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _monitorFrame = NativeScreenCaptureService.Crop(desktopFrame, layout.FrameRegionOf(monitor));
         InitializeComponent();
     }
@@ -77,6 +90,11 @@ public sealed partial class CaptureOverlayWindow : Window
         PreviewImage.Source = source;
         _renderer = new ShapeAnnotationRenderer(AnnotationLayer, _layout, _monitor);
         BuildToolButtons();
+        LoadStyle();
+
+        // Covers both finishing and cancelling: the owner closes every overlay either
+        // way, and a colour picked but not used is still the colour the user wants.
+        Closed += (_, _) => PersistStyle();
 
         var appWindow = this.GetAppWindow();
         if (appWindow.Presenter is OverlappedPresenter presenter)
@@ -302,6 +320,88 @@ public sealed partial class CaptureOverlayWindow : Window
 
         RenderAnnotations();
     }
+
+    /// <summary>
+    /// Fills the style controls from the remembered style. The flag keeps the change
+    /// handlers from writing a half-initialized style back while this runs: setting
+    /// the colour before the slider has a value would otherwise commit a stroke width
+    /// of zero.
+    /// </summary>
+    private void LoadStyle()
+    {
+        _isLoadingStyle = true;
+        try
+        {
+            _loadedStyle = _settings.Current.ToAnnotationStyle();
+            _editor.Style = _loadedStyle;
+
+            LineStyleBox.ItemsSource = Enum.GetValues<LineStyle>().Select(style => style.ToString()).ToList();
+            LineStyleBox.SelectedIndex = (int)_loadedStyle.LineStyle;
+            StrokeWidthSlider.Value = _loadedStyle.StrokeWidth;
+            StyleColorPicker.Color = ToUiColor(_loadedStyle.Color);
+        }
+        finally
+        {
+            _isLoadingStyle = false;
+        }
+
+        UpdateColorSwatch();
+    }
+
+    private void StyleColor_Changed(ColorPicker sender, ColorChangedEventArgs args) => ApplyStyle();
+
+    private void StrokeWidth_Changed(object sender, RangeBaseValueChangedEventArgs e) => ApplyStyle();
+
+    private void LineStyle_Changed(object sender, SelectionChangedEventArgs e) => ApplyStyle();
+
+    /// <summary>
+    /// The style applies to marks drawn from now on. Restyling what is already on the
+    /// canvas would need a selection, which is a separate feature.
+    /// </summary>
+    private void ApplyStyle()
+    {
+        // SelectionChanged fires while the XAML tree is still being built, before the
+        // other controls this reads from exist.
+        if (_isLoadingStyle || StyleColorPicker is null || StrokeWidthSlider is null)
+        {
+            return;
+        }
+
+        var color = StyleColorPicker.Color;
+        _editor.Style = new AnnotationStyle(
+            new AnnotationColor(color.R, color.G, color.B, color.A),
+            Math.Max(1, StrokeWidthSlider.Value),
+            LineStyleBox.SelectedIndex >= 0 ? (LineStyle)LineStyleBox.SelectedIndex : LineStyle.Solid);
+        UpdateColorSwatch();
+    }
+
+    private void UpdateColorSwatch() =>
+        ColorSwatch.Background = new SolidColorBrush(ToUiColor(_editor.Style.Color));
+
+    /// <summary>
+    /// Remembers the style for the next capture. A failure here is swallowed on
+    /// purpose: this runs while the overlay is being torn down, there is no window
+    /// left to report into, and the cost of losing it is that the next capture starts
+    /// from the previous colour.
+    /// </summary>
+    private void PersistStyle()
+    {
+        if (_editor.Style == _loadedStyle)
+        {
+            return;
+        }
+
+        try
+        {
+            _settings.Save(_settings.Current.WithAnnotationStyle(_editor.Style));
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+        }
+    }
+
+    private static Color ToUiColor(AnnotationColor color) =>
+        new() { A = color.Alpha, R = color.Red, G = color.Green, B = color.Blue };
 
     private static string Label(AnnotationTool tool) => tool switch
     {

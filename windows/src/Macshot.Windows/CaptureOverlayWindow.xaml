@@ -42,13 +42,50 @@
             Padding="8"
             Background="#EE202020"
             CornerRadius="8">
-            <StackPanel Orientation="Horizontal" Spacing="8">
-                <!-- Populated in code from ShapeAnnotationRenderer.SupportedTools so the
-                     toolbar cannot offer a tool the preview would refuse to draw. -->
-                <StackPanel x:Name="ToolButtons" Orientation="Horizontal" Spacing="4" />
-                <Button Content="Undo" Click="Undo_Click" />
-                <Button Content="Redo" Click="Redo_Click" />
-                <Button Content="Done" Click="Confirm_Click" Style="{StaticResource AccentButtonStyle}" />
+            <StackPanel Spacing="8">
+                <StackPanel Orientation="Horizontal" Spacing="8">
+                    <!-- Populated in code from ShapeAnnotationRenderer.SupportedTools so
+                         the toolbar cannot offer a tool the preview would refuse to draw. -->
+                    <StackPanel x:Name="ToolButtons" Orientation="Horizontal" Spacing="4" />
+                    <Button Content="Undo" Click="Undo_Click" />
+                    <Button Content="Redo" Click="Redo_Click" />
+                    <Button Content="Done" Click="Confirm_Click" Style="{StaticResource AccentButtonStyle}" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
+                    <Button Padding="6" ToolTipService.ToolTip="Colour">
+                        <Border
+                            x:Name="ColorSwatch"
+                            Width="20"
+                            Height="20"
+                            CornerRadius="3"
+                            BorderBrush="#66FFFFFF"
+                            BorderThickness="1" />
+                        <Button.Flyout>
+                            <Flyout>
+                                <ColorPicker
+                                    x:Name="StyleColorPicker"
+                                    IsAlphaEnabled="True"
+                                    ColorChanged="StyleColor_Changed" />
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
+
+                    <TextBlock Text="Width" Foreground="White" VerticalAlignment="Center" />
+                    <Slider
+                        x:Name="StrokeWidthSlider"
+                        Width="120"
+                        Minimum="1"
+                        Maximum="32"
+                        StepFrequency="1"
+                        VerticalAlignment="Center"
+                        ValueChanged="StrokeWidth_Changed" />
+
+                    <ComboBox
+                        x:Name="LineStyleBox"
+                        VerticalAlignment="Center"
+                        SelectionChanged="LineStyle_Changed" />
+                </StackPanel>
             </StackPanel>
         </Border>
     </Grid>

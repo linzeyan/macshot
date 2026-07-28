@@ -1,3 +1,5 @@
+using Macshot.Windows.Core.Annotations;
+
 namespace Macshot.Windows.Core.Output;
 
 /// <summary>
@@ -16,6 +18,8 @@ public sealed record CaptureSettings
     public const int MaxQuality = 100;
     public const int MinThumbnailSeconds = 1;
     public const int MaxThumbnailSeconds = 60;
+    public const double MinStrokeWidth = 1;
+    public const double MaxStrokeWidth = 64;
 
     public static CaptureSettings Default { get; } = new();
 
@@ -43,6 +47,38 @@ public sealed record CaptureSettings
     public int ThumbnailSeconds { get; init; } = 6;
 
     /// <summary>
+    /// The drawing style the toolbar was last left on, as <c>#AARRGGBB</c>. This is
+    /// remembered rather than configured — nobody opens a settings window to pick
+    /// the colour of the next arrow — which is why it has no preferences UI. It is
+    /// the counterpart of the macOS <c>currentStrokeWidth</c> family of defaults.
+    /// </summary>
+    public string AnnotationColor { get; init; } = AnnotationStyle.Default.Color.ToHex();
+
+    public double AnnotationStrokeWidth { get; init; } = AnnotationStyle.Default.StrokeWidth;
+
+    public LineStyle AnnotationLineStyle { get; init; } = LineStyle.Solid;
+
+    public AnnotationStyle ToAnnotationStyle()
+    {
+        var color = Annotations.AnnotationColor.TryParseHex(AnnotationColor, out var parsed)
+            ? parsed
+            : AnnotationStyle.Default.Color;
+        return new AnnotationStyle(color, Math.Clamp(AnnotationStrokeWidth, MinStrokeWidth, MaxStrokeWidth), AnnotationLineStyle);
+    }
+
+    public CaptureSettings WithAnnotationStyle(AnnotationStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(style);
+
+        return this with
+        {
+            AnnotationColor = style.Color.ToHex(),
+            AnnotationStrokeWidth = style.StrokeWidth,
+            AnnotationLineStyle = style.LineStyle,
+        };
+    }
+
+    /// <summary>
     /// Clamps every field into range. The settings file is user-editable and can
     /// also be stale after an upgrade, so nothing downstream may assume it is sane;
     /// this is the one place that repairs it.
@@ -58,6 +94,16 @@ public sealed record CaptureSettings
                 ? Output.FilenameTemplate.Default
                 : FilenameTemplate.Trim(),
             ThumbnailSeconds = Math.Clamp(ThumbnailSeconds, MinThumbnailSeconds, MaxThumbnailSeconds),
+
+            // Round-tripped through the parser so an unreadable colour becomes the
+            // default here, rather than silently at every point that draws.
+            AnnotationColor = (Annotations.AnnotationColor.TryParseHex(AnnotationColor, out var color)
+                ? color
+                : AnnotationStyle.Default.Color).ToHex(),
+            AnnotationStrokeWidth = double.IsFinite(AnnotationStrokeWidth)
+                ? Math.Clamp(AnnotationStrokeWidth, MinStrokeWidth, MaxStrokeWidth)
+                : AnnotationStyle.Default.StrokeWidth,
+            AnnotationLineStyle = Enum.IsDefined(AnnotationLineStyle) ? AnnotationLineStyle : LineStyle.Solid,
         };
     }
 }

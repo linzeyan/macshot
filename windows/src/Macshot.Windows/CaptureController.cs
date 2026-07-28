@@ -79,7 +79,7 @@ public sealed class CaptureController : IDisposable
 
         foreach (var monitor in layout.Monitors)
         {
-            var overlay = new CaptureOverlayWindow(desktopFrame, layout, monitor);
+            var overlay = new CaptureOverlayWindow(desktopFrame, layout, monitor, _settings);
             overlay.CaptureCompleted += OnCaptureCompleted;
             overlay.SelectionCommitted += OnSelectionCommitted;
             overlay.Cancelled += OnCaptureCancelled;
