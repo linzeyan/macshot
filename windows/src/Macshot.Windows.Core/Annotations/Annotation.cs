@@ -79,6 +79,14 @@ public sealed record Annotation(
     public int NumberValue { get; init; }
 
     /// <summary>
+    /// Rasterized pixels for the tools Core cannot draw itself — text, number,
+    /// stamp — and null for every other tool. Being an ordinary member of the record
+    /// is what makes it survive <c>with</c> expressions, so dragging a badge cannot
+    /// lose its glyphs. See <c>docs/windows-port/architecture.md</c>, decision D7.
+    /// </summary>
+    public AnnotationSprite? Sprite { get; init; }
+
+    /// <summary>
     /// Annotations produced by one user action (auto-redact, paste) share a group
     /// id so callers can present and remove them as a single item.
     /// </summary>
@@ -111,6 +119,39 @@ public sealed record Annotation(
             Points = samples,
         };
     }
+
+    /// <summary>
+    /// A sprite-backed annotation with its top-left at <paramref name="origin"/>.
+    /// The bounds come from the sprite instead of from a drag, because the sprite is
+    /// composited one to one: bounds that disagreed with it would hit test an area
+    /// the mark does not cover.
+    /// </summary>
+    public static Annotation CreateSprite(
+        AnnotationTool tool,
+        CapturePoint origin,
+        AnnotationSprite sprite,
+        AnnotationStyle? style = null)
+    {
+        ArgumentNullException.ThrowIfNull(sprite);
+
+        if (!RequiresSprite(tool))
+        {
+            throw new ArgumentException($"{tool} is drawn from geometry, not from a sprite.", nameof(tool));
+        }
+
+        var end = new CapturePoint(origin.X + sprite.Width, origin.Y + sprite.Height);
+        return new Annotation(Guid.NewGuid(), tool, origin, end, style ?? AnnotationStyle.Default)
+        {
+            Sprite = sprite,
+        };
+    }
+
+    /// <summary>
+    /// Tools whose mark is rasterized pixels rather than geometry, and which are
+    /// therefore invalid without a <see cref="Sprite"/>.
+    /// </summary>
+    public static bool RequiresSprite(AnnotationTool tool) =>
+        tool is AnnotationTool.Text or AnnotationTool.Number or AnnotationTool.Stamp;
 
     /// <summary>Tools that describe an interaction rather than a drawn mark cannot be dragged.</summary>
     public bool IsMovable => Tool is not (AnnotationTool.Crop or AnnotationTool.ColorSampler or AnnotationTool.Select);

@@ -23,6 +23,16 @@
              never hit testable so pointer input keeps reaching the canvas below. -->
         <Canvas x:Name="AnnotationLayer" IsHitTestVisible="False" />
 
+        <!-- Holds the elements glyph sprites are rasterized from, parked off-screen.
+             RenderTargetBitmap only captures elements that are in the tree and have
+             been arranged, so they cannot simply be built on the side. -->
+        <Canvas x:Name="SpriteHost" IsHitTestVisible="False" />
+
+        <!-- The text tool's entry box lives here. Unlike the layers above it this one
+             is hit testable, but a Canvas with no background only hit tests its
+             children, so a click anywhere else still reaches the selection canvas. -->
+        <Canvas x:Name="TextEntryLayer" />
+
         <Border
             HorizontalAlignment="Center"
             VerticalAlignment="Top"
@@ -87,6 +97,21 @@
                         x:Name="LineStyleBox"
                         VerticalAlignment="Center"
                         SelectionChanged="LineStyle_Changed" />
+
+                    <!-- Which emoji the stamp tool places. Populated in code from
+                         StampGlyph.Choices so the picker and the renderer cannot
+                         offer different sets. -->
+                    <Button x:Name="StampButton" VerticalAlignment="Center" ToolTipService.ToolTip="Stamp">
+                        <Button.Flyout>
+                            <Flyout>
+                                <GridView
+                                    x:Name="StampChoices"
+                                    MaxWidth="240"
+                                    SelectionMode="Single"
+                                    SelectionChanged="StampChoice_Changed" />
+                            </Flyout>
+                        </Button.Flyout>
+                    </Button>
                 </StackPanel>
             </StackPanel>
         </Border>

@@ -32,6 +32,12 @@ namespace Macshot.Windows;
 /// </summary>
 public sealed partial class CaptureOverlayWindow : Window
 {
+    /// <summary>
+    /// The standing instruction, restored whenever a transient message — a text entry
+    /// prompt, a redaction count, an error — has had its turn.
+    /// </summary>
+    private const string AnnotationHint = "Draw to annotate • Ctrl+Z undo • Enter to finish • Esc to cancel";
+
     private readonly CapturedFrame _desktopFrame;
     private readonly MonitorLayout _layout;
     private readonly CaptureMonitor _monitor;
@@ -43,6 +49,16 @@ public sealed partial class CaptureOverlayWindow : Window
     private RasterAnnotationPreview? _annotationPreview;
     private Point? _selectionStart;
     private CaptureRegion? _selection;
+    private TextBox? _textEntry;
+    private CapturePoint _textEntryOrigin;
+    private string _stampEmoji = StampGlyph.Default;
+
+    /// <summary>
+    /// The sprite placement still rasterizing, if any. Producing a sprite is async, so
+    /// finishing the capture has to wait for it: without this, clicking Done right
+    /// after typing would deliver an image missing the text that click committed.
+    /// </summary>
+    private Task _pendingSprite = Task.CompletedTask;
 
     /// <summary>The style the toolbar started from, so only a real change is written back.</summary>
     private AnnotationStyle _loadedStyle = AnnotationStyle.Default;
@@ -121,6 +137,16 @@ public sealed partial class CaptureOverlayWindow : Window
 
         if (IsAnnotating)
         {
+            // Sprite tools are placed with a click rather than dragged out: their size
+            // comes from the rasterized pixels, so there is nothing left for a drag to
+            // decide. The editor is deliberately not told about the press, which is
+            // what keeps its move and release handlers no-ops.
+            if (Annotation.RequiresSprite(_editor.Tool))
+            {
+                PlaceSprite(ToFrame(e));
+                return;
+            }
+
             _editor.PointerPressed(ToFrame(e), ToModifiers(e));
             RenderAnnotations();
             return;
@@ -191,15 +217,249 @@ public sealed partial class CaptureOverlayWindow : Window
             region);
 
         AnnotationToolbar.Visibility = Visibility.Visible;
-        HintText.Text = "Draw to annotate • Ctrl+Z undo • Enter to finish • Esc to cancel";
+        HintText.Text = AnnotationHint;
 
         // The other displays' overlays are always on top, so they have to go before
         // the user can see anything but this one.
         SelectionCommitted?.Invoke(this, EventArgs.Empty);
     }
 
+    /// <summary>
+    /// Starts placing the active sprite tool's mark at <paramref name="point"/>. Text
+    /// opens an entry box and commits later; the other two commit as soon as their
+    /// glyphs are rasterized. See <c>docs/windows-port/architecture.md</c>, decision
+    /// D7.
+    /// </summary>
+    private void PlaceSprite(CapturePoint point)
+    {
+        switch (_editor.Tool)
+        {
+            case AnnotationTool.Text:
+                QueueSprite(() => ReplaceTextEntryAsync(point));
+                return;
+            case AnnotationTool.Number:
+                QueueSprite(() => PlaceNumberAsync(point));
+                return;
+            case AnnotationTool.Stamp:
+                QueueSprite(() => PlaceStampAsync(point));
+                return;
+            default:
+                return;
+        }
+    }
+
+    /// <summary>
+    /// Runs sprite work behind whatever is already in flight, and keeps the tail of
+    /// the chain so finishing the capture can wait for all of it.
+    /// </summary>
+    /// <remarks>
+    /// Sprites are rasterized asynchronously, so two placements a moment apart would
+    /// otherwise interleave: clicking away from a half-typed label would open the next
+    /// entry box before the previous one had committed, and the first label would be
+    /// lost. Ordering them is cheaper than making each one defend itself.
+    /// </remarks>
+    private void QueueSprite(Func<Task> work) => _pendingSprite = RunAfterAsync(_pendingSprite, work);
+
+    private async Task RunAfterAsync(Task previous, Func<Task> work)
+    {
+        try
+        {
+            await previous;
+            await work();
+        }
+        catch (Exception exception)
+        {
+            // Failures land in the hint line for the same reason the recognition ones
+            // do: the overlay is a borderless always-on-top window covering the
+            // screen, so a dialog has nowhere to go. Catching here also keeps one
+            // failed placement from poisoning every later one that waits on it.
+            HintText.Text = exception.Message;
+        }
+    }
+
+    /// <summary>
+    /// Finishes whatever was being typed before starting the next label, so clicking
+    /// elsewhere moves the text on rather than abandoning it.
+    /// </summary>
+    private async Task ReplaceTextEntryAsync(CapturePoint point)
+    {
+        await CommitTextEntryAsync();
+        BeginTextEntry(point);
+    }
+
+    /// <summary>
+    /// Places a numbered badge centred on <paramref name="point"/>. Rasterizing the
+    /// digits is async, so the badge appears a frame or two after the click — which
+    /// is exactly why a sprite is produced once when the annotation is committed and
+    /// never from inside the draw path.
+    /// </summary>
+    private async Task PlaceNumberAsync(CapturePoint point)
+    {
+        var style = _editor.Style;
+
+        // The next number is read off the document rather than kept in a counter, so
+        // undoing a badge frees its number instead of leaving a hole in the sequence.
+        var value = _editor.Document.Annotations.Count(existing => existing.Tool == AnnotationTool.Number) + 1;
+
+        var badge = NumberBadge.Build(value, style, RasterizationScale);
+        var sprite = await GlyphSpriteFactory.RenderAsync(SpriteHost, badge);
+
+        Commit(Annotation.CreateSprite(AnnotationTool.Number, Centred(point, sprite), sprite, style) with
+        {
+            // Kept alongside the pixels so the badge stays readable as data, not only
+            // as an image.
+            NumberValue = value,
+        });
+    }
+
+    private async Task PlaceStampAsync(CapturePoint point)
+    {
+        var style = _editor.Style;
+        var emoji = _stampEmoji;
+
+        var glyph = StampGlyph.Build(emoji, style, RasterizationScale);
+        var sprite = await GlyphSpriteFactory.RenderAsync(SpriteHost, glyph);
+
+        Commit(Annotation.CreateSprite(AnnotationTool.Stamp, Centred(point, sprite), sprite, style) with
+        {
+            Text = emoji,
+        });
+    }
+
+    /// <summary>
+    /// Opens the on-canvas entry box. The box is what makes the text tool feel like
+    /// typing on the screenshot rather than filling in a dialog, and it uses the same
+    /// font size the sprite will, so what is typed is what is committed.
+    /// </summary>
+    private void BeginTextEntry(CapturePoint point)
+    {
+        var position = _layout.FrameToPointer(_monitor, point);
+        var entry = new TextBox
+        {
+            MinWidth = 120,
+
+            // No padding, so the first glyph sits at the click point rather than
+            // inset from it by whatever the theme's padding happens to be.
+            Padding = new Thickness(0),
+            FontSize = TextGlyphs.FontSizeFor(_editor.Style, RasterizationScale),
+            Foreground = new SolidColorBrush(GlyphSpriteFactory.ToBrushColor(_editor.Style)),
+            AcceptsReturn = false,
+            TextWrapping = TextWrapping.NoWrap,
+        };
+
+        entry.KeyDown += TextEntry_KeyDown;
+        entry.LostFocus += TextEntry_LostFocus;
+        Canvas.SetLeft(entry, position.X);
+        Canvas.SetTop(entry, position.Y);
+        TextEntryLayer.Children.Add(entry);
+        _textEntry = entry;
+        _textEntryOrigin = point;
+        entry.Focus(FocusState.Programmatic);
+        HintText.Text = "Type the label • Enter to place • Esc to discard it";
+    }
+
+    private void TextEntry_KeyDown(object sender, KeyRoutedEventArgs e)
+    {
+        switch (e.Key)
+        {
+            case VirtualKey.Enter:
+                // Handled here, or it would bubble up and finish the whole capture.
+                e.Handled = true;
+                QueueSprite(CommitTextEntryAsync);
+                return;
+
+            case VirtualKey.Escape:
+                // The first Escape discards the text being typed, the same way it
+                // discards a half-drawn mark before it cancels the capture.
+                e.Handled = true;
+                RemoveTextEntry();
+                return;
+
+            default:
+                return;
+        }
+    }
+
+    /// <summary>
+    /// Clicking anywhere else — another tool, the canvas, Done — means the text is
+    /// finished, so it is committed rather than lost.
+    /// </summary>
+    private void TextEntry_LostFocus(object sender, RoutedEventArgs e) => QueueSprite(CommitTextEntryAsync);
+
+    private async Task CommitTextEntryAsync()
+    {
+        if (_textEntry is not { } entry)
+        {
+            return;
+        }
+
+        var text = entry.Text.Trim();
+        var origin = _textEntryOrigin;
+        var style = _editor.Style;
+
+        // Torn down before the await, so the LostFocus that removing the box raises
+        // cannot commit the same text a second time.
+        RemoveTextEntry();
+        if (text.Length == 0)
+        {
+            return;
+        }
+
+        var glyphs = TextGlyphs.Build(text, style, RasterizationScale);
+        var sprite = await GlyphSpriteFactory.RenderAsync(SpriteHost, glyphs);
+
+        // Anchored at the click rather than centred on it: the user typed from there.
+        Commit(Annotation.CreateSprite(AnnotationTool.Text, origin, sprite, style) with { Text = text });
+    }
+
+    private void RemoveTextEntry()
+    {
+        if (_textEntry is not { } entry)
+        {
+            return;
+        }
+
+        _textEntry = null;
+        entry.KeyDown -= TextEntry_KeyDown;
+        entry.LostFocus -= TextEntry_LostFocus;
+        TextEntryLayer.Children.Remove(entry);
+
+        // The keyboard belongs to the overlay again: Enter finishes, Ctrl+Z undoes.
+        OverlayRoot.Focus(FocusState.Programmatic);
+        HintText.Text = AnnotationHint;
+    }
+
+    private void Commit(Annotation annotation)
+    {
+        _editor.Document.Add(annotation);
+        RenderAnnotations();
+    }
+
+    /// <summary>
+    /// The scale XAML will actually rasterize at, which is what decides how many
+    /// pixels a sprite comes out as. The display's own scale is the fallback for the
+    /// window not being in a tree yet, which cannot happen from a pointer event but
+    /// keeps the sizing honest rather than silently defaulting to 1.
+    /// </summary>
+    private double RasterizationScale => OverlayRoot.XamlRoot?.RasterizationScale ?? _monitor.Scale;
+
+    /// <summary>
+    /// A mark aimed at a point belongs centred on it; anchoring its top-left there
+    /// would drop it down and right of what the user aimed at.
+    /// </summary>
+    private static CapturePoint Centred(CapturePoint point, AnnotationSprite sprite) =>
+        new(point.X - (sprite.Width / 2.0), point.Y - (sprite.Height / 2.0));
+
     private void OverlayRoot_KeyDown(object sender, KeyRoutedEventArgs e)
     {
+        // While the entry box has focus the keyboard is its: Delete edits the text
+        // instead of deleting an annotation, and Ctrl+Z takes back typing. Enter and
+        // Escape are handled on the box itself, which is why they never arrive here.
+        if (_textEntry is not null)
+        {
+            return;
+        }
+
         var control = IsDown(VirtualKey.Control);
         var shift = IsDown(VirtualKey.Shift);
 
@@ -224,7 +484,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
             case VirtualKey.Enter when IsAnnotating:
                 e.Handled = true;
-                Complete();
+                _ = CompleteAsync();
                 return;
 
             case VirtualKey.Delete or VirtualKey.Back when IsAnnotating:
@@ -265,7 +525,7 @@ public sealed partial class CaptureOverlayWindow : Window
         RenderAnnotations();
     }
 
-    private void Confirm_Click(object sender, RoutedEventArgs e) => Complete();
+    private async void Confirm_Click(object sender, RoutedEventArgs e) => await CompleteAsync();
 
     private async void ReadText_Click(object sender, RoutedEventArgs e)
     {
@@ -336,12 +596,19 @@ public sealed partial class CaptureOverlayWindow : Window
     /// resolution over this exact crop, so re-rendering could only introduce a
     /// difference between what was approved and what is handed over.
     /// </summary>
-    private void Complete()
+    private async Task CompleteAsync()
     {
         if (_annotationPreview is null)
         {
             return;
         }
+
+        // Text still in the entry box is part of the capture the moment the user
+        // finishes it, and clicking Done is finishing it. Every queued placement has
+        // to land before the pixels are taken, or the delivered image is missing a
+        // mark the user made.
+        QueueSprite(CommitTextEntryAsync);
+        await _pendingSprite;
 
         // An in-flight mark is not part of the capture, and the preview still shows
         // it, so the draft is dropped and the preview brought back into agreement
@@ -368,15 +635,21 @@ public sealed partial class CaptureOverlayWindow : Window
             _toolButtons[tool] = button;
             ToolButtons.Children.Add(button);
         }
+
+        StampChoices.ItemsSource = StampGlyph.Choices;
+        StampButton.Content = _stampEmoji;
     }
 
     private void ToolButton_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is not ToggleButton { Tag: AnnotationTool tool })
+        if (sender is ToggleButton { Tag: AnnotationTool tool })
         {
-            return;
+            SelectTool(tool);
         }
+    }
 
+    private void SelectTool(AnnotationTool tool)
+    {
         _editor.Tool = tool;
 
         // Behaves as a radio group: a tool is always active, so re-clicking the
@@ -387,6 +660,25 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         RenderAnnotations();
+    }
+
+    private void StampChoice_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (StampChoices.SelectedItem is not string emoji)
+        {
+            return;
+        }
+
+        _stampEmoji = emoji;
+        StampButton.Content = emoji;
+        StampButton.Flyout?.Hide();
+
+        // Picking a stamp is asking to stamp: leaving the previous tool active would
+        // make the choice look like it did nothing.
+        if (_toolButtons.ContainsKey(AnnotationTool.Stamp))
+        {
+            SelectTool(AnnotationTool.Stamp);
+        }
     }
 
     /// <summary>

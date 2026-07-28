@@ -45,7 +45,9 @@ public sealed class AnnotationRasterizerTests
 
         foreach (var tool in AnnotationRasterizer.SupportedTools)
         {
-            var annotation = Annotation.Create(tool, new CapturePoint(2, 2), new CapturePoint(9, 9));
+            var annotation = Annotation.RequiresSprite(tool)
+                ? Annotation.CreateSprite(tool, new CapturePoint(2, 2), OpaqueSprite(6, 6))
+                : Annotation.Create(tool, new CapturePoint(2, 2), new CapturePoint(9, 9));
             AnnotationRasterizer.Render(width, height, source, [annotation]);
         }
     }
@@ -185,14 +187,66 @@ public sealed class AnnotationRasterizerTests
     }
 
     [TestMethod]
-    public void Render_RejectsToolsThatNeedTextRendering()
+    public void Render_RejectsASpriteToolThatCarriesNoSprite()
     {
-        // Failing loudly keeps a half-drawn export from being mistaken for a
-        // complete one while the Win2D draw path is still missing.
+        // Failing loudly keeps a half-drawn export from being mistaken for a complete
+        // one: a text annotation whose glyphs were never rasterized would otherwise
+        // deliver a picture missing a mark the user placed.
         var annotation = Annotation.Create(AnnotationTool.Text, default, default) with { Text = "hello" };
 
         Assert.ThrowsException<NotSupportedException>(
             () => AnnotationRasterizer.Render(Width, Height, WhiteFrame(), [annotation]));
+    }
+
+    [TestMethod]
+    public void Render_SpriteLandsAtItsOriginAtOneToOneScale()
+    {
+        // Glyph pixels are rasterized at capture resolution, so the rasterizer places
+        // them and never resamples them. Resampling is what would turn sharp text
+        // into blurred text on the one tool where that is most visible.
+        var badge = Annotation.CreateSprite(AnnotationTool.Number, new CapturePoint(10, 6), OpaqueSprite(4, 3));
+
+        var rendered = AnnotationRasterizer.Render(Width, Height, WhiteFrame(), [badge]);
+
+        Assert.AreEqual(0, BlueAt(rendered, 10, 6), "the sprite's first pixel belongs at the origin");
+        Assert.AreEqual(0, BlueAt(rendered, 13, 8), "the sprite's last pixel belongs at origin + size - 1");
+        Assert.AreEqual(255, BlueAt(rendered, 14, 8), "nothing may be painted past the sprite's width");
+        Assert.AreEqual(255, BlueAt(rendered, 10, 9), "nothing may be painted past the sprite's height");
+    }
+
+    [TestMethod]
+    public void Render_SpriteBlendsAsPremultipliedAlpha()
+    {
+        // RenderTargetBitmap hands back premultiplied BGRA. Blending it as straight
+        // alpha would scale the colour by its alpha a second time, so every
+        // antialiased glyph edge would come out with a dark halo around it.
+        var half = new byte[4 * 4];
+        for (var pixel = 0; pixel < 4; pixel++)
+        {
+            // Half-covered black: the colour is already multiplied down to zero.
+            half[(pixel * 4) + 3] = 128;
+        }
+
+        var badge = Annotation.CreateSprite(AnnotationTool.Number, new CapturePoint(20, 10), new AnnotationSprite(2, 2, half));
+
+        var rendered = AnnotationRasterizer.Render(Width, Height, WhiteFrame(), [badge]);
+
+        Assert.AreEqual(127, BlueAt(rendered, 20, 10), "half-covered black over white must land on the midpoint");
+    }
+
+    [TestMethod]
+    public void Render_SpriteIsClippedToTheFrameInsteadOfThrowing()
+    {
+        // A badge placed near an edge hangs over it, and the preview redraws on every
+        // pointer move, so an out-of-range write here would take down the capture.
+        var badge = Annotation.CreateSprite(
+            AnnotationTool.Number,
+            new CapturePoint(Width - 2, Height - 2),
+            OpaqueSprite(8, 8));
+
+        var rendered = AnnotationRasterizer.Render(Width, Height, WhiteFrame(), [badge]);
+
+        Assert.AreEqual(0, BlueAt(rendered, Width - 1, Height - 1), "the visible corner must still be painted");
     }
 
     [TestMethod]
@@ -218,6 +272,18 @@ public sealed class AnnotationRasterizerTests
         var frame = new byte[Width * Height * 4];
         Array.Fill(frame, byte.MaxValue);
         return frame;
+    }
+
+    /// <summary>Opaque black, premultiplied: the colour channels stay zero.</summary>
+    private static AnnotationSprite OpaqueSprite(int width, int height)
+    {
+        var pixels = new byte[width * height * 4];
+        for (var index = 3; index < pixels.Length; index += 4)
+        {
+            pixels[index] = byte.MaxValue;
+        }
+
+        return new AnnotationSprite(width, height, pixels);
     }
 
     private static byte BlueAt(byte[] frame, int x, int y) => frame[(y * Width + x) * 4];

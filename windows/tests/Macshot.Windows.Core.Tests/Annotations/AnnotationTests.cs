@@ -97,4 +97,43 @@ public sealed class AnnotationTests
         Assert.ThrowsException<ArgumentException>(
             () => Annotation.CreateFreeform(AnnotationTool.Pencil, []));
     }
+
+    [TestMethod]
+    public void CreateSprite_TakesItsBoundsFromTheSprite()
+    {
+        // The sprite is composited one to one, so bounds that disagreed with it would
+        // hit test an area the mark does not cover.
+        var badge = Annotation.CreateSprite(
+            AnnotationTool.Number,
+            new CapturePoint(40, 25),
+            SpriteOf(12, 9));
+
+        Assert.AreEqual(new CaptureRegion(40, 25, 12, 9), badge.BoundingRect);
+        Assert.IsTrue(badge.HitTest(new CapturePoint(46, 29)), "the badge must be grabbable over its pixels");
+    }
+
+    [TestMethod]
+    public void Translate_KeepsTheSprite()
+    {
+        // Sprite is an ordinary record member so that copying carries it. The macOS
+        // product hand-writes clone() and loses whatever nobody remembered to add.
+        var badge = Annotation.CreateSprite(AnnotationTool.Number, new CapturePoint(0, 0), SpriteOf(10, 10));
+
+        var moved = badge.Translate(7, 4);
+
+        Assert.AreSame(badge.Sprite, moved.Sprite);
+        Assert.AreEqual(new CaptureRegion(7, 4, 10, 10), moved.BoundingRect);
+    }
+
+    [TestMethod]
+    public void CreateSprite_RejectsAToolThatIsDrawnFromGeometry()
+    {
+        // An arrow carrying a sprite would be drawn twice over, once as geometry and
+        // once as pixels. The two sets of tools have to stay disjoint.
+        Assert.ThrowsException<ArgumentException>(
+            () => Annotation.CreateSprite(AnnotationTool.Arrow, default, SpriteOf(4, 4)));
+    }
+
+    private static AnnotationSprite SpriteOf(int width, int height) =>
+        new(width, height, new byte[width * height * 4]);
 }

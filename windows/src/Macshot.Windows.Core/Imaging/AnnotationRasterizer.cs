@@ -7,10 +7,12 @@ namespace Macshot.Windows.Core.Imaging;
 /// Composites annotations onto a BGRA, top-down frame.
 /// </summary>
 /// <remarks>
-/// This is the headless export and test path. Tools that need font, emoji, or
-/// image rendering (text, number, stamp, loupe, measure) are deliberately not
-/// handled here and belong to the Win2D draw path; see
-/// <c>docs/windows-port/architecture.md</c>, decision D3.
+/// This is the one draw path: the live preview and the delivered image both come
+/// from here, so they cannot disagree. Tools that need font or emoji rendering
+/// (text, number, stamp) carry their glyphs as an <see cref="AnnotationSprite"/>
+/// the UI layer rasterized, which is what keeps them on this path instead of
+/// growing a second one; see <c>docs/windows-port/architecture.md</c>, decisions D3
+/// and D7.
 /// </remarks>
 public static class AnnotationRasterizer
 {
@@ -36,6 +38,9 @@ public static class AnnotationRasterizer
         AnnotationTool.FilledRectangle,
         AnnotationTool.Pixelate,
         AnnotationTool.Blur,
+        AnnotationTool.Text,
+        AnnotationTool.Number,
+        AnnotationTool.Stamp,
     ];
 
     public static byte[] Render(
@@ -120,9 +125,85 @@ public static class AnnotationRasterizer
         case AnnotationTool.Blur:
             PixelEffects.Blur(pixels, width, height, annotation.BoundingRect, BlurRadius(annotation.Style));
             break;
+        case AnnotationTool.Text:
+        case AnnotationTool.Number:
+        case AnnotationTool.Stamp:
+            CompositeSprite(pixels, width, height, annotation);
+            break;
         default:
             throw new NotSupportedException($"{annotation.Tool} is not yet rasterizable.");
         }
+    }
+
+    /// <summary>
+    /// Draws a sprite one to one at the annotation's top-left. Nothing is resampled:
+    /// the sprite was rasterized at capture resolution, and scaling glyph pixels here
+    /// would blur exactly the marks whose sharpness is the point.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="AnnotationStyle"/> plays no part. Colour, size, and opacity were
+    /// chosen when the sprite was rasterized, so applying them again would apply them
+    /// twice.
+    /// </remarks>
+    private static void CompositeSprite(byte[] pixels, int width, int height, Annotation annotation)
+    {
+        if (annotation.Sprite is not { } sprite)
+        {
+            // Fail loudly rather than skip: a sprite tool with no sprite is a bug in
+            // whatever committed the annotation, and silently drawing nothing would
+            // hand the user an export missing a mark they placed.
+            throw new NotSupportedException(
+                $"A {annotation.Tool} annotation carries no sprite. Sprites are produced by the UI "
+                + "layer when the annotation is committed; see architecture decision D7.");
+        }
+
+        var bounds = annotation.BoundingRect;
+        var originX = (int)Math.Round(bounds.X);
+        var originY = (int)Math.Round(bounds.Y);
+        var source = sprite.Pixels;
+
+        for (var row = 0; row < sprite.Height; row++)
+        {
+            var y = originY + row;
+            if (y < 0 || y >= height)
+            {
+                continue;
+            }
+
+            for (var column = 0; column < sprite.Width; column++)
+            {
+                var x = originX + column;
+                if (x < 0 || x >= width)
+                {
+                    continue;
+                }
+
+                var from = (row * sprite.Width + column) * 4;
+                var alpha = source[from + 3];
+                if (alpha == 0)
+                {
+                    // Glyph sprites are mostly empty, so this is the common case.
+                    continue;
+                }
+
+                var to = (y * width + x) * 4;
+                pixels[to] = OverPremultiplied(pixels[to], source[from], alpha);
+                pixels[to + 1] = OverPremultiplied(pixels[to + 1], source[from + 1], alpha);
+                pixels[to + 2] = OverPremultiplied(pixels[to + 2], source[from + 2], alpha);
+                pixels[to + 3] = byte.MaxValue;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Source-over for a premultiplied source: <c>dst = src + dst × (1 - a)</c>. The
+    /// source colour is already scaled by its alpha, so it is added rather than
+    /// interpolated; treating it as straight alpha would darken every glyph edge.
+    /// </summary>
+    private static byte OverPremultiplied(byte destination, byte source, byte sourceAlpha)
+    {
+        var kept = (destination * (byte.MaxValue - sourceAlpha) + byte.MaxValue / 2) / byte.MaxValue;
+        return (byte)Math.Min(byte.MaxValue, source + kept);
     }
 
     // Intensity is derived from the stroke width until the tool options row can
