@@ -1,2 +1,5 @@
 bin/
 obj/
+
+# Where build.ps1 publishes a runnable copy.
+dist/
