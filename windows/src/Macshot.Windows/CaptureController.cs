@@ -83,12 +83,18 @@ public sealed class CaptureController : IDisposable
         // windows offered for snapping are the ones in the frozen pixels the user is
         // about to look at — and so macshot's own overlays cannot be among them.
         var snapCandidates = WindowEnumerator.EnumerateFrontToBack()
-            .Select(window => layout.VirtualToFrame(window))
+            .Select(window => window with { Bounds = layout.VirtualToFrame(window.Bounds) })
             .ToArray();
 
         foreach (var monitor in layout.Monitors)
         {
-            var overlay = new CaptureOverlayWindow(desktopFrame, layout, monitor, _settings, snapCandidates);
+            var overlay = new CaptureOverlayWindow(
+                desktopFrame,
+                layout,
+                monitor,
+                _settings,
+                snapCandidates,
+                _screenCapture.TryCaptureWindowAsync);
             overlay.CaptureCompleted += OnCaptureCompleted;
             overlay.SelectionCommitted += OnSelectionCommitted;
             overlay.Cancelled += OnCaptureCancelled;

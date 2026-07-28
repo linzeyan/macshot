@@ -45,9 +45,9 @@ public static class WindowEnumerator
         "Shell_SecondaryTrayWnd",
     ];
 
-    public static IReadOnlyList<CaptureRegion> EnumerateFrontToBack()
+    public static IReadOnlyList<CaptureWindow> EnumerateFrontToBack()
     {
-        var windows = new List<CaptureRegion>();
+        var windows = new List<CaptureWindow>();
         var ownProcess = GetCurrentProcessId();
 
         // EnumWindows walks top-level windows in z-order, front first, which is the
@@ -56,7 +56,7 @@ public static class WindowEnumerator
         {
             if (IsSnapCandidate(window, ownProcess) && TryGetFrameBounds(window, out var bounds))
             {
-                windows.Add(bounds);
+                windows.Add(new CaptureWindow((long)window, bounds));
             }
 
             return true;
@@ -66,6 +66,24 @@ public static class WindowEnumerator
         // dragging out a selection still works.
         _ = EnumWindows(callback, IntPtr.Zero);
         return windows;
+    }
+
+    /// <summary>
+    /// Both rectangles Windows has for one window: the outer one a capture item
+    /// covers, and the visible one inside it. Asked again at capture time rather
+    /// than carried from the enumeration, because only a capture of the window
+    /// itself needs the outer rectangle, and only as one half of the pair
+    /// <see cref="WindowFrameCrop"/> takes.
+    /// </summary>
+    public static bool TryGetBounds(long windowId, out CaptureRegion windowRect, out CaptureRegion visibleBounds)
+    {
+        var window = (IntPtr)windowId;
+
+        windowRect = GetWindowRect(window, out var outer)
+            ? CaptureRegion.FromPoints(outer.Left, outer.Top, outer.Right, outer.Bottom)
+            : default;
+
+        return TryGetFrameBounds(window, out visibleBounds);
     }
 
     private static bool IsSnapCandidate(IntPtr window, uint ownProcess)

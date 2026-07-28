@@ -26,8 +26,14 @@ public static class WindowSnapper
     /// them. Every rectangle has to be in the same space; the capture pipeline
     /// passes frame space, so what comes back is usable as a selection unchanged.
     /// </summary>
-    public static CaptureRegion? Snap(
-        IReadOnlyList<CaptureRegion> windowsFrontToBack,
+    /// <remarks>
+    /// The answer names the window rather than only measuring it, because a click
+    /// can now be served two ways: cropped out of the desktop screenshot, or taken
+    /// from the window itself. Only the second needs the identity, and this is the
+    /// last place that still knows it.
+    /// </remarks>
+    public static CaptureWindow? Snap(
+        IReadOnlyList<CaptureWindow> windowsFrontToBack,
         CapturePoint point,
         CaptureRegion bounds)
     {
@@ -35,7 +41,7 @@ public static class WindowSnapper
 
         foreach (var window in windowsFrontToBack)
         {
-            if (!window.Contains(point.X, point.Y))
+            if (!window.Bounds.Contains(point.X, point.Y))
             {
                 continue;
             }
@@ -43,8 +49,8 @@ public static class WindowSnapper
             // A window too small to be worth snapping to does not hide the ones
             // behind it: a sliver lying over a real window should let the click
             // through to the window the user can actually see.
-            var visible = window.Intersect(bounds);
-            if (visible.Width < MinimumEdge || visible.Height < MinimumEdge)
+            var visible = window.ClipTo(bounds);
+            if (visible.Bounds.Width < MinimumEdge || visible.Bounds.Height < MinimumEdge)
             {
                 continue;
             }

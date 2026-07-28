@@ -50,7 +50,14 @@ public sealed partial class CaptureOverlayWindow : Window
     private readonly CaptureMonitor _monitor;
     private readonly CapturedFrame _monitorFrame;
     private readonly SettingsStore _settings;
-    private readonly IReadOnlyList<CaptureRegion> _snapCandidates;
+    private readonly IReadOnlyList<CaptureWindow> _snapCandidates;
+
+    /// <summary>
+    /// Takes one window as its own capture, or answers null when Windows cannot.
+    /// Injected because the service behind it belongs to the controller and
+    /// outlives every overlay.
+    /// </summary>
+    private readonly Func<long, Task<CapturedFrame?>> _captureWindow;
     private readonly AnnotationEditor _editor = new(new AnnotationDocument());
     private readonly Dictionary<AnnotationTool, ToggleButton> _toolButtons = [];
 
@@ -59,7 +66,7 @@ public sealed partial class CaptureOverlayWindow : Window
     private CaptureRegion? _selection;
 
     /// <summary>The window under the pointer, in frame space, while none is chosen yet.</summary>
-    private CaptureRegion? _hoveredWindow;
+    private CaptureWindow? _hoveredWindow;
     private TextBox? _textEntry;
     private CapturePoint _textEntryOrigin;
     private string _stampEmoji = StampGlyph.Default;
@@ -81,13 +88,15 @@ public sealed partial class CaptureOverlayWindow : Window
         MonitorLayout layout,
         CaptureMonitor monitor,
         SettingsStore settings,
-        IReadOnlyList<CaptureRegion> snapCandidates)
+        IReadOnlyList<CaptureWindow> snapCandidates,
+        Func<long, Task<CapturedFrame?>> captureWindow)
     {
         _desktopFrame = desktopFrame ?? throw new ArgumentNullException(nameof(desktopFrame));
         _layout = layout ?? throw new ArgumentNullException(nameof(layout));
         _monitor = monitor ?? throw new ArgumentNullException(nameof(monitor));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _snapCandidates = snapCandidates ?? throw new ArgumentNullException(nameof(snapCandidates));
+        _captureWindow = captureWindow ?? throw new ArgumentNullException(nameof(captureWindow));
         _monitorFrame = NativeScreenCaptureService.Crop(desktopFrame, layout.FrameRegionOf(monitor));
         InitializeComponent();
     }
@@ -209,7 +218,7 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
 
-        PlaceChrome(SnapHighlight, window);
+        PlaceChrome(SnapHighlight, window.Bounds);
     }
 
     /// <summary>
@@ -257,17 +266,79 @@ public sealed partial class CaptureOverlayWindow : Window
         // The slop is what makes that reachable: a click carries a pixel or two of
         // movement, and without it the user would get a 2px selection instead of
         // the window they were being shown.
-        var region = dragged.Width < ClickSlop && dragged.Height < ClickSlop
-            ? _hoveredWindow ?? default
-            : _layout.PointerToFrame(_monitor, dragged);
+        if (dragged.Width < ClickSlop && dragged.Height < ClickSlop)
+        {
+            if (_hoveredWindow is { } window && !window.Bounds.IsEmpty)
+            {
+                // Awaited inside rather than by the caller: a pointer event handler
+                // cannot be, and the capture it waits on is the only asynchronous
+                // step between the click and the annotation phase.
+                _ = EnterSnappedWindowPhaseAsync(window);
+            }
 
+            return;
+        }
+
+        var region = _layout.PointerToFrame(_monitor, dragged);
         if (!region.IsEmpty)
         {
             EnterAnnotationPhase(region);
         }
     }
 
-    private void EnterAnnotationPhase(CaptureRegion region)
+    /// <summary>
+    /// Enters the annotation phase on a clicked window, taking the window's own
+    /// pixels when Windows will give them and the frozen screenshot when it will
+    /// not.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A capture of the window itself is the better image — no dialog and no
+    /// neighbouring app sitting over it — but only if it is the same image. It is
+    /// accepted only at the size the highlight promised, because the annotation
+    /// phase maps what the user draws onto this buffer through the selection
+    /// region. A window that resized between the screenshot and the click would put
+    /// every mark in the wrong place, and delivering what they were looking at is
+    /// the honest answer to that.
+    /// </para>
+    /// <para>
+    /// Falling back is said out loud, because it is not only a worse capture but a
+    /// different one: the screenshot crop still has whatever was covering the
+    /// window in it, and that is about to be saved.
+    /// </para>
+    /// </remarks>
+    private async Task EnterSnappedWindowPhaseAsync(CaptureWindow window)
+    {
+        CapturedFrame? captured = null;
+
+        try
+        {
+            captured = await _captureWindow(window.Id);
+
+            if (captured is not null
+                && (captured.Width != (int)Math.Round(window.Bounds.Width)
+                    || captured.Height != (int)Math.Round(window.Bounds.Height)))
+            {
+                captured = null;
+            }
+
+            EnterAnnotationPhase(window.Bounds, captured);
+
+            if (captured is null)
+            {
+                HintText.Text = "Captured from the screen, so anything over the window is included";
+            }
+        }
+        catch (Exception exception)
+        {
+            // Nothing may escape: this runs on a task nobody holds, where an
+            // unobserved exception ends the process rather than the capture. The
+            // hint is where this overlay reports every other failure too.
+            HintText.Text = exception.Message;
+        }
+    }
+
+    private void EnterAnnotationPhase(CaptureRegion region, CapturedFrame? capturedWindow = null)
     {
         _selection = region;
         _hoveredWindow = null;
@@ -285,7 +356,7 @@ public sealed partial class CaptureOverlayWindow : Window
             AnnotationLayer,
             _layout,
             _monitor,
-            NativeScreenCaptureService.Crop(_desktopFrame, region),
+            capturedWindow ?? NativeScreenCaptureService.Crop(_desktopFrame, region),
             region);
 
         AnnotationToolbar.Visibility = Visibility.Visible;

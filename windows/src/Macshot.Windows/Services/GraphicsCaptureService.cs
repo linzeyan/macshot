@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices;
 using System.Runtime.InteropServices.WindowsRuntime;
+using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
 using Microsoft.UI;
 using WinRT;
@@ -17,6 +18,7 @@ using Windows.Graphics.Imaging;
 // the system's Windows.Graphics.DisplayId, which the capture API takes. Aliased so
 // the difference is visible where it is bridged rather than looking like a typo.
 using GraphicsDisplayId = Windows.Graphics.DisplayId;
+using GraphicsWindowId = Windows.Graphics.WindowId;
 
 namespace Macshot.Windows.Services;
 
@@ -100,6 +102,47 @@ public sealed class GraphicsCaptureService : IDisposable
             composer.ToImage());
     }
 
+    /// <summary>
+    /// Captures one window as its own item, rather than cropping it out of the
+    /// desktop frame.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is what a crop cannot do: the compositor renders the window's own tree,
+    /// so anything sitting in front of it — a dialog, another app, macshot's own
+    /// overlay — is simply not there. The delivered image is the window, not the
+    /// window as it happened to be buried.
+    /// </para>
+    /// <para>
+    /// The frame arrives as the window manager holds it, borders and all, so
+    /// <see cref="WindowFrameCrop"/> takes the invisible resize border back off.
+    /// </para>
+    /// </remarks>
+    public async Task<CapturedFrame> CaptureWindowAsync(long windowId)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        if (!WindowEnumerator.TryGetBounds(windowId, out var windowRect, out var visibleBounds))
+        {
+            throw new InvalidOperationException("Windows no longer reports bounds for that window.");
+        }
+
+        var device = _device ??= CreateDevice();
+
+        // Two WindowId types with the same shape and no conversion, exactly as with
+        // DisplayId: Microsoft.UI.WindowId is the App SDK's, Windows.Graphics.WindowId
+        // is what the capture API takes. Here the value comes straight from an HWND,
+        // so there is only the one crossing to make.
+        var item = GraphicsCaptureItem.TryCreateFromWindowId(new GraphicsWindowId { Value = (ulong)windowId })
+            ?? throw new InvalidOperationException("Windows would not open a capture item for the window.");
+
+        var (width, height, pixels) = await CaptureItemAsync(device, item);
+        var crop = WindowFrameCrop.Resolve(windowRect, visibleBounds, width, height);
+
+        var frame = new CapturedFrame((int)windowRect.X, (int)windowRect.Y, width, height, pixels);
+        return NativeScreenCaptureService.Crop(frame, crop);
+    }
+
     public void Dispose()
     {
         if (_disposed)
@@ -112,7 +155,7 @@ public sealed class GraphicsCaptureService : IDisposable
         _device = null;
     }
 
-    private static async Task<(int Width, int Height, byte[] Pixels)> CaptureDisplayAsync(
+    private static Task<(int Width, int Height, byte[] Pixels)> CaptureDisplayAsync(
         IDirect3DDevice device,
         nint monitorHandle)
     {
@@ -124,6 +167,18 @@ public sealed class GraphicsCaptureService : IDisposable
         var item = GraphicsCaptureItem.TryCreateFromDisplayId(displayId)
             ?? throw new InvalidOperationException("Windows would not open a capture item for the display.");
 
+        return CaptureItemAsync(device, item);
+    }
+
+    /// <summary>
+    /// Runs one capture item long enough to take a single frame off it. A display
+    /// and a window differ only in how the item is opened, so everything from the
+    /// frame pool down is shared.
+    /// </summary>
+    private static async Task<(int Width, int Height, byte[] Pixels)> CaptureItemAsync(
+        IDirect3DDevice device,
+        GraphicsCaptureItem item)
+    {
         var arrival = new TaskCompletionSource<Direct3D11CaptureFrame>(
             TaskCreationOptions.RunContinuationsAsynchronously);
 

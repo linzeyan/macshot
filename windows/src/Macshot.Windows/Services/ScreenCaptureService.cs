@@ -82,6 +82,49 @@ public sealed class ScreenCaptureService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Captures one window from its own capture item, or <c>null</c> when this
+    /// build of Windows cannot or the attempt failed.
+    /// </summary>
+    /// <remarks>
+    /// There is no older backend to degrade to here: BitBlt against a window returns
+    /// whatever is on screen over it, which is the thing window capture exists to
+    /// avoid. So the answer is null and the caller keeps the crop it already has —
+    /// the pixels the user was being shown — rather than a second, worse way of
+    /// capturing the window. <see cref="FallbackReason"/> still records why, so the
+    /// failure is not silent.
+    /// </remarks>
+    public async Task<CapturedFrame?> TryCaptureWindowAsync(long windowId)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        if (!GraphicsCaptureService.IsSupported)
+        {
+            FallbackReason = "This build of Windows does not offer Windows.Graphics.Capture.";
+            return null;
+        }
+
+        try
+        {
+            var frame = await _graphics.CaptureWindowAsync(windowId);
+
+            // Recorded the same way the desktop path records it, so the hardware
+            // check that has to confirm which backend really runs covers window
+            // capture too rather than only the desktop.
+            Backend = CaptureBackend.WindowsGraphicsCapture;
+            FallbackReason = null;
+            return frame;
+        }
+        catch (Exception exception)
+        {
+            // As broad as the desktop path, and for the same reason: every failure
+            // under the D3D and COM interop has the one answer, which is to deliver
+            // the capture the user could already see.
+            FallbackReason = exception.Message;
+            return null;
+        }
+    }
+
     public void Dispose()
     {
         if (_disposed)
