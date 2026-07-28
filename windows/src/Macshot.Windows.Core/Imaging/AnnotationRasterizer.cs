@@ -19,6 +19,25 @@ public static class AnnotationRasterizer
     /// <summary>Extra margin around a stroke so its antialiased edge is not clipped.</summary>
     private const double AntialiasMargin = 2;
 
+    /// <summary>
+    /// The tools this rasterizer draws, which is what the toolbar may offer. A tool
+    /// outside this list reaches <see cref="DrawAnnotation"/>'s default case and
+    /// throws, so building the toolbar from here is what stops the two drifting
+    /// apart.
+    /// </summary>
+    public static IReadOnlyList<AnnotationTool> SupportedTools { get; } =
+    [
+        AnnotationTool.Arrow,
+        AnnotationTool.Rectangle,
+        AnnotationTool.Ellipse,
+        AnnotationTool.Line,
+        AnnotationTool.Pencil,
+        AnnotationTool.Marker,
+        AnnotationTool.FilledRectangle,
+        AnnotationTool.Pixelate,
+        AnnotationTool.Blur,
+    ];
+
     public static byte[] Render(
         int width,
         int height,
@@ -27,6 +46,27 @@ public static class AnnotationRasterizer
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+
+        var output = new byte[checked(width * height * 4)];
+        RenderInto(width, height, bgraPixels, output, annotations);
+        return output;
+    }
+
+    /// <summary>
+    /// Renders into a caller-owned buffer. The live preview redraws on every pointer
+    /// move, and allocating a fresh multi-megabyte frame each time would put the
+    /// whole capture under GC pressure for the length of a drag.
+    /// </summary>
+    public static void RenderInto(
+        int width,
+        int height,
+        ReadOnlySpan<byte> bgraPixels,
+        byte[] destination,
+        IEnumerable<Annotation> annotations)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+        ArgumentNullException.ThrowIfNull(destination);
         ArgumentNullException.ThrowIfNull(annotations);
 
         var expectedLength = checked(width * height * 4);
@@ -35,14 +75,19 @@ public static class AnnotationRasterizer
             throw new ArgumentException("The pixel buffer does not match the frame dimensions.", nameof(bgraPixels));
         }
 
-        var output = bgraPixels.ToArray();
+        if (destination.Length != expectedLength)
+        {
+            throw new ArgumentException(
+                "The destination buffer does not match the frame dimensions.",
+                nameof(destination));
+        }
+
+        bgraPixels.CopyTo(destination);
         foreach (var annotation in annotations)
         {
             annotation.Style.Validate();
-            DrawAnnotation(output, width, height, annotation);
+            DrawAnnotation(destination, width, height, annotation);
         }
-
-        return output;
     }
 
     private static void DrawAnnotation(byte[] pixels, int width, int height, Annotation annotation)

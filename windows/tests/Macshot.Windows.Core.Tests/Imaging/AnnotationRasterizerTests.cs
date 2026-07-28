@@ -7,6 +7,58 @@ namespace Macshot.Windows.Core.Tests.Imaging;
 [TestClass]
 public sealed class AnnotationRasterizerTests
 {
+    /// <summary>
+    /// The live preview renders through <c>RenderInto</c> and the delivered image is
+    /// whatever the preview last produced, so the two entry points drifting apart
+    /// would silently hand the user pixels they never approved.
+    /// </summary>
+    [TestMethod]
+    public void RenderInto_ProducesTheSamePixelsAsRender()
+    {
+        const int width = 24;
+        const int height = 16;
+        var source = new byte[width * height * 4];
+        Array.Fill(source, (byte)40);
+        var annotations = new[]
+        {
+            Annotation.Create(AnnotationTool.Rectangle, new CapturePoint(3, 3), new CapturePoint(18, 12)),
+            Annotation.Create(AnnotationTool.Blur, new CapturePoint(5, 5), new CapturePoint(15, 10)),
+        };
+
+        var expected = AnnotationRasterizer.Render(width, height, source, annotations);
+        var actual = new byte[source.Length];
+        AnnotationRasterizer.RenderInto(width, height, source, actual, annotations);
+
+        CollectionAssert.AreEqual(expected, actual);
+    }
+
+    /// <summary>
+    /// The toolbar is built from this list, and a tool the rasterizer cannot draw
+    /// throws rather than quietly rendering nothing.
+    /// </summary>
+    [TestMethod]
+    public void SupportedTools_AreAllRasterizable()
+    {
+        const int width = 12;
+        const int height = 12;
+        var source = new byte[width * height * 4];
+
+        foreach (var tool in AnnotationRasterizer.SupportedTools)
+        {
+            var annotation = Annotation.Create(tool, new CapturePoint(2, 2), new CapturePoint(9, 9));
+            AnnotationRasterizer.Render(width, height, source, [annotation]);
+        }
+    }
+
+    [TestMethod]
+    public void RenderInto_RejectsADestinationOfTheWrongSize()
+    {
+        var source = new byte[4 * 4 * 4];
+
+        Assert.ThrowsException<ArgumentException>(() =>
+            AnnotationRasterizer.RenderInto(4, 4, source, new byte[8], []));
+    }
+
     private const int Width = 64;
     private const int Height = 24;
 

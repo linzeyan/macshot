@@ -39,7 +39,7 @@ public sealed partial class CaptureOverlayWindow : Window
     private readonly AnnotationEditor _editor = new(new AnnotationDocument());
     private readonly Dictionary<AnnotationTool, ToggleButton> _toolButtons = [];
 
-    private ShapeAnnotationRenderer? _renderer;
+    private RasterAnnotationPreview? _annotationPreview;
     private Point? _selectionStart;
     private CaptureRegion? _selection;
 
@@ -88,7 +88,6 @@ public sealed partial class CaptureOverlayWindow : Window
         var source = new SoftwareBitmapSource();
         await source.SetBitmapAsync(_monitorFrame.ToSoftwareBitmap());
         PreviewImage.Source = source;
-        _renderer = new ShapeAnnotationRenderer(AnnotationLayer, _layout, _monitor);
         BuildToolButtons();
         LoadStyle();
 
@@ -179,6 +178,17 @@ public sealed partial class CaptureOverlayWindow : Window
     private void EnterAnnotationPhase(CaptureRegion region)
     {
         _selection = region;
+
+        // The preview covers the selection with the pixels that will be delivered,
+        // which also hides the selection tint inside it: from here on, what is inside
+        // the marquee is the finished image rather than a tinted approximation of it.
+        _annotationPreview = new RasterAnnotationPreview(
+            AnnotationLayer,
+            _layout,
+            _monitor,
+            NativeScreenCaptureService.Crop(_desktopFrame, region),
+            region);
+
         AnnotationToolbar.Visibility = Visibility.Visible;
         HintText.Text = "Draw to annotate • Ctrl+Z undo • Enter to finish • Esc to cancel";
 
@@ -256,39 +266,33 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private void Confirm_Click(object sender, RoutedEventArgs e) => Complete();
 
+    /// <summary>
+    /// Delivers the pixels the preview is already showing. There is no separate
+    /// export render: the preview was produced by the Core rasterizer at capture
+    /// resolution over this exact crop, so re-rendering could only introduce a
+    /// difference between what was approved and what is handed over.
+    /// </summary>
     private void Complete()
     {
-        if (_selection is not { } region)
+        if (_annotationPreview is null)
         {
             return;
         }
 
-        CaptureCompleted?.Invoke(this, Bake(region));
-    }
-
-    /// <summary>
-    /// Burns the annotations into the cropped image using the same Core rasterizer
-    /// the tests cover, so what is delivered does not depend on the XAML preview.
-    /// </summary>
-    private CapturedFrame Bake(CaptureRegion region)
-    {
-        var cropped = NativeScreenCaptureService.Crop(_desktopFrame, region);
-        var annotations = _editor.Document.Annotations;
-        if (annotations.Count == 0)
+        // An in-flight mark is not part of the capture, and the preview still shows
+        // it, so the draft is dropped and the preview brought back into agreement
+        // before its pixels are taken.
+        if (_editor.Cancel())
         {
-            return cropped;
+            RenderAnnotations();
         }
 
-        // Annotations are stored against the whole virtual desktop, and the crop
-        // moves the origin, so they have to move with it.
-        var moved = annotations.Select(annotation => annotation.Translate(-region.X, -region.Y));
-        var pixels = AnnotationRasterizer.Render(cropped.Width, cropped.Height, cropped.BgraPixels, moved);
-        return new CapturedFrame(cropped.VirtualX, cropped.VirtualY, cropped.Width, cropped.Height, pixels);
+        CaptureCompleted?.Invoke(this, _annotationPreview.ToFrame());
     }
 
     private void BuildToolButtons()
     {
-        foreach (var tool in ShapeAnnotationRenderer.SupportedTools)
+        foreach (var tool in AnnotationRasterizer.SupportedTools)
         {
             var button = new ToggleButton
             {
@@ -412,10 +416,12 @@ public sealed partial class CaptureOverlayWindow : Window
         AnnotationTool.Pencil => "Pen",
         AnnotationTool.Marker => "Marker",
         AnnotationTool.FilledRectangle => "Redact",
+        AnnotationTool.Pixelate => "Pixelate",
+        AnnotationTool.Blur => "Blur",
         _ => tool.ToString(),
     };
 
-    private void RenderAnnotations() => _renderer?.Render(_editor.VisibleAnnotations);
+    private void RenderAnnotations() => _annotationPreview?.Render(_editor.VisibleAnnotations);
 
     private CapturePoint ToFrame(PointerRoutedEventArgs e)
     {
