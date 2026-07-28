@@ -4,6 +4,18 @@ using Macshot.Windows.Core.Capture;
 namespace Macshot.Windows.Services;
 
 /// <summary>
+/// The attached displays, and the handle Windows knows each of them by.
+/// </summary>
+/// <remarks>
+/// The handles are carried alongside the portable layout because
+/// <c>Windows.Graphics.Capture</c> opens an item per <c>DisplayId</c>, and a
+/// <c>DisplayId</c> is only obtainable from an <c>HMONITOR</c>. Keeping them here
+/// rather than on <see cref="CaptureMonitor"/> is what stops a Win32 handle from
+/// leaking into Core.
+/// </remarks>
+public sealed record DisplaySet(MonitorLayout Layout, IReadOnlyDictionary<string, nint> Handles);
+
+/// <summary>
 /// Builds the <see cref="MonitorLayout"/> from the attached displays.
 /// </summary>
 /// <remarks>
@@ -18,15 +30,17 @@ public static class MonitorEnumerator
     private const int MonitorDpiTypeEffective = 0;
     private const double DefaultDpi = 96;
 
-    public static MonitorLayout Enumerate()
+    public static DisplaySet Enumerate()
     {
         var monitors = new List<CaptureMonitor>();
+        var handles = new Dictionary<string, nint>(StringComparer.Ordinal);
 
         var callback = new MonitorEnumProc((monitorHandle, _, _, _) =>
         {
             if (TryDescribe(monitorHandle, out var monitor))
             {
                 monitors.Add(monitor);
+                handles[monitor.DeviceName] = monitorHandle;
             }
 
             return true;
@@ -40,7 +54,7 @@ public static class MonitorEnumerator
         // Primary first keeps overlay creation order stable, which in turn keeps
         // which overlay ends up focused predictable.
         monitors.Sort((first, second) => second.IsPrimary.CompareTo(first.IsPrimary));
-        return new MonitorLayout(monitors);
+        return new DisplaySet(new MonitorLayout(monitors), handles);
     }
 
     private static bool TryDescribe(IntPtr monitorHandle, out CaptureMonitor monitor)

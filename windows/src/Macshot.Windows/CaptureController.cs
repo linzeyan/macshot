@@ -30,7 +30,7 @@ public sealed class CaptureController : IDisposable
 
     private const uint MessageBoxIconError = 0x00000010;
 
-    private readonly NativeScreenCaptureService _screenCapture = new();
+    private readonly ScreenCaptureService _screenCapture = new();
     private readonly SettingsStore _settings = new();
     private readonly DispatcherQueue _dispatcher;
     private readonly MessageWindow _messageWindow;
@@ -41,6 +41,7 @@ public sealed class CaptureController : IDisposable
     private MainWindow? _preview;
     private ThumbnailWindow? _thumbnail;
     private PreferencesWindow? _preferences;
+    private bool _reportedCaptureFallback;
     private bool _disposed;
 
     public CaptureController()
@@ -74,8 +75,9 @@ public sealed class CaptureController : IDisposable
 
         // One overlay per display: a single window spanning displays with different
         // DPI cannot map pointer input to pixels. See the architecture notes, D6.
-        var layout = MonitorEnumerator.Enumerate();
-        var desktopFrame = _screenCapture.CaptureVirtualDesktop();
+        var displays = MonitorEnumerator.Enumerate();
+        var layout = displays.Layout;
+        var desktopFrame = await CaptureDesktopAsync(displays);
 
         foreach (var monitor in layout.Monitors)
         {
@@ -92,9 +94,35 @@ public sealed class CaptureController : IDisposable
         }
     }
 
-    public Task CaptureAllScreensAsync()
+    public async Task CaptureAllScreensAsync()
     {
-        return DeliverAsync(_screenCapture.CaptureVirtualDesktop());
+        await DeliverAsync(await CaptureDesktopAsync(MonitorEnumerator.Enumerate()));
+    }
+
+    /// <summary>
+    /// Takes the desktop capture and, once per session, says so when the preferred
+    /// backend was available but failed.
+    /// </summary>
+    /// <remarks>
+    /// Falling back still produces the screenshot, so interrupting every capture with
+    /// the same message would be worse than the fault. Saying it once is what stops
+    /// the app from silently running on the older backend forever. A build of Windows
+    /// that simply does not offer the API is not a fault and is not reported.
+    /// </remarks>
+    private async Task<CapturedFrame> CaptureDesktopAsync(DisplaySet displays)
+    {
+        var frame = await _screenCapture.CaptureVirtualDesktopAsync(displays);
+        if (_screenCapture.FellBackUnexpectedly && !_reportedCaptureFallback)
+        {
+            _reportedCaptureFallback = true;
+            MessageBox(
+                _messageWindow.Handle,
+                $"Screen capture fell back to the older backend: {_screenCapture.FallbackReason}",
+                "macshot",
+                MessageBoxIconError);
+        }
+
+        return frame;
     }
 
     /// <summary>The preferences the delivery path is currently using.</summary>
@@ -117,6 +145,7 @@ public sealed class CaptureController : IDisposable
             pin.Close();
         }
 
+        _screenCapture.Dispose();
         _trayIcon.Dispose();
         _hotkeys.Dispose();
         _messageWindow.Dispose();

@@ -70,7 +70,7 @@ public sealed partial class ThumbnailWindow : Window
     /// </summary>
     private static RectInt32 PlaceBottomRight()
     {
-        var monitor = MonitorEnumerator.Enumerate().Primary;
+        var monitor = MonitorEnumerator.Enumerate().Layout.Primary;
         var width = (int)(WidthDips * monitor.Scale);
         var height = (int)(HeightDips * monitor.Scale);
         var margin = (int)(MarginDips * monitor.Scale);
