@@ -13,12 +13,16 @@ using Windows.Graphics.DirectX;
 using Windows.Graphics.DirectX.Direct3D11;
 using Windows.Graphics.Imaging;
 
-// There are two DisplayId types with the same shape and no conversion between them:
-// the Windows App SDK's Microsoft.UI.DisplayId, which Win32Interop hands back, and
-// the system's Windows.Graphics.DisplayId, which the capture API takes. Aliased so
-// the difference is visible where it is bridged rather than looking like a typo.
+// A display and a window each have two id types with the same shape and no
+// conversion between them: the Windows App SDK's Microsoft.UI.* pair, which
+// Win32Interop hands back, and the system pair the capture API takes. Aliased so
+// each bridge is visible where it is made rather than looking like a typo.
+//
+// The system pair does not share a namespace — DisplayId is under Windows.Graphics
+// and WindowId is under Windows.UI — so the symmetry stops at the shape. Assuming
+// otherwise is a build error, not a runtime surprise.
 using GraphicsDisplayId = Windows.Graphics.DisplayId;
-using GraphicsWindowId = Windows.Graphics.WindowId;
+using GraphicsWindowId = Windows.UI.WindowId;
 
 namespace Macshot.Windows.Services;
 
@@ -129,10 +133,10 @@ public sealed class GraphicsCaptureService : IDisposable
 
         var device = _device ??= CreateDevice();
 
-        // Two WindowId types with the same shape and no conversion, exactly as with
-        // DisplayId: Microsoft.UI.WindowId is the App SDK's, Windows.Graphics.WindowId
-        // is what the capture API takes. Here the value comes straight from an HWND,
-        // so there is only the one crossing to make.
+        // Windows.UI.WindowId is what the capture API takes, and its value is the
+        // HWND, so the id is built here rather than fetched: going out to
+        // Win32Interop would only produce the App SDK's WindowId, which is the type
+        // that does not fit.
         var item = GraphicsCaptureItem.TryCreateFromWindowId(new GraphicsWindowId { Value = (ulong)windowId })
             ?? throw new InvalidOperationException("Windows would not open a capture item for the window.");
 
