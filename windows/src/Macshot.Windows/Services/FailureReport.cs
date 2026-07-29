@@ -28,7 +28,23 @@ public static class FailureReport
     public static void Show(nint owner, Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
-        MessageBox(owner, Describe(exception), "macshot", IconError);
+
+        var text = Describe(exception);
+
+        // Written first, and unconditionally. Whether the box appears depends on the
+        // owner still being a window that can own one; whether the failure is knowable
+        // afterwards must not.
+        DiagnosticLog.Write(text);
+
+        // A message-only window cannot own a dialog, and macshot reports most failures
+        // from exactly such a window — the one that receives the hotkeys. MessageBox
+        // answers a refusal with zero rather than an error, which is how a whole class
+        // of failures came to be reported to nobody. Asking again with no owner is what
+        // keeps the report on screen.
+        if (MessageBox(owner, text, "macshot", IconError) == 0 && owner != IntPtr.Zero)
+        {
+            MessageBox(IntPtr.Zero, text, "macshot", IconError);
+        }
     }
 
     /// <summary>
