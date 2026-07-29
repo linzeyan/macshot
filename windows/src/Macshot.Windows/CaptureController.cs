@@ -2,6 +2,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
+using Macshot.Windows.Core.Input;
 using Macshot.Windows.Core.Output;
 using Macshot.Windows.Services;
 using Microsoft.UI.Dispatching;
@@ -113,15 +114,12 @@ public sealed class CaptureController : IDisposable
         _messageWindow = new MessageWindow();
 
         _hotkeys = new GlobalHotkeyService(_messageWindow);
-        _hotkeys.RegisterControlShift(HotkeyCaptureArea, 'X', () => Post(BeginAreaCaptureAsync));
-        _hotkeys.RegisterControlShift(HotkeyCaptureAllScreens, 'F', () => Post(CaptureAllScreensAsync));
-        _hotkeys.RegisterControlShift(HotkeyRecordScreen, 'R', () => Post(ToggleRecordingAsync));
 
         _trayIcon = new TrayIconService(_messageWindow, "macshot");
-        _trayIcon.AddMenuItem(CommandCaptureArea, "Capture area\tCtrl+Shift+X");
-        _trayIcon.AddMenuItem(CommandCaptureAllScreens, "Capture all screens\tCtrl+Shift+F");
+        _trayIcon.AddMenuItem(CommandCaptureArea, "Capture area");
+        _trayIcon.AddMenuItem(CommandCaptureAllScreens, "Capture all screens");
         _trayIcon.AddMenuItem(CommandCaptureAfterDelay, "Capture area after a delay");
-        _trayIcon.AddMenuItem(CommandRecordScreen, "Record screen\tCtrl+Shift+R");
+        _trayIcon.AddMenuItem(CommandRecordScreen, "Record screen");
         _trayIcon.AddSeparator();
         _trayIcon.AddSubmenu("Recent captures", RecentMenuEntries);
         _trayIcon.AddSeparator();
@@ -129,6 +127,66 @@ public sealed class CaptureController : IDisposable
         _trayIcon.AddMenuItem(CommandQuit, "Quit macshot");
         _trayIcon.CommandInvoked += OnTrayCommandInvoked;
         _trayIcon.DefaultActionInvoked += (_, _) => Post(BeginAreaCaptureAsync);
+
+        // After the menu exists, because applying a shortcut also writes it into the
+        // menu entry that names it.
+        ApplyHotkeys(_settings.Current);
+
+        // Re-applied rather than read once, so a shortcut changed in preferences takes
+        // effect without restarting macshot — which, for a background app with no
+        // window, is something the user would have to be told how to do.
+        _settings.Changed += (_, settings) => ApplyHotkeys(settings);
+    }
+
+    /// <summary>
+    /// Claims the three configured shortcuts, and says so once when Windows refuses
+    /// any of them.
+    /// </summary>
+    /// <remarks>
+    /// The refusals are collected and reported together. Told one at a time they would
+    /// be three message boxes in a row for a user who has just typed one shortcut that
+    /// another program owns, and the second and third would be about shortcuts they
+    /// did not touch.
+    /// </remarks>
+    private void ApplyHotkeys(CaptureSettings settings)
+    {
+        var refused = new List<HotkeyBinding>(3);
+
+        Bind(HotkeyCaptureArea, CommandCaptureArea, "Capture area", settings.CaptureAreaBinding, BeginAreaCaptureAsync);
+        Bind(
+            HotkeyCaptureAllScreens,
+            CommandCaptureAllScreens,
+            "Capture all screens",
+            settings.CaptureAllScreensBinding,
+            CaptureAllScreensAsync);
+        Bind(HotkeyRecordScreen, CommandRecordScreen, "Record screen", settings.RecordScreenBinding, ToggleRecordingAsync);
+
+        if (refused.Count > 0)
+        {
+            FailureReport.Notice(
+                _messageWindow.Handle,
+                "Windows would not give macshot these shortcuts, so they are not active: "
+                    + string.Join(", ", refused)
+                    + ". Another program may already own them. The notification-area menu still works.");
+        }
+
+        void Bind(int hotkey, int command, string label, HotkeyBinding binding, Func<Task> action)
+        {
+            // Given back first: re-registering an id Windows still holds fails, which
+            // would turn every preferences save into a lost shortcut.
+            _hotkeys.Unregister(hotkey);
+
+            if (_hotkeys.TryRegister(hotkey, binding, () => Post(action)))
+            {
+                _trayIcon.SetMenuItemText(command, $"{label}\t{binding}");
+            }
+            else
+            {
+                // Named without a shortcut rather than with one that does nothing.
+                _trayIcon.SetMenuItemText(command, label);
+                refused.Add(binding);
+            }
+        }
     }
 
     /// <summary>Puts one selection overlay on every display.</summary>

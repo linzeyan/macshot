@@ -35,6 +35,16 @@
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
 
+                <TextBlock Text="Shortcuts" Style="{StaticResource SubtitleTextBlockStyle}" />
+
+                <TextBox x:Name="CaptureAreaHotkeyBox" Header="Capture area" />
+                <TextBox x:Name="CaptureAllScreensHotkeyBox" Header="Capture all screens" />
+                <TextBox x:Name="RecordScreenHotkeyBox" Header="Record screen" />
+                <TextBlock
+                    Text="Written as Ctrl+Shift+X. Ctrl, Alt, Shift and Win may be combined, and at least one is required — a shortcut with no modifier would swallow that key in every program on the machine."
+                    TextWrapping="Wrap"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
                 <TextBlock Text="History" Style="{StaticResource SubtitleTextBlockStyle}" />
 
                 <NumberBox

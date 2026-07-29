@@ -1,4 +1,5 @@
 using System.Runtime.InteropServices;
+using Macshot.Windows.Core.Input;
 
 namespace Macshot.Windows.Services;
 
@@ -14,8 +15,6 @@ namespace Macshot.Windows.Services;
 public sealed class GlobalHotkeyService : IDisposable
 {
     private const uint WmHotkey = 0x0312;
-    private const uint ModControl = 0x0002;
-    private const uint ModShift = 0x0004;
 
     /// <summary>Stops the shortcut repeating while the key is held down.</summary>
     private const uint ModNoRepeat = 0x4000;
@@ -30,10 +29,20 @@ public sealed class GlobalHotkeyService : IDisposable
         _window.MessageReceived += OnMessageReceived;
     }
 
-    public void RegisterControlShift(int id, char key, Action handler)
+    /// <summary>
+    /// Claims a configured shortcut, and answers whether Windows gave it up.
+    /// </summary>
+    /// <remarks>
+    /// A refusal is reported rather than thrown, because the shortcuts are the user's
+    /// to choose: one that another program already owns must cost that shortcut and
+    /// nothing else. Throwing here would take a mistyped preference and turn it into
+    /// an app that will not start.
+    /// </remarks>
+    public bool TryRegister(int id, HotkeyBinding binding, Action handler)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
         ArgumentOutOfRangeException.ThrowIfLessThan(id, 1);
+        ArgumentNullException.ThrowIfNull(binding);
         ArgumentNullException.ThrowIfNull(handler);
 
         if (_handlers.ContainsKey(id))
@@ -41,14 +50,14 @@ public sealed class GlobalHotkeyService : IDisposable
             throw new InvalidOperationException($"A global hotkey is already registered with id {id}.");
         }
 
-        var virtualKey = char.ToUpperInvariant(key);
-        if (!RegisterHotKey(_window.Handle, id, ModControl | ModShift | ModNoRepeat, virtualKey))
+        if (!binding.IsValid
+            || !RegisterHotKey(_window.Handle, id, (uint)binding.Modifiers | ModNoRepeat, binding.Key))
         {
-            throw new InvalidOperationException(
-                $"Unable to register Ctrl+Shift+{virtualKey}. Another application may already own it.");
+            return false;
         }
 
         _handlers.Add(id, handler);
+        return true;
     }
 
     /// <summary>

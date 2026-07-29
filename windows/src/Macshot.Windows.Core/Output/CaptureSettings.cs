@@ -1,6 +1,7 @@
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
+using Macshot.Windows.Core.Input;
 
 namespace Macshot.Windows.Core.Output;
 
@@ -115,6 +116,32 @@ public sealed record CaptureSettings
     /// <summary>How many past captures are kept. Zero turns history off entirely.</summary>
     public int HistorySize { get; init; } = 20;
 
+    /// <summary>
+    /// The three global shortcuts, written the way <see cref="HotkeyBinding"/> reads
+    /// them.
+    /// </summary>
+    /// <remarks>
+    /// Stored as text rather than as a modifier mask and a key code, because the
+    /// settings file is meant to be hand-editable and <c>Ctrl+Shift+X</c> says what it
+    /// means where <c>{"modifiers":6,"key":88}</c> does not. Normalizing rewrites
+    /// whatever is in the file through the parser, so a shortcut that cannot be
+    /// registered becomes the default here rather than at the point of registering.
+    /// </remarks>
+    public string CaptureAreaHotkey { get; init; } = HotkeyBinding.CaptureArea.ToString();
+
+    public string CaptureAllScreensHotkey { get; init; } = HotkeyBinding.CaptureAllScreens.ToString();
+
+    public string RecordScreenHotkey { get; init; } = HotkeyBinding.RecordScreen.ToString();
+
+    public HotkeyBinding CaptureAreaBinding =>
+        HotkeyBinding.ParseOrDefault(CaptureAreaHotkey, HotkeyBinding.CaptureArea);
+
+    public HotkeyBinding CaptureAllScreensBinding =>
+        HotkeyBinding.ParseOrDefault(CaptureAllScreensHotkey, HotkeyBinding.CaptureAllScreens);
+
+    public HotkeyBinding RecordScreenBinding =>
+        HotkeyBinding.ParseOrDefault(RecordScreenHotkey, HotkeyBinding.RecordScreen);
+
     /// <summary>Which of <see cref="BeautifyRenderer.Styles"/> the Beautify action uses.</summary>
     public int BeautifyStyleIndex { get; init; }
 
@@ -221,6 +248,13 @@ public sealed record CaptureSettings
             AnnotationLineStyle = Enum.IsDefined(AnnotationLineStyle) ? AnnotationLineStyle : LineStyle.Solid,
             DelaySeconds = Math.Clamp(DelaySeconds, MinDelaySeconds, MaxDelaySeconds),
             HistorySize = Math.Clamp(HistorySize, 0, MaxHistorySize),
+
+            // Round-tripped through the parser, so a shortcut the file cannot express
+            // becomes the default here rather than leaving macshot with no way to
+            // capture at all.
+            CaptureAreaHotkey = CaptureAreaBinding.ToString(),
+            CaptureAllScreensHotkey = CaptureAllScreensBinding.ToString(),
+            RecordScreenHotkey = RecordScreenBinding.ToString(),
 
             // A selection with no display to belong to cannot be placed, and a display
             // with no selection has nothing to place, so neither survives alone.

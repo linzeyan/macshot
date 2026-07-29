@@ -89,6 +89,25 @@ public sealed class TrayIconService : IDisposable
         _menuItems.Add(new MenuEntry(0, text, items));
     }
 
+    /// <summary>
+    /// Renames an entry already in the menu, doing nothing when there is no such id.
+    /// </summary>
+    /// <remarks>
+    /// The entries that name a keyboard shortcut have to be able to change: a menu
+    /// still offering Ctrl+Shift+X after the user has moved that shortcut is worse
+    /// than one that never mentioned it.
+    /// </remarks>
+    public void SetMenuItemText(int id, string text)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+
+        var index = _menuItems.FindIndex(entry => entry.Text is not null && entry.Submenu is null && entry.Id == id);
+        if (index >= 0)
+        {
+            _menuItems[index] = _menuItems[index] with { Text = text };
+        }
+    }
+
     public void AddSeparator() => _menuItems.Add(new MenuEntry(0, null, null));
 
     public void Dispose()

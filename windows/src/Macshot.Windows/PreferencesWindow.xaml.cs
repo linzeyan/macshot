@@ -1,3 +1,4 @@
+using Macshot.Windows.Core.Input;
 using Macshot.Windows.Core.Output;
 using Macshot.Windows.Services;
 using Microsoft.UI.Xaml;
@@ -44,6 +45,9 @@ public sealed partial class PreferencesWindow : Window
         ThumbnailSecondsBox.Value = settings.ThumbnailSeconds;
         DelaySecondsBox.Value = settings.DelaySeconds;
         HistorySizeBox.Value = settings.HistorySize;
+        CaptureAreaHotkeyBox.Text = settings.CaptureAreaHotkey;
+        CaptureAllScreensHotkeyBox.Text = settings.CaptureAllScreensHotkey;
+        RecordScreenHotkeyBox.Text = settings.RecordScreenHotkey;
         UpdateQualityVisibility();
         UpdateTemplatePreview();
     }
@@ -78,6 +82,9 @@ public sealed partial class PreferencesWindow : Window
             HistorySize = double.IsNaN(HistorySizeBox.Value)
                 ? CaptureSettings.Default.HistorySize
                 : (int)HistorySizeBox.Value,
+            CaptureAreaHotkey = CaptureAreaHotkeyBox.Text,
+            CaptureAllScreensHotkey = CaptureAllScreensHotkeyBox.Text,
+            RecordScreenHotkey = RecordScreenHotkeyBox.Text,
         }).Normalized();
     }
 
@@ -155,6 +162,22 @@ public sealed partial class PreferencesWindow : Window
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
+        // Refused rather than repaired. Normalizing would quietly put the default back,
+        // and a shortcut silently reverting to Ctrl+Shift+X reads as macshot ignoring
+        // what was typed rather than as the text being unusable.
+        var unreadable = new[]
+        {
+            CaptureAreaHotkeyBox.Text,
+            CaptureAllScreensHotkeyBox.Text,
+            RecordScreenHotkeyBox.Text,
+        }.Where(text => !HotkeyBinding.TryParse(text, out _)).ToArray();
+
+        if (unreadable.Length > 0)
+        {
+            StatusText.Text = $"Not a shortcut: {string.Join(", ", unreadable)}. Write it like Ctrl+Shift+X.";
+            return;
+        }
+
         var settings = Collect();
         try
         {

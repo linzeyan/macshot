@@ -1,4 +1,5 @@
 using Macshot.Windows.Core.Input;
+using Macshot.Windows.Core.Output;
 
 namespace Macshot.Windows.Core.Tests.Input;
 
@@ -116,5 +117,30 @@ public sealed class HotkeyBindingTests
         Assert.AreEqual("Ctrl+Shift+X", HotkeyBinding.CaptureArea.ToString());
         Assert.AreEqual("Ctrl+Shift+F", HotkeyBinding.CaptureAllScreens.ToString());
         Assert.AreEqual("Ctrl+Shift+R", HotkeyBinding.RecordScreen.ToString());
+    }
+
+    [TestMethod]
+    public void Settings_KeepAShortcutTheUserChose()
+    {
+        var normalized = (CaptureSettings.Default with { CaptureAreaHotkey = " alt + f9 " }).Normalized();
+
+        Assert.AreEqual("Alt+F9", normalized.CaptureAreaHotkey);
+        Assert.AreEqual(new HotkeyBinding(HotkeyModifiers.Alt, 0x78), normalized.CaptureAreaBinding);
+    }
+
+    [TestMethod]
+    public void Settings_ReplaceAShortcutThatCannotBeRegistered()
+    {
+        // A bare key is the dangerous one: it would be taken from every program on
+        // the machine, including the one the user would need in order to change it
+        // back. Normalizing has to refuse it rather than pass it through.
+        var normalized = (CaptureSettings.Default with
+        {
+            CaptureAreaHotkey = "Q",
+            RecordScreenHotkey = "not a shortcut",
+        }).Normalized();
+
+        Assert.AreEqual(HotkeyBinding.CaptureArea.ToString(), normalized.CaptureAreaHotkey);
+        Assert.AreEqual(HotkeyBinding.RecordScreen.ToString(), normalized.RecordScreenHotkey);
     }
 }
