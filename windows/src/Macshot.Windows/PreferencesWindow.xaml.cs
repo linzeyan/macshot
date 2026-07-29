@@ -46,6 +46,14 @@ public sealed partial class PreferencesWindow : Window
         DelaySecondsBox.Value = settings.DelaySeconds;
         HistorySizeBox.Value = settings.HistorySize;
         RememberSelectionSwitch.IsOn = settings.RememberLastSelection;
+
+#if OFFLINE
+        // No translator in this build, so nothing to give a key to.
+        TranslationSection.Visibility = Visibility.Collapsed;
+#else
+        TranslateKeyBox.Password = settings.TranslateApiKey;
+#endif
+
         CaptureAreaHotkeyBox.Text = settings.CaptureAreaHotkey;
         CaptureAllScreensHotkeyBox.Text = settings.CaptureAllScreensHotkey;
         RecordScreenHotkeyBox.Text = settings.RecordScreenHotkey;
@@ -84,6 +92,9 @@ public sealed partial class PreferencesWindow : Window
                 ? CaptureSettings.Default.HistorySize
                 : (int)HistorySizeBox.Value,
             RememberLastSelection = RememberSelectionSwitch.IsOn,
+#if !OFFLINE
+            TranslateApiKey = TranslateKeyBox.Password,
+#endif
             CaptureAreaHotkey = CaptureAreaHotkeyBox.Text,
             CaptureAllScreensHotkey = CaptureAllScreensHotkeyBox.Text,
             RecordScreenHotkey = RecordScreenHotkeyBox.Text,

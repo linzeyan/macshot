@@ -6,7 +6,7 @@
     <Grid
         Background="{ThemeResource ApplicationPageBackgroundThemeBrush}"
         Padding="16"
-        RowDefinitions="*,Auto"
+        RowDefinitions="*,Auto,Auto"
         RowSpacing="12">
         <!-- Editable on purpose: OCR misreads characters, and fixing a wrong letter
              before copying is faster than retyping the line somewhere else. -->
@@ -17,8 +17,22 @@
             IsSpellCheckEnabled="False"
             ScrollViewer.VerticalScrollBarVisibility="Auto" />
 
+        <!-- Collapsed in the offline build, where the code behind the button does not
+             exist at all. See TranslationService. -->
         <StackPanel
+            x:Name="TranslateRow"
             Grid.Row="1"
+            Orientation="Horizontal"
+            Spacing="8">
+            <ComboBox
+                x:Name="TargetLanguageBox"
+                MinWidth="200"
+                SelectionChanged="TargetLanguage_Changed" />
+            <Button x:Name="TranslateButton" Content="Translate" Click="Translate_Click" />
+        </StackPanel>
+
+        <StackPanel
+            Grid.Row="2"
             Orientation="Horizontal"
             HorizontalAlignment="Right"
             Spacing="8">

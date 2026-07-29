@@ -35,6 +35,17 @@
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
 
+                <!-- Collapsed in the offline build, which contains no translator to
+                     give a key to. See TranslationService. -->
+                <StackPanel x:Name="TranslationSection" Spacing="4">
+                    <TextBlock Text="Translation" Style="{StaticResource SubtitleTextBlockStyle}" />
+                    <PasswordBox x:Name="TranslateKeyBox" Header="Google Cloud Translation API key" />
+                    <TextBlock
+                        Text="Your own key, for your own project. Recognized text is sent to Google only when Translate is pressed. Without a key, Translate says so and sends nothing."
+                        TextWrapping="Wrap"
+                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                </StackPanel>
+
                 <TextBlock Text="Selection" Style="{StaticResource SubtitleTextBlockStyle}" />
 
                 <ToggleSwitch x:Name="RememberSelectionSwitch" Header="Offer the last selection again" />

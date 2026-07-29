@@ -2,6 +2,7 @@ using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Input;
+using Macshot.Windows.Core.Recognition;
 
 namespace Macshot.Windows.Core.Output;
 
@@ -142,6 +143,21 @@ public sealed record CaptureSettings
     public HotkeyBinding RecordScreenBinding =>
         HotkeyBinding.ParseOrDefault(RecordScreenHotkey, HotkeyBinding.RecordScreen);
 
+    /// <summary>What recognized text is translated into, as an ISO-639-1 code.</summary>
+    public string TranslateTargetLanguage { get; init; } = TranslationLanguages.DefaultCode;
+
+    /// <summary>
+    /// The user's own Google Cloud Translation key. Empty until they supply one, and
+    /// translation is simply not offered until then.
+    /// </summary>
+    /// <remarks>
+    /// In the settings file in plain text, which is what the macOS product does with
+    /// <c>imgbbAPIKey</c> as well. It is the user's key for their own project, the file
+    /// is under their profile, and a credential store would put a Windows-only
+    /// dependency under Core for a secret that is already theirs to read.
+    /// </remarks>
+    public string TranslateApiKey { get; init; } = string.Empty;
+
     /// <summary>Which of <see cref="BeautifyRenderer.Styles"/> the Beautify action uses.</summary>
     public int BeautifyStyleIndex { get; init; }
 
@@ -252,6 +268,12 @@ public sealed record CaptureSettings
             // Round-tripped through the parser, so a shortcut the file cannot express
             // becomes the default here rather than leaving macshot with no way to
             // capture at all.
+            // Normalized rather than passed through: a code the table does not hold
+            // would be sent to the service and refused, so the capture would come back
+            // with an error where a translation was asked for.
+            TranslateTargetLanguage = TranslationLanguages.Normalize(TranslateTargetLanguage),
+            TranslateApiKey = TranslateApiKey?.Trim() ?? string.Empty,
+
             CaptureAreaHotkey = CaptureAreaBinding.ToString(),
             CaptureAllScreensHotkey = CaptureAllScreensBinding.ToString(),
             RecordScreenHotkey = RecordScreenBinding.ToString(),
