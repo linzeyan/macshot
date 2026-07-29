@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
@@ -27,6 +28,19 @@ public sealed class CaptureController : IDisposable
     private const int CommandQuit = 4;
     private const int CommandRecordScreen = 5;
     private const int CommandCaptureAfterDelay = 6;
+
+    /// <summary>
+    /// Where the recent-capture entries start. They are numbered at the moment the
+    /// menu is opened, so they need a range of their own that the fixed commands
+    /// above can never grow into.
+    /// </summary>
+    private const int CommandRecentFirst = 100;
+
+    /// <summary>
+    /// How many past captures the menu offers, whatever the history is allowed to
+    /// keep. A menu is for reaching the one just missed, not for browsing an archive.
+    /// </summary>
+    private const int RecentMenuCount = 10;
 
     private const int HotkeyCaptureArea = 1;
     private const int HotkeyCaptureAllScreens = 2;
@@ -76,6 +90,13 @@ public sealed class CaptureController : IDisposable
     private CountdownWindow? _countdown;
 
     /// <summary>
+    /// The captures the menu was last built from. Kept because the menu hands back a
+    /// number and nothing else, and the file that number meant has to survive until
+    /// the click arrives.
+    /// </summary>
+    private IReadOnlyList<HistoryEntry> _recent = [];
+
+    /// <summary>
     /// Held for the length of a recording, and the only sign one is running: asking
     /// to record while this is set stops the recording instead of starting a second.
     /// </summary>
@@ -101,6 +122,8 @@ public sealed class CaptureController : IDisposable
         _trayIcon.AddMenuItem(CommandCaptureAllScreens, "Capture all screens\tCtrl+Shift+F");
         _trayIcon.AddMenuItem(CommandCaptureAfterDelay, "Capture area after a delay");
         _trayIcon.AddMenuItem(CommandRecordScreen, "Record screen\tCtrl+Shift+R");
+        _trayIcon.AddSeparator();
+        _trayIcon.AddSubmenu("Recent captures", RecentMenuEntries);
         _trayIcon.AddSeparator();
         _trayIcon.AddMenuItem(CommandPreferences, "Preferences...");
         _trayIcon.AddMenuItem(CommandQuit, "Quit macshot");
@@ -303,6 +326,9 @@ public sealed class CaptureController : IDisposable
         case CommandPreferences:
             _dispatcher.TryEnqueue(ShowPreferences);
             break;
+        case >= CommandRecentFirst:
+            OpenRecent(command - CommandRecentFirst);
+            break;
         case CommandQuit:
             _dispatcher.TryEnqueue(() =>
             {
@@ -370,6 +396,11 @@ public sealed class CaptureController : IDisposable
             await ImageDelivery.SaveAsync(frame, settings);
         }
 
+        // After the actions the user asked for, so the extra encode is never in front
+        // of the clipboard. History is the safety net under delivery, not part of it,
+        // and it is written whether or not the capture was saved anywhere else.
+        await ScreenshotHistory.RecordAsync(frame, settings);
+
         if (settings.ShowThumbnail)
         {
             await ShowThumbnailAsync(frame);
@@ -415,6 +446,46 @@ public sealed class CaptureController : IDisposable
         pin.Closed += (_, _) => _pins.Remove(pin);
         _pins.Add(pin);
         await pin.ShowPinnedAsync();
+    }
+
+    /// <summary>
+    /// The recent captures, numbered for the menu that is about to be drawn.
+    /// </summary>
+    private IReadOnlyList<TrayMenuEntry> RecentMenuEntries()
+    {
+        _recent = ScreenshotHistory.Recent(RecentMenuCount);
+        return [.. _recent.Select((entry, index) => new TrayMenuEntry(CommandRecentFirst + index, entry.Label))];
+    }
+
+    /// <summary>
+    /// Opens a past capture in whatever the machine shows PNGs with.
+    /// </summary>
+    /// <remarks>
+    /// Handed to the shell rather than reopened inside macshot, because there is no
+    /// standalone editor window to reopen it into yet. When there is one, this is
+    /// where it goes.
+    /// </remarks>
+    private void OpenRecent(int index)
+    {
+        if (index < 0 || index >= _recent.Count)
+        {
+            return;
+        }
+
+        var path = _recent[index].Path;
+        _dispatcher.TryEnqueue(() =>
+        {
+            try
+            {
+                using var opened = Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+            }
+            catch (Exception exception)
+            {
+                // A capture pruned or deleted between the menu being built and the
+                // click arriving is the ordinary case, and not worth a message box.
+                DiagnosticLog.Write($"Could not open the past capture '{path}': {exception.Message}");
+            }
+        });
     }
 
     private void ShowPreferences()

@@ -2,6 +2,9 @@ using System.Runtime.InteropServices;
 
 namespace Macshot.Windows.Services;
 
+/// <summary>One entry in a submenu, built at the moment the menu is opened.</summary>
+public readonly record struct TrayMenuEntry(int Id, string Text);
+
 /// <summary>
 /// The notification-area icon and its context menu, which is macshot's primary
 /// entry point. It is the Windows counterpart of the macOS <c>NSStatusItem</c>.
@@ -23,6 +26,8 @@ public sealed class TrayIconService : IDisposable
 
     private const uint MenuString = 0x00000000;
     private const uint MenuSeparator = 0x00000800;
+    private const uint MenuPopup = 0x00000010;
+    private const uint MenuGrayed = 0x00000001;
     private const uint TrackReturnCommand = 0x0100;
     private const uint TrackRightButton = 0x0002;
     private const uint TrackNoNotify = 0x0080;
@@ -31,7 +36,7 @@ public sealed class TrayIconService : IDisposable
     private const uint IconId = 1;
 
     private readonly MessageWindow _window;
-    private readonly List<(int Id, string? Text)> _menuItems = [];
+    private readonly List<MenuEntry> _menuItems = [];
     private bool _disposed;
 
     public TrayIconService(MessageWindow window, string tooltip)
@@ -66,10 +71,25 @@ public sealed class TrayIconService : IDisposable
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(id, 1);
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
-        _menuItems.Add((id, text));
+        _menuItems.Add(new MenuEntry(id, text, null));
     }
 
-    public void AddSeparator() => _menuItems.Add((0, null));
+    /// <summary>
+    /// Adds a submenu whose contents are asked for each time the menu is opened.
+    /// </summary>
+    /// <remarks>
+    /// A callback rather than a list, because the entries this exists for — the recent
+    /// captures — change with every capture, and a menu built once in the constructor
+    /// would go on offering whatever was there when macshot started.
+    /// </remarks>
+    public void AddSubmenu(string text, Func<IReadOnlyList<TrayMenuEntry>> items)
+    {
+        ArgumentException.ThrowIfNullOrWhiteSpace(text);
+        ArgumentNullException.ThrowIfNull(items);
+        _menuItems.Add(new MenuEntry(0, text, items));
+    }
+
+    public void AddSeparator() => _menuItems.Add(new MenuEntry(0, null, null));
 
     public void Dispose()
     {
@@ -137,15 +157,21 @@ public sealed class TrayIconService : IDisposable
 
         try
         {
-            foreach (var (id, text) in _menuItems)
+            foreach (var entry in _menuItems)
             {
-                if (text is null)
+                if (entry.Text is null)
                 {
                     AppendMenu(menu, MenuSeparator, UIntPtr.Zero, null);
                 }
+                else if (entry.Submenu is { } items)
+                {
+                    // Owned by the parent from here: DestroyMenu takes the submenus
+                    // with it, so the popup below needs no cleanup of its own.
+                    AppendMenu(menu, MenuPopup, new UIntPtr((ulong)BuildSubmenu(items()).ToInt64()), entry.Text);
+                }
                 else
                 {
-                    AppendMenu(menu, MenuString, new UIntPtr((uint)id), text);
+                    AppendMenu(menu, MenuString, new UIntPtr((uint)entry.Id), entry.Text);
                 }
             }
 
@@ -177,6 +203,39 @@ public sealed class TrayIconService : IDisposable
             DestroyMenu(menu);
         }
     }
+
+    /// <summary>
+    /// A popup holding the given entries, or a single greyed line when there are
+    /// none — an empty submenu opens as a blank rectangle, which reads as a defect
+    /// rather than as "nothing here yet".
+    /// </summary>
+    private static IntPtr BuildSubmenu(IReadOnlyList<TrayMenuEntry> entries)
+    {
+        var submenu = CreatePopupMenu();
+        if (submenu == IntPtr.Zero)
+        {
+            return IntPtr.Zero;
+        }
+
+        if (entries.Count == 0)
+        {
+            AppendMenu(submenu, MenuString | MenuGrayed, UIntPtr.Zero, "Nothing yet");
+            return submenu;
+        }
+
+        foreach (var entry in entries)
+        {
+            AppendMenu(submenu, MenuString, new UIntPtr((uint)entry.Id), entry.Text);
+        }
+
+        return submenu;
+    }
+
+    /// <summary>
+    /// A menu line: a command, a separator (no text), or a submenu (a callback that
+    /// produces the entries when the menu is opened).
+    /// </summary>
+    private sealed record MenuEntry(int Id, string? Text, Func<IReadOnlyList<TrayMenuEntry>>? Submenu);
 
     [DllImport("shell32.dll", EntryPoint = "Shell_NotifyIconW", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]

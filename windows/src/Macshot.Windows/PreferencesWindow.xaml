@@ -35,6 +35,20 @@
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
 
+                <TextBlock Text="History" Style="{StaticResource SubtitleTextBlockStyle}" />
+
+                <NumberBox
+                    x:Name="HistorySizeBox"
+                    Header="Keep the last (captures)"
+                    Minimum="0"
+                    Maximum="200"
+                    SpinButtonPlacementMode="Compact" />
+                <TextBlock
+                    Text="Kept under macshot's own data folder, separately from the save folder, and offered in the notification-area menu. Zero keeps none."
+                    TextWrapping="Wrap"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <Button Content="Clear history now" Click="ClearHistory_Click" HorizontalAlignment="Left" />
+
                 <TextBlock Text="Delayed capture" Style="{StaticResource SubtitleTextBlockStyle}" />
 
                 <NumberBox

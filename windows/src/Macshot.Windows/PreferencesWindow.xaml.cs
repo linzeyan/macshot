@@ -43,6 +43,7 @@ public sealed partial class PreferencesWindow : Window
         ThumbnailSwitch.IsOn = settings.ShowThumbnail;
         ThumbnailSecondsBox.Value = settings.ThumbnailSeconds;
         DelaySecondsBox.Value = settings.DelaySeconds;
+        HistorySizeBox.Value = settings.HistorySize;
         UpdateQualityVisibility();
         UpdateTemplatePreview();
     }
@@ -74,6 +75,9 @@ public sealed partial class PreferencesWindow : Window
             DelaySeconds = double.IsNaN(DelaySecondsBox.Value)
                 ? CaptureSettings.Default.DelaySeconds
                 : (int)DelaySecondsBox.Value,
+            HistorySize = double.IsNaN(HistorySizeBox.Value)
+                ? CaptureSettings.Default.HistorySize
+                : (int)HistorySizeBox.Value,
         }).Normalized();
     }
 
@@ -134,6 +138,20 @@ public sealed partial class PreferencesWindow : Window
     }
 
     private void ResetDirectory_Click(object sender, RoutedEventArgs e) => DirectoryBox.Text = string.Empty;
+
+    /// <summary>
+    /// Deletes the kept copies immediately, without waiting for Save.
+    /// </summary>
+    /// <remarks>
+    /// Immediate because it is an action rather than a setting: someone clearing
+    /// history has just captured something they want gone, and leaving it on disk
+    /// until an unrelated Save button is pressed would be the wrong answer to that.
+    /// </remarks>
+    private void ClearHistory_Click(object sender, RoutedEventArgs e)
+    {
+        ScreenshotHistory.Clear();
+        StatusText.Text = "History cleared.";
+    }
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
