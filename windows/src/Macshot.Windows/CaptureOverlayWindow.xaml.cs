@@ -147,6 +147,7 @@ public sealed partial class CaptureOverlayWindow : Window
         PreviewImage.Source = source;
         BuildToolButtons();
         LoadStyle();
+        WireStyleControls();
 
         // Covers both finishing and cancelling: the owner closes every overlay either
         // way, and a colour picked but not used is still the colour the user wants.
@@ -880,6 +881,32 @@ public sealed partial class CaptureOverlayWindow : Window
         UpdateColorSwatch();
     }
 
+    /// <summary>
+    /// Attaches the style controls' change handlers, once the whole toolbar exists.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Not in the markup, which is where this began. Assigning a slider's Minimum
+    /// coerces its Value, that raises ValueChanged while the toolbar is still being
+    /// parsed, and the handler then reads controls declared further down the same file
+    /// which have not been created yet. WinUI reports the null reference that follows
+    /// as a failure to assign the property it was in the middle of setting, naming
+    /// neither the handler nor the control it tripped over — the overlay simply never
+    /// opened.
+    /// </para>
+    /// <para>
+    /// Attaching here rather than guarding inside each handler is what makes it stay
+    /// fixed: the next control added to this toolbar cannot bring the fault back.
+    /// </para>
+    /// </remarks>
+    private void WireStyleControls()
+    {
+        StyleColorPicker.ColorChanged += StyleColor_Changed;
+        StrokeWidthSlider.ValueChanged += StrokeWidth_Changed;
+        LineStyleBox.SelectionChanged += LineStyle_Changed;
+        StampChoices.SelectionChanged += StampChoice_Changed;
+    }
+
     private void StyleColor_Changed(ColorPicker sender, ColorChangedEventArgs args) => ApplyStyle();
 
     private void StrokeWidth_Changed(object sender, RangeBaseValueChangedEventArgs e) => ApplyStyle();
@@ -892,9 +919,11 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private void ApplyStyle()
     {
-        // SelectionChanged fires while the XAML tree is still being built, before the
-        // other controls this reads from exist.
-        if (_isLoadingStyle || StyleColorPicker is null || StrokeWidthSlider is null)
+        // Every control this reads, not merely the first two. The handlers are attached
+        // after the toolbar is built, so none of these should be null; checking all of
+        // them is what keeps a style change from taking the overlay down with it if one
+        // ever is.
+        if (_isLoadingStyle || StyleColorPicker is null || StrokeWidthSlider is null || LineStyleBox is null)
         {
             return;
         }

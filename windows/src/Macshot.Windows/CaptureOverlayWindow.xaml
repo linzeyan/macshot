@@ -89,10 +89,9 @@
                             BorderThickness="1" />
                         <Button.Flyout>
                             <Flyout>
-                                <ColorPicker
-                                    x:Name="StyleColorPicker"
-                                    IsAlphaEnabled="True"
-                                    ColorChanged="StyleColor_Changed" />
+                                <!-- The style controls' change handlers are attached in
+                                     code once the toolbar exists. See WireStyleControls. -->
+                                <ColorPicker x:Name="StyleColorPicker" IsAlphaEnabled="True" />
                             </Flyout>
                         </Button.Flyout>
                     </Button>
@@ -104,13 +103,9 @@
                         Minimum="1"
                         Maximum="32"
                         StepFrequency="1"
-                        VerticalAlignment="Center"
-                        ValueChanged="StrokeWidth_Changed" />
+                        VerticalAlignment="Center" />
 
-                    <ComboBox
-                        x:Name="LineStyleBox"
-                        VerticalAlignment="Center"
-                        SelectionChanged="LineStyle_Changed" />
+                    <ComboBox x:Name="LineStyleBox" VerticalAlignment="Center" />
 
                     <!-- Which emoji the stamp tool places. Populated in code from
                          StampGlyph.Choices so the picker and the renderer cannot
@@ -118,11 +113,7 @@
                     <Button x:Name="StampButton" VerticalAlignment="Center" ToolTipService.ToolTip="Stamp">
                         <Button.Flyout>
                             <Flyout>
-                                <GridView
-                                    x:Name="StampChoices"
-                                    MaxWidth="240"
-                                    SelectionMode="Single"
-                                    SelectionChanged="StampChoice_Changed" />
+                                <GridView x:Name="StampChoices" MaxWidth="240" SelectionMode="Single" />
                             </Flyout>
                         </Button.Flyout>
                     </Button>
