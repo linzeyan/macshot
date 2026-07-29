@@ -17,6 +17,16 @@
     <ApplicationManifest>app.manifest</ApplicationManifest>
   </PropertyGroup>
 
+  <!-- The offline variant, selected with -p:Variant=Offline. The same tree with every
+       network feature compiled out rather than a second project, because a fork would
+       drift: the point of the variant is that it is provably the same app minus the
+       uploads, and a compiler that fails on a stray reference is the only thing that
+       can prove it. This mirrors the macOS OFFLINE condition. -->
+  <PropertyGroup Condition="'$(Variant)' == 'Offline'">
+    <DefineConstants>$(DefineConstants);OFFLINE</DefineConstants>
+    <AssemblyName>Macshot.Windows.Offline</AssemblyName>
+  </PropertyGroup>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
   </ItemGroup>
