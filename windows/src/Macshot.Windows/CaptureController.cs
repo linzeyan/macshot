@@ -131,9 +131,21 @@ public sealed class CaptureController : IDisposable
             _overlays.Add(overlay);
         }
 
-        foreach (var overlay in _overlays)
+        try
         {
-            await overlay.ShowAsync();
+            foreach (var overlay in _overlays)
+            {
+                await overlay.ShowAsync();
+            }
+        }
+        catch
+        {
+            // An overlay that failed on the way up is still in the list, and a non-empty
+            // list is what turns the next hotkey into a no-op. Without this, one failed
+            // capture stops every capture for the rest of the session, and the app looks
+            // like it has stopped responding to its own shortcut.
+            DismissOverlays();
+            throw;
         }
     }
 
