@@ -52,7 +52,7 @@ public sealed partial class PreferencesWindow : Window
         // not show every setting: the annotation colour, width and line style are
         // chosen on the overlay's own toolbar, and starting from a blank record would
         // hand them back their defaults every time any preference was saved.
-        return _settings.Current with
+        return (_settings.Current with
         {
             Format = SelectedFormat(),
             Quality = (int)QualitySlider.Value,
@@ -70,7 +70,7 @@ public sealed partial class PreferencesWindow : Window
             ThumbnailSeconds = double.IsNaN(ThumbnailSecondsBox.Value)
                 ? CaptureSettings.Default.ThumbnailSeconds
                 : (int)ThumbnailSecondsBox.Value,
-        }.Normalized();
+        }).Normalized();
     }
 
     private CaptureImageFormat SelectedFormat() =>
