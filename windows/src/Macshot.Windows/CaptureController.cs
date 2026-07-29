@@ -1,5 +1,4 @@
 using System.Runtime.InteropServices;
-using System.Text;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Output;
@@ -49,9 +48,6 @@ public sealed class CaptureController : IDisposable
     private const uint VirtualKeyEscape = 0x1B;
 
     private const uint MessageBoxIconError = 0x00000010;
-
-    /// <summary>Stack frames a failure is reported with. A message box does not scroll.</summary>
-    private const int StackFramesReported = 8;
 
     private readonly ScreenCaptureService _screenCapture = new();
     private readonly ScreenRecorder _recorder = new();
@@ -254,10 +250,12 @@ public sealed class CaptureController : IDisposable
 
     private async void OnCaptureCompleted(object? sender, CapturedFrame result)
     {
-        DismissOverlays();
-
+        // Inside the try with the delivery: this runs from the overlay's own input
+        // handler, closing the very window whose event is still on the stack, and an
+        // exception escaping an async void method has nobody above it to catch it.
         try
         {
+            DismissOverlays();
             await DeliverAsync(result);
         }
         catch (Exception exception)
@@ -579,40 +577,7 @@ public sealed class CaptureController : IDisposable
     /// capture triggered by a hotkey may have no window to host one, and a
     /// swallowed exception would look like macshot simply doing nothing.
     /// </summary>
-    private void ReportError(Exception exception)
-    {
-        MessageBox(_messageWindow.Handle, Describe(exception), "macshot", MessageBoxIconError);
-    }
-
-    /// <summary>
-    /// The failure in enough detail to act on.
-    /// </summary>
-    /// <remarks>
-    /// A message on its own is not enough for the failures that matter here. WinUI
-    /// reports every markup fault as "XAML parsing failed." and names neither the
-    /// window nor the key, and a background app with no log leaves whoever is looking
-    /// at that box as the only place the information ever existed. The type, the inner
-    /// exceptions, and the top of the stack are what make it something that can be
-    /// acted on; the stack is cut short because a message box does not scroll.
-    /// </remarks>
-    private static string Describe(Exception exception)
-    {
-        var text = new StringBuilder();
-        for (var current = exception; current is not null; current = current.InnerException)
-        {
-            text.AppendLine($"{current.GetType().Name}: {current.Message}");
-        }
-
-        if (exception.StackTrace is { } stack)
-        {
-            text.AppendLine();
-            text.AppendLine(string.Join(
-                Environment.NewLine,
-                stack.Split(Environment.NewLine).Take(StackFramesReported)));
-        }
-
-        return text.ToString();
-    }
+    private void ReportError(Exception exception) => FailureReport.Show(_messageWindow.Handle, exception);
 
     [DllImport("user32.dll", EntryPoint = "MessageBoxW", CharSet = CharSet.Unicode)]
     private static extern int MessageBox(IntPtr window, string text, string caption, uint type);

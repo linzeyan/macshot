@@ -134,7 +134,10 @@ public sealed partial class PreferencesWindow : Window
         {
             _settings.Save(settings);
         }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        // Everything, not only the file system failures. This runs from a click
+        // handler, so anything that escapes has nobody above it to catch it, and a
+        // preference that cannot be stored is never a reason to take the app down.
+        catch (Exception exception)
         {
             StatusText.Text = $"Could not save preferences: {exception.Message}";
             return;
