@@ -96,6 +96,15 @@
                         </Button.Flyout>
                     </Button>
 
+                    <!-- Armed, not a tool: sampling happens in the middle of drawing,
+                         so it borrows one click and hands the current tool back. -->
+                    <ToggleButton
+                        x:Name="PickColorButton"
+                        Content="Pick"
+                        VerticalAlignment="Center"
+                        ToolTipService.ToolTip="Take a colour from the screen"
+                        Click="PickColor_Click" />
+
                     <TextBlock Text="Width" Foreground="White" VerticalAlignment="Center" />
                     <Slider
                         x:Name="StrokeWidthSlider"

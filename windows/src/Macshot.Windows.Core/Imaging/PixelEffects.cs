@@ -1,3 +1,4 @@
+using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
 
 namespace Macshot.Windows.Core.Imaging;
@@ -10,6 +11,34 @@ namespace Macshot.Windows.Core.Imaging;
 public static class PixelEffects
 {
     /// <summary>Replaces each block inside <paramref name="region"/> with its average color.</summary>
+    /// <summary>
+    /// The colour of one pixel, with the point clamped into the frame.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Clamped rather than refused. The sampler follows the pointer, and a pointer a
+    /// pixel past the edge of the frame is an ordinary thing to happen rather than a
+    /// reason to abandon the pick.
+    /// </para>
+    /// <para>
+    /// Always opaque. A screen capture's alpha channel says nothing about what is on
+    /// screen — <c>BitBlt</c> leaves it at zero — so carrying it through would sample
+    /// every pixel of the desktop as invisible.
+    /// </para>
+    /// </remarks>
+    public static AnnotationColor Sample(byte[] bgraPixels, int width, int height, int x, int y)
+    {
+        ArgumentNullException.ThrowIfNull(bgraPixels);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+
+        var column = Math.Clamp(x, 0, width - 1);
+        var row = Math.Clamp(y, 0, height - 1);
+        var offset = (((row * width) + column) * 4);
+
+        return new AnnotationColor(bgraPixels[offset + 2], bgraPixels[offset + 1], bgraPixels[offset]);
+    }
+
     public static void Pixelate(byte[] bgraPixels, int width, int height, CaptureRegion region, double blockSize)
     {
         ValidateFrame(bgraPixels, width, height);

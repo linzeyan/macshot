@@ -42,6 +42,8 @@ public sealed partial class CaptureOverlayWindow : Window
     /// <summary>The standing instruction before anything is chosen. Matches the XAML default.</summary>
     private const string SelectionHint = "Drag to capture • Click a window to take it • Esc to cancel";
 
+    private const string SamplingHint = "Click to take the colour under the pointer • Esc to stop";
+
     private const string RememberedHint =
         "Enter to take the last selection again • Drag for a new one • Esc to cancel";
 
@@ -84,6 +86,12 @@ public sealed partial class CaptureOverlayWindow : Window
     /// drawn over.
     /// </summary>
     private CaptureRegion? _remembered;
+
+    /// <summary>
+    /// True while the colour sampler is armed, which makes the next click a pick
+    /// rather than a mark.
+    /// </summary>
+    private bool _samplingColor;
 
     /// <summary>The window under the pointer, in frame space, while none is chosen yet.</summary>
     private CaptureWindow? _hoveredWindow;
@@ -262,6 +270,14 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         SelectionCanvas.CapturePointer(e.Pointer);
 
+        // Ahead of everything else: while the sampler is armed the click is the pick,
+        // and must not also start a mark or a selection under it.
+        if (_samplingColor)
+        {
+            TakeSampledColor(ToFrame(e));
+            return;
+        }
+
         if (IsAnnotating)
         {
             // Sprite tools are placed with a click rather than dragged out: their size
@@ -294,6 +310,15 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private void SelectionCanvas_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
+        if (_samplingColor)
+        {
+            // Reading it out as it moves is what makes the tool usable at all: on a
+            // gradient or a photograph, the pixel under the pointer is not the colour
+            // the eye reports, and there is no way to tell before committing to it.
+            HintText.Text = $"{SamplingHint} • {SampleAt(ToFrame(e)).ToHex()}";
+            return;
+        }
+
         if (IsAnnotating)
         {
             if (e.Pointer.IsInContact)
@@ -735,6 +760,15 @@ public sealed partial class CaptureOverlayWindow : Window
             case VirtualKey.Escape:
                 e.Handled = true;
 
+                // An armed sampler is the first thing Escape gives up. It takes over
+                // the click, so leaving it armed while Escape did something else would
+                // leave the pointer doing nothing the user asked for.
+                if (_samplingColor)
+                {
+                    SetColorSampling(false);
+                    return;
+                }
+
                 // The first Escape abandons a half-drawn mark; only an Escape with
                 // nothing in flight throws the whole capture away.
                 if (_editor.Cancel())
@@ -917,6 +951,65 @@ public sealed partial class CaptureOverlayWindow : Window
         StampButton.Content = _stampEmoji;
     }
 
+    /// <summary>
+    /// Arms or disarms the colour sampler.
+    /// </summary>
+    /// <remarks>
+    /// Armed rather than made a tool of its own. Sampling is something done in the
+    /// middle of drawing — the whole reason to take a colour off the screen is to draw
+    /// the next mark in it — so it borrows one click and hands the tool back, instead
+    /// of making the user reselect the tool they were already using.
+    /// </remarks>
+    private void PickColor_Click(object sender, RoutedEventArgs e) =>
+        SetColorSampling(PickColorButton.IsChecked == true);
+
+    private void SetColorSampling(bool armed)
+    {
+        _samplingColor = armed;
+        PickColorButton.IsChecked = armed;
+        HintText.Text = armed ? SamplingHint : AnnotationHint;
+    }
+
+    /// <summary>
+    /// Takes the colour under the pointer and puts it on the toolbar, keeping the
+    /// opacity that was already chosen.
+    /// </summary>
+    /// <remarks>
+    /// Applied through the colour picker rather than straight onto the editor, so the
+    /// swatch, the picker, and what the next mark is drawn in cannot disagree — the
+    /// picker's change handler is the one path that keeps all three together.
+    /// </remarks>
+    private void TakeSampledColor(CapturePoint point)
+    {
+        var sampled = SampleAt(point);
+
+        // Opacity is a property of the mark rather than of the pixel, and the pixel
+        // has no opinion about it: a screenshot is opaque everywhere.
+        StyleColorPicker.Color = Color.FromArgb(
+            StyleColorPicker.Color.A,
+            sampled.Red,
+            sampled.Green,
+            sampled.Blue);
+
+        SetColorSampling(false);
+        HintText.Text = $"Took {sampled.ToHex()} • {AnnotationHint}";
+    }
+
+    /// <summary>
+    /// The colour of the frozen screenshot under a frame-space point.
+    /// </summary>
+    /// <remarks>
+    /// The screenshot rather than the preview, so a mark already drawn cannot be
+    /// sampled by accident: what the sampler is for is the colour of the thing being
+    /// annotated, and every annotation on top of it is macshot's own.
+    /// </remarks>
+    private AnnotationColor SampleAt(CapturePoint point) => PixelEffects.Sample(
+        _desktopFrame.BgraPixels,
+        _desktopFrame.Width,
+        _desktopFrame.Height,
+        (int)point.X,
+        (int)point.Y);
+
     private void ToolButton_Click(object sender, RoutedEventArgs e)
     {
         if (sender is ToggleButton { Tag: AnnotationTool tool })
@@ -927,6 +1020,12 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private void SelectTool(AnnotationTool tool)
     {
+        // Reaching for a tool is as clear a way of abandoning a pick as Escape is.
+        if (_samplingColor)
+        {
+            SetColorSampling(false);
+        }
+
         _editor.Tool = tool;
 
         // Behaves as a radio group: a tool is always active, so re-clicking the
