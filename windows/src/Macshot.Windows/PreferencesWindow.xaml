@@ -35,6 +35,19 @@
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
 
+                <TextBlock Text="Delayed capture" Style="{StaticResource SubtitleTextBlockStyle}" />
+
+                <NumberBox
+                    x:Name="DelaySecondsBox"
+                    Header="Count down for (seconds)"
+                    Minimum="1"
+                    Maximum="60"
+                    SpinButtonPlacementMode="Compact" />
+                <TextBlock
+                    Text="Used by &quot;Capture area after a delay&quot; in the notification-area menu, for capturing a menu or a hover state. The keyboard shortcut stays immediate."
+                    TextWrapping="Wrap"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
                 <TextBlock Text="Recording" Style="{StaticResource SubtitleTextBlockStyle}" />
 
                 <ComboBox x:Name="RecordingFormatBox" Header="Recording format" />

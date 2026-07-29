@@ -22,6 +22,7 @@ public sealed record CaptureSettings
     public const int MaxThumbnailSeconds = 60;
     public const double MinStrokeWidth = 1;
     public const double MaxStrokeWidth = 64;
+    public const int MinDelaySeconds = 1;
     public const int MaxDelaySeconds = 60;
     public const int MaxHistorySize = 200;
 
@@ -100,10 +101,16 @@ public sealed record CaptureSettings
     public string? LastSelectionDisplay { get; init; }
 
     /// <summary>
-    /// Seconds counted down before a capture is taken, so the thing being captured
-    /// can be opened first. Zero is no delay.
+    /// How long the delayed capture counts down for, so whatever is being captured
+    /// can be opened first.
     /// </summary>
-    public int DelaySeconds { get; init; }
+    /// <remarks>
+    /// This is the length of the wait, not whether there is one. A delay in front of
+    /// every capture would make the shortcut useless for the ordinary case, so the
+    /// delay is asked for by name from the notification-area menu and the shortcut
+    /// stays immediate — which is also why there is no "off" value.
+    /// </remarks>
+    public int DelaySeconds { get; init; } = 5;
 
     /// <summary>How many past captures are kept. Zero turns history off entirely.</summary>
     public int HistorySize { get; init; } = 20;
@@ -212,7 +219,7 @@ public sealed record CaptureSettings
                 ? Math.Clamp(AnnotationStrokeWidth, MinStrokeWidth, MaxStrokeWidth)
                 : AnnotationStyle.Default.StrokeWidth,
             AnnotationLineStyle = Enum.IsDefined(AnnotationLineStyle) ? AnnotationLineStyle : LineStyle.Solid,
-            DelaySeconds = Math.Clamp(DelaySeconds, 0, MaxDelaySeconds),
+            DelaySeconds = Math.Clamp(DelaySeconds, MinDelaySeconds, MaxDelaySeconds),
             HistorySize = Math.Clamp(HistorySize, 0, MaxHistorySize),
 
             // A selection with no display to belong to cannot be placed, and a display

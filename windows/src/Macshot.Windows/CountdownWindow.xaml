@@ -1,0 +1,35 @@
+<Window
+    x:Class="Macshot.Windows.CountdownWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Macshot Countdown">
+    <Grid Background="#EE202020" Padding="12" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
+        <!-- The number is the whole panel. It is read at a glance from across the
+             desk while both hands are busy arranging whatever is being captured. -->
+        <TextBlock
+            x:Name="SecondsText"
+            FontSize="34"
+            FontWeight="SemiBold"
+            Foreground="#FFFFFF"
+            MinWidth="44"
+            TextAlignment="Center"
+            VerticalAlignment="Center"
+            Text="5" />
+
+        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
+            <!-- Foreground is set rather than inherited, for the same reason as the
+                 recording panel: this is dark whatever the system theme is. -->
+            <TextBlock Foreground="#FFFFFF" Text="Capturing when this reaches zero" />
+            <TextBlock
+                Foreground="#B0B0B0"
+                FontSize="12"
+                Text="Esc or Cancel stops it" />
+        </StackPanel>
+
+        <Button
+            Grid.Column="2"
+            Content="Cancel"
+            VerticalAlignment="Center"
+            Click="Cancel_Click" />
+    </Grid>
+</Window>

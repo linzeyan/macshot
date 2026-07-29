@@ -115,7 +115,9 @@ public sealed class RememberedSelectionTests
     {
         var normalized = (CaptureSettings.Default with { DelaySeconds = -4, HistorySize = 9999 }).Normalized();
 
-        Assert.AreEqual(0, normalized.DelaySeconds);
+        // Not zero: a countdown of no seconds is the same as having no delayed
+        // capture at all, and the menu entry that runs it would then do nothing.
+        Assert.AreEqual(CaptureSettings.MinDelaySeconds, normalized.DelaySeconds);
         Assert.AreEqual(CaptureSettings.MaxHistorySize, normalized.HistorySize);
     }
 

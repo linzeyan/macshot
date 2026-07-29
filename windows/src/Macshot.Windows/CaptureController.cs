@@ -26,6 +26,7 @@ public sealed class CaptureController : IDisposable
     private const int CommandPreferences = 3;
     private const int CommandQuit = 4;
     private const int CommandRecordScreen = 5;
+    private const int CommandCaptureAfterDelay = 6;
 
     private const int HotkeyCaptureArea = 1;
     private const int HotkeyCaptureAllScreens = 2;
@@ -45,6 +46,13 @@ public sealed class CaptureController : IDisposable
     /// </summary>
     private const int HotkeyStopRecording = 5;
 
+    /// <summary>
+    /// Held only while a delayed capture counts down. Bare, because the countdown
+    /// panel deliberately never takes the foreground, so a key sent to macshot's own
+    /// window would never arrive.
+    /// </summary>
+    private const int HotkeyCancelCountdown = 6;
+
     private const uint VirtualKeyEscape = 0x1B;
 
     private readonly ScreenCaptureService _screenCapture = new();
@@ -59,6 +67,13 @@ public sealed class CaptureController : IDisposable
     private MainWindow? _preview;
     private ThumbnailWindow? _thumbnail;
     private PreferencesWindow? _preferences;
+
+    /// <summary>
+    /// Held for the length of a countdown, and the only sign one is running: asking
+    /// for a second delayed capture while this is set does nothing rather than
+    /// stacking two counters on top of each other.
+    /// </summary>
+    private CountdownWindow? _countdown;
 
     /// <summary>
     /// Held for the length of a recording, and the only sign one is running: asking
@@ -84,6 +99,7 @@ public sealed class CaptureController : IDisposable
         _trayIcon = new TrayIconService(_messageWindow, "macshot");
         _trayIcon.AddMenuItem(CommandCaptureArea, "Capture area\tCtrl+Shift+X");
         _trayIcon.AddMenuItem(CommandCaptureAllScreens, "Capture all screens\tCtrl+Shift+F");
+        _trayIcon.AddMenuItem(CommandCaptureAfterDelay, "Capture area after a delay");
         _trayIcon.AddMenuItem(CommandRecordScreen, "Record screen\tCtrl+Shift+R");
         _trayIcon.AddSeparator();
         _trayIcon.AddMenuItem(CommandPreferences, "Preferences...");
@@ -147,6 +163,62 @@ public sealed class CaptureController : IDisposable
         }
     }
 
+    /// <summary>
+    /// Counts down, then puts the selection overlays up on what the screen has
+    /// become by then.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is the only way to capture the things that end when another window is
+    /// clicked: an open menu, a hover state, a tooltip. Reaching for macshot closes
+    /// them, so macshot has to be told first and arrive later.
+    /// </para>
+    /// <para>
+    /// It is a separate action rather than a preference on every capture. A wait in
+    /// front of the shortcut would cost the ordinary case far more than it buys the
+    /// rare one, so the shortcut stays immediate and the preference only says how
+    /// long this waits.
+    /// </para>
+    /// </remarks>
+    public async Task BeginDelayedAreaCaptureAsync()
+    {
+        if (_countdown is not null || _overlays.Count > 0)
+        {
+            return;
+        }
+
+        using var cancellation = new CancellationTokenSource();
+        var countdown = new CountdownWindow();
+        _countdown = countdown;
+
+        var holdsEscape = _hotkeys.TryRegisterBareKey(
+            HotkeyCancelCountdown,
+            VirtualKeyEscape,
+            cancellation.Cancel);
+
+        bool elapsed;
+        try
+        {
+            elapsed = await countdown.RunAsync(_settings.Current.DelaySeconds, cancellation.Token);
+        }
+        finally
+        {
+            _countdown = null;
+            if (holdsEscape)
+            {
+                _hotkeys.Unregister(HotkeyCancelCountdown);
+            }
+        }
+
+        // A cancelled countdown takes no capture at all. Showing the overlays anyway
+        // would make Escape mean "wait less" rather than "stop", and the user who
+        // pressed it would then have to press it again.
+        if (elapsed)
+        {
+            await BeginAreaCaptureAsync();
+        }
+    }
+
     public async Task CaptureAllScreensAsync()
     {
         await DeliverAsync(await CaptureDesktopAsync(MonitorEnumerator.Enumerate()));
@@ -193,6 +265,10 @@ public sealed class CaptureController : IDisposable
         // quitting out from under the encoder would leave it unplayable.
         _recording?.Cancel();
 
+        // Closing the countdown completes the wait as a cancellation, so the delayed
+        // capture it belongs to does not go on to raise overlays over a quitting app.
+        _countdown?.Close();
+
         _thumbnail?.Close();
         _preferences?.Close();
         foreach (var pin in _pins.ToArray())
@@ -217,6 +293,9 @@ public sealed class CaptureController : IDisposable
             break;
         case CommandCaptureAllScreens:
             Post(CaptureAllScreensAsync);
+            break;
+        case CommandCaptureAfterDelay:
+            Post(BeginDelayedAreaCaptureAsync);
             break;
         case CommandRecordScreen:
             Post(ToggleRecordingAsync);

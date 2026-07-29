@@ -42,6 +42,7 @@ public sealed partial class PreferencesWindow : Window
         AutoSaveSwitch.IsOn = settings.AutoSave;
         ThumbnailSwitch.IsOn = settings.ShowThumbnail;
         ThumbnailSecondsBox.Value = settings.ThumbnailSeconds;
+        DelaySecondsBox.Value = settings.DelaySeconds;
         UpdateQualityVisibility();
         UpdateTemplatePreview();
     }
@@ -70,6 +71,9 @@ public sealed partial class PreferencesWindow : Window
             ThumbnailSeconds = double.IsNaN(ThumbnailSecondsBox.Value)
                 ? CaptureSettings.Default.ThumbnailSeconds
                 : (int)ThumbnailSecondsBox.Value,
+            DelaySeconds = double.IsNaN(DelaySecondsBox.Value)
+                ? CaptureSettings.Default.DelaySeconds
+                : (int)DelaySecondsBox.Value,
         }).Normalized();
     }
 
