@@ -48,7 +48,11 @@ public sealed partial class PreferencesWindow : Window
 
     private CaptureSettings Collect()
     {
-        return new CaptureSettings
+        // Built from what is stored rather than from nothing, because this window does
+        // not show every setting: the annotation colour, width and line style are
+        // chosen on the overlay's own toolbar, and starting from a blank record would
+        // hand them back their defaults every time any preference was saved.
+        return _settings.Current with
         {
             Format = SelectedFormat(),
             Quality = (int)QualitySlider.Value,
