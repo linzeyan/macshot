@@ -42,6 +42,9 @@ public sealed partial class CaptureOverlayWindow : Window
     /// <summary>The standing instruction before anything is chosen. Matches the XAML default.</summary>
     private const string SelectionHint = "Drag to capture • Click a window to take it • Esc to cancel";
 
+    private const string RememberedHint =
+        "Enter to take the last selection again • Drag for a new one • Esc to cancel";
+
     /// <summary>
     /// Shown while a window is highlighted. Scroll capture is otherwise unfindable:
     /// there is no toolbar yet at hover time, and a gesture nobody is told about is
@@ -74,6 +77,13 @@ public sealed partial class CaptureOverlayWindow : Window
     private RasterAnnotationPreview? _annotationPreview;
     private Point? _selectionStart;
     private CaptureRegion? _selection;
+
+    /// <summary>
+    /// The region the last capture was taken from, offered on the display it was
+    /// drawn on. Null on every other overlay, and once the offer has been taken or
+    /// drawn over.
+    /// </summary>
+    private CaptureRegion? _remembered;
 
     /// <summary>The window under the pointer, in frame space, while none is chosen yet.</summary>
     private CaptureWindow? _hoveredWindow;
@@ -168,6 +178,84 @@ public sealed partial class CaptureOverlayWindow : Window
             (int)_monitor.Bounds.Height));
         this.TakeForeground();
         OverlayRoot.Focus(FocusState.Programmatic);
+        OfferRememberedSelection();
+    }
+
+    /// <summary>
+    /// Draws the last capture's region where it was, on the display it was drawn on,
+    /// and offers Enter as the way to take it again.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Offered rather than applied. Entering the annotation phase outright would take
+    /// a capture nobody asked for and close every other display's overlay to do it,
+    /// so a remembered selection is a proposal the user accepts by pressing Enter —
+    /// and ignores by dragging, which is exactly what they would have done anyway.
+    /// </para>
+    /// <para>
+    /// Restoring it needs no resize handles to be useful: what makes the setting worth
+    /// having is taking the same region again, and the same region is what this gives.
+    /// Adjusting it waits for <c>SelectionHandles</c> to reach the overlay.
+    /// </para>
+    /// </remarks>
+    private void OfferRememberedSelection()
+    {
+        var monitorFrame = _layout.FrameRegionOf(_monitor);
+        var remembered = _settings.Current.RememberedSelectionFor(
+            _monitor.DeviceName,
+            (int)monitorFrame.Width,
+            (int)monitorFrame.Height);
+
+        if (remembered is not { } local)
+        {
+            return;
+        }
+
+        // Stored relative to its own display, so that rearranging the monitors moves
+        // the selection with the display it belongs to rather than leaving it at a
+        // virtual-desktop coordinate that now points somewhere else entirely.
+        _remembered = new CaptureRegion(
+            local.X + monitorFrame.X,
+            local.Y + monitorFrame.Y,
+            local.Width,
+            local.Height);
+
+        PlaceChrome(SelectionRectangle, _remembered.Value);
+        HintText.Text = RememberedHint;
+    }
+
+    /// <summary>
+    /// Stores the region this capture was taken from, so the next one can offer it
+    /// back.
+    /// </summary>
+    /// <remarks>
+    /// Written when the capture completes rather than when the region is chosen: a
+    /// selection drawn and then abandoned with Escape is not the one to come back to.
+    /// </remarks>
+    private void RememberSelection(CaptureRegion region)
+    {
+        if (!_settings.Current.RememberLastSelection)
+        {
+            return;
+        }
+
+        var monitorFrame = _layout.FrameRegionOf(_monitor);
+        var local = new CaptureRegion(
+            region.X - monitorFrame.X,
+            region.Y - monitorFrame.Y,
+            region.Width,
+            region.Height);
+
+        try
+        {
+            _settings.Save(_settings.Current.WithLastSelection(local, _monitor.DeviceName));
+        }
+        catch (Exception exception)
+        {
+            // The capture is already made and about to be delivered. Failing to write
+            // a convenience for the next one is not a reason to interrupt this one.
+            DiagnosticLog.Write($"Could not remember the selection: {exception.Message}");
+        }
     }
 
     private void SelectionCanvas_PointerPressed(object sender, PointerRoutedEventArgs e)
@@ -192,6 +280,11 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         _selectionStart = e.GetCurrentPoint(SelectionCanvas).Position;
+
+        // The offer of the last selection ends the moment the user reaches for the
+        // pointer, whether that turns out to be a drag or a click on a window. Leaving
+        // it live would let Enter take a region that is no longer the one on screen.
+        _remembered = null;
 
         // The highlight has done its job the moment a drag begins: what the pointer
         // is over stops mattering once the user is drawing their own edges.
@@ -232,7 +325,10 @@ public sealed partial class CaptureOverlayWindow : Window
         if (_hoveredWindow is not { } window)
         {
             SnapHighlight.Visibility = Visibility.Collapsed;
-            HintText.Text = SelectionHint;
+
+            // Back to whichever hint this overlay started with: an offered selection
+            // is still on offer after the pointer has passed over a window.
+            HintText.Text = _remembered is null ? SelectionHint : RememberedHint;
             return;
         }
 
@@ -658,6 +754,11 @@ public sealed partial class CaptureOverlayWindow : Window
                 _ = CompleteAsync();
                 return;
 
+            case VirtualKey.Enter when _remembered is { } remembered:
+                e.Handled = true;
+                EnterAnnotationPhase(remembered);
+                return;
+
             case VirtualKey.Delete or VirtualKey.Back when IsAnnotating:
                 e.Handled = true;
                 if (_editor.DeleteSelected())
@@ -787,6 +888,11 @@ public sealed partial class CaptureOverlayWindow : Window
         if (_editor.Cancel())
         {
             RenderAnnotations();
+        }
+
+        if (_selection is { } taken)
+        {
+            RememberSelection(taken);
         }
 
         CaptureCompleted?.Invoke(this, _annotationPreview.ToFrame());

@@ -45,6 +45,7 @@ public sealed partial class PreferencesWindow : Window
         ThumbnailSecondsBox.Value = settings.ThumbnailSeconds;
         DelaySecondsBox.Value = settings.DelaySeconds;
         HistorySizeBox.Value = settings.HistorySize;
+        RememberSelectionSwitch.IsOn = settings.RememberLastSelection;
         CaptureAreaHotkeyBox.Text = settings.CaptureAreaHotkey;
         CaptureAllScreensHotkeyBox.Text = settings.CaptureAllScreensHotkey;
         RecordScreenHotkeyBox.Text = settings.RecordScreenHotkey;
@@ -82,6 +83,7 @@ public sealed partial class PreferencesWindow : Window
             HistorySize = double.IsNaN(HistorySizeBox.Value)
                 ? CaptureSettings.Default.HistorySize
                 : (int)HistorySizeBox.Value,
+            RememberLastSelection = RememberSelectionSwitch.IsOn,
             CaptureAreaHotkey = CaptureAreaHotkeyBox.Text,
             CaptureAllScreensHotkey = CaptureAllScreensHotkeyBox.Text,
             RecordScreenHotkey = RecordScreenHotkeyBox.Text,

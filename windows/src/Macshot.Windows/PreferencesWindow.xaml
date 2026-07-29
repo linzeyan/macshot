@@ -35,6 +35,14 @@
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
 
+                <TextBlock Text="Selection" Style="{StaticResource SubtitleTextBlockStyle}" />
+
+                <ToggleSwitch x:Name="RememberSelectionSwitch" Header="Offer the last selection again" />
+                <TextBlock
+                    Text="The next capture draws the previous region on the display it was taken from, and Enter takes it again. Off by default, because a selection that reappears on its own is a surprise until you know the setting exists."
+                    TextWrapping="Wrap"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
                 <TextBlock Text="Shortcuts" Style="{StaticResource SubtitleTextBlockStyle}" />
 
                 <TextBox x:Name="CaptureAreaHotkeyBox" Header="Capture area" />
