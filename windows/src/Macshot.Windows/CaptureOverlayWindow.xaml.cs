@@ -154,11 +154,9 @@ public sealed partial class CaptureOverlayWindow : Window
         Closed += (_, _) => PersistStyle();
 
         var appWindow = this.GetAppWindow();
-        if (appWindow.Presenter is OverlappedPresenter presenter)
-        {
-            presenter.SetBorderAndTitleBar(false, false);
-            presenter.IsAlwaysOnTop = true;
-        }
+        var presenter = appWindow.MakeChromeless();
+        presenter.IsAlwaysOnTop = true;
+        presenter.IsResizable = false;
 
         // AppWindow positions in physical pixels, so the display's virtual-space
         // bounds go in unchanged. Converting to layout units here would misplace
@@ -168,7 +166,7 @@ public sealed partial class CaptureOverlayWindow : Window
             (int)_monitor.Bounds.Y,
             (int)_monitor.Bounds.Width,
             (int)_monitor.Bounds.Height));
-        Activate();
+        this.TakeForeground();
         OverlayRoot.Focus(FocusState.Programmatic);
     }
 

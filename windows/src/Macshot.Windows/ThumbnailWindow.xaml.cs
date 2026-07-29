@@ -51,12 +51,9 @@ public sealed partial class ThumbnailWindow : Window
         ThumbnailImage.Source = source;
 
         var appWindow = this.GetAppWindow();
-        if (appWindow.Presenter is OverlappedPresenter presenter)
-        {
-            presenter.SetBorderAndTitleBar(false, false);
-            presenter.IsAlwaysOnTop = true;
-            presenter.IsResizable = false;
-        }
+        var presenter = appWindow.MakeChromeless();
+        presenter.IsAlwaysOnTop = true;
+        presenter.IsResizable = false;
 
         appWindow.MoveAndResize(PlaceBottomRight());
         Activate();

@@ -48,11 +48,7 @@ public sealed partial class ScrollCaptureHudWindow : Window
     public void ShowHud()
     {
         var appWindow = this.GetAppWindow();
-        if (appWindow.Presenter is OverlappedPresenter presenter)
-        {
-            presenter.SetBorderAndTitleBar(false, false);
-            presenter.IsAlwaysOnTop = true;
-        }
+        appWindow.MakeChromeless().IsAlwaysOnTop = true;
 
         appWindow.MoveAndResize(PlaceBottomCentre());
         Activate();

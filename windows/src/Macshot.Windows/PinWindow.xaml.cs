@@ -42,12 +42,9 @@ public sealed partial class PinWindow : Window
         PinImage.Source = source;
 
         var appWindow = this.GetAppWindow();
-        if (appWindow.Presenter is OverlappedPresenter presenter)
-        {
-            presenter.SetBorderAndTitleBar(false, false);
-            presenter.IsAlwaysOnTop = true;
-            presenter.IsResizable = false;
-        }
+        var presenter = appWindow.MakeChromeless();
+        presenter.IsAlwaysOnTop = true;
+        presenter.IsResizable = false;
 
         // Physical pixels, so the pin is the same size as what it captured whatever
         // the display scale is.

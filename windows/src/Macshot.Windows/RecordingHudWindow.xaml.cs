@@ -61,11 +61,7 @@ public sealed partial class RecordingHudWindow : Window
     public void ShowHud()
     {
         var appWindow = this.GetAppWindow();
-        if (appWindow.Presenter is OverlappedPresenter presenter)
-        {
-            presenter.SetBorderAndTitleBar(false, false);
-            presenter.IsAlwaysOnTop = true;
-        }
+        appWindow.MakeChromeless().IsAlwaysOnTop = true;
 
         // Before the window is shown, so it is never in a frame at all — asking
         // afterwards would leave the first moment of the recording with a panel in it.
