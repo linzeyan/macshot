@@ -178,6 +178,73 @@ public static class PixelEffects
         }
     }
 
+    /// <summary>
+    /// Redraws a circle inside <paramref name="region"/> as a magnified view of what
+    /// sits under its centre.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The frame is copied before anything is written, because the area being
+    /// magnified and the circle it is drawn into are the same pixels: sampling
+    /// straight from the buffer would feed the magnifier its own output and smear it
+    /// outwards.
+    /// </para>
+    /// <para>
+    /// Nearest neighbour rather than a smooth resample. A loupe over a screenshot is
+    /// pointed at a hairline or a character, and interpolation is exactly what would
+    /// blur away the thing being looked at.
+    /// </para>
+    /// </remarks>
+    public static void Magnify(
+        byte[] bgraPixels,
+        int width,
+        int height,
+        CaptureRegion region,
+        double zoom)
+    {
+        ValidateFrame(bgraPixels, width, height);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(zoom);
+
+        if (!TryGetBounds(region, width, height, out var left, out var top, out var right, out var bottom))
+        {
+            return;
+        }
+
+        var centerX = region.X + (region.Width / 2);
+        var centerY = region.Y + (region.Height / 2);
+        var radius = Math.Min(region.Width, region.Height) / 2;
+        if (radius <= 0)
+        {
+            return;
+        }
+
+        var source = ExtractRegion(bgraPixels, width, 0, 0, width, height);
+
+        for (var y = top; y < bottom; y++)
+        {
+            for (var x = left; x < right; x++)
+            {
+                var offsetX = x + 0.5 - centerX;
+                var offsetY = y + 0.5 - centerY;
+                if ((offsetX * offsetX) + (offsetY * offsetY) > radius * radius)
+                {
+                    continue;
+                }
+
+                var sampleX = (int)Math.Floor(centerX + (offsetX / zoom));
+                var sampleY = (int)Math.Floor(centerY + (offsetY / zoom));
+                if (sampleX < 0 || sampleX >= width || sampleY < 0 || sampleY >= height)
+                {
+                    continue;
+                }
+
+                var from = ((sampleY * width) + sampleX) * 4;
+                var to = ((y * width) + x) * 4;
+                source.AsSpan(from, 4).CopyTo(bgraPixels.AsSpan(to, 4));
+            }
+        }
+    }
+
     private static bool TryGetBounds(
         CaptureRegion region,
         int frameWidth,

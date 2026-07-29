@@ -92,6 +92,28 @@ public sealed record Annotation(
     /// </summary>
     public Guid? GroupId { get; init; }
 
+    /// <summary>
+    /// Radians clockwise about the centre of <see cref="BoundingRect"/>.
+    /// </summary>
+    /// <remarks>
+    /// Held rather than baked into the points, so a rotation can be taken back by
+    /// dragging the handle to where it started. Rewriting <see cref="Start"/> and
+    /// <see cref="End"/> in place would lose the upright rectangle, and every further
+    /// drag would compound the last one's rounding.
+    /// </remarks>
+    public double Rotation { get; init; }
+
+    /// <summary>
+    /// How far the middle of a line or arrow is pulled off the straight path between
+    /// its ends, as a fraction of that path's length. Zero is straight.
+    /// </summary>
+    /// <remarks>
+    /// A fraction rather than a distance, so a bent arrow keeps its shape when it is
+    /// dragged longer — which is what the user drew, rather than what a control point
+    /// pinned at an absolute offset would give them.
+    /// </remarks>
+    public double Bend { get; init; }
+
     public static Annotation Create(
         AnnotationTool tool,
         CapturePoint start,
