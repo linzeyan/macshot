@@ -1,0 +1,110 @@
+using Macshot.Windows.Core.Capture;
+
+namespace Macshot.Windows.Core.Imaging;
+
+/// <summary>
+/// Whole-frame rearrangements of a BGRA, top-down buffer: flipping and cropping.
+/// </summary>
+/// <remarks>
+/// These move pixels rather than draw on them, which is why they are not annotations.
+/// A flip is not a mark that can sit in the undo stack alongside an arrow — it moves
+/// every mark already placed — so the caller rewrites the frame and carries the
+/// annotations across with <see cref="FlipPoint"/>, recording one step for the pair.
+/// </remarks>
+public static class FrameTransforms
+{
+    /// <summary>Mirrors the frame left to right.</summary>
+    public static byte[] FlipHorizontal(int width, int height, ReadOnlySpan<byte> bgraPixels)
+    {
+        Validate(width, height, bgraPixels);
+
+        var output = new byte[bgraPixels.Length];
+        for (var row = 0; row < height; row++)
+        {
+            var line = row * width * 4;
+            for (var column = 0; column < width; column++)
+            {
+                var from = line + column * 4;
+                var to = line + (width - 1 - column) * 4;
+                bgraPixels.Slice(from, 4).CopyTo(output.AsSpan(to, 4));
+            }
+        }
+
+        return output;
+    }
+
+    /// <summary>Mirrors the frame top to bottom.</summary>
+    public static byte[] FlipVertical(int width, int height, ReadOnlySpan<byte> bgraPixels)
+    {
+        Validate(width, height, bgraPixels);
+
+        var output = new byte[bgraPixels.Length];
+        var stride = width * 4;
+        for (var row = 0; row < height; row++)
+        {
+            bgraPixels.Slice(row * stride, stride).CopyTo(output.AsSpan((height - 1 - row) * stride, stride));
+        }
+
+        return output;
+    }
+
+    /// <summary>
+    /// The pixels inside <paramref name="region"/>, clamped to the frame.
+    /// </summary>
+    /// <remarks>
+    /// Rounded outwards rather than to nearest. A crop is asked for by dragging a
+    /// rectangle around the pixels to keep, and shaving the outermost row off is the
+    /// one error the user would see.
+    /// </remarks>
+    public static (int Width, int Height, byte[] Pixels) Crop(
+        int width,
+        int height,
+        ReadOnlySpan<byte> bgraPixels,
+        CaptureRegion region)
+    {
+        Validate(width, height, bgraPixels);
+
+        var left = Math.Clamp((int)Math.Floor(region.X), 0, width);
+        var top = Math.Clamp((int)Math.Floor(region.Y), 0, height);
+        var right = Math.Clamp((int)Math.Ceiling(region.Right), left, width);
+        var bottom = Math.Clamp((int)Math.Ceiling(region.Bottom), top, height);
+
+        var croppedWidth = right - left;
+        var croppedHeight = bottom - top;
+        if (croppedWidth <= 0 || croppedHeight <= 0)
+        {
+            throw new ArgumentException("The crop region does not overlap the frame.", nameof(region));
+        }
+
+        var output = new byte[checked(croppedWidth * croppedHeight * 4)];
+        for (var row = 0; row < croppedHeight; row++)
+        {
+            var from = ((top + row) * width + left) * 4;
+            bgraPixels.Slice(from, croppedWidth * 4).CopyTo(output.AsSpan(row * croppedWidth * 4));
+        }
+
+        return (croppedWidth, croppedHeight, output);
+    }
+
+    /// <summary>
+    /// Where a frame-space point lands after the matching flip, so annotations can be
+    /// carried across rather than left behind on pixels that moved.
+    /// </summary>
+    public static CapturePoint FlipPoint(CapturePoint point, int width, int height, bool horizontal)
+    {
+        return horizontal
+            ? new CapturePoint(width - point.X, point.Y)
+            : new CapturePoint(point.X, height - point.Y);
+    }
+
+    private static void Validate(int width, int height, ReadOnlySpan<byte> bgraPixels)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+
+        if (bgraPixels.Length != checked(width * height * 4))
+        {
+            throw new ArgumentException("The pixel buffer does not match the frame dimensions.", nameof(bgraPixels));
+        }
+    }
+}
