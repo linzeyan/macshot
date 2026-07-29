@@ -1,0 +1,221 @@
+using System.Globalization;
+
+namespace Macshot.Windows.Core.Input;
+
+/// <summary>The modifier keys a hotkey is held down with, as Windows numbers them.</summary>
+/// <remarks>
+/// The values are <c>MOD_ALT</c>, <c>MOD_CONTROL</c>, <c>MOD_SHIFT</c> and
+/// <c>MOD_WIN</c> from <c>RegisterHotKey</c>. Spelled out here rather than in the
+/// Windows layer so the value that is parsed, stored, and shown to the user is the
+/// one that is registered, with nothing to translate in between.
+/// </remarks>
+[Flags]
+public enum HotkeyModifiers
+{
+    None = 0,
+    Alt = 0x0001,
+    Control = 0x0002,
+    Shift = 0x0004,
+    Windows = 0x0008,
+}
+
+/// <summary>
+/// One configurable shortcut: the modifiers, and the virtual key held with them.
+/// </summary>
+/// <remarks>
+/// <para>
+/// A virtual key rather than a character, for the same reason the macOS product uses
+/// <c>keyCode</c>: the character a key produces depends on the layout, and a shortcut
+/// that moves when the user switches to a Russian keyboard is broken for them.
+/// </para>
+/// <para>
+/// The text form is what goes in the settings file and what preferences shows, so it
+/// has to survive a round trip exactly. Parsing is deliberately forgiving about
+/// spacing, order, and the names people actually type — <c>Ctrl</c>, <c>Control</c>,
+/// <c>Win</c>, <c>Cmd</c> — because the file is meant to be hand-editable.
+/// </para>
+/// </remarks>
+public sealed record HotkeyBinding(HotkeyModifiers Modifiers, uint Key)
+{
+    /// <summary>Virtual key codes for the keys with no printable name.</summary>
+    private static readonly (string Name, uint Key)[] NamedKeys =
+    [
+        ("Space", 0x20),
+        ("PageUp", 0x21),
+        ("PageDown", 0x22),
+        ("End", 0x23),
+        ("Home", 0x24),
+        ("Left", 0x25),
+        ("Up", 0x26),
+        ("Right", 0x27),
+        ("Down", 0x28),
+        ("PrintScreen", 0x2C),
+        ("Insert", 0x2D),
+        ("Delete", 0x2E),
+        ("F1", 0x70),
+        ("F2", 0x71),
+        ("F3", 0x72),
+        ("F4", 0x73),
+        ("F5", 0x74),
+        ("F6", 0x75),
+        ("F7", 0x76),
+        ("F8", 0x77),
+        ("F9", 0x78),
+        ("F10", 0x79),
+        ("F11", 0x7A),
+        ("F12", 0x7B),
+    ];
+
+    public static HotkeyBinding CaptureArea { get; } =
+        new(HotkeyModifiers.Control | HotkeyModifiers.Shift, 'X');
+
+    public static HotkeyBinding CaptureAllScreens { get; } =
+        new(HotkeyModifiers.Control | HotkeyModifiers.Shift, 'F');
+
+    public static HotkeyBinding RecordScreen { get; } =
+        new(HotkeyModifiers.Control | HotkeyModifiers.Shift, 'R');
+
+    /// <summary>
+    /// Whether this is a shortcut Windows will actually register.
+    /// </summary>
+    /// <remarks>
+    /// A bare key is refused rather than allowed. macshot's hotkeys are global, so one
+    /// without a modifier would swallow that key in every program on the machine — and
+    /// the user who set it would have no way left to type it in order to change it
+    /// back.
+    /// </remarks>
+    public bool IsValid => Key != 0 && Modifiers != HotkeyModifiers.None;
+
+    /// <summary>
+    /// The form stored in the settings file and shown in preferences, always in the
+    /// same modifier order so a round trip cannot rewrite what the user typed.
+    /// </summary>
+    public override string ToString()
+    {
+        var parts = new List<string>(5);
+        if (Modifiers.HasFlag(HotkeyModifiers.Control))
+        {
+            parts.Add("Ctrl");
+        }
+
+        if (Modifiers.HasFlag(HotkeyModifiers.Alt))
+        {
+            parts.Add("Alt");
+        }
+
+        if (Modifiers.HasFlag(HotkeyModifiers.Shift))
+        {
+            parts.Add("Shift");
+        }
+
+        if (Modifiers.HasFlag(HotkeyModifiers.Windows))
+        {
+            parts.Add("Win");
+        }
+
+        parts.Add(NameOf(Key));
+        return string.Join("+", parts);
+    }
+
+    /// <summary>
+    /// Reads a binding written as <c>Ctrl+Shift+X</c>, or returns false when it says
+    /// nothing usable.
+    /// </summary>
+    public static bool TryParse(string? text, out HotkeyBinding binding)
+    {
+        binding = CaptureArea;
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return false;
+        }
+
+        var modifiers = HotkeyModifiers.None;
+        uint key = 0;
+
+        foreach (var raw in text.Split('+', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            switch (raw.ToUpperInvariant())
+            {
+            case "CTRL":
+            case "CONTROL":
+                modifiers |= HotkeyModifiers.Control;
+                continue;
+            case "ALT":
+            case "OPTION":
+                modifiers |= HotkeyModifiers.Alt;
+                continue;
+            case "SHIFT":
+                modifiers |= HotkeyModifiers.Shift;
+                continue;
+            case "WIN":
+            case "WINDOWS":
+            case "CMD":
+            case "COMMAND":
+                modifiers |= HotkeyModifiers.Windows;
+                continue;
+            }
+
+            // Anything that is not a modifier is the key, and there may be only one.
+            // A second one means the text is not a shortcut at all.
+            if (key != 0 || !TryParseKey(raw, out key))
+            {
+                return false;
+            }
+        }
+
+        var parsed = new HotkeyBinding(modifiers, key);
+        if (!parsed.IsValid)
+        {
+            return false;
+        }
+
+        binding = parsed;
+        return true;
+    }
+
+    /// <summary>
+    /// The stored binding, or <paramref name="fallback"/> when the file holds
+    /// something unusable — an unregistrable shortcut must not leave the user with no
+    /// way to take a capture at all.
+    /// </summary>
+    public static HotkeyBinding ParseOrDefault(string? text, HotkeyBinding fallback) =>
+        TryParse(text, out var parsed) ? parsed : fallback;
+
+    private static bool TryParseKey(string text, out uint key)
+    {
+        foreach (var (name, value) in NamedKeys)
+        {
+            if (string.Equals(name, text, StringComparison.OrdinalIgnoreCase))
+            {
+                key = value;
+                return true;
+            }
+        }
+
+        // A single letter or digit is its own virtual key code, which is why the
+        // printable keys need no table.
+        if (text.Length == 1 && char.IsAsciiLetterOrDigit(text[0]))
+        {
+            key = char.ToUpperInvariant(text[0]);
+            return true;
+        }
+
+        key = 0;
+        return false;
+    }
+
+    private static string NameOf(uint key)
+    {
+        foreach (var (name, value) in NamedKeys)
+        {
+            if (value == key)
+            {
+                return name;
+            }
+        }
+
+        return key is (>= 'A' and <= 'Z') or (>= '0' and <= '9')
+            ? ((char)key).ToString()
+            : key.ToString("X2", CultureInfo.InvariantCulture);
+    }
+}
