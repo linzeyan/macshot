@@ -47,8 +47,6 @@ public sealed class CaptureController : IDisposable
 
     private const uint VirtualKeyEscape = 0x1B;
 
-    private const uint MessageBoxIconError = 0x00000010;
-
     private readonly ScreenCaptureService _screenCapture = new();
     private readonly ScreenRecorder _recorder = new();
     private readonly SettingsStore _settings = new();
@@ -170,11 +168,9 @@ public sealed class CaptureController : IDisposable
         if (_screenCapture.FellBackUnexpectedly && !_reportedCaptureFallback)
         {
             _reportedCaptureFallback = true;
-            MessageBox(
+            FailureReport.Notice(
                 _messageWindow.Handle,
-                $"Screen capture fell back to the older backend: {_screenCapture.FallbackReason}",
-                "macshot",
-                MessageBoxIconError);
+                $"Screen capture fell back to the older backend: {_screenCapture.FallbackReason}");
         }
 
         return frame;
@@ -432,11 +428,9 @@ public sealed class CaptureController : IDisposable
 
         if (result.Stop == ScrollCaptureStop.HeightLimit)
         {
-            MessageBox(
+            FailureReport.Notice(
                 _messageWindow.Handle,
-                "That page was longer than macshot will capture in one go, so the bottom of it is missing.",
-                "macshot",
-                MessageBoxIconError);
+                "That page was longer than macshot will capture in one go, so the bottom of it is missing.");
         }
 
         await DeliverAsync(result.Frame);
@@ -590,9 +584,6 @@ public sealed class CaptureController : IDisposable
     /// swallowed exception would look like macshot simply doing nothing.
     /// </summary>
     private void ReportError(Exception exception) => FailureReport.Show(_messageWindow.Handle, exception);
-
-    [DllImport("user32.dll", EntryPoint = "MessageBoxW", CharSet = CharSet.Unicode)]
-    private static extern int MessageBox(IntPtr window, string text, string caption, uint type);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

@@ -4,13 +4,15 @@ using System.Text;
 namespace Macshot.Windows.Services;
 
 /// <summary>
-/// Puts a failure in front of the user, in enough detail to act on.
+/// Puts a failure in front of the user, in enough detail to act on, and leaves a copy
+/// behind for when nobody was looking.
 /// </summary>
 /// <remarks>
 /// <para>
-/// macshot is a background app with no log and, most of the time, no window. Whoever
-/// is looking at the box this shows is the only place the information ever exists, so
-/// throwing away everything but the message throws away the whole diagnosis.
+/// macshot is a background app with, most of the time, no window. The box this shows
+/// is all the user ever sees of a failure, so throwing away everything but the message
+/// throws away the whole diagnosis; <see cref="DiagnosticLog"/> is what keeps the same
+/// text once the box has been dismissed.
 /// </para>
 /// <para>
 /// A shell message box rather than a XAML dialog, because a failure while starting a
@@ -28,8 +30,22 @@ public static class FailureReport
     public static void Show(nint owner, Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
+        Notice(owner, Describe(exception));
+    }
 
-        var text = Describe(exception);
+    /// <summary>
+    /// Reports something that is not an exception but still has to reach the user: a
+    /// capture that degraded to the older backend, a page too long to finish.
+    /// </summary>
+    /// <remarks>
+    /// Told the same way a failure is, because it is worth no less. These notices used
+    /// to go straight to <c>MessageBox</c> with the message window as owner, which is
+    /// the one combination that shows nothing at all — and the fallback reason is the
+    /// only evidence there is that the preferred backend broke.
+    /// </remarks>
+    public static void Notice(nint owner, string text)
+    {
+        ArgumentException.ThrowIfNullOrEmpty(text);
 
         // Written first, and unconditionally. Whether the box appears depends on the
         // owner still being a window that can own one; whether the failure is knowable
