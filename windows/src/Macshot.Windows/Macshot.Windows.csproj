@@ -27,6 +27,20 @@
     <AssemblyName>Macshot.Windows.Offline</AssemblyName>
   </PropertyGroup>
 
+  <!-- macshot has no window, so a copy of it left running from the last test is
+       invisible: the only sign is the notification-area icon, and the only way out
+       is its Quit entry. That copy holds the output assemblies, which turns the next
+       build into MSB3027 about a file copy after forty seconds of retries — an error
+       that says nothing about the app still running. Ending it first is what makes
+       build, run, build work at all. Harmless where there is nothing to end, which
+       is every CI run. -->
+  <Target Name="StopRunningInstance" BeforeTargets="PrepareForBuild" Condition="'$(OS)' == 'Windows_NT'">
+    <Exec
+      Command="taskkill /IM $(AssemblyName).exe /F 2&gt;nul"
+      IgnoreExitCode="true"
+      StandardOutputImportance="low" />
+  </Target>
+
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
   </ItemGroup>
