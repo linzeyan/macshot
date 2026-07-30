@@ -327,6 +327,33 @@ public sealed class AnnotationHandlesTests
         Assert.IsFalse(AnnotationHandles.Differ(line, line));
     }
 
+    [TestMethod]
+    public void ALabelledRuler_StillOffersItsEnds()
+    {
+        // A ruler carries a sprite, but only as its reading — the mark is the line, and
+        // the line has to stay reshapable. Treating any sprite as "this mark is pixels"
+        // would take the handles off the one tool whose number depends on them.
+        var ruler = Shape(AnnotationTool.Measure, 10, 10, 50, 10)
+            with { Sprite = new AnnotationSprite(2, 2, new byte[2 * 2 * 4]) };
+
+        var kinds = AnnotationHandles.For(ruler).Select(handle => handle.Kind).ToArray();
+
+        CollectionAssert.AreEquivalent(new[] { AnnotationHandleKind.Start, AnnotationHandleKind.End }, kinds);
+    }
+
+    [TestMethod]
+    public void ReshapingARuler_DropsTheReadingItNoLongerMatches()
+    {
+        // Otherwise a ruler dragged from 40 pixels to 90 keeps insisting it is 40.
+        var ruler = Shape(AnnotationTool.Measure, 0, 0, 40, 0)
+            with { Sprite = new AnnotationSprite(2, 2, new byte[2 * 2 * 4]) };
+
+        var dragged = AnnotationHandles.Drag(ruler, AnnotationHandleKind.End, new CapturePoint(90, 0));
+
+        Assert.IsNull(dragged.Sprite);
+        Assert.AreEqual(90, dragged.Span, 1e-9);
+    }
+
     private static Annotation Shape(AnnotationTool tool, double startX, double startY, double endX, double endY) =>
         Annotation.Create(tool, new CapturePoint(startX, startY), new CapturePoint(endX, endY));
 

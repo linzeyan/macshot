@@ -322,6 +322,10 @@ public sealed partial class EditorWindow : Window
 
         _editor.PointerReleased(ToFrame(e), ToModifiers(e));
         AnnotationCanvas.Render();
+
+        // After the release, because a ruler's reading is only knowable once the drag
+        // that measures it has stopped.
+        AnnotationCanvas.LabelRulers();
     }
 
     private void EditorRoot_KeyDown(object sender, KeyRoutedEventArgs e)

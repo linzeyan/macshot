@@ -78,15 +78,17 @@ public static class AnnotationHandles
     /// </summary>
     /// <remarks>
     /// A freeform stroke has no two points that describe it, so dragging one would have to
-    /// distort every sample by some rule the user never chose. A sprite is composited one
-    /// pixel to one pixel, so a resize would either scale glyphs into mush or leave the
-    /// bounds disagreeing with what is drawn. Both move and nothing more.
+    /// distort every sample by some rule the user never chose. A mark that <em>is</em> a
+    /// sprite — a label, a badge, a stamp — is composited one pixel to one pixel, so a
+    /// resize would either scale glyphs into mush or leave the bounds disagreeing with what
+    /// is drawn. Both move and nothing more. A ruler carries a sprite too, but only as its
+    /// reading: the mark itself is the line, and the line is reshapable.
     /// </remarks>
     public static IReadOnlyList<AnnotationHandle> For(Annotation annotation)
     {
         ArgumentNullException.ThrowIfNull(annotation);
 
-        if (!annotation.IsMovable || annotation.Points.Count > 0 || annotation.Sprite is not null)
+        if (!annotation.IsMovable || annotation.Points.Count > 0 || Annotation.RequiresSprite(annotation.Tool))
         {
             return [];
         }
@@ -150,11 +152,11 @@ public static class AnnotationHandles
 
         return kind switch
         {
-            AnnotationHandleKind.Start => annotation with
+            AnnotationHandleKind.Start => Restretched(annotation) with
             {
                 Start = Constrain(annotation.End, upright, modifiers),
             },
-            AnnotationHandleKind.End => annotation with
+            AnnotationHandleKind.End => Restretched(annotation) with
             {
                 End = Constrain(annotation.Start, upright, modifiers),
             },
@@ -191,6 +193,14 @@ public static class AnnotationHandles
             Turn(new CapturePoint(bounds.X, bounds.Bottom), centre, annotation.Rotation),
         ];
     }
+
+    /// <summary>
+    /// Drops a reading that is about to become wrong. A ruler's sprite says how long the
+    /// span was, so moving an end has to take the old number with it — the UI renders a
+    /// new one once the drag is over.
+    /// </summary>
+    private static Annotation Restretched(Annotation annotation) =>
+        annotation.Tool == AnnotationTool.Measure ? annotation with { Sprite = null } : annotation;
 
     private static bool Offers(Annotation annotation, AnnotationHandleKind kind)
     {

@@ -175,6 +175,20 @@ public sealed record Annotation(
     public static bool RequiresSprite(AnnotationTool tool) =>
         tool is AnnotationTool.Text or AnnotationTool.Number or AnnotationTool.Stamp;
 
+    /// <summary>
+    /// The straight distance from one end to the other, in frame pixels: what the ruler
+    /// reports, and the length a bend is a fraction of.
+    /// </summary>
+    public double Span
+    {
+        get
+        {
+            var deltaX = End.X - Start.X;
+            var deltaY = End.Y - Start.Y;
+            return Math.Sqrt((deltaX * deltaX) + (deltaY * deltaY));
+        }
+    }
+
     /// <summary>Tools that describe an interaction rather than a drawn mark cannot be dragged.</summary>
     public bool IsMovable => Tool is not (AnnotationTool.Crop or AnnotationTool.ColorSampler or AnnotationTool.Select);
 

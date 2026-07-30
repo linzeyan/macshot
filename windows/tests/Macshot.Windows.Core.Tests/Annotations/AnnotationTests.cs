@@ -136,4 +136,13 @@ public sealed class AnnotationTests
 
     private static AnnotationSprite SpriteOf(int width, int height) =>
         new(width, height, new byte[width * height * 4]);
+
+    [TestMethod]
+    public void Span_IsTheStraightDistanceBetweenTheEnds()
+    {
+        // What the ruler reports, and the length a bend is a fraction of.
+        var line = Annotation.Create(AnnotationTool.Line, new CapturePoint(10, 20), new CapturePoint(13, 24));
+
+        Assert.AreEqual(5, line.Span, 1e-9);
+    }
 }

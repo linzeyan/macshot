@@ -88,4 +88,21 @@ internal static class GlyphSpriteFactory
         var alpha = (byte)Math.Clamp(Math.Round(style.Color.Alpha * style.Opacity), 0, byte.MaxValue);
         return Color.FromArgb(alpha, style.Color.Red, style.Color.Green, style.Color.Blue);
     }
+
+    /// <summary>
+    /// Picks the text colour to put on a filled shape from that fill's perceived
+    /// luminance, so a yellow badge gets dark digits instead of white ones nobody can read.
+    /// </summary>
+    public static Color ReadableOn(Color background)
+    {
+        var luminance = ((0.299 * background.R) + (0.587 * background.G) + (0.114 * background.B)) / byte.MaxValue;
+
+        // Both branches are built the same way rather than one of them reaching for a
+        // named colour: WinUI 3 keeps the Color struct in Windows.UI but moved the Colors
+        // palette to Microsoft.UI, and inside namespace Macshot.Windows that is one import
+        // too easy to get wrong.
+        return luminance > 0.6
+            ? Color.FromArgb(byte.MaxValue, 26, 26, 26)
+            : Color.FromArgb(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue);
+    }
 }

@@ -116,6 +116,51 @@ public sealed partial class AnnotationCanvasView : UserControl
     {
         _preview?.Render(_editor?.VisibleAnnotations ?? []);
         DrawSelectionChrome();
+
+        // A ruler is worth nothing until it says a number, and the number it will say
+        // once it is let go is worth having during the drag. It goes in the hint line
+        // rather than beside the pointer: a figure that jitters along with the mouse is
+        // harder to read than one that sits still.
+        if (_editor?.Draft is { Tool: AnnotationTool.Measure } ruler)
+        {
+            _reportHint(MeasureReading.Format(ruler.Span));
+        }
+    }
+
+    /// <summary>
+    /// Gives every ruler that has been drawn but not yet labelled its reading.
+    /// </summary>
+    /// <remarks>
+    /// Called by the host once a gesture ends, because the reading cannot be produced
+    /// during one: rasterizing digits is asynchronous, and the number is not known until
+    /// the drag stops. The label is amended onto the annotation rather than replacing it,
+    /// so the ruler and its reading are one undo step — the drag the user made.
+    /// </remarks>
+    public void LabelRulers()
+    {
+        if (_editor is not { } editor)
+        {
+            return;
+        }
+
+        foreach (var ruler in editor.Document.Annotations
+            .Where(annotation => annotation.Tool == AnnotationTool.Measure && annotation.Sprite is null)
+            .ToArray())
+        {
+            QueueSprite(() => LabelRulerAsync(ruler));
+        }
+    }
+
+    private async Task LabelRulerAsync(Annotation ruler)
+    {
+        var reading = MeasureReading.Build(ruler.Style, ruler.Span, SpriteScale);
+        var sprite = await GlyphSpriteFactory.RenderAsync(SpriteHost, reading);
+
+        // Amend, not add: undone or reshaped while the sprite was rendering, the ruler
+        // this belongs to may be gone, and a reading for a ruler that is not there would
+        // be a number floating on the screenshot.
+        _editor?.Document.Amend(ruler with { Sprite = sprite });
+        Render();
     }
 
     /// <summary>

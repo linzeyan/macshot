@@ -5,11 +5,6 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 
-// Imported rather than written out at each use site: inside namespace Macshot.Windows
-// the name "Windows" binds to Macshot.Windows, so a qualified Windows.UI.Color
-// resolves to Macshot.Windows.UI.Color and does not compile.
-using Windows.UI;
-
 namespace Macshot.Windows.Rendering;
 
 /// <summary>
@@ -60,27 +55,10 @@ internal static class NumberBadge
                 Text = value.ToString(CultureInfo.InvariantCulture),
                 FontSize = diameter * 0.6,
                 FontWeight = FontWeights.SemiBold,
-                Foreground = new SolidColorBrush(ReadableOn(fill)),
+                Foreground = new SolidColorBrush(GlyphSpriteFactory.ReadableOn(fill)),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,
             },
         };
-    }
-
-    /// <summary>
-    /// Picks the digit colour from the badge's perceived luminance, so a yellow badge
-    /// gets dark digits instead of white ones nobody can read.
-    /// </summary>
-    private static Color ReadableOn(Color background)
-    {
-        var luminance = ((0.299 * background.R) + (0.587 * background.G) + (0.114 * background.B)) / byte.MaxValue;
-
-        // Both branches are built the same way rather than one of them reaching for a
-        // named colour: WinUI 3 keeps the Color struct in Windows.UI but moved the
-        // Colors palette to Microsoft.UI, and inside namespace Macshot.Windows that is
-        // one import too easy to get wrong.
-        return luminance > 0.6
-            ? Color.FromArgb(byte.MaxValue, 26, 26, 26)
-            : Color.FromArgb(byte.MaxValue, byte.MaxValue, byte.MaxValue, byte.MaxValue);
     }
 }

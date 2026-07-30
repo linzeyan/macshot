@@ -442,6 +442,10 @@ public sealed partial class CaptureOverlayWindow : Window
         {
             _editor.PointerReleased(ToFrame(e), ToModifiers(e));
             RenderAnnotations();
+
+            // After the release, because a ruler's reading is only knowable once the
+            // drag that measures it has stopped.
+            AnnotationCanvas.LabelRulers();
             return;
         }
 

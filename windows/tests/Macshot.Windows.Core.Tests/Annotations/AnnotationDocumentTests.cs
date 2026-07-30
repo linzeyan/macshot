@@ -157,4 +157,43 @@ public sealed class AnnotationDocumentTests
     {
         return Annotation.Create(AnnotationTool.FilledRectangle, new CapturePoint(10, 10), new CapturePoint(30, 30));
     }
+
+    [TestMethod]
+    public void Amend_ChangesTheMarkWithoutAddingAnUndoStep()
+    {
+        // A ruler's reading is rendered after the drag that drew the ruler. If amending
+        // it recorded a step, the first Ctrl+Z would strip the number off and leave the
+        // ruler standing there unlabelled.
+        var document = new AnnotationDocument();
+        var ruler = Annotation.Create(AnnotationTool.Measure, new CapturePoint(0, 0), new CapturePoint(40, 0));
+        document.Add(ruler);
+
+        document.Amend(ruler with { Text = "40 px" });
+        document.Undo();
+
+        Assert.AreEqual(0, document.Annotations.Count, "undo must take back the drag, not the label");
+    }
+
+    [TestMethod]
+    public void Amend_SaysNoForAMarkThatIsNoLongerThere()
+    {
+        var document = new AnnotationDocument();
+        var ruler = Annotation.Create(AnnotationTool.Measure, new CapturePoint(0, 0), new CapturePoint(40, 0));
+
+        Assert.IsFalse(document.Amend(ruler));
+    }
+
+    [TestMethod]
+    public void Amend_TellsListenersSoTheCanvasRedraws()
+    {
+        var document = new AnnotationDocument();
+        var ruler = Annotation.Create(AnnotationTool.Measure, new CapturePoint(0, 0), new CapturePoint(40, 0));
+        document.Add(ruler);
+
+        var raised = 0;
+        document.Changed += (_, _) => raised++;
+        document.Amend(ruler with { Text = "40 px" });
+
+        Assert.AreEqual(1, raised);
+    }
 }

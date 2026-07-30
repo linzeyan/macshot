@@ -95,6 +95,30 @@ public sealed class AnnotationDocument
         return true;
     }
 
+    /// <summary>
+    /// Swaps in a copy of an annotation without recording an undo step.
+    /// </summary>
+    /// <remarks>
+    /// For finishing a mark the user has already made rather than changing one: a ruler's
+    /// reading is rasterized after the drag that drew the ruler, and the reading is not a
+    /// second thing to take back. Recording a step for it would make the first Ctrl+Z
+    /// strip the number off a ruler and leave the ruler behind.
+    /// </remarks>
+    public bool Amend(Annotation annotation)
+    {
+        ArgumentNullException.ThrowIfNull(annotation);
+
+        var index = _annotations.FindIndex(existing => existing.Id == annotation.Id);
+        if (index < 0)
+        {
+            return false;
+        }
+
+        _annotations[index] = annotation;
+        Changed?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
     public bool Clear()
     {
         if (_annotations.Count == 0)

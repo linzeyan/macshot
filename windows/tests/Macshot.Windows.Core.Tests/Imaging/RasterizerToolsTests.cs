@@ -187,6 +187,30 @@ public sealed class RasterizerToolsTests
         // than be dropped for not being one of the three sprite tools.
         var rendered = Render(Blank(), measured);
 
-        Assert.IsTrue(IsInked(rendered, 21, 33));
+        // Beside the span, centred on its middle — not at the bounds' corner, where a
+        // label's sprite goes. A reading sitting on one end of the ruler covers the very
+        // pixels the ruler was dragged out to measure.
+        Assert.IsTrue(IsInked(rendered, 31, 20), "the reading belongs above a span that runs across");
+        Assert.IsFalse(IsInked(rendered, 31, 40), "nothing belongs below it");
+    }
+
+    [TestMethod]
+    public void Measure_PutsTheReadingBesideAVerticalSpan()
+    {
+        // Above is meaningless for a ruler that runs down the screen, so the reading goes
+        // to the right of it, which is the side a reader looks for a label on.
+        var opaque = new byte[4 * 4 * 4];
+        for (var index = 3; index < opaque.Length; index += 4)
+        {
+            opaque[index] = byte.MaxValue;
+        }
+
+        var measured = Shape(AnnotationTool.Measure, 32, 20, 32, 44)
+            with { Sprite = new AnnotationSprite(4, 4, opaque) };
+
+        var rendered = Render(Blank(), measured);
+
+        Assert.IsTrue(IsInked(rendered, 42, 31));
+        Assert.IsFalse(IsInked(rendered, 22, 31), "the reading must not land on the left");
     }
 }

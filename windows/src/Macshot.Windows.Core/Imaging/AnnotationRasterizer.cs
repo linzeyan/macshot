@@ -175,7 +175,7 @@ public static class AnnotationRasterizer
     }
 
     /// <summary>
-    /// Draws a sprite one to one at the annotation's top-left. Nothing is resampled:
+    /// Draws a sprite one to one where the annotation puts it. Nothing is resampled:
     /// the sprite was rasterized at capture resolution, and scaling glyph pixels here
     /// would blur exactly the marks whose sharpness is the point.
     /// </summary>
@@ -196,9 +196,9 @@ public static class AnnotationRasterizer
                 + "layer when the annotation is committed; see architecture decision D7.");
         }
 
-        var bounds = annotation.BoundingRect;
-        var originX = (int)Math.Round(bounds.X);
-        var originY = (int)Math.Round(bounds.Y);
+        var origin = SpriteOrigin(annotation, sprite);
+        var originX = (int)Math.Round(origin.X);
+        var originY = (int)Math.Round(origin.Y);
         var source = sprite.Pixels;
 
         for (var row = 0; row < sprite.Height; row++)
@@ -232,6 +232,62 @@ public static class AnnotationRasterizer
                 pixels[to + 3] = byte.MaxValue;
             }
         }
+    }
+
+    /// <summary>
+    /// Where a sprite's top-left pixel lands.
+    /// </summary>
+    /// <remarks>
+    /// The annotation's own top-left for the tools whose sprite <em>is</em> the mark — a
+    /// label, a badge, a stamp are drawn where they were placed. A ruler is the exception:
+    /// its mark is the line, and its sprite is a reading about that line, so it is set
+    /// beside the span rather than on top of one end of it.
+    /// </remarks>
+    private static CapturePoint SpriteOrigin(Annotation annotation, AnnotationSprite sprite)
+    {
+        if (annotation.Tool != AnnotationTool.Measure)
+        {
+            var bounds = annotation.BoundingRect;
+            return new CapturePoint(bounds.X, bounds.Y);
+        }
+
+        return MeasureReadingOrigin(annotation, sprite);
+    }
+
+    /// <summary>
+    /// Centres the reading across the middle of the ruler and pushes it clear of the line,
+    /// on the side a reader expects to find it: above a span that runs across, and to the
+    /// right of one that runs down.
+    /// </summary>
+    private static CapturePoint MeasureReadingOrigin(Annotation annotation, AnnotationSprite sprite)
+    {
+        var mid = new CapturePoint(
+            (annotation.Start.X + annotation.End.X) / 2,
+            (annotation.Start.Y + annotation.End.Y) / 2);
+
+        var span = annotation.Span;
+        if (span <= 0)
+        {
+            return new CapturePoint(mid.X - (sprite.Width / 2.0), mid.Y - (sprite.Height / 2.0));
+        }
+
+        // Unit vector at right angles to the span, flipped so it never points down: a
+        // reading under the line would be read as belonging to whatever is below it.
+        var acrossX = -(annotation.End.Y - annotation.Start.Y) / span;
+        var acrossY = (annotation.End.X - annotation.Start.X) / span;
+        if (acrossY > 0 || (acrossY == 0 && acrossX < 0))
+        {
+            acrossX = -acrossX;
+            acrossY = -acrossY;
+        }
+
+        // Far enough out that the end bars, which are as long as the stroke is wide, do
+        // not run into the digits.
+        var reach = Math.Max(annotation.Style.StrokeWidth * MeasureCapLength, 6) + (sprite.Height / 2.0);
+
+        return new CapturePoint(
+            mid.X + (acrossX * reach) - (sprite.Width / 2.0),
+            mid.Y + (acrossY * reach) - (sprite.Height / 2.0));
     }
 
     /// <summary>
