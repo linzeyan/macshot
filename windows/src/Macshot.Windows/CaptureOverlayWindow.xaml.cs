@@ -47,7 +47,8 @@ public sealed partial class CaptureOverlayWindow : Window
         "Draw to annotate • Drag a grip or arrow-key to adjust • Ctrl+Z undo • Enter to finish";
 
     /// <summary>The standing instruction before anything is chosen. Matches the XAML default.</summary>
-    private const string SelectionHint = "Drag to capture • Click a window to take it • Esc to cancel";
+    private const string SelectionHint =
+        "Drag to capture • Hold Space to move it • Click a window to take it • Esc to cancel";
 
     private const string SamplingHint = "Click to take the colour under the pointer • Esc to stop";
 
@@ -113,6 +114,13 @@ public sealed partial class CaptureOverlayWindow : Window
     private SamplerLoupe? _loupe;
 
     private Point? _selectionStart;
+
+    /// <summary>
+    /// Where the pointer was on the last move of a marquee drag. Held so a rectangle
+    /// being moved with Space travels by exactly what the pointer travelled.
+    /// </summary>
+    private Point? _marqueeAt;
+
     private CaptureRegion? _selection;
 
     /// <summary>
@@ -428,6 +436,7 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         _selectionStart = e.GetCurrentPoint(SelectionCanvas).Position;
+        _marqueeAt = _selectionStart;
 
         // The offer of the last selection ends the moment the user reaches for the
         // pointer, whether that turns out to be a drag or a click on a window. Leaving
@@ -504,7 +513,20 @@ public sealed partial class CaptureOverlayWindow : Window
 
         if (_selectionStart is { } start && e.Pointer.IsInContact)
         {
-            DrawMarquee(start, e.GetCurrentPoint(SelectionCanvas).Position);
+            var now = e.GetCurrentPoint(SelectionCanvas).Position;
+
+            // Space moves the rectangle instead of resizing it, the way it does on macOS
+            // and in every drawing program: the first corner of a drag lands where the
+            // pointer was, which is rarely where it should have been, and letting go to
+            // start again loses the size that was right.
+            if (IsDown(VirtualKey.Space) && _marqueeAt is { } previous)
+            {
+                start = new Point(start.X + (now.X - previous.X), start.Y + (now.Y - previous.Y));
+                _selectionStart = start;
+            }
+
+            _marqueeAt = now;
+            DrawMarquee(start, now);
             return;
         }
 
@@ -677,6 +699,7 @@ public sealed partial class CaptureOverlayWindow : Window
         var end = e.GetCurrentPoint(SelectionCanvas).Position;
         DrawMarquee(start, end);
         _selectionStart = null;
+        _marqueeAt = null;
 
         var dragged = CaptureRegion.FromPoints(start.X, start.Y, end.X, end.Y);
 

@@ -68,7 +68,7 @@
             CornerRadius="6">
             <TextBlock
                 x:Name="HintText"
-                Text="Drag to capture • Click a window to take it • Esc to cancel"
+                Text="Drag to capture • Hold Space to move it • Click a window to take it • Esc to cancel"
                 Foreground="White" />
         </Border>
 
