@@ -243,7 +243,7 @@ public sealed partial class AnnotationCanvasView : UserControl
         // undoing a badge frees its number instead of leaving a hole in the sequence.
         var value = editor.Document.Annotations.Count(existing => existing.Tool == AnnotationTool.Number) + 1;
 
-        var badge = NumberBadge.Build(value, style, RasterizationScale);
+        var badge = NumberBadge.Build(value, style, SpriteScale);
         var sprite = await GlyphSpriteFactory.RenderAsync(SpriteHost, badge);
 
         Commit(Annotation.CreateSprite(AnnotationTool.Number, Centred(point, sprite), sprite, style) with
@@ -264,7 +264,7 @@ public sealed partial class AnnotationCanvasView : UserControl
         var style = editor.Style;
         var emoji = StampEmoji();
 
-        var glyph = StampGlyph.Build(emoji, style, RasterizationScale);
+        var glyph = StampGlyph.Build(emoji, style, SpriteScale);
         var sprite = await GlyphSpriteFactory.RenderAsync(SpriteHost, glyph);
 
         Commit(Annotation.CreateSprite(AnnotationTool.Stamp, Centred(point, sprite), sprite, style) with
@@ -293,7 +293,7 @@ public sealed partial class AnnotationCanvasView : UserControl
             // No padding, so the first glyph sits at the click point rather than inset
             // from it by whatever the theme's padding happens to be.
             Padding = new Thickness(0),
-            FontSize = TextGlyphs.FontSizeFor(editor.Style, RasterizationScale),
+            FontSize = TextGlyphs.FontSizeFor(editor.Style, SpriteScale),
             Foreground = new SolidColorBrush(GlyphSpriteFactory.ToBrushColor(editor.Style)),
             AcceptsReturn = false,
             TextWrapping = TextWrapping.NoWrap,
@@ -357,7 +357,7 @@ public sealed partial class AnnotationCanvasView : UserControl
             return;
         }
 
-        var glyphs = TextGlyphs.Build(text, style, RasterizationScale);
+        var glyphs = TextGlyphs.Build(text, style, SpriteScale);
         var sprite = await GlyphSpriteFactory.RenderAsync(SpriteHost, glyphs);
 
         // Anchored at the click rather than centred on it: the user typed from there.
@@ -395,9 +395,11 @@ public sealed partial class AnnotationCanvasView : UserControl
 
     /// <summary>
     /// The scale XAML will actually rasterize at, which is what decides how many pixels
-    /// a sprite comes out as.
+    /// a sprite comes out as. Named for what it is for rather than after
+    /// <see cref="UIElement.RasterizationScale"/>, which this would otherwise hide —
+    /// and which reads 0 until the element has been arranged.
     /// </summary>
-    private double RasterizationScale => _rasterizationScale?.Invoke() ?? 1;
+    private double SpriteScale => _rasterizationScale?.Invoke() ?? 1;
 
     /// <summary>
     /// A mark aimed at a point belongs centred on it; anchoring its top-left there would
