@@ -255,7 +255,7 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// Opacity is a property of the mark rather than of the pixel, and the pixel has no
     /// opinion about it: a screenshot is opaque everywhere.
     /// </remarks>
-    public void ApplySampledColor(AnnotationColor sampled) => _colorPicker.Color = Color.FromArgb(
+    public void ApplyPickedColor(AnnotationColor sampled) => _colorPicker.Color = Color.FromArgb(
         _colorPicker.Color.A,
         sampled.Red,
         sampled.Green,

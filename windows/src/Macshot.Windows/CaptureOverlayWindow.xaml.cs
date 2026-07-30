@@ -92,6 +92,12 @@ public sealed partial class CaptureOverlayWindow : Window
     private readonly ResolutionBox _sizeBox = new();
 
     /// <summary>
+    /// The ring of colours a right-click opens. Added to the overlay in code, above
+    /// everything else, because it is drawn over whatever the pointer happens to be on.
+    /// </summary>
+    private readonly ColorWheelView _colorWheel = new();
+
+    /// <summary>
     /// This display's mapping between frame pixels and the layout units the overlay's
     /// chrome is arranged in. Built once: it depends only on the monitor.
     /// </summary>
@@ -226,6 +232,7 @@ public sealed partial class CaptureOverlayWindow : Window
         BuildGrips();
         WireToolbar();
         WireSizeBox();
+        WireColorWheel();
         WireCanvas();
 
         // Covers both finishing and cancelling: the owner closes every overlay either
@@ -335,6 +342,23 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         SelectionCanvas.CapturePointer(e.Pointer);
 
+        // The right button opens the ring of colours where the pointer already is. The
+        // colour button is wherever the toolbar happens to be, which is a trip across the
+        // screen for every mark that wants a different colour from the last one.
+        if (e.GetCurrentPoint(SelectionCanvas).Properties.IsRightButtonPressed && IsAnnotating)
+        {
+            _colorWheel.Show(ToLayoutPoint(e));
+            return;
+        }
+
+        // A press while the ring is open answers it, whatever else that press would have
+        // meant: the ring is in front of everything and the user is aiming at it.
+        if (_colorWheel.IsShown)
+        {
+            TakeWheelColor();
+            return;
+        }
+
         // Ahead of everything else: while the sampler is armed the click is the pick,
         // and must not also start a mark or a selection under it.
         if (AnnotationToolbar.IsSamplingColor)
@@ -389,6 +413,12 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private void SelectionCanvas_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
+        if (_colorWheel.IsShown)
+        {
+            _colorWheel.Hover(ToLayoutPoint(e));
+            return;
+        }
+
         UpdateCursor(ToFrame(e));
 
         if (AnnotationToolbar.IsSamplingColor)
@@ -559,6 +589,23 @@ public sealed partial class CaptureOverlayWindow : Window
     private void SelectionCanvas_PointerReleased(object sender, PointerRoutedEventArgs e)
     {
         SelectionCanvas.ReleasePointerCaptures();
+
+        // Letting go over a colour takes it. Letting go having pointed at nothing leaves
+        // the ring open to be clicked at instead — a right-click that opens it and does
+        // not move is someone wanting to look, not someone who has missed.
+        if (_colorWheel.IsShown)
+        {
+            if (_colorWheel.HoveredColor is not null)
+            {
+                TakeWheelColor();
+            }
+            else
+            {
+                _colorWheel.IsSticky = true;
+            }
+
+            return;
+        }
 
         if (_resizing != SelectionHandle.None)
         {
@@ -1077,6 +1124,14 @@ public sealed partial class CaptureOverlayWindow : Window
             case VirtualKey.Escape:
                 e.Handled = true;
 
+                // The ring is the first thing Escape closes: it is in front of everything
+                // and it is taking the pointer, so it is what the user is looking at.
+                if (_colorWheel.IsShown)
+                {
+                    _colorWheel.Dismiss();
+                    return;
+                }
+
                 // An armed sampler is the first thing Escape gives up. It takes over
                 // the click, so leaving it armed while Escape did something else would
                 // leave the pointer doing nothing the user asked for.
@@ -1163,6 +1218,25 @@ public sealed partial class CaptureOverlayWindow : Window
         AnnotationToolbar.Changed += (_, _) => RenderAnnotations();
         AnnotationToolbar.ColorSamplingToggled += (_, armed) => SetColorSampling(armed);
         AnnotationToolbar.CommandInvoked += (_, command) => RunToolbarCommand(command);
+    }
+
+    /// <summary>
+    /// Puts the colour ring above everything else on the overlay. It is drawn wherever the
+    /// pointer is, which is over the marks, the grips and the toolbar by turns.
+    /// </summary>
+    private void WireColorWheel() => OverlayRoot.Children.Add(_colorWheel);
+
+    /// <summary>
+    /// Takes the colour the ring is pointing at, if any, and closes it.
+    /// </summary>
+    private void TakeWheelColor()
+    {
+        if (_colorWheel.HoveredColor is { } picked)
+        {
+            AnnotationToolbar.ApplyPickedColor(picked);
+        }
+
+        _colorWheel.Dismiss();
     }
 
     /// <summary>
@@ -1465,7 +1539,7 @@ public sealed partial class CaptureOverlayWindow : Window
     private void TakeSampledColor(CapturePoint point)
     {
         var sampled = SampleAt(point);
-        AnnotationToolbar.ApplySampledColor(sampled);
+        AnnotationToolbar.ApplyPickedColor(sampled);
         SetColorSampling(false);
         HintText.Text = $"Took {sampled.ToHex()} • {AnnotatingHint}";
 
@@ -1495,6 +1569,16 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         var position = e.GetCurrentPoint(SelectionCanvas).Position;
         return _layout.PointerToFrame(_monitor, position.X, position.Y);
+    }
+
+    /// <summary>
+    /// The pointer where the overlay's chrome is arranged, rather than where its pixels
+    /// are. The colour ring is drawn by WinUI, so it is placed in layout units.
+    /// </summary>
+    private CapturePoint ToLayoutPoint(PointerRoutedEventArgs e)
+    {
+        var position = e.GetCurrentPoint(SelectionCanvas).Position;
+        return new CapturePoint(position.X, position.Y);
     }
 
     private static EditorModifiers ToModifiers(PointerRoutedEventArgs e) =>

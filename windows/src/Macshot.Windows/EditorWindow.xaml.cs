@@ -794,7 +794,7 @@ public sealed partial class EditorWindow : Window
     private void TakeSampledColor(CapturePoint point)
     {
         var sampled = SampleAt(point);
-        AnnotationToolbar.ApplySampledColor(sampled);
+        AnnotationToolbar.ApplyPickedColor(sampled);
         SetColorSampling(false);
         HintText.Text = $"Took {sampled.ToHex()} • {StandingHint}";
     }
