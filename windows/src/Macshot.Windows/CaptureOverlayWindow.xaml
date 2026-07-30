@@ -85,18 +85,26 @@
             <Canvas x:Name="LoupeLayer" IsHitTestVisible="False" />
         </Grid>
 
-        <Border
-            HorizontalAlignment="Center"
-            VerticalAlignment="Top"
-            Margin="0,20,0,0"
-            Padding="14,8"
-            Background="#CC202020"
-            CornerRadius="6">
-            <TextBlock
-                x:Name="HintText"
-                Text="Drag to capture • Hold Space to move it • Click a window to take it • Esc to cancel"
-                Foreground="White" />
-        </Border>
+        <!-- The instruction, and anything else the overlay has to say. Placed in code:
+             macOS puts it in the middle of the screen while nothing is chosen and just
+             above the region once something is, and takes it away entirely for the rest of
+             the annotation phase — a standing instruction over a chosen region is a strip
+             of the capture the user cannot see past for as long as they are working on it.
+             Its own layer so it is above the capture and never in it. -->
+        <Canvas x:Name="HintLayer" IsHitTestVisible="False">
+            <Border
+                x:Name="HintPill"
+                Padding="14"
+                Background="#A6000000"
+                CornerRadius="8">
+                <TextBlock
+                    x:Name="HintText"
+                    Text="Drag to capture • Hold Space to move it • Click a window to take it • Esc to cancel"
+                    FontSize="13"
+                    FontWeight="Medium"
+                    Foreground="White" />
+            </Border>
+        </Canvas>
 
         <!-- The width × height box, which is put here in code so it can stay internal to
              the assembly like the rest of the toolbar's parts. -->

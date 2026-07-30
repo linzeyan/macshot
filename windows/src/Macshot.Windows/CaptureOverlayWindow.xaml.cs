@@ -32,22 +32,17 @@ namespace Macshot.Windows;
 /// </summary>
 public sealed partial class CaptureOverlayWindow : Window
 {
-    /// <summary>
-    /// The standing instruction, restored whenever a transient message — a text entry
-    /// prompt, a redaction count, an error — has had its turn.
-    /// </summary>
-    private const string AnnotationHint = "Draw to annotate • Ctrl+Z undo • Enter to finish • Esc to cancel";
-
-    /// <summary>
-    /// The same, for a region that can still be adjusted. The grips are visible on their
-    /// own, so what the line has to name is the arrow keys, which nothing advertises.
-    /// </summary>
-    private const string AdjustableAnnotationHint =
-        "Draw to annotate • Drag a grip or arrow-key to adjust • Ctrl+Z undo • Enter to finish";
-
     /// <summary>The standing instruction before anything is chosen. Matches the XAML default.</summary>
     private const string SelectionHint =
         "Drag to capture • Hold Space to move it • Click a window to take it • Esc to cancel";
+
+    /// <summary>
+    /// Shown above the region while it is being dragged out, which is the one moment the
+    /// Space key is worth naming: it is what saves a drag whose first corner landed in the
+    /// wrong place, and letting go to start again is how someone who has not been told
+    /// deals with that.
+    /// </summary>
+    private const string SelectingHint = "Hold Space to move. Release to annotate and edit";
 
     private const string SamplingHint = "Click to take the colour under the pointer • Esc to stop";
 
@@ -285,6 +280,10 @@ public sealed partial class CaptureOverlayWindow : Window
         // Everything is dimmed until something is chosen, which is what says the whole
         // screen is the thing being captured from.
         UpdateDim(null);
+
+        // Placed rather than merely shown: the pill is laid out in a canvas, so until it is
+        // told where to go it sits in the display's top-left corner.
+        Hint(SelectionHint);
         OfferRememberedSelection();
     }
 
@@ -329,7 +328,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         PlaceChrome(SelectionRectangle, _remembered.Value);
         UpdateDim(ToLayout(_remembered.Value));
-        HintText.Text = RememberedHint;
+        Hint(RememberedHint);
 
         DiagnosticLog.Verbose(
             $"offering last selection on {_monitor.DeviceName}: stored {local.X},{local.Y} "
@@ -450,6 +449,7 @@ public sealed partial class CaptureOverlayWindow : Window
         // The highlight has done its job the moment a drag begins: what the pointer
         // is over stops mattering once the user is drawing their own edges.
         SnapHighlight.Visibility = Visibility.Collapsed;
+        Hint(SelectingHint);
         DrawMarquee(_selectionStart.Value, _selectionStart.Value);
     }
 
@@ -477,7 +477,7 @@ public sealed partial class CaptureOverlayWindow : Window
             // gradient or a photograph, the pixel under the pointer is not the colour
             // the eye reports, and there is no way to tell before committing to it.
             var sampling = ToFrame(e);
-            HintText.Text = $"{SamplingHint} • {SampleAt(sampling).ToHex()}";
+            Hint($"{SamplingHint} • {SampleAt(sampling).ToHex()}");
             Loupe().Track(sampling);
             return;
         }
@@ -622,12 +622,12 @@ public sealed partial class CaptureOverlayWindow : Window
 
             // Back to whichever hint this overlay started with: an offered selection
             // is still on offer after the pointer has passed over a window.
-            HintText.Text = _remembered is null ? SelectionHint : RememberedHint;
+            Hint(_remembered is null ? SelectionHint : RememberedHint);
             return;
         }
 
         PlaceChrome(SnapHighlight, window.Bounds);
-        HintText.Text = WindowHint;
+        Hint(WindowHint);
     }
 
     /// <summary>
@@ -704,6 +704,7 @@ public sealed partial class CaptureOverlayWindow : Window
         DrawMarquee(start, end);
         _selectionStart = null;
         _marqueeAt = null;
+        Hint(SelectionHint);
 
         var dragged = CaptureRegion.FromPoints(start.X, start.Y, end.X, end.Y);
 
@@ -780,7 +781,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
             if (captured is null)
             {
-                HintText.Text = "Captured from the screen, so anything over the window is included";
+                Hint("Captured from the screen, so anything over the window is included");
             }
         }
         catch (Exception exception)
@@ -788,7 +789,7 @@ public sealed partial class CaptureOverlayWindow : Window
             // Nothing may escape: this runs on a task nobody holds, where an
             // unobserved exception ends the process rather than the capture. The
             // hint is where this overlay reports every other failure too.
-            HintText.Text = exception.Message;
+            Hint(exception.Message);
         }
     }
 
@@ -826,15 +827,12 @@ public sealed partial class CaptureOverlayWindow : Window
         AnnotationToolbar.ShowToolbar(true);
         _sizeBox.Visibility = Visibility.Visible;
         RepositionChrome(region);
-        HintText.Text = AnnotatingHint;
+        Hint(string.Empty);
 
         // The other displays' overlays are always on top, so they have to go before
         // the user can see anything but this one.
         SelectionCommitted?.Invoke(this, EventArgs.Empty);
     }
-
-    /// <summary>The standing instruction for the annotation phase this overlay is in.</summary>
-    private string AnnotatingHint => _regionIsAdjustable ? AdjustableAnnotationHint : AnnotationHint;
 
     /// <summary>This display, in frame space: what an adjusted region is kept inside.</summary>
     /// <remarks>
@@ -1053,7 +1051,7 @@ public sealed partial class CaptureOverlayWindow : Window
         _movingFrom = region;
         _movePending = region;
         _moveGrip = null;
-        HintText.Text = MovingHint;
+        Hint(MovingHint);
         SelectionCanvas.UseCursor(InputSystemCursorShape.SizeAll);
         PlaceGrips(region);
     }
@@ -1071,7 +1069,7 @@ public sealed partial class CaptureOverlayWindow : Window
         var moved = _movePending;
         _movingFrom = null;
         _moveGrip = null;
-        HintText.Text = AnnotatingHint;
+        Hint(string.Empty);
 
         if (keep)
         {
@@ -1377,9 +1375,9 @@ public sealed partial class CaptureOverlayWindow : Window
             RepositionChrome(region);
         }
 
-        HintText.Text = viewport.IsIdentity
-            ? (IsAnnotating ? AnnotatingHint : SelectionHint)
-            : $"{viewport.Scale * 100:0}% • Scroll to zoom • Middle-drag to pan";
+        Hint(viewport.IsIdentity
+            ? (IsAnnotating ? string.Empty : SelectionHint)
+            : $"{viewport.Scale * 100:0}% • Scroll to zoom • Middle-drag to pan");
     }
 
     /// <summary>
@@ -1566,12 +1564,12 @@ public sealed partial class CaptureOverlayWindow : Window
         AnnotationCanvas.Bind(
             _editor,
             () => OverlayRoot.XamlRoot?.RasterizationScale ?? _monitor.Scale,
-            message => HintText.Text = message);
+            message => Hint(message));
         AnnotationCanvas.StampEmoji = () => AnnotationToolbar.StampEmoji;
         AnnotationCanvas.TypingEnded += (_, _) =>
         {
             OverlayRoot.Focus(FocusState.Programmatic);
-            HintText.Text = AnnotatingHint;
+            Hint(string.Empty);
         };
     }
 
@@ -1598,7 +1596,7 @@ public sealed partial class CaptureOverlayWindow : Window
                 // Silence here would be indistinguishable from a broken button, and
                 // "nothing found" is a useful answer on a screenshot about to be
                 // shared.
-                HintText.Text = "No personal data found in the selection";
+                Hint("No personal data found in the selection");
                 return;
             }
 
@@ -1606,7 +1604,7 @@ public sealed partial class CaptureOverlayWindow : Window
             // run back off. This is what the document's snapshot history buys.
             _editor.Document.AddRange(annotations);
             RenderAnnotations();
-            HintText.Text = $"Redacted {annotations.Count} • Ctrl+Z to undo • Enter to finish";
+            Hint($"Redacted {annotations.Count} • Ctrl+Z to undo • Enter to finish");
         });
     }
 
@@ -1624,16 +1622,16 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         var previousHint = HintText.Text;
-        HintText.Text = "Reading text...";
+        Hint("Reading text...");
         try
         {
             var lines = await AnnotationCanvas.RecognizeAsync();
-            HintText.Text = previousHint;
+            Hint(previousHint);
             handle(lines);
         }
         catch (Exception exception)
         {
-            HintText.Text = exception.Message;
+            Hint(exception.Message);
         }
     }
 
@@ -1678,7 +1676,7 @@ public sealed partial class CaptureOverlayWindow : Window
     private void SetColorSampling(bool armed)
     {
         AnnotationToolbar.SetColorSampling(armed);
-        HintText.Text = armed ? SamplingHint : AnnotatingHint;
+        Hint(armed ? SamplingHint : string.Empty);
 
         if (!armed)
         {
@@ -1703,7 +1701,7 @@ public sealed partial class CaptureOverlayWindow : Window
         var sampled = SampleAt(point);
         AnnotationToolbar.ApplyPickedColor(sampled);
         SetColorSampling(false);
-        HintText.Text = $"Took {sampled.ToHex()} • {AnnotatingHint}";
+        Hint($"Took {sampled.ToHex()}");
 
         // The point as well as the colour: a sampler reading the wrong pixel is a
         // coordinate fault, and the colour alone cannot tell one from a channel swap.
@@ -1807,5 +1805,102 @@ public sealed partial class CaptureOverlayWindow : Window
         SelectionRectangle.Width = region.Width;
         SelectionRectangle.Height = region.Height;
         SelectionRectangle.Visibility = Visibility.Visible;
+        PlaceHint();
+    }
+
+    /// <summary>
+    /// Says something on the overlay, or takes the pill away when there is nothing to say.
+    /// </summary>
+    /// <remarks>
+    /// Empty means gone rather than blank, and the annotation phase says nothing at all —
+    /// which is what macOS does with it. A line of instructions standing over a chosen
+    /// region for as long as it is being worked on is a strip of the capture the user
+    /// cannot see past, and it is at its least useful exactly then: by that point they
+    /// have already dragged out a region and are holding a tool.
+    /// </remarks>
+    private void Hint(string text)
+    {
+        HintText.Text = text;
+
+        if (text.Length == 0)
+        {
+            HintPill.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        HintPill.Visibility = Visibility.Visible;
+        PlaceHint();
+    }
+
+    /// <summary>
+    /// Puts the pill where what it is about is: the middle of the screen while nothing is
+    /// chosen, and just above the region once something is.
+    /// </summary>
+    /// <remarks>
+    /// Both placements are macOS's, and so is each one's shape — the middle of an empty
+    /// screen can carry a larger pill than a line sitting against a rectangle the user is
+    /// dragging. Measured rather than worked out from constants, unlike the toolbar and the
+    /// size box: what a sentence comes to is the whole variable here, and there is no
+    /// arithmetic that answers it.
+    /// </remarks>
+    private void PlaceHint()
+    {
+        if (HintPill.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        var screen = LayoutBounds;
+        var anchor = HintAnchor();
+
+        HintPill.Padding = anchor is null ? new Thickness(14) : new Thickness(10, 5, 10, 5);
+        HintPill.CornerRadius = new CornerRadius(anchor is null ? 8 : 6);
+        HintPill.Measure(new Size(screen.Width, screen.Height));
+        var size = HintPill.DesiredSize;
+
+        if (anchor is not { } region)
+        {
+            Canvas.SetLeft(HintPill, (screen.Width - size.Width) / 2);
+            Canvas.SetTop(HintPill, (screen.Height - size.Height) / 2);
+            return;
+        }
+
+        // Above the region, or below it when there is no room above — and never off the
+        // side, which a wide sentence about a region against the screen's edge would be.
+        var top = region.Y - size.Height - HintGap;
+        if (top < screen.Y + HintGap)
+        {
+            top = region.Bottom + HintGap;
+        }
+
+        Canvas.SetLeft(HintPill, Math.Clamp(
+            region.X + ((region.Width - size.Width) / 2),
+            screen.X + HintGap,
+            Math.Max(screen.X + HintGap, screen.Right - size.Width - HintGap)));
+        Canvas.SetTop(HintPill, Math.Min(top, Math.Max(screen.Y, screen.Bottom - size.Height - HintGap)));
+    }
+
+    /// <summary>How far the pill keeps off the region it describes and off the screen edge.</summary>
+    private const double HintGap = 8;
+
+    /// <summary>
+    /// What the pill is about, in the units it is placed in, or null when that is the
+    /// whole screen because nothing has been chosen or dragged out yet.
+    /// </summary>
+    /// <remarks>
+    /// Through the viewport, like the rest of the chrome: the pill is outside the zoom
+    /// transform, so where it goes is where the region appears on screen rather than where
+    /// it is on the capture.
+    /// </remarks>
+    private CaptureRegion? HintAnchor()
+    {
+        if (_selection is { } chosen)
+        {
+            return _viewport.ToView(ToLayout(chosen));
+        }
+
+        return _selectionStart is { } start && _marqueeAt is { } now
+            ? _viewport.ToView(CaptureRegion.FromPoints(start.X, start.Y, now.X, now.Y))
+            : null;
     }
 }
