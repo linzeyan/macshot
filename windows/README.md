@@ -4,9 +4,12 @@ A native Windows port of [macshot](https://github.com/sw33tLie/macshot), on the
 `windows` branch. C#, .NET 8, WinUI 3 (Windows App SDK). `main` stays the macOS
 product; this tree is not built from it.
 
-Still in progress. Capture, annotation, and delivery work; text, OCR, recording,
-and an installer do not. See `docs/windows-port/` in the repository for the
-roadmap and the feature-parity matrix.
+Still in progress. Capture, annotation, editing, recognition, recording and
+delivery work; uploads, HEIC and WebP encoding, and an installer do not. None of
+it has been run on Windows hardware yet — CI compiles the WinUI half and the
+portable half is unit-tested, which is not the same thing. See
+`docs/windows-port/` in the repository for the roadmap and the feature-parity
+matrix.
 
 ## Requirements
 
@@ -54,15 +57,26 @@ macshot has no window. It runs in the notification area:
 | --- | --- |
 | Capture an area | `Ctrl+Shift+X`, or left-click the icon |
 | Capture every screen | `Ctrl+Shift+F` |
-| Preferences, Quit | right-click the icon |
+| Record the screen | `Ctrl+Shift+R`, and again to stop |
+| Capture after a delay, History, Preferences, Quit | right-click the icon |
 
-Drag to select, annotate with the toolbar, `Enter` to finish, `Esc` to cancel.
-`Ctrl+Z` / `Ctrl+Shift+Z` undo and redo.
+Drag to select, or click a window to take it whole. The chosen region can be
+adjusted with the eight grips or the arrow keys. Annotate with the toolbar,
+`Enter` to finish, `Esc` to cancel. `Ctrl+Z` / `Ctrl+Shift+Z` undo and redo.
+
+The first tool is a pointer: it selects a mark already drawn so it can be moved,
+reshaped by its handles, turned, bent, or deleted.
+
+For anything more than a few marks, press **Editor** for a resizable window with
+zoom, cropping, flipping and gradient backgrounds. A past capture reopens there
+too, from the thumbnail, the Recent captures menu, or the History panel.
 
 By default a finished capture goes to the clipboard, is saved to
 `Pictures\Macshot`, and appears as a floating thumbnail with copy, save, pin, and
-edit. All of that is configurable in Preferences, which writes to
-`%LOCALAPPDATA%\macshot\settings.json`.
+edit; a run of captures stacks up the corner rather than replacing each other. All
+of that is configurable in Preferences, which writes to
+`%LOCALAPPDATA%\macshot\settings.json`. Shortcuts there are set by pressing the
+keys, not by typing their names.
 
 ## Working on it
 
