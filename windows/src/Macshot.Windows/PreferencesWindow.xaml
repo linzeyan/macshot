@@ -4,28 +4,47 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:Macshot.Windows"
     Title="Macshot Preferences">
-    <!-- Grouped into tabs rather than stacked in one scroll. Nine headings in a single
-         column, in the order the features happened to be written, means the setting
-         being looked for is found by scrolling past eight that are not it. The four
-         names mirror the macOS product's tabs so the two are learnable as one app. -->
+    <!-- A named list down the side rather than a row of tabs across the top, and the same
+         six names in the same order as the macOS product's settings window. macshot on
+         Windows is that product written in another language: someone who knows where a
+         setting lives on one machine must find it in the same place on the other. The
+         seventh, Uploads, is not here because this port has nothing to upload with. -->
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" RowDefinitions="*,Auto">
-        <Pivot>
-            <PivotItem Header="General">
-                <ScrollViewer>
-                    <StackPanel Spacing="20" Padding="4,8,4,8">
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="Image" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                            <ComboBox
-                                x:Name="FormatBox"
-                                Header="Format"
-                                HorizontalAlignment="Stretch"
-                                SelectionChanged="Format_SelectionChanged" />
-                            <StackPanel x:Name="QualityPanel" Spacing="4" Margin="0,8,0,0">
-                                <TextBlock Text="Quality" />
-                                <Slider x:Name="QualitySlider" Minimum="1" Maximum="100" StepFrequency="1" />
-                            </StackPanel>
-                        </StackPanel>
+        <NavigationView
+            x:Name="Sections"
+            PaneDisplayMode="Left"
+            IsBackButtonVisible="Collapsed"
+            IsSettingsVisible="False"
+            IsPaneToggleButtonVisible="False"
+            OpenPaneLength="180"
+            SelectionChanged="Sections_SelectionChanged">
+            <NavigationView.MenuItems>
+                <NavigationViewItem Content="General" Tag="general" IsSelected="True">
+                    <NavigationViewItem.Icon><SymbolIcon Symbol="Setting" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Capture" Tag="capture">
+                    <NavigationViewItem.Icon><SymbolIcon Symbol="Camera" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Shortcuts" Tag="shortcuts">
+                    <NavigationViewItem.Icon><SymbolIcon Symbol="Keyboard" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Tools" Tag="tools">
+                    <NavigationViewItem.Icon><SymbolIcon Symbol="Edit" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="Recording" Tag="recording">
+                    <NavigationViewItem.Icon><SymbolIcon Symbol="Video" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+                <NavigationViewItem Content="About" Tag="about">
+                    <NavigationViewItem.Icon><SymbolIcon Symbol="Help" /></NavigationViewItem.Icon>
+                </NavigationViewItem>
+            </NavigationView.MenuItems>
 
+            <!-- All six pages exist at once and one is shown. A Frame would rebuild the
+                 page on every click, and every control on it is read on Save — a page that
+                 has been navigated away from must still hold what was typed into it. -->
+            <Grid Padding="16,8,16,8">
+                <ScrollViewer x:Name="GeneralPage">
+                    <StackPanel Spacing="20">
                         <StackPanel Spacing="4">
                             <TextBlock Text="Save folder" Style="{StaticResource BodyStrongTextBlockStyle}" />
                             <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
@@ -60,23 +79,42 @@
                                 Minimum="1"
                                 Maximum="60"
                                 SpinButtonPlacementMode="Compact" />
+                            <TextBlock
+                                Text="The toolbar's copy, save and pin buttons each mean one of these on their own, whatever is switched on here."
+                                TextWrapping="Wrap"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="History" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <NumberBox
+                                x:Name="HistorySizeBox"
+                                Header="Keep the last (captures)"
+                                Minimum="0"
+                                Maximum="200"
+                                SpinButtonPlacementMode="Compact" />
+                            <TextBlock
+                                Text="Kept under macshot's own data folder, separately from the save folder, and offered in the notification-area menu. Zero keeps none."
+                                TextWrapping="Wrap"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <Button Content="Clear history now" Click="ClearHistory_Click" HorizontalAlignment="Left" />
                         </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
-            </PivotItem>
 
-            <PivotItem Header="Capture">
-                <ScrollViewer>
-                    <StackPanel Spacing="20" Padding="4,8,4,8">
+                <ScrollViewer x:Name="CapturePage" Visibility="Collapsed">
+                    <StackPanel Spacing="20">
                         <StackPanel Spacing="4">
-                            <TextBlock Text="Shortcuts" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                            <local:HotkeyBox x:Name="CaptureAreaHotkeyBox" Header="Capture area" />
-                            <local:HotkeyBox x:Name="CaptureAllScreensHotkeyBox" Header="Capture all screens" Margin="0,8,0,0" />
-                            <local:HotkeyBox x:Name="RecordScreenHotkeyBox" Header="Record screen" Margin="0,8,0,0" />
-                            <TextBlock
-                                Text="Click a shortcut and press the keys. At least one of Ctrl, Alt, Shift or Win is required — a shortcut with no modifier would swallow that key in every program on the machine. The settings file stores them as text, written like Ctrl+Shift+X."
-                                TextWrapping="Wrap"
-                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <TextBlock Text="Image" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <ComboBox
+                                x:Name="FormatBox"
+                                Header="Format"
+                                HorizontalAlignment="Stretch"
+                                SelectionChanged="Format_SelectionChanged" />
+                            <StackPanel x:Name="QualityPanel" Spacing="4" Margin="0,8,0,0">
+                                <TextBlock Text="Quality" />
+                                <Slider x:Name="QualitySlider" Minimum="1" Maximum="100" StepFrequency="1" />
+                            </StackPanel>
                         </StackPanel>
 
                         <StackPanel Spacing="4">
@@ -86,13 +124,8 @@
                                 Text="The next capture draws the previous region on the display it was taken from, and Enter takes it again. Off by default, because a selection that reappears on its own is a surprise until you know the setting exists."
                                 TextWrapping="Wrap"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                        </StackPanel>
-
-                        <StackPanel Spacing="4">
-                            <TextBlock Text="Annotation" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                            <ToggleSwitch x:Name="SmoothPencilSwitch" Header="Smooth freehand strokes" />
                             <TextBlock
-                                Text="Rounds off the corners of a pencil or highlighter stroke once you let go. A path sampled from a mouse is a staircase; turn this off if you are tracing something and want the points exactly where the pointer went."
+                                Text="On the overlay: scroll to zoom in on what you are capturing, middle-drag to pan, Ctrl+0 for actual size."
                                 TextWrapping="Wrap"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         </StackPanel>
@@ -112,39 +145,60 @@
                         </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
-            </PivotItem>
 
-            <PivotItem Header="Recording">
-                <ScrollViewer>
-                    <StackPanel Spacing="20" Padding="4,8,4,8">
+                <ScrollViewer x:Name="ShortcutsPage" Visibility="Collapsed">
+                    <StackPanel Spacing="20">
                         <StackPanel Spacing="4">
-                            <TextBlock Text="Format" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                            <ComboBox x:Name="RecordingFormatBox" HorizontalAlignment="Stretch" />
+                            <TextBlock Text="Global shortcuts" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <local:HotkeyBox x:Name="CaptureAreaHotkeyBox" Header="Capture area" />
+                            <local:HotkeyBox x:Name="CaptureAllScreensHotkeyBox" Header="Capture all screens" Margin="0,8,0,0" />
+                            <local:HotkeyBox x:Name="RecordScreenHotkeyBox" Header="Record screen" Margin="0,8,0,0" />
                             <TextBlock
-                                Text="GIF is written smaller and slower than MP4, because every GIF frame is a whole image."
+                                Text="Click a shortcut and press the keys. At least one of Ctrl, Alt, Shift or Win is required — a shortcut with no modifier would swallow that key in every program on the machine. The settings file stores them as text, written like Ctrl+Shift+X."
+                                TextWrapping="Wrap"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="While a capture is open" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock
+                                Text="Enter takes the capture • Esc gives it up • Ctrl+Z and Ctrl+Y undo and redo • Delete removes the selected mark • the arrow keys nudge the region, ten pixels at a time with Shift • right-click opens the colour ring."
                                 TextWrapping="Wrap"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
-            </PivotItem>
 
-            <PivotItem Header="Advanced">
-                <ScrollViewer>
-                    <StackPanel Spacing="20" Padding="4,8,4,8">
+                <ScrollViewer x:Name="ToolsPage" Visibility="Collapsed">
+                    <StackPanel Spacing="20">
                         <StackPanel Spacing="4">
-                            <TextBlock Text="History" Style="{StaticResource BodyStrongTextBlockStyle}" />
-                            <NumberBox
-                                x:Name="HistorySizeBox"
-                                Header="Keep the last (captures)"
-                                Minimum="0"
-                                Maximum="200"
-                                SpinButtonPlacementMode="Compact" />
+                            <TextBlock Text="Tools on the toolbar" Style="{StaticResource BodyStrongTextBlockStyle}" />
                             <TextBlock
-                                Text="Kept under macshot's own data folder, separately from the save folder, and offered in the notification-area menu. Zero keeps none."
+                                Text="Unticked tools are taken off the strip. Nothing is lost by hiding one, and the same choice is on the right-click menu of any tool button."
                                 TextWrapping="Wrap"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                            <Button Content="Clear history now" Click="ClearHistory_Click" HorizontalAlignment="Left" />
+                            <!-- Filled in code from the toolbar's own list, so a tool added
+                                 later appears here without this page being edited. -->
+                            <StackPanel x:Name="ToolToggles" Spacing="2" Margin="0,4,0,0" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="Toolbar colours" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <StackPanel x:Name="ToolbarColorRow" Orientation="Horizontal" Spacing="8" />
+                            <TextBlock
+                                Text="The toolbar is drawn over a screenshot rather than inside a window, so it cannot follow the system theme without disappearing into half the captures anyone takes. Hover and press are worked out from the accent and the icon colour, so no combination can make the buttons unreadable."
+                                TextWrapping="Wrap"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <Button Content="Back to macshot's colours" Click="ResetToolbarColors_Click" HorizontalAlignment="Left" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Annotation" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <ToggleSwitch x:Name="SmoothPencilSwitch" Header="Smooth freehand strokes" />
+                            <TextBlock
+                                Text="Rounds off the corners of a pencil or highlighter stroke once you let go. A path sampled from a mouse is a staircase; turn this off if you are tracing something and want the points exactly where the pointer went."
+                                TextWrapping="Wrap"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         </StackPanel>
 
                         <!-- Collapsed in the offline build, which contains no translator to
@@ -155,6 +209,41 @@
                             <TextBlock
                                 Text="Your own key, for your own project. Recognized text is sent to Google only when Translate is pressed. Without a key, Translate says so and sends nothing."
                                 TextWrapping="Wrap"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <ScrollViewer x:Name="RecordingPage" Visibility="Collapsed">
+                    <StackPanel Spacing="20">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Format" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <ComboBox x:Name="RecordingFormatBox" HorizontalAlignment="Stretch" />
+                            <TextBlock
+                                Text="GIF is written smaller and slower than MP4, because every GIF frame is a whole image."
+                                TextWrapping="Wrap"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+
+                <ScrollViewer x:Name="AboutPage" Visibility="Collapsed">
+                    <StackPanel Spacing="20">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="macshot" Style="{StaticResource SubtitleTextBlockStyle}" />
+                            <TextBlock x:Name="VersionText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <TextBlock
+                                Text="A screenshot and annotation tool. This is the Windows build of the macOS app of the same name, with the same tools, the same toolbar and the same shortcuts."
+                                TextWrapping="Wrap"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Settings file" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBlock
+                                x:Name="SettingsPathText"
+                                TextWrapping="Wrap"
+                                IsTextSelectionEnabled="True"
                                 Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         </StackPanel>
 
@@ -169,11 +258,11 @@
                         </StackPanel>
                     </StackPanel>
                 </ScrollViewer>
-            </PivotItem>
-        </Pivot>
+            </Grid>
+        </NavigationView>
 
-        <!-- Outside the tabs on purpose: Save writes every tab, and a Save button per
-             tab would invite the belief that it only writes the one it is sitting in. -->
+        <!-- Outside the pages on purpose: Save writes all of them, and a Save button per
+             page would invite the belief that it only writes the one it is sitting in. -->
         <Grid
             Grid.Row="1"
             Padding="20,12,20,16"

@@ -1,11 +1,14 @@
 using System.Diagnostics;
+using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Input;
 using Macshot.Windows.Core.Output;
 using Macshot.Windows.Services;
+using Macshot.Windows.Toolbar;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Windows.Graphics;
 using Windows.Storage.Pickers;
+using Windows.UI;
 using WinRT.Interop;
 
 namespace Macshot.Windows;
@@ -33,13 +36,63 @@ public sealed partial class PreferencesWindow : Window
 
     private readonly SettingsStore _settings;
 
+    /// <summary>One tick box per tool, in the order the toolbar keeps them.</summary>
+    private readonly Dictionary<AnnotationTool, CheckBox> _toolToggles = [];
+
+    private readonly ColorChoice _toolbarBackground = new("Background");
+    private readonly ColorChoice _toolbarAccent = new("Accent");
+    private readonly ColorChoice _toolbarIcon = new("Icons");
+
     public PreferencesWindow(SettingsStore settings)
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         InitializeComponent();
+        BuildToolsPage();
         Load(_settings.Current);
         PlaceOnScreen();
     }
+
+    /// <summary>
+    /// Builds the parts of the Tools page that come from the toolbar rather than from the
+    /// markup, so a tool added later appears here without this page being edited.
+    /// </summary>
+    private void BuildToolsPage()
+    {
+        foreach (var tool in ToolbarActions.ToolOrder)
+        {
+            var toggle = new CheckBox { Content = ToolbarActions.Tooltip(tool) };
+            _toolToggles[tool] = toggle;
+            ToolToggles.Children.Add(toggle);
+        }
+
+        ToolbarColorRow.Children.Add(_toolbarBackground);
+        ToolbarColorRow.Children.Add(_toolbarAccent);
+        ToolbarColorRow.Children.Add(_toolbarIcon);
+    }
+
+    /// <summary>
+    /// Shows the chosen page. All six exist at once and one is visible: a Frame would
+    /// rebuild the page on every click, and Save reads every control on every page.
+    /// </summary>
+    private void Sections_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    {
+        var chosen = (args.SelectedItem as NavigationViewItem)?.Tag as string;
+
+        foreach (var (tag, page) in Pages())
+        {
+            page.Visibility = tag == chosen ? Visibility.Visible : Visibility.Collapsed;
+        }
+    }
+
+    private IEnumerable<(string Tag, FrameworkElement Page)> Pages() =>
+    [
+        ("general", GeneralPage),
+        ("capture", CapturePage),
+        ("shortcuts", ShortcutsPage),
+        ("tools", ToolsPage),
+        ("recording", RecordingPage),
+        ("about", AboutPage),
+    ];
 
     /// <summary>
     /// Opens at a size the content fits in, in the middle of the primary display.
@@ -94,9 +147,37 @@ public sealed partial class PreferencesWindow : Window
         CaptureAreaHotkeyBox.Binding = settings.CaptureAreaHotkey;
         CaptureAllScreensHotkeyBox.Binding = settings.CaptureAllScreensHotkey;
         RecordScreenHotkeyBox.Binding = settings.RecordScreenHotkey;
+
+        var shown = settings.EnabledTools();
+        foreach (var (tool, toggle) in _toolToggles)
+        {
+            toggle.IsChecked = shown.Contains(tool);
+        }
+
+        ShowToolbarColors(settings.ToToolbarColors());
+
+        VersionText.Text = $"Version {typeof(PreferencesWindow).Assembly.GetName().Version?.ToString(3) ?? "unknown"}";
+        SettingsPathText.Text = _settings.Path;
+
         UpdateQualityVisibility();
         UpdateTemplatePreview();
     }
+
+    private void ShowToolbarColors(ToolbarColors colors)
+    {
+        _toolbarBackground.Color = ToUiColor(colors.Background);
+        _toolbarAccent.Color = ToUiColor(colors.Accent);
+        _toolbarIcon.Color = ToUiColor(colors.Icon);
+    }
+
+    private void ResetToolbarColors_Click(object sender, RoutedEventArgs e) =>
+        ShowToolbarColors(ToolbarColors.Default);
+
+    private static Color ToUiColor(AnnotationColor color) =>
+        Color.FromArgb(color.Alpha, color.Red, color.Green, color.Blue);
+
+    private static AnnotationColor ToAnnotationColor(Color color) =>
+        new(color.R, color.G, color.B, color.A);
 
     private CaptureSettings Collect()
     {
@@ -137,6 +218,16 @@ public sealed partial class PreferencesWindow : Window
             CaptureAreaHotkey = CaptureAreaHotkeyBox.Binding,
             CaptureAllScreensHotkey = CaptureAllScreensHotkeyBox.Binding,
             RecordScreenHotkey = RecordScreenHotkeyBox.Binding,
+
+            // Stored as what is hidden rather than what is ticked, so a tool added in a
+            // later version arrives switched on instead of hidden from everyone who has
+            // ever saved this page.
+            HiddenTools = [.. _toolToggles
+                .Where(entry => entry.Value.IsChecked != true)
+                .Select(entry => entry.Key.ToString())],
+            ToolbarBackgroundColor = ToAnnotationColor(_toolbarBackground.Color).ToHex(),
+            ToolbarAccentColor = ToAnnotationColor(_toolbarAccent.Color).ToHex(),
+            ToolbarIconColor = ToAnnotationColor(_toolbarIcon.Color).ToHex(),
         }).Normalized();
     }
 
