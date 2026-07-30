@@ -282,6 +282,10 @@ public sealed partial class CaptureOverlayWindow : Window
             (int)_monitor.Bounds.Height));
         this.TakeForeground();
         OverlayRoot.Focus(FocusState.Programmatic);
+
+        // Everything is dimmed until something is chosen, which is what says the whole
+        // screen is the thing being captured from.
+        UpdateDim(null);
         OfferRememberedSelection();
     }
 
@@ -325,6 +329,7 @@ public sealed partial class CaptureOverlayWindow : Window
             local.Height);
 
         PlaceChrome(SelectionRectangle, _remembered.Value);
+        UpdateDim(ToLayout(_remembered.Value));
         HintText.Text = RememberedHint;
 
         DiagnosticLog.Verbose(
@@ -809,6 +814,7 @@ public sealed partial class CaptureOverlayWindow : Window
         // that already left it in the right place.
         PlaceChrome(SelectionRectangle, region);
         PlaceGrips(region);
+        UpdateDim(ToLayout(region));
 
         // The preview covers the selection with the pixels that will be delivered,
         // which also hides the selection tint inside it: from here on, what is inside
@@ -949,6 +955,7 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         PlaceChrome(SelectionRectangle, region);
         PlaceGrips(region);
+        UpdateDim(ToLayout(region));
         RepositionChrome(region);
     }
 
@@ -1131,6 +1138,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         PlaceChrome(SelectionRectangle, taken);
         PlaceGrips(taken);
+        UpdateDim(ToLayout(taken));
         RepositionChrome(taken);
 
         if (taken == current)
@@ -1724,10 +1732,59 @@ public sealed partial class CaptureOverlayWindow : Window
     private static bool IsDown(VirtualKey key) =>
         InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(CoreVirtualKeyStates.Down);
 
+    /// <summary>
+    /// Darkens everything that is not being captured.
+    /// </summary>
+    /// <remarks>
+    /// The region itself is left alone, so what is inside the marquee is the capture as it
+    /// will be delivered rather than a tinted approximation of it — the colour being
+    /// captured is often the reason for the capture. Four rectangles around the region
+    /// rather than one with a hole in it: the hole would be a path to rebuild on every
+    /// pointer move, and this is four numbers to change.
+    /// </remarks>
+    private void UpdateDim(CaptureRegion? clear)
+    {
+        var screen = LayoutBounds;
+
+        if (clear is not { } hole || hole.IsEmpty)
+        {
+            // Nothing chosen yet, so all of it is "not being captured".
+            Cover(DimTop, screen);
+            Cover(DimBottom, default);
+            Cover(DimLeft, default);
+            Cover(DimRight, default);
+            return;
+        }
+
+        Cover(DimTop, new CaptureRegion(screen.X, screen.Y, screen.Width, hole.Y - screen.Y));
+        Cover(DimBottom, new CaptureRegion(screen.X, hole.Bottom, screen.Width, screen.Bottom - hole.Bottom));
+        Cover(DimLeft, new CaptureRegion(screen.X, hole.Y, hole.X - screen.X, hole.Height));
+        Cover(DimRight, new CaptureRegion(hole.Right, hole.Y, screen.Right - hole.Right, hole.Height));
+    }
+
+    private static void Cover(Rectangle target, CaptureRegion where)
+    {
+        // A region with no area is a side of the selection that is against the edge of the
+        // screen. Hidden rather than drawn at zero size, because a Rectangle with a stroke
+        // would still be a line there.
+        if (where.IsEmpty)
+        {
+            target.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        Canvas.SetLeft(target, where.X);
+        Canvas.SetTop(target, where.Y);
+        target.Width = where.Width;
+        target.Height = where.Height;
+        target.Visibility = Visibility.Visible;
+    }
+
     /// <summary>Draws the marquee, which stays in layout units because it is chrome.</summary>
     private void DrawMarquee(Point start, Point end)
     {
         var region = CaptureRegion.FromPoints(start.X, start.Y, end.X, end.Y);
+        UpdateDim(region);
         Canvas.SetLeft(SelectionRectangle, region.X);
         Canvas.SetTop(SelectionRectangle, region.Y);
         SelectionRectangle.Width = region.Width;

@@ -16,6 +16,19 @@
              that needs it most. -->
         <Grid x:Name="ZoomHost">
             <Image x:Name="PreviewImage" Stretch="Fill" />
+
+            <!-- Everything that is not being captured, darkened. Four rectangles around
+                 the region rather than one with a hole in it: a hole is a path to rebuild
+                 on every pointer move, and four rectangles are four numbers to change.
+                 Above the screenshot and below the marquee, so the edge of the region
+                 stays the brightest line on the screen. -->
+            <Canvas x:Name="DimLayer" IsHitTestVisible="False">
+                <Rectangle x:Name="DimTop" Fill="#8C000000" />
+                <Rectangle x:Name="DimBottom" Fill="#8C000000" />
+                <Rectangle x:Name="DimLeft" Fill="#8C000000" />
+                <Rectangle x:Name="DimRight" Fill="#8C000000" />
+            </Canvas>
+
             <local:PointerCanvas
                 x:Name="SelectionCanvas"
                 Background="Transparent"
@@ -34,12 +47,14 @@
                     RadiusY="4"
                     Fill="#144CC2FF" />
 
+                <!-- Outlined but not filled: what is inside is the capture, and it is
+                     shown as it will be delivered. Everything outside is darkened
+                     instead, which is what says where the edges are. -->
                 <Rectangle
                     x:Name="SelectionRectangle"
                     Visibility="Collapsed"
                     Stroke="#4CC2FF"
-                    StrokeThickness="2"
-                    Fill="#334CC2FF" />
+                    StrokeThickness="2" />
             </local:PointerCanvas>
 
             <!-- Above SelectionCanvas so marks are not tinted by the selection fill. The
