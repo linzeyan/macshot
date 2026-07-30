@@ -2,6 +2,7 @@
     x:Class="Macshot.Windows.CaptureOverlayWindow"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Macshot.Windows"
     Title="Macshot Capture">
     <Grid x:Name="OverlayRoot" Background="#FF000000" KeyDown="OverlayRoot_KeyDown">
         <Image x:Name="PreviewImage" Stretch="Fill" />
@@ -63,77 +64,13 @@
                 Foreground="White" />
         </Border>
 
-        <Border
+        <!-- The same bar the editor window uses. Bound to this overlay's editor in
+             ShowAsync; everything it does arrives back as an event. -->
+        <local:AnnotationToolbarView
             x:Name="AnnotationToolbar"
             Visibility="Collapsed"
             HorizontalAlignment="Center"
             VerticalAlignment="Bottom"
-            Margin="0,0,0,32"
-            Padding="8"
-            Background="#EE202020"
-            CornerRadius="8">
-            <StackPanel Spacing="8">
-                <StackPanel Orientation="Horizontal" Spacing="8">
-                    <!-- Populated in code from AnnotationRasterizer.SupportedTools so the
-                         toolbar cannot offer a tool the renderer would refuse to draw. -->
-                    <StackPanel x:Name="ToolButtons" Orientation="Horizontal" Spacing="4" />
-                    <Button Content="Undo" Click="Undo_Click" />
-                    <Button Content="Redo" Click="Redo_Click" />
-                    <Button Content="Read text" Click="ReadText_Click" />
-                    <Button Content="Redact" Click="RedactPii_Click" />
-                    <Button Content="Done" Click="Confirm_Click" Style="{StaticResource AccentButtonStyle}" />
-                </StackPanel>
-
-                <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                    <Button Padding="6" ToolTipService.ToolTip="Colour">
-                        <Border
-                            x:Name="ColorSwatch"
-                            Width="20"
-                            Height="20"
-                            CornerRadius="3"
-                            BorderBrush="#66FFFFFF"
-                            BorderThickness="1" />
-                        <Button.Flyout>
-                            <Flyout>
-                                <!-- The style controls' change handlers are attached in
-                                     code once the toolbar exists. See WireStyleControls. -->
-                                <ColorPicker x:Name="StyleColorPicker" IsAlphaEnabled="True" />
-                            </Flyout>
-                        </Button.Flyout>
-                    </Button>
-
-                    <!-- Armed, not a tool: sampling happens in the middle of drawing,
-                         so it borrows one click and hands the current tool back. -->
-                    <ToggleButton
-                        x:Name="PickColorButton"
-                        Content="Pick"
-                        VerticalAlignment="Center"
-                        ToolTipService.ToolTip="Take a colour from the screen"
-                        Click="PickColor_Click" />
-
-                    <TextBlock Text="Width" Foreground="White" VerticalAlignment="Center" />
-                    <Slider
-                        x:Name="StrokeWidthSlider"
-                        Width="120"
-                        Minimum="1"
-                        Maximum="32"
-                        StepFrequency="1"
-                        VerticalAlignment="Center" />
-
-                    <ComboBox x:Name="LineStyleBox" VerticalAlignment="Center" />
-
-                    <!-- Which emoji the stamp tool places. Populated in code from
-                         StampGlyph.Choices so the picker and the renderer cannot
-                         offer different sets. -->
-                    <Button x:Name="StampButton" VerticalAlignment="Center" ToolTipService.ToolTip="Stamp">
-                        <Button.Flyout>
-                            <Flyout>
-                                <GridView x:Name="StampChoices" MaxWidth="240" SelectionMode="Single" />
-                            </Flyout>
-                        </Button.Flyout>
-                    </Button>
-                </StackPanel>
-            </StackPanel>
-        </Border>
+            Margin="0,0,0,32" />
     </Grid>
 </Window>

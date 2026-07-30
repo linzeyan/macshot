@@ -8,7 +8,6 @@ using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -49,12 +48,6 @@ public sealed partial class CaptureOverlayWindow : Window
     /// <summary>The standing instruction before anything is chosen. Matches the XAML default.</summary>
     private const string SelectionHint = "Drag to capture • Click a window to take it • Esc to cancel";
 
-    /// <summary>
-    /// The box every tool icon is drawn in. Small enough that nine buttons stay a strip
-    /// rather than a row of tiles.
-    /// </summary>
-    private const double IconExtent = 16;
-
     private const string SamplingHint = "Click to take the colour under the pointer • Esc to stop";
 
     private const string RememberedHint =
@@ -87,7 +80,6 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private readonly Func<long, Task<CapturedFrame?>> _captureWindow;
     private readonly AnnotationEditor _editor = new(new AnnotationDocument());
-    private readonly Dictionary<AnnotationTool, ToggleButton> _toolButtons = [];
     private readonly Dictionary<SelectionHandle, Rectangle> _grips = [];
 
     private RasterAnnotationPreview? _annotationPreview;
@@ -135,7 +127,6 @@ public sealed partial class CaptureOverlayWindow : Window
     private CaptureWindow? _hoveredWindow;
     private TextBox? _textEntry;
     private CapturePoint _textEntryOrigin;
-    private string _stampEmoji = StampGlyph.Default;
 
     /// <summary>
     /// The sprite placement still rasterizing, if any. Producing a sprite is async, so
@@ -143,11 +134,6 @@ public sealed partial class CaptureOverlayWindow : Window
     /// after typing would deliver an image missing the text that click committed.
     /// </summary>
     private Task _pendingSprite = Task.CompletedTask;
-
-    /// <summary>The style the toolbar started from, so only a real change is written back.</summary>
-    private AnnotationStyle _loadedStyle = AnnotationStyle.Default;
-
-    private bool _isLoadingStyle;
 
     public CaptureOverlayWindow(
         CapturedFrame desktopFrame,
@@ -201,14 +187,12 @@ public sealed partial class CaptureOverlayWindow : Window
         var source = new SoftwareBitmapSource();
         await source.SetBitmapAsync(_monitorFrame.ToSoftwareBitmap());
         PreviewImage.Source = source;
-        BuildToolButtons();
         BuildGrips();
-        LoadStyle();
-        WireStyleControls();
+        WireToolbar();
 
         // Covers both finishing and cancelling: the owner closes every overlay either
         // way, and a colour picked but not used is still the colour the user wants.
-        Closed += (_, _) => PersistStyle();
+        Closed += (_, _) => AnnotationToolbar.PersistStyle();
 
         var appWindow = this.GetAppWindow();
         var presenter = appWindow.MakeChromeless();
@@ -627,7 +611,7 @@ public sealed partial class CaptureOverlayWindow : Window
                 // The marquee's own blue filled in, outlined in white so a grip is
                 // still findable against a blue window behind it.
                 Fill = new SolidColorBrush(Color.FromArgb(255, 0x4C, 0xC2, 0xFF)),
-                Stroke = IconBrush(1),
+                Stroke = new SolidColorBrush(Color.FromArgb(255, 255, 255, 255)),
                 StrokeThickness = 1,
             };
 
@@ -889,7 +873,7 @@ public sealed partial class CaptureOverlayWindow : Window
     private async Task PlaceStampAsync(CapturePoint point)
     {
         var style = _editor.Style;
-        var emoji = _stampEmoji;
+        var emoji = AnnotationToolbar.StampEmoji;
 
         var glyph = StampGlyph.Build(emoji, style, RasterizationScale);
         var sprite = await GlyphSpriteFactory.RenderAsync(SpriteHost, glyph);
@@ -1109,21 +1093,21 @@ public sealed partial class CaptureOverlayWindow : Window
         }
     }
 
-    private void Undo_Click(object sender, RoutedEventArgs e)
+    /// <summary>
+    /// Binds the shared toolbar to this overlay's editor and answers the things only the
+    /// overlay can: which pixels a colour sample comes from, and what Done means.
+    /// </summary>
+    private void WireToolbar()
     {
-        _editor.Undo();
-        RenderAnnotations();
+        AnnotationToolbar.Bind(_editor, _settings);
+        AnnotationToolbar.Changed += (_, _) => RenderAnnotations();
+        AnnotationToolbar.ColorSamplingToggled += (_, armed) => SetColorSampling(armed);
+        AnnotationToolbar.ReadTextRequested += (_, _) => _ = ReadTextAsync();
+        AnnotationToolbar.RedactRequested += (_, _) => _ = RedactPiiAsync();
+        AnnotationToolbar.DoneRequested += (_, _) => _ = CompleteAsync();
     }
 
-    private void Redo_Click(object sender, RoutedEventArgs e)
-    {
-        _editor.Redo();
-        RenderAnnotations();
-    }
-
-    private async void Confirm_Click(object sender, RoutedEventArgs e) => await CompleteAsync();
-
-    private async void ReadText_Click(object sender, RoutedEventArgs e)
+    private async Task ReadTextAsync()
     {
         await RunRecognitionAsync(lines =>
         {
@@ -1136,7 +1120,7 @@ public sealed partial class CaptureOverlayWindow : Window
         });
     }
 
-    private async void RedactPii_Click(object sender, RoutedEventArgs e)
+    private async Task RedactPiiAsync()
     {
         await RunRecognitionAsync(lines =>
         {
@@ -1222,74 +1206,28 @@ public sealed partial class CaptureOverlayWindow : Window
         CaptureCompleted?.Invoke(this, _annotationPreview.ToFrame());
     }
 
-    private void BuildToolButtons()
-    {
-        foreach (var tool in AnnotationRasterizer.SupportedTools)
-        {
-            var button = new ToggleButton
-            {
-                Content = ToolIcon(tool),
-                Tag = tool,
-                IsChecked = tool == _editor.Tool,
-
-                // Square and tight, so nine of them are a compact strip rather than a
-                // sentence. The default button padding is sized for words.
-                MinWidth = 0,
-                Padding = new Thickness(8),
-            };
-
-            // The name has to remain reachable: a picture is faster once known and
-            // useless before that, and hover is where the answer belongs.
-            ToolTipService.SetToolTip(button, Label(tool));
-            button.Click += ToolButton_Click;
-            _toolButtons[tool] = button;
-            ToolButtons.Children.Add(button);
-        }
-
-        StampChoices.ItemsSource = StampGlyph.Choices;
-        StampButton.Content = _stampEmoji;
-    }
-
     /// <summary>
-    /// Arms or disarms the colour sampler.
+    /// Arms or disarms the colour sampler, from the toolbar or from Escape.
     /// </summary>
     /// <remarks>
-    /// Armed rather than made a tool of its own. Sampling is something done in the
-    /// middle of drawing — the whole reason to take a colour off the screen is to draw
-    /// the next mark in it — so it borrows one click and hands the tool back, instead
-    /// of making the user reselect the tool they were already using.
+    /// The mode lives here rather than in the toolbar because a pick is answered from
+    /// the frozen screenshot, which is this window's. The toolbar is told so its button
+    /// cannot show a sampler that is no longer armed.
     /// </remarks>
-    private void PickColor_Click(object sender, RoutedEventArgs e) =>
-        SetColorSampling(PickColorButton.IsChecked == true);
-
     private void SetColorSampling(bool armed)
     {
         _samplingColor = armed;
-        PickColorButton.IsChecked = armed;
+        AnnotationToolbar.SetColorSampling(armed);
         HintText.Text = armed ? SamplingHint : AnnotatingHint;
     }
 
     /// <summary>
-    /// Takes the colour under the pointer and puts it on the toolbar, keeping the
-    /// opacity that was already chosen.
+    /// Takes the colour under the pointer and puts it on the toolbar.
     /// </summary>
-    /// <remarks>
-    /// Applied through the colour picker rather than straight onto the editor, so the
-    /// swatch, the picker, and what the next mark is drawn in cannot disagree — the
-    /// picker's change handler is the one path that keeps all three together.
-    /// </remarks>
     private void TakeSampledColor(CapturePoint point)
     {
         var sampled = SampleAt(point);
-
-        // Opacity is a property of the mark rather than of the pixel, and the pixel
-        // has no opinion about it: a screenshot is opaque everywhere.
-        StyleColorPicker.Color = Color.FromArgb(
-            StyleColorPicker.Color.A,
-            sampled.Red,
-            sampled.Green,
-            sampled.Blue);
-
+        AnnotationToolbar.ApplySampledColor(sampled);
         SetColorSampling(false);
         HintText.Text = $"Took {sampled.ToHex()} • {AnnotatingHint}";
 
@@ -1312,318 +1250,6 @@ public sealed partial class CaptureOverlayWindow : Window
         _desktopFrame.Height,
         (int)point.X,
         (int)point.Y);
-
-    private void ToolButton_Click(object sender, RoutedEventArgs e)
-    {
-        if (sender is ToggleButton { Tag: AnnotationTool tool })
-        {
-            SelectTool(tool);
-        }
-    }
-
-    private void SelectTool(AnnotationTool tool)
-    {
-        // Reaching for a tool is as clear a way of abandoning a pick as Escape is.
-        if (_samplingColor)
-        {
-            SetColorSampling(false);
-        }
-
-        _editor.Tool = tool;
-
-        // Behaves as a radio group: a tool is always active, so re-clicking the
-        // current tool must not leave the toolbar with nothing selected.
-        foreach (var (candidate, button) in _toolButtons)
-        {
-            button.IsChecked = candidate == tool;
-        }
-
-        RenderAnnotations();
-    }
-
-    private void StampChoice_Changed(object sender, SelectionChangedEventArgs e)
-    {
-        if (StampChoices.SelectedItem is not string emoji)
-        {
-            return;
-        }
-
-        _stampEmoji = emoji;
-        StampButton.Content = emoji;
-        StampButton.Flyout?.Hide();
-
-        // Picking a stamp is asking to stamp: leaving the previous tool active would
-        // make the choice look like it did nothing.
-        if (_toolButtons.ContainsKey(AnnotationTool.Stamp))
-        {
-            SelectTool(AnnotationTool.Stamp);
-        }
-    }
-
-    /// <summary>
-    /// Fills the style controls from the remembered style. The flag keeps the change
-    /// handlers from writing a half-initialized style back while this runs: setting
-    /// the colour before the slider has a value would otherwise commit a stroke width
-    /// of zero.
-    /// </summary>
-    private void LoadStyle()
-    {
-        _isLoadingStyle = true;
-        try
-        {
-            _loadedStyle = _settings.Current.ToAnnotationStyle();
-            _editor.Style = _loadedStyle;
-
-            LineStyleBox.ItemsSource = Enum.GetValues<LineStyle>().Select(style => style.ToString()).ToList();
-            LineStyleBox.SelectedIndex = (int)_loadedStyle.LineStyle;
-            StrokeWidthSlider.Value = _loadedStyle.StrokeWidth;
-            StyleColorPicker.Color = ToUiColor(_loadedStyle.Color);
-        }
-        finally
-        {
-            _isLoadingStyle = false;
-        }
-
-        UpdateColorSwatch();
-    }
-
-    /// <summary>
-    /// Attaches the style controls' change handlers, once the whole toolbar exists.
-    /// </summary>
-    /// <remarks>
-    /// <para>
-    /// Not in the markup, which is where this began. Assigning a slider's Minimum
-    /// coerces its Value, that raises ValueChanged while the toolbar is still being
-    /// parsed, and the handler then reads controls declared further down the same file
-    /// which have not been created yet. WinUI reports the null reference that follows
-    /// as a failure to assign the property it was in the middle of setting, naming
-    /// neither the handler nor the control it tripped over — the overlay simply never
-    /// opened.
-    /// </para>
-    /// <para>
-    /// Attaching here rather than guarding inside each handler is what makes it stay
-    /// fixed: the next control added to this toolbar cannot bring the fault back.
-    /// </para>
-    /// </remarks>
-    private void WireStyleControls()
-    {
-        StyleColorPicker.ColorChanged += StyleColor_Changed;
-        StrokeWidthSlider.ValueChanged += StrokeWidth_Changed;
-        LineStyleBox.SelectionChanged += LineStyle_Changed;
-        StampChoices.SelectionChanged += StampChoice_Changed;
-    }
-
-    private void StyleColor_Changed(ColorPicker sender, ColorChangedEventArgs args) => ApplyStyle();
-
-    private void StrokeWidth_Changed(object sender, RangeBaseValueChangedEventArgs e) => ApplyStyle();
-
-    private void LineStyle_Changed(object sender, SelectionChangedEventArgs e) => ApplyStyle();
-
-    /// <summary>
-    /// The style applies to marks drawn from now on. Restyling what is already on the
-    /// canvas would need a selection, which is a separate feature.
-    /// </summary>
-    private void ApplyStyle()
-    {
-        // Every control this reads, not merely the first two. The handlers are attached
-        // after the toolbar is built, so none of these should be null; checking all of
-        // them is what keeps a style change from taking the overlay down with it if one
-        // ever is.
-        if (_isLoadingStyle || StyleColorPicker is null || StrokeWidthSlider is null || LineStyleBox is null)
-        {
-            return;
-        }
-
-        var color = StyleColorPicker.Color;
-        _editor.Style = new AnnotationStyle(
-            new AnnotationColor(color.R, color.G, color.B, color.A),
-            Math.Max(1, StrokeWidthSlider.Value),
-            LineStyleBox.SelectedIndex >= 0 ? (LineStyle)LineStyleBox.SelectedIndex : LineStyle.Solid);
-        UpdateColorSwatch();
-    }
-
-    private void UpdateColorSwatch() =>
-        ColorSwatch.Background = new SolidColorBrush(ToUiColor(_editor.Style.Color));
-
-    /// <summary>
-    /// Remembers the style for the next capture. A failure here is swallowed on
-    /// purpose: this runs while the overlay is being torn down, there is no window
-    /// left to report into, and the cost of losing it is that the next capture starts
-    /// from the previous colour.
-    /// </summary>
-    private void PersistStyle()
-    {
-        if (_editor.Style == _loadedStyle)
-        {
-            return;
-        }
-
-        try
-        {
-            _settings.Save(_settings.Current.WithAnnotationStyle(_editor.Style));
-        }
-        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
-        {
-        }
-    }
-
-    private static Color ToUiColor(AnnotationColor color) =>
-        new() { A = color.Alpha, R = color.Red, G = color.Green, B = color.Blue };
-
-    private static string Label(AnnotationTool tool) => tool switch
-    {
-        AnnotationTool.Arrow => "Arrow",
-        AnnotationTool.Rectangle => "Box",
-        AnnotationTool.Ellipse => "Ellipse",
-        AnnotationTool.Line => "Line",
-        AnnotationTool.Pencil => "Pen",
-        AnnotationTool.Marker => "Marker",
-        AnnotationTool.FilledRectangle => "Redact",
-        AnnotationTool.Pixelate => "Pixelate",
-        AnnotationTool.Blur => "Blur",
-        _ => tool.ToString(),
-    };
-
-    /// <summary>The icon for a tool: the mark it makes, drawn small.</summary>
-    /// <remarks>
-    /// <para>
-    /// Shapes rather than words. A row of word buttons is wide, slow to scan, and tells
-    /// a beginner nothing they did not already know from the word; a tool showing its
-    /// own shape needs no legend. The word survives as the tooltip, which is where a
-    /// name belongs once the picture carries the meaning.
-    /// </para>
-    /// <para>
-    /// Built from <c>Line</c>, <c>Rectangle</c> and <c>Ellipse</c> rather than icon-font
-    /// codepoints. A codepoint written without a Windows to look at renders as an empty
-    /// box when it is wrong, which is worse than the word it replaced — and half of
-    /// these have no glyph in the icon font anyway.
-    /// </para>
-    /// </remarks>
-    private static FrameworkElement ToolIcon(AnnotationTool tool)
-    {
-        var canvas = new Canvas { Width = IconExtent, Height = IconExtent };
-
-        switch (tool)
-        {
-        case AnnotationTool.Line:
-            canvas.Children.Add(Stroke(2, 14, 14, 2));
-            break;
-
-        case AnnotationTool.Arrow:
-            canvas.Children.Add(Stroke(2, 14, 14, 2));
-            canvas.Children.Add(Stroke(14, 2, 8.5, 2.5));
-            canvas.Children.Add(Stroke(14, 2, 13.5, 7.5));
-            break;
-
-        case AnnotationTool.Pencil:
-            // A zigzag rather than a straight line: what separates this from the line
-            // tool is that the stroke follows the hand.
-            canvas.Children.Add(Stroke(2, 12, 6, 4));
-            canvas.Children.Add(Stroke(6, 4, 10, 12));
-            canvas.Children.Add(Stroke(10, 12, 14, 5));
-            break;
-
-        case AnnotationTool.Marker:
-            // Wide and translucent, which is the whole difference from the pencil.
-            canvas.Children.Add(Stroke(2, 13, 14, 3, thickness: 5, opacity: 0.55));
-            break;
-
-        case AnnotationTool.Rectangle:
-            canvas.Children.Add(Box(filled: false));
-            break;
-
-        case AnnotationTool.FilledRectangle:
-            canvas.Children.Add(Box(filled: true));
-            break;
-
-        case AnnotationTool.Ellipse:
-            canvas.Children.Add(new Ellipse
-            {
-                Width = 13,
-                Height = 10,
-                Stroke = IconBrush(1),
-                StrokeThickness = 1.6,
-                Margin = new Thickness(1.5, 3, 0, 0),
-            });
-            break;
-
-        case AnnotationTool.Pixelate:
-            // Four blocks in a checker, which is what the effect looks like at the size
-            // anyone actually notices it.
-            canvas.Children.Add(Block(2, 3, 1));
-            canvas.Children.Add(Block(8, 3, 0.45));
-            canvas.Children.Add(Block(2, 9, 0.45));
-            canvas.Children.Add(Block(8, 9, 1));
-            break;
-
-        case AnnotationTool.Blur:
-            // Nested rings fading outwards: the same shape losing its edge, which is
-            // what distinguishes it from the hard blocks above.
-            canvas.Children.Add(Ring(1, 14, 0.35));
-            canvas.Children.Add(Ring(4, 8, 0.7));
-            canvas.Children.Add(Ring(6, 4, 1));
-            break;
-
-        default:
-            // A tool the icon set has not caught up with still has to be usable, so it
-            // falls back to its name rather than to an empty button.
-            return new TextBlock
-            {
-                Text = Label(tool),
-                Foreground = IconBrush(1),
-                FontSize = 12,
-            };
-        }
-
-        return canvas;
-    }
-
-    private static Line Stroke(double x1, double y1, double x2, double y2, double thickness = 1.6, double opacity = 1) =>
-        new()
-        {
-            X1 = x1,
-            Y1 = y1,
-            X2 = x2,
-            Y2 = y2,
-            Stroke = IconBrush(opacity),
-            StrokeThickness = thickness,
-            StrokeStartLineCap = PenLineCap.Round,
-            StrokeEndLineCap = PenLineCap.Round,
-        };
-
-    private static Rectangle Box(bool filled) => new()
-    {
-        Width = 12,
-        Height = 9,
-        Stroke = IconBrush(1),
-        StrokeThickness = 1.6,
-        Fill = filled ? IconBrush(1) : null,
-        Margin = new Thickness(2, 3.5, 0, 0),
-    };
-
-    private static Rectangle Block(double x, double y, double opacity) => new()
-    {
-        Width = 5,
-        Height = 4,
-        Fill = IconBrush(opacity),
-        Margin = new Thickness(x, y, 0, 0),
-    };
-
-    private static Ellipse Ring(double inset, double extent, double opacity) => new()
-    {
-        Width = extent,
-        Height = extent,
-        Stroke = IconBrush(opacity),
-        StrokeThickness = 1.4,
-        Margin = new Thickness(inset + 1, inset, 0, 0),
-    };
-
-    /// <summary>
-    /// White, because the toolbar is dark whatever the system theme is. A
-    /// theme-adaptive brush would be invisible on it in light mode.
-    /// </summary>
-    private static SolidColorBrush IconBrush(double opacity) =>
-        new(Color.FromArgb((byte)(255 * opacity), 255, 255, 255));
 
     private void RenderAnnotations() => _annotationPreview?.Render(_editor.VisibleAnnotations);
 
