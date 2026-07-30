@@ -143,4 +143,36 @@ public sealed class HotkeyBindingTests
         Assert.AreEqual(HotkeyBinding.CaptureArea.ToString(), normalized.CaptureAreaHotkey);
         Assert.AreEqual(HotkeyBinding.RecordScreen.ToString(), normalized.RecordScreenHotkey);
     }
+
+    [TestMethod]
+    public void PunctuationKeys_HaveNamesTheyCanBeWrittenWith()
+    {
+        // A shortcut recorder reports a virtual key code, and a code with no name cannot
+        // be stored. VK_OEM_1 is the semicolon on a US layout, which is the only thing a
+        // layout-independent code can be named after.
+        Assert.IsTrue(HotkeyBinding.TryParse("Ctrl+Shift+;", out var parsed));
+        Assert.AreEqual(0xBAu, parsed.Key);
+        Assert.AreEqual("Ctrl+Shift+;", parsed.ToString());
+    }
+
+    [TestMethod]
+    public void CanBeStored_IsTrueForAKeyWithAName()
+    {
+        Assert.IsTrue(new HotkeyBinding(HotkeyModifiers.Control, 0xBB).CanBeStored);
+    }
+
+    [TestMethod]
+    public void CanBeStored_IsFalseForAKeyWithNoName()
+    {
+        // 0xE2 is the extra key on an ISO keyboard. Windows reports it, macshot has no
+        // name for it, and the recorder has to refuse it at the press rather than write
+        // down something that reads back as a different shortcut.
+        Assert.IsFalse(new HotkeyBinding(HotkeyModifiers.Control, 0xE2).CanBeStored);
+    }
+
+    [TestMethod]
+    public void CanBeStored_IsFalseForAShortcutWithNoModifier()
+    {
+        Assert.IsFalse(new HotkeyBinding(HotkeyModifiers.None, 'X').CanBeStored);
+    }
 }

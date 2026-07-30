@@ -1,0 +1,20 @@
+<UserControl
+    x:Class="Macshot.Windows.HotkeyBox"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
+
+    <StackPanel Spacing="4">
+        <TextBlock x:Name="HeaderText" />
+
+        <!-- A button rather than a text box: the shortcut is pressed, not spelled. It
+             stays a button while recording so the keyboard has somewhere to be, and the
+             text on it is the same form the settings file holds. -->
+        <Button
+            x:Name="RecordButton"
+            HorizontalAlignment="Stretch"
+            HorizontalContentAlignment="Left"
+            Click="Record_Click"
+            KeyDown="Record_KeyDown"
+            LostFocus="Record_LostFocus" />
+    </StackPanel>
+</UserControl>

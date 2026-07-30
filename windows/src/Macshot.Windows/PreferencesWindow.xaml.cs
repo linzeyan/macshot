@@ -90,9 +90,9 @@ public sealed partial class PreferencesWindow : Window
         TranslateKeyBox.Password = settings.TranslateApiKey;
 #endif
 
-        CaptureAreaHotkeyBox.Text = settings.CaptureAreaHotkey;
-        CaptureAllScreensHotkeyBox.Text = settings.CaptureAllScreensHotkey;
-        RecordScreenHotkeyBox.Text = settings.RecordScreenHotkey;
+        CaptureAreaHotkeyBox.Binding = settings.CaptureAreaHotkey;
+        CaptureAllScreensHotkeyBox.Binding = settings.CaptureAllScreensHotkey;
+        RecordScreenHotkeyBox.Binding = settings.RecordScreenHotkey;
         UpdateQualityVisibility();
         UpdateTemplatePreview();
     }
@@ -132,9 +132,9 @@ public sealed partial class PreferencesWindow : Window
 #if !OFFLINE
             TranslateApiKey = TranslateKeyBox.Password,
 #endif
-            CaptureAreaHotkey = CaptureAreaHotkeyBox.Text,
-            CaptureAllScreensHotkey = CaptureAllScreensHotkeyBox.Text,
-            RecordScreenHotkey = RecordScreenHotkeyBox.Text,
+            CaptureAreaHotkey = CaptureAreaHotkeyBox.Binding,
+            CaptureAllScreensHotkey = CaptureAllScreensHotkeyBox.Binding,
+            RecordScreenHotkey = RecordScreenHotkeyBox.Binding,
         }).Normalized();
     }
 
@@ -242,19 +242,20 @@ public sealed partial class PreferencesWindow : Window
 
     private void Save_Click(object sender, RoutedEventArgs e)
     {
-        // Refused rather than repaired. Normalizing would quietly put the default back,
-        // and a shortcut silently reverting to Ctrl+Shift+X reads as macshot ignoring
-        // what was typed rather than as the text being unusable.
+        // The recorder cannot produce an unusable shortcut, but a hand-edited settings
+        // file can, and this window shows what the file held. Refused rather than
+        // repaired: normalizing would quietly put the default back, and a shortcut
+        // silently reverting to Ctrl+Shift+X reads as macshot ignoring what was set.
         var unreadable = new[]
         {
-            CaptureAreaHotkeyBox.Text,
-            CaptureAllScreensHotkeyBox.Text,
-            RecordScreenHotkeyBox.Text,
+            CaptureAreaHotkeyBox.Binding,
+            CaptureAllScreensHotkeyBox.Binding,
+            RecordScreenHotkeyBox.Binding,
         }.Where(text => !HotkeyBinding.TryParse(text, out _)).ToArray();
 
         if (unreadable.Length > 0)
         {
-            StatusText.Text = $"Not a shortcut: {string.Join(", ", unreadable)}. Write it like Ctrl+Shift+X.";
+            StatusText.Text = $"Not a shortcut: {string.Join(", ", unreadable)}. Click it and press the keys.";
             return;
         }
 

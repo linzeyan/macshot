@@ -37,9 +37,21 @@ public enum HotkeyModifiers
 /// </remarks>
 public sealed record HotkeyBinding(HotkeyModifiers Modifiers, uint Key)
 {
-    /// <summary>Virtual key codes for the keys with no printable name.</summary>
+    /// <summary>
+    /// Virtual key codes for the keys whose name is not simply the character on them.
+    /// </summary>
+    /// <remarks>
+    /// The punctuation keys are here under the character they print on a US layout, which
+    /// is the only thing a virtual key code can be named after — <c>VK_OEM_1</c> is
+    /// semicolon there and something else elsewhere, and Windows registers the code
+    /// either way. <c>+</c> is deliberately absent: it separates the parts of a binding,
+    /// so a key named <c>+</c> could not be written down.
+    /// </remarks>
     private static readonly (string Name, uint Key)[] NamedKeys =
     [
+        ("Backspace", 0x08),
+        ("Tab", 0x09),
+        ("Enter", 0x0D),
         ("Space", 0x20),
         ("PageUp", 0x21),
         ("PageDown", 0x22),
@@ -64,6 +76,17 @@ public sealed record HotkeyBinding(HotkeyModifiers Modifiers, uint Key)
         ("F10", 0x79),
         ("F11", 0x7A),
         ("F12", 0x7B),
+        (";", 0xBA),
+        ("=", 0xBB),
+        (",", 0xBC),
+        ("-", 0xBD),
+        (".", 0xBE),
+        ("/", 0xBF),
+        ("`", 0xC0),
+        ("[", 0xDB),
+        ("\\", 0xDC),
+        ("]", 0xDD),
+        ("'", 0xDE),
     ];
 
     public static HotkeyBinding CaptureArea { get; } =
@@ -85,6 +108,18 @@ public sealed record HotkeyBinding(HotkeyModifiers Modifiers, uint Key)
     /// back.
     /// </remarks>
     public bool IsValid => Key != 0 && Modifiers != HotkeyModifiers.None;
+
+    /// <summary>
+    /// Whether writing this binding down and reading it back gives this binding again.
+    /// </summary>
+    /// <remarks>
+    /// The settings file holds the text form, so a binding that does not survive the round
+    /// trip cannot be stored — and a shortcut recorder must refuse such a key at the
+    /// moment it is pressed rather than let it be saved and come back as something else.
+    /// Every key Windows can report has a code; not every code has a name a person could
+    /// have typed, which is the gap this closes.
+    /// </remarks>
+    public bool CanBeStored => TryParse(ToString(), out var parsed) && parsed == this;
 
     /// <summary>
     /// The form stored in the settings file and shown in preferences, always in the
@@ -193,7 +228,7 @@ public sealed record HotkeyBinding(HotkeyModifiers Modifiers, uint Key)
         }
 
         // A single letter or digit is its own virtual key code, which is why the
-        // printable keys need no table.
+        // alphanumeric keys need no table.
         if (text.Length == 1 && char.IsAsciiLetterOrDigit(text[0]))
         {
             key = char.ToUpperInvariant(text[0]);
