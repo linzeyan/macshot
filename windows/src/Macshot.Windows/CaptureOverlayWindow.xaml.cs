@@ -82,7 +82,12 @@ public sealed partial class CaptureOverlayWindow : Window
     private readonly AnnotationEditor _editor = new(new AnnotationDocument());
     private readonly Dictionary<SelectionHandle, Rectangle> _grips = [];
 
-    private RasterAnnotationPreview? _annotationPreview;
+    /// <summary>
+    /// This display's mapping between frame pixels and the layout units the overlay's
+    /// chrome is arranged in. Built once: it depends only on the monitor.
+    /// </summary>
+    private readonly IFramePlacement _placement;
+
     private Point? _selectionStart;
     private CaptureRegion? _selection;
 
@@ -125,15 +130,6 @@ public sealed partial class CaptureOverlayWindow : Window
 
     /// <summary>The window under the pointer, in frame space, while none is chosen yet.</summary>
     private CaptureWindow? _hoveredWindow;
-    private TextBox? _textEntry;
-    private CapturePoint _textEntryOrigin;
-
-    /// <summary>
-    /// The sprite placement still rasterizing, if any. Producing a sprite is async, so
-    /// finishing the capture has to wait for it: without this, clicking Done right
-    /// after typing would deliver an image missing the text that click committed.
-    /// </summary>
-    private Task _pendingSprite = Task.CompletedTask;
 
     public CaptureOverlayWindow(
         CapturedFrame desktopFrame,
@@ -150,6 +146,7 @@ public sealed partial class CaptureOverlayWindow : Window
         _snapCandidates = snapCandidates ?? throw new ArgumentNullException(nameof(snapCandidates));
         _captureWindow = captureWindow ?? throw new ArgumentNullException(nameof(captureWindow));
         _monitorFrame = NativeScreenCaptureService.Crop(desktopFrame, layout.FrameRegionOf(monitor));
+        _placement = new MonitorFramePlacement(layout, monitor);
         InitializeComponent();
     }
 
@@ -189,6 +186,7 @@ public sealed partial class CaptureOverlayWindow : Window
         PreviewImage.Source = source;
         BuildGrips();
         WireToolbar();
+        WireCanvas();
 
         // Covers both finishing and cancelling: the owner closes every overlay either
         // way, and a colour picked but not used is still the colour the user wants.
@@ -314,13 +312,12 @@ public sealed partial class CaptureOverlayWindow : Window
                 return;
             }
 
-            // Sprite tools are placed with a click rather than dragged out: their size
-            // comes from the rasterized pixels, so there is nothing left for a drag to
-            // decide. The editor is deliberately not told about the press, which is
-            // what keeps its move and release handlers no-ops.
-            if (Annotation.RequiresSprite(_editor.Tool))
+            // Sprite tools are placed with a click rather than dragged out, and the
+            // editor is deliberately not told about the press, which is what keeps its
+            // move and release handlers no-ops.
+            if (AnnotationCanvasView.IsPlacedByClick(_editor.Tool))
             {
-                PlaceSprite(ToFrame(e));
+                AnnotationCanvas.PlaceSprite(ToFrame(e));
                 return;
             }
 
@@ -568,12 +565,10 @@ public sealed partial class CaptureOverlayWindow : Window
         // The preview covers the selection with the pixels that will be delivered,
         // which also hides the selection tint inside it: from here on, what is inside
         // the marquee is the finished image rather than a tinted approximation of it.
-        _annotationPreview = new RasterAnnotationPreview(
-            AnnotationLayer,
-            _layout,
-            _monitor,
+        AnnotationCanvas.Present(
             capturedWindow ?? NativeScreenCaptureService.Crop(_desktopFrame, region),
-            region);
+            region,
+            _placement);
 
         AnnotationToolbar.Visibility = Visibility.Visible;
         HintText.Text = AnnotatingHint;
@@ -741,14 +736,7 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         _selection = taken;
-        _annotationPreview?.Detach();
-        _annotationPreview = new RasterAnnotationPreview(
-            AnnotationLayer,
-            _layout,
-            _monitor,
-            NativeScreenCaptureService.Crop(_desktopFrame, taken),
-            taken);
-        RenderAnnotations();
+        AnnotationCanvas.Present(NativeScreenCaptureService.Crop(_desktopFrame, taken), taken, _placement);
 
         DiagnosticLog.Verbose(
             $"region adjusted to {taken.Width}x{taken.Height} at {taken.X},{taken.Y} on {_monitor.DeviceName}");
@@ -782,238 +770,12 @@ public sealed partial class CaptureOverlayWindow : Window
             MonitorBounds));
     }
 
-    /// <summary>
-    /// Starts placing the active sprite tool's mark at <paramref name="point"/>. Text
-    /// opens an entry box and commits later; the other two commit as soon as their
-    /// glyphs are rasterized. See <c>docs/windows-port/architecture.md</c>, decision
-    /// D7.
-    /// </summary>
-    private void PlaceSprite(CapturePoint point)
-    {
-        switch (_editor.Tool)
-        {
-            case AnnotationTool.Text:
-                QueueSprite(() => ReplaceTextEntryAsync(point));
-                return;
-            case AnnotationTool.Number:
-                QueueSprite(() => PlaceNumberAsync(point));
-                return;
-            case AnnotationTool.Stamp:
-                QueueSprite(() => PlaceStampAsync(point));
-                return;
-            default:
-                return;
-        }
-    }
-
-    /// <summary>
-    /// Runs sprite work behind whatever is already in flight, and keeps the tail of
-    /// the chain so finishing the capture can wait for all of it.
-    /// </summary>
-    /// <remarks>
-    /// Sprites are rasterized asynchronously, so two placements a moment apart would
-    /// otherwise interleave: clicking away from a half-typed label would open the next
-    /// entry box before the previous one had committed, and the first label would be
-    /// lost. Ordering them is cheaper than making each one defend itself.
-    /// </remarks>
-    private void QueueSprite(Func<Task> work) => _pendingSprite = RunAfterAsync(_pendingSprite, work);
-
-    private async Task RunAfterAsync(Task previous, Func<Task> work)
-    {
-        try
-        {
-            await previous;
-            await work();
-        }
-        catch (Exception exception)
-        {
-            // Failures land in the hint line for the same reason the recognition ones
-            // do: the overlay is a borderless always-on-top window covering the
-            // screen, so a dialog has nowhere to go. Catching here also keeps one
-            // failed placement from poisoning every later one that waits on it.
-            HintText.Text = exception.Message;
-        }
-    }
-
-    /// <summary>
-    /// Finishes whatever was being typed before starting the next label, so clicking
-    /// elsewhere moves the text on rather than abandoning it.
-    /// </summary>
-    private async Task ReplaceTextEntryAsync(CapturePoint point)
-    {
-        await CommitTextEntryAsync();
-        BeginTextEntry(point);
-    }
-
-    /// <summary>
-    /// Places a numbered badge centred on <paramref name="point"/>. Rasterizing the
-    /// digits is async, so the badge appears a frame or two after the click — which
-    /// is exactly why a sprite is produced once when the annotation is committed and
-    /// never from inside the draw path.
-    /// </summary>
-    private async Task PlaceNumberAsync(CapturePoint point)
-    {
-        var style = _editor.Style;
-
-        // The next number is read off the document rather than kept in a counter, so
-        // undoing a badge frees its number instead of leaving a hole in the sequence.
-        var value = _editor.Document.Annotations.Count(existing => existing.Tool == AnnotationTool.Number) + 1;
-
-        var badge = NumberBadge.Build(value, style, RasterizationScale);
-        var sprite = await GlyphSpriteFactory.RenderAsync(SpriteHost, badge);
-
-        Commit(Annotation.CreateSprite(AnnotationTool.Number, Centred(point, sprite), sprite, style) with
-        {
-            // Kept alongside the pixels so the badge stays readable as data, not only
-            // as an image.
-            NumberValue = value,
-        });
-    }
-
-    private async Task PlaceStampAsync(CapturePoint point)
-    {
-        var style = _editor.Style;
-        var emoji = AnnotationToolbar.StampEmoji;
-
-        var glyph = StampGlyph.Build(emoji, style, RasterizationScale);
-        var sprite = await GlyphSpriteFactory.RenderAsync(SpriteHost, glyph);
-
-        Commit(Annotation.CreateSprite(AnnotationTool.Stamp, Centred(point, sprite), sprite, style) with
-        {
-            Text = emoji,
-        });
-    }
-
-    /// <summary>
-    /// Opens the on-canvas entry box. The box is what makes the text tool feel like
-    /// typing on the screenshot rather than filling in a dialog, and it uses the same
-    /// font size the sprite will, so what is typed is what is committed.
-    /// </summary>
-    private void BeginTextEntry(CapturePoint point)
-    {
-        var position = _layout.FrameToPointer(_monitor, point);
-        var entry = new TextBox
-        {
-            MinWidth = 120,
-
-            // No padding, so the first glyph sits at the click point rather than
-            // inset from it by whatever the theme's padding happens to be.
-            Padding = new Thickness(0),
-            FontSize = TextGlyphs.FontSizeFor(_editor.Style, RasterizationScale),
-            Foreground = new SolidColorBrush(GlyphSpriteFactory.ToBrushColor(_editor.Style)),
-            AcceptsReturn = false,
-            TextWrapping = TextWrapping.NoWrap,
-        };
-
-        entry.KeyDown += TextEntry_KeyDown;
-        entry.LostFocus += TextEntry_LostFocus;
-        Canvas.SetLeft(entry, position.X);
-        Canvas.SetTop(entry, position.Y);
-        TextEntryLayer.Children.Add(entry);
-        _textEntry = entry;
-        _textEntryOrigin = point;
-        entry.Focus(FocusState.Programmatic);
-        HintText.Text = "Type the label • Enter to place • Esc to discard it";
-    }
-
-    private void TextEntry_KeyDown(object sender, KeyRoutedEventArgs e)
-    {
-        switch (e.Key)
-        {
-            case VirtualKey.Enter:
-                // Handled here, or it would bubble up and finish the whole capture.
-                e.Handled = true;
-                QueueSprite(CommitTextEntryAsync);
-                return;
-
-            case VirtualKey.Escape:
-                // The first Escape discards the text being typed, the same way it
-                // discards a half-drawn mark before it cancels the capture.
-                e.Handled = true;
-                RemoveTextEntry();
-                return;
-
-            default:
-                return;
-        }
-    }
-
-    /// <summary>
-    /// Clicking anywhere else — another tool, the canvas, Done — means the text is
-    /// finished, so it is committed rather than lost.
-    /// </summary>
-    private void TextEntry_LostFocus(object sender, RoutedEventArgs e) => QueueSprite(CommitTextEntryAsync);
-
-    private async Task CommitTextEntryAsync()
-    {
-        if (_textEntry is not { } entry)
-        {
-            return;
-        }
-
-        var text = entry.Text.Trim();
-        var origin = _textEntryOrigin;
-        var style = _editor.Style;
-
-        // Torn down before the await, so the LostFocus that removing the box raises
-        // cannot commit the same text a second time.
-        RemoveTextEntry();
-        if (text.Length == 0)
-        {
-            return;
-        }
-
-        var glyphs = TextGlyphs.Build(text, style, RasterizationScale);
-        var sprite = await GlyphSpriteFactory.RenderAsync(SpriteHost, glyphs);
-
-        // Anchored at the click rather than centred on it: the user typed from there.
-        Commit(Annotation.CreateSprite(AnnotationTool.Text, origin, sprite, style) with { Text = text });
-    }
-
-    private void RemoveTextEntry()
-    {
-        if (_textEntry is not { } entry)
-        {
-            return;
-        }
-
-        _textEntry = null;
-        entry.KeyDown -= TextEntry_KeyDown;
-        entry.LostFocus -= TextEntry_LostFocus;
-        TextEntryLayer.Children.Remove(entry);
-
-        // The keyboard belongs to the overlay again: Enter finishes, Ctrl+Z undoes.
-        OverlayRoot.Focus(FocusState.Programmatic);
-        HintText.Text = AnnotatingHint;
-    }
-
-    private void Commit(Annotation annotation)
-    {
-        _editor.Document.Add(annotation);
-        RenderAnnotations();
-    }
-
-    /// <summary>
-    /// The scale XAML will actually rasterize at, which is what decides how many
-    /// pixels a sprite comes out as. The display's own scale is the fallback for the
-    /// window not being in a tree yet, which cannot happen from a pointer event but
-    /// keeps the sizing honest rather than silently defaulting to 1.
-    /// </summary>
-    private double RasterizationScale => OverlayRoot.XamlRoot?.RasterizationScale ?? _monitor.Scale;
-
-    /// <summary>
-    /// A mark aimed at a point belongs centred on it; anchoring its top-left there
-    /// would drop it down and right of what the user aimed at.
-    /// </summary>
-    private static CapturePoint Centred(CapturePoint point, AnnotationSprite sprite) =>
-        new(point.X - (sprite.Width / 2.0), point.Y - (sprite.Height / 2.0));
-
     private void OverlayRoot_KeyDown(object sender, KeyRoutedEventArgs e)
     {
         // While the entry box has focus the keyboard is its: Delete edits the text
         // instead of deleting an annotation, and Ctrl+Z takes back typing. Enter and
         // Escape are handled on the box itself, which is why they never arrive here.
-        if (_textEntry is not null)
+        if (AnnotationCanvas.IsTyping)
         {
             return;
         }
@@ -1107,6 +869,24 @@ public sealed partial class CaptureOverlayWindow : Window
         AnnotationToolbar.DoneRequested += (_, _) => _ = CompleteAsync();
     }
 
+    /// <summary>
+    /// Binds the shared drawing surface. The sprite scale comes from this window's XAML
+    /// root, and the hint line is where the surface reports what it is doing.
+    /// </summary>
+    private void WireCanvas()
+    {
+        AnnotationCanvas.Bind(
+            _editor,
+            () => OverlayRoot.XamlRoot?.RasterizationScale ?? _monitor.Scale,
+            message => HintText.Text = message);
+        AnnotationCanvas.StampEmoji = () => AnnotationToolbar.StampEmoji;
+        AnnotationCanvas.TypingEnded += (_, _) =>
+        {
+            OverlayRoot.Focus(FocusState.Programmatic);
+            HintText.Text = AnnotatingHint;
+        };
+    }
+
     private async Task ReadTextAsync()
     {
         await RunRecognitionAsync(lines =>
@@ -1150,7 +930,7 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private async Task RunRecognitionAsync(Action<IReadOnlyList<RecognizedLine>> handle)
     {
-        if (_selection is not { } region)
+        if (!IsAnnotating)
         {
             return;
         }
@@ -1159,8 +939,7 @@ public sealed partial class CaptureOverlayWindow : Window
         HintText.Text = "Reading text...";
         try
         {
-            var frame = NativeScreenCaptureService.Crop(_desktopFrame, region);
-            var lines = await TextRecognizer.RecognizeAsync(frame, region.X, region.Y);
+            var lines = await AnnotationCanvas.RecognizeAsync();
             HintText.Text = previousHint;
             handle(lines);
         }
@@ -1178,32 +957,26 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private async Task CompleteAsync()
     {
-        if (_annotationPreview is null)
+        if (!IsAnnotating)
         {
             return;
         }
 
         // Text still in the entry box is part of the capture the moment the user
-        // finishes it, and clicking Done is finishing it. Every queued placement has
-        // to land before the pixels are taken, or the delivered image is missing a
-        // mark the user made.
-        QueueSprite(CommitTextEntryAsync);
-        await _pendingSprite;
-
-        // An in-flight mark is not part of the capture, and the preview still shows
-        // it, so the draft is dropped and the preview brought back into agreement
-        // before its pixels are taken.
-        if (_editor.Cancel())
-        {
-            RenderAnnotations();
-        }
+        // finishes it, and clicking Done is finishing it. Every queued placement has to
+        // land before the pixels are taken, or the delivered image is missing a mark the
+        // user made.
+        await AnnotationCanvas.FlushAsync();
 
         if (_selection is { } taken)
         {
             RememberSelection(taken);
         }
 
-        CaptureCompleted?.Invoke(this, _annotationPreview.ToFrame());
+        if (AnnotationCanvas.ToFrame() is { } finished)
+        {
+            CaptureCompleted?.Invoke(this, finished);
+        }
     }
 
     /// <summary>
@@ -1251,7 +1024,7 @@ public sealed partial class CaptureOverlayWindow : Window
         (int)point.X,
         (int)point.Y);
 
-    private void RenderAnnotations() => _annotationPreview?.Render(_editor.VisibleAnnotations);
+    private void RenderAnnotations() => AnnotationCanvas.Render();
 
     private CapturePoint ToFrame(PointerRoutedEventArgs e)
     {

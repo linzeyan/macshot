@@ -40,14 +40,12 @@ public sealed class RasterAnnotationPreview
 
     public RasterAnnotationPreview(
         Canvas layer,
-        MonitorLayout layout,
-        CaptureMonitor monitor,
+        IFramePlacement placement,
         CapturedFrame selection,
         CaptureRegion region)
     {
         ArgumentNullException.ThrowIfNull(layer);
-        ArgumentNullException.ThrowIfNull(layout);
-        ArgumentNullException.ThrowIfNull(monitor);
+        ArgumentNullException.ThrowIfNull(placement);
         ArgumentNullException.ThrowIfNull(selection);
 
         _region = region;
@@ -68,8 +66,8 @@ public sealed class RasterAnnotationPreview
         };
 
         _image = image;
-        var topLeft = layout.FrameToPointer(monitor, new CapturePoint(region.X, region.Y));
-        var bottomRight = layout.FrameToPointer(monitor, new CapturePoint(region.Right, region.Bottom));
+        var topLeft = placement.ToLayout(new CapturePoint(region.X, region.Y));
+        var bottomRight = placement.ToLayout(new CapturePoint(region.Right, region.Bottom));
         Canvas.SetLeft(image, topLeft.X);
         Canvas.SetTop(image, topLeft.Y);
         image.Width = Math.Max(0, bottomRight.X - topLeft.X);
