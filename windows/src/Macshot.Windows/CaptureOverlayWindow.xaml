@@ -34,6 +34,12 @@
              never hit testable so pointer input keeps reaching the canvas below. -->
         <Canvas x:Name="AnnotationLayer" IsHitTestVisible="False" />
 
+        <!-- The selection's grips, above the preview because they straddle its edge:
+             declared any lower, the preview would cover their inner half and leave
+             eight half-squares. Not hit testable either — which grip a point grabs is
+             arithmetic SelectionHandles answers, so these only have to be visible. -->
+        <Canvas x:Name="SelectionGrips" IsHitTestVisible="False" />
+
         <!-- Holds the elements glyph sprites are rasterized from, parked off-screen.
              RenderTargetBitmap only captures elements that are in the tree and have
              been arranged, so they cannot simply be built on the side. -->

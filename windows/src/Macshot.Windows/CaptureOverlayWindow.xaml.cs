@@ -39,6 +39,13 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private const string AnnotationHint = "Draw to annotate • Ctrl+Z undo • Enter to finish • Esc to cancel";
 
+    /// <summary>
+    /// The same, for a region that can still be adjusted. The grips are visible on their
+    /// own, so what the line has to name is the arrow keys, which nothing advertises.
+    /// </summary>
+    private const string AdjustableAnnotationHint =
+        "Draw to annotate • Drag a grip or arrow-key to adjust • Ctrl+Z undo • Enter to finish";
+
     /// <summary>The standing instruction before anything is chosen. Matches the XAML default.</summary>
     private const string SelectionHint = "Drag to capture • Click a window to take it • Esc to cancel";
 
@@ -81,6 +88,7 @@ public sealed partial class CaptureOverlayWindow : Window
     private readonly Func<long, Task<CapturedFrame?>> _captureWindow;
     private readonly AnnotationEditor _editor = new(new AnnotationDocument());
     private readonly Dictionary<AnnotationTool, ToggleButton> _toolButtons = [];
+    private readonly Dictionary<SelectionHandle, Rectangle> _grips = [];
 
     private RasterAnnotationPreview? _annotationPreview;
     private Point? _selectionStart;
@@ -98,6 +106,30 @@ public sealed partial class CaptureOverlayWindow : Window
     /// rather than a mark.
     /// </summary>
     private bool _samplingColor;
+
+    /// <summary>
+    /// Whether the chosen region can still be changed, which it can when its pixels
+    /// were cropped out of the screenshot and cannot when they are a window's own.
+    /// </summary>
+    /// <remarks>
+    /// A window capture has exactly one region with pixels behind it: the window's.
+    /// Re-cropping the screenshot for an adjusted one would quietly swap the delivered
+    /// image for a different photograph of the same place, with whatever was covering
+    /// the window back in it. A window capture is the window; a different rectangle is
+    /// a drag.
+    /// </remarks>
+    private bool _regionIsAdjustable;
+
+    /// <summary>The grip being dragged, or <see cref="SelectionHandle.None"/>.</summary>
+    private SelectionHandle _resizing = SelectionHandle.None;
+
+    /// <summary>
+    /// The region the current grip drag started from. Kept still for the whole drag
+    /// because a resize is resolved against the corner opposite the grip: feeding the
+    /// region back in as it changes would move that corner too, so a drag past the far
+    /// side would crawl after the pointer instead of flipping.
+    /// </summary>
+    private CaptureRegion _resizeFrom;
 
     /// <summary>The window under the pointer, in frame space, while none is chosen yet.</summary>
     private CaptureWindow? _hoveredWindow;
@@ -170,6 +202,7 @@ public sealed partial class CaptureOverlayWindow : Window
         await source.SetBitmapAsync(_monitorFrame.ToSoftwareBitmap());
         PreviewImage.Source = source;
         BuildToolButtons();
+        BuildGrips();
         LoadStyle();
         WireStyleControls();
 
@@ -207,9 +240,9 @@ public sealed partial class CaptureOverlayWindow : Window
     /// and ignores by dragging, which is exactly what they would have done anyway.
     /// </para>
     /// <para>
-    /// Restoring it needs no resize handles to be useful: what makes the setting worth
-    /// having is taking the same region again, and the same region is what this gives.
-    /// Adjusting it waits for <c>SelectionHandles</c> to reach the overlay.
+    /// Nothing is adjustable yet at this point: the grips arrive with the annotation
+    /// phase, so a remembered region is taken first and then trimmed, rather than
+    /// trimmed and then taken. Which is the same two steps in the same order as a drag.
     /// </para>
     /// </remarks>
     private void OfferRememberedSelection()
@@ -290,6 +323,13 @@ public sealed partial class CaptureOverlayWindow : Window
 
         if (IsAnnotating)
         {
+            // Ahead of the tools: the grips are drawn over the selection's edge, so a
+            // press on one is aimed at the grip, not through it at the canvas below.
+            if (GrabGrip(ToFrame(e)))
+            {
+                return;
+            }
+
             // Sprite tools are placed with a click rather than dragged out: their size
             // comes from the rasterized pixels, so there is nothing left for a drag to
             // decide. The editor is deliberately not told about the press, which is
@@ -326,6 +366,20 @@ public sealed partial class CaptureOverlayWindow : Window
             // gradient or a photograph, the pixel under the pointer is not the colour
             // the eye reports, and there is no way to tell before committing to it.
             HintText.Text = $"{SamplingHint} • {SampleAt(ToFrame(e)).ToHex()}";
+            return;
+        }
+
+        if (_resizing != SelectionHandle.None)
+        {
+            if (e.Pointer.IsInContact)
+            {
+                ShowPendingRegion(ResizedTo(e));
+            }
+            else
+            {
+                AbandonResize();
+            }
+
             return;
         }
 
@@ -393,6 +447,14 @@ public sealed partial class CaptureOverlayWindow : Window
     private void SelectionCanvas_PointerReleased(object sender, PointerRoutedEventArgs e)
     {
         SelectionCanvas.ReleasePointerCaptures();
+
+        if (_resizing != SelectionHandle.None)
+        {
+            var resized = ResizedTo(e);
+            _resizing = SelectionHandle.None;
+            ApplyRegion(resized);
+            return;
+        }
 
         if (IsAnnotating)
         {
@@ -510,12 +572,14 @@ public sealed partial class CaptureOverlayWindow : Window
 
         _selection = region;
         _hoveredWindow = null;
+        _regionIsAdjustable = capturedWindow is null;
         SnapHighlight.Visibility = Visibility.Collapsed;
 
         // Brings the marquee onto the region actually taken, which is the whole
         // point when the region came from a snapped window rather than from a drag
         // that already left it in the right place.
         PlaceChrome(SelectionRectangle, region);
+        PlaceGrips(region);
 
         // The preview covers the selection with the pixels that will be delivered,
         // which also hides the selection tint inside it: from here on, what is inside
@@ -528,11 +592,210 @@ public sealed partial class CaptureOverlayWindow : Window
             region);
 
         AnnotationToolbar.Visibility = Visibility.Visible;
-        HintText.Text = AnnotationHint;
+        HintText.Text = AnnotatingHint;
 
         // The other displays' overlays are always on top, so they have to go before
         // the user can see anything but this one.
         SelectionCommitted?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>The standing instruction for the annotation phase this overlay is in.</summary>
+    private string AnnotatingHint => _regionIsAdjustable ? AdjustableAnnotationHint : AnnotationHint;
+
+    /// <summary>This display, in frame space: what an adjusted region is kept inside.</summary>
+    /// <remarks>
+    /// This display rather than the whole desktop. Choosing the region is what closes
+    /// the other displays' overlays, so by the time a grip can be dragged there is
+    /// nothing on the neighbouring screens showing what a selection reaching onto them
+    /// would take.
+    /// </remarks>
+    private CaptureRegion MonitorBounds => _layout.FrameRegionOf(_monitor);
+
+    /// <summary>
+    /// Builds the eight grips once, hidden. Which of them a selection offers depends on
+    /// its size, so they are shown and hidden rather than created and destroyed: a
+    /// resize must cost a rasterize per pointer move, not an allocation.
+    /// </summary>
+    private void BuildGrips()
+    {
+        foreach (var handle in SelectionHandles.All)
+        {
+            var grip = new Rectangle
+            {
+                Visibility = Visibility.Collapsed,
+
+                // The marquee's own blue filled in, outlined in white so a grip is
+                // still findable against a blue window behind it.
+                Fill = new SolidColorBrush(Color.FromArgb(255, 0x4C, 0xC2, 0xFF)),
+                Stroke = IconBrush(1),
+                StrokeThickness = 1,
+            };
+
+            _grips[handle] = grip;
+            SelectionGrips.Children.Add(grip);
+        }
+    }
+
+    /// <summary>
+    /// Puts the grips on a region's edges, showing only the ones it is big enough to
+    /// offer, and hides all of them when there is nothing to adjust.
+    /// </summary>
+    private void PlaceGrips(CaptureRegion? selection)
+    {
+        if (_regionIsAdjustable && selection is { } region)
+        {
+            var offered = SelectionHandles.For(region);
+            foreach (var (handle, grip) in _grips)
+            {
+                if (offered.Contains(handle))
+                {
+                    PlaceChrome(grip, SelectionHandles.RectangleOf(region, handle));
+                }
+                else
+                {
+                    grip.Visibility = Visibility.Collapsed;
+                }
+            }
+
+            return;
+        }
+
+        foreach (var grip in _grips.Values)
+        {
+            grip.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    /// <summary>
+    /// Starts a resize when <paramref name="point"/> is on one of the grips, and answers
+    /// whether it did — a press that grabbed a grip is not also the start of a mark.
+    /// </summary>
+    private bool GrabGrip(CapturePoint point)
+    {
+        if (!_regionIsAdjustable || _selection is not { } region)
+        {
+            return false;
+        }
+
+        _resizing = SelectionHandles.HitTest(region, point);
+        _resizeFrom = region;
+        return _resizing != SelectionHandle.None;
+    }
+
+    /// <summary>
+    /// The region the grip being dragged is asking for, kept on this display.
+    /// </summary>
+    /// <remarks>
+    /// Clipped to the display rather than pushed back inside it: a resize that runs off
+    /// the edge should stop the edge being dragged and leave the opposite one where the
+    /// user put it, which is what an intersection does and what moving the whole
+    /// rectangle would not.
+    /// </remarks>
+    private CaptureRegion ResizedTo(PointerRoutedEventArgs e) => SelectionHandles
+        .Resize(_resizeFrom, _resizing, ToFrame(e), e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift))
+        .Intersect(MonitorBounds);
+
+    /// <summary>
+    /// Shows where a region is heading mid-drag, without re-cropping.
+    /// </summary>
+    /// <remarks>
+    /// The preview holds a buffer and a bitmap sized to its region, so rebuilding it on
+    /// every pointer move would allocate two of each per frame for the sake of pixels
+    /// that are about to be replaced. Until the grip is let go the pixels on show are
+    /// the ones the preview already has, and the marquee is what says where the new
+    /// edges are — which is the same thing the marquee does while the region is first
+    /// being dragged out.
+    /// </remarks>
+    private void ShowPendingRegion(CaptureRegion region)
+    {
+        PlaceChrome(SelectionRectangle, region);
+        PlaceGrips(region);
+    }
+
+    /// <summary>
+    /// Drops a grip drag whose release never arrived — a lost pointer capture, or a
+    /// button let go somewhere this window never hears about. Left held, the grip would
+    /// take every later press and no mark could be drawn again.
+    /// </summary>
+    private void AbandonResize()
+    {
+        _resizing = SelectionHandle.None;
+        if (_selection is { } current)
+        {
+            ShowPendingRegion(current);
+        }
+    }
+
+    /// <summary>
+    /// Takes an adjusted region: re-crops the pixels under it and rebuilds the preview
+    /// around them, keeping every annotation already made.
+    /// </summary>
+    /// <remarks>
+    /// Annotations are held in frame space, so they stay on the pixels they were drawn
+    /// on rather than sliding with the crop. One the region no longer covers is clipped,
+    /// which is what already happens to a mark drawn past the edge of the selection.
+    /// </remarks>
+    private void ApplyRegion(CaptureRegion region)
+    {
+        if (_selection is not { } current)
+        {
+            return;
+        }
+
+        // An empty region has no pixels to crop and nothing to annotate, so a grip
+        // dragged exactly onto its opposite edge leaves the region as it was instead of
+        // collapsing the capture. The chrome is put back either way: a drag that ends
+        // here left the marquee showing the region that is not being taken.
+        var taken = region.IsEmpty ? current : region;
+
+        PlaceChrome(SelectionRectangle, taken);
+        PlaceGrips(taken);
+
+        if (taken == current)
+        {
+            return;
+        }
+
+        _selection = taken;
+        _annotationPreview?.Detach();
+        _annotationPreview = new RasterAnnotationPreview(
+            AnnotationLayer,
+            _layout,
+            _monitor,
+            NativeScreenCaptureService.Crop(_desktopFrame, taken),
+            taken);
+        RenderAnnotations();
+
+        DiagnosticLog.Verbose(
+            $"region adjusted to {taken.Width}x{taken.Height} at {taken.X},{taken.Y} on {_monitor.DeviceName}");
+    }
+
+    /// <summary>
+    /// Moves the whole region by a key press, which is the only way to move it: dragging
+    /// inside the selection draws a mark, and taking that gesture over would cost the
+    /// tools the one thing they are for.
+    /// </summary>
+    private void NudgeRegion(VirtualKey key, bool far)
+    {
+        if (_selection is not { } region)
+        {
+            return;
+        }
+
+        // Ten pixels with Shift. One at a time is what a fine adjustment needs and is
+        // uselessly slow for anything else.
+        var step = far ? 10 : 1;
+        var (deltaX, deltaY) = key switch
+        {
+            VirtualKey.Left => (-step, 0),
+            VirtualKey.Right => (step, 0),
+            VirtualKey.Up => (0, -step),
+            _ => (0, step),
+        };
+
+        ApplyRegion(SelectionHandles.ClampTo(
+            SelectionHandles.Translate(region, deltaX, deltaY),
+            MonitorBounds));
     }
 
     /// <summary>
@@ -737,7 +1000,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         // The keyboard belongs to the overlay again: Enter finishes, Ctrl+Z undoes.
         OverlayRoot.Focus(FocusState.Programmatic);
-        HintText.Text = AnnotationHint;
+        HintText.Text = AnnotatingHint;
     }
 
     private void Commit(Annotation annotation)
@@ -810,6 +1073,14 @@ public sealed partial class CaptureOverlayWindow : Window
             case VirtualKey.Enter when _remembered is { } remembered:
                 e.Handled = true;
                 EnterAnnotationPhase(remembered);
+                return;
+
+            case VirtualKey.Left or VirtualKey.Right or VirtualKey.Up or VirtualKey.Down
+                when IsAnnotating && _regionIsAdjustable:
+                // Handled, or the arrow would move focus between the toolbar's buttons
+                // instead, which is the one other thing arrow keys mean here.
+                e.Handled = true;
+                NudgeRegion(e.Key, shift);
                 return;
 
             case VirtualKey.Delete or VirtualKey.Back when IsAnnotating:
@@ -995,7 +1266,7 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         _samplingColor = armed;
         PickColorButton.IsChecked = armed;
-        HintText.Text = armed ? SamplingHint : AnnotationHint;
+        HintText.Text = armed ? SamplingHint : AnnotatingHint;
     }
 
     /// <summary>
@@ -1020,7 +1291,7 @@ public sealed partial class CaptureOverlayWindow : Window
             sampled.Blue);
 
         SetColorSampling(false);
-        HintText.Text = $"Took {sampled.ToHex()} • {AnnotationHint}";
+        HintText.Text = $"Took {sampled.ToHex()} • {AnnotatingHint}";
 
         // The point as well as the colour: a sampler reading the wrong pixel is a
         // coordinate fault, and the colour alone cannot tell one from a channel swap.

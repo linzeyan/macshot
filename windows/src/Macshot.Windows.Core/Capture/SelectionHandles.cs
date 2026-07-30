@@ -169,16 +169,28 @@ public static class SelectionHandles
         new(selection.X + deltaX, selection.Y + deltaY, selection.Width, selection.Height);
 
     /// <summary>
-    /// Keeps a selection inside the frame without changing its size, which is what
-    /// dragging one towards an edge should do.
+    /// Keeps a selection inside <paramref name="bounds"/> without changing its size,
+    /// which is what moving one towards an edge should do.
     /// </summary>
-    public static CaptureRegion ClampTo(CaptureRegion selection, int width, int height)
+    /// <remarks>
+    /// <para>
+    /// Only for moving. Resizing into an edge has to stop the edge being dragged and
+    /// leave the opposite one where the user put it, which is
+    /// <see cref="CaptureRegion.Intersect"/> rather than this.
+    /// </para>
+    /// <para>
+    /// Takes a region rather than a width and a height because the bounds are one
+    /// display inside the virtual desktop, and every display but the first starts
+    /// somewhere other than the origin.
+    /// </para>
+    /// </remarks>
+    public static CaptureRegion ClampTo(CaptureRegion selection, CaptureRegion bounds)
     {
-        var clampedWidth = Math.Min(selection.Width, width);
-        var clampedHeight = Math.Min(selection.Height, height);
-        var x = Math.Clamp(selection.X, 0, Math.Max(0, width - clampedWidth));
-        var y = Math.Clamp(selection.Y, 0, Math.Max(0, height - clampedHeight));
-        return new CaptureRegion(x, y, clampedWidth, clampedHeight);
+        var width = Math.Min(selection.Width, bounds.Width);
+        var height = Math.Min(selection.Height, bounds.Height);
+        var x = Math.Clamp(selection.X, bounds.X, Math.Max(bounds.X, bounds.Right - width));
+        var y = Math.Clamp(selection.Y, bounds.Y, Math.Max(bounds.Y, bounds.Bottom - height));
+        return new CaptureRegion(x, y, width, height);
     }
 
     public static bool IsCorner(SelectionHandle handle) =>

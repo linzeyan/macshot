@@ -35,6 +35,8 @@ public sealed class RasterAnnotationPreview
     private readonly byte[] _baseline;
     private readonly byte[] _pixels;
     private readonly WriteableBitmap _bitmap;
+    private readonly Canvas _layer;
+    private readonly Image _image;
 
     public RasterAnnotationPreview(
         Canvas layer,
@@ -54,6 +56,7 @@ public sealed class RasterAnnotationPreview
         _pixels = new byte[_baseline.Length];
         _bitmap = new WriteableBitmap(selection.Width, selection.Height);
 
+        _layer = layer;
         var image = new Image
         {
             Source = _bitmap,
@@ -64,6 +67,7 @@ public sealed class RasterAnnotationPreview
             IsHitTestVisible = false,
         };
 
+        _image = image;
         var topLeft = layout.FrameToPointer(monitor, new CapturePoint(region.X, region.Y));
         var bottomRight = layout.FrameToPointer(monitor, new CapturePoint(region.Right, region.Bottom));
         Canvas.SetLeft(image, topLeft.X);
@@ -85,6 +89,18 @@ public sealed class RasterAnnotationPreview
         _baseFrame.Width,
         _baseFrame.Height,
         (byte[])_pixels.Clone());
+
+    /// <summary>
+    /// Takes the preview off the overlay.
+    /// </summary>
+    /// <remarks>
+    /// A preview is built around one region: its buffers, its bitmap, and where on the
+    /// canvas it sits are all fixed at construction, because that is what keeps the
+    /// per-move cost to a rasterize rather than an allocation. Adjusting the selection
+    /// therefore means a new preview, and the old image has to go — left behind it would
+    /// keep showing the pixels of a region that is no longer selected.
+    /// </remarks>
+    public void Detach() => _layer.Children.Remove(_image);
 
     /// <summary>Redraws from the untouched selection, so nothing accumulates between frames.</summary>
     public void Render(IEnumerable<Annotation> annotations)

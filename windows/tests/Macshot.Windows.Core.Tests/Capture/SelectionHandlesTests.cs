@@ -115,7 +115,7 @@ public sealed class SelectionHandlesTests
     {
         var moved = SelectionHandles.Translate(Selection, -500, -500);
 
-        var clamped = SelectionHandles.ClampTo(moved, 1920, 1080);
+        var clamped = SelectionHandles.ClampTo(moved, new CaptureRegion(0, 0, 1920, 1080));
 
         // Pushing it off the top-left has to park it at the origin at full size, not
         // shrink it against the edge.
@@ -125,8 +125,22 @@ public sealed class SelectionHandlesTests
     [TestMethod]
     public void ClampTo_ShrinksASelectionLargerThanTheFrame()
     {
-        var clamped = SelectionHandles.ClampTo(new CaptureRegion(-10, -10, 4000, 3000), 1920, 1080);
+        var clamped = SelectionHandles.ClampTo(
+            new CaptureRegion(-10, -10, 4000, 3000),
+            new CaptureRegion(0, 0, 1920, 1080));
 
         Assert.AreEqual(new CaptureRegion(0, 0, 1920, 1080), clamped);
+    }
+
+    [TestMethod]
+    public void ClampTo_ParksAgainstTheBoundsOwnOriginRatherThanTheDesktops()
+    {
+        // The second display in a left-to-right pair: a selection nudged off its left
+        // edge belongs at x=1920, not at x=0, which is a different monitor entirely.
+        var secondDisplay = new CaptureRegion(1920, 0, 1920, 1080);
+
+        var clamped = SelectionHandles.ClampTo(new CaptureRegion(1900, -40, 200, 160), secondDisplay);
+
+        Assert.AreEqual(new CaptureRegion(1920, 0, 200, 160), clamped);
     }
 }
