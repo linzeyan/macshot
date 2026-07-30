@@ -130,6 +130,10 @@ public sealed partial class AnnotationToolbarView : UserControl
         LoadStyle();
         ShowOptionsFor(editor.Tool);
 
+        // Read here rather than by the editor itself, so Core stays free of the settings
+        // file and this stays the one place the toolbar's state comes from.
+        editor.SmoothStrokes = settings.Current.SmoothPencilStrokes;
+
         StyleColorPicker.ColorChanged += StyleColor_Changed;
         StrokeWidthSlider.ValueChanged += StrokeWidth_Changed;
         LineStyleBox.SelectionChanged += LineStyle_Changed;

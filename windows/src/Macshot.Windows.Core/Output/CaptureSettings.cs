@@ -79,6 +79,14 @@ public sealed record CaptureSettings
     public LineStyle AnnotationLineStyle { get; init; } = LineStyle.Solid;
 
     /// <summary>
+    /// Rounds off a freehand stroke once it is finished. On by default: a path sampled
+    /// from a mouse is a staircase, and nobody draws one on purpose. Configured rather
+    /// than remembered, because it is a preference about how the tool behaves and not a
+    /// value the toolbar leaves behind.
+    /// </summary>
+    public bool SmoothPencilStrokes { get; init; } = true;
+
+    /// <summary>
     /// Offers the previous selection again on the next capture. Off by default: a
     /// selection that reappears where the last one was is a surprise until you know
     /// the setting exists.

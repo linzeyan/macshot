@@ -66,6 +66,12 @@ public sealed class AnnotationEditor
 
     public AnnotationStyle Style { get; set; } = AnnotationStyle.Default;
 
+    /// <summary>
+    /// Whether a finished freehand stroke has its corners rounded off. On by default,
+    /// because a path sampled from a mouse is a staircase and nobody draws one on purpose.
+    /// </summary>
+    public bool SmoothStrokes { get; set; } = true;
+
     /// <summary>The annotation currently being drawn or dragged, for live preview.</summary>
     public Annotation? Draft { get; private set; }
 
@@ -201,7 +207,32 @@ public sealed class AnnotationEditor
             return;
         }
 
-        _document.Add(draft);
+        _document.Add(Finished(draft));
+    }
+
+    /// <summary>
+    /// The mark as it is committed. Smoothing happens here rather than during the drag:
+    /// rounding a path the user is still adding to would move the ink they just laid down
+    /// and read as the stroke lagging behind the pointer.
+    /// </summary>
+    private Annotation Finished(Annotation draft)
+    {
+        if (!SmoothStrokes || draft.Points.Count < 3)
+        {
+            return draft;
+        }
+
+        var smoothed = StrokeSmoothing.Smooth(draft.Points);
+        return draft with
+        {
+            Points = smoothed,
+
+            // Start and End follow the points, since a freeform mark's ends are its
+            // first and last samples and everything from hit testing to the bounding
+            // rectangle reads them.
+            Start = smoothed[0],
+            End = smoothed[^1],
+        };
     }
 
     /// <summary>Abandons an in-flight gesture. Returns whether there was one.</summary>

@@ -81,6 +81,7 @@ public sealed partial class PreferencesWindow : Window
         DelaySecondsBox.Value = settings.DelaySeconds;
         HistorySizeBox.Value = settings.HistorySize;
         RememberSelectionSwitch.IsOn = settings.RememberLastSelection;
+        SmoothPencilSwitch.IsOn = settings.SmoothPencilStrokes;
         VerboseLoggingSwitch.IsOn = settings.VerboseLogging;
 
 #if OFFLINE
@@ -128,6 +129,7 @@ public sealed partial class PreferencesWindow : Window
                 ? CaptureSettings.Default.HistorySize
                 : (int)HistorySizeBox.Value,
             RememberLastSelection = RememberSelectionSwitch.IsOn,
+            SmoothPencilStrokes = SmoothPencilSwitch.IsOn,
             VerboseLogging = VerboseLoggingSwitch.IsOn,
 #if !OFFLINE
             TranslateApiKey = TranslateKeyBox.Password,

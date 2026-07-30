@@ -89,6 +89,15 @@
                         </StackPanel>
 
                         <StackPanel Spacing="4">
+                            <TextBlock Text="Annotation" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <ToggleSwitch x:Name="SmoothPencilSwitch" Header="Smooth freehand strokes" />
+                            <TextBlock
+                                Text="Rounds off the corners of a pencil or highlighter stroke once you let go. A path sampled from a mouse is a staircase; turn this off if you are tracing something and want the points exactly where the pointer went."
+                                TextWrapping="Wrap"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+
+                        <StackPanel Spacing="4">
                             <TextBlock Text="Delayed capture" Style="{StaticResource BodyStrongTextBlockStyle}" />
                             <NumberBox
                                 x:Name="DelaySecondsBox"
