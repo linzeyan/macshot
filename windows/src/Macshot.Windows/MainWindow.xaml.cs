@@ -32,6 +32,7 @@ public sealed partial class MainWindow : Window
     {
         _controller = controller ?? throw new ArgumentNullException(nameof(controller));
         InitializeComponent();
+        this.GetAppWindow().UseAppIcon();
     }
 
     public bool HasCapture => _capturedFrame is not null;

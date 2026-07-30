@@ -124,7 +124,9 @@ public sealed class CaptureController : IDisposable
 
         _hotkeys = new GlobalHotkeyService(_messageWindow);
 
-        _trayIcon = new TrayIconService(_messageWindow, "macshot");
+        // The variant's own name, so someone running both can tell which icon is which
+        // from the tooltip alone.
+        _trayIcon = new TrayIconService(_messageWindow, BuildVariant.DisplayName);
         _trayIcon.AddMenuItem(CommandCaptureArea, "Capture area");
         _trayIcon.AddMenuItem(CommandCaptureAllScreens, "Capture all screens");
         _trayIcon.AddMenuItem(CommandCaptureAfterDelay, "Capture area after a delay");

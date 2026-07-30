@@ -35,6 +35,32 @@ internal static class WindowExtensions
     }
 
     /// <summary>
+    /// The macshot icon for a titled window's title bar, Alt+Tab entry, and taskbar
+    /// button.
+    /// </summary>
+    /// <remarks>
+    /// An unpackaged WinUI window does not pick up the executable's icon on its own, so
+    /// without this every macshot window is the generic placeholder in Alt+Tab. Silent
+    /// on failure: a window with the wrong icon still works, and there is nothing the
+    /// user could do about it.
+    /// </remarks>
+    public static void UseAppIcon(this AppWindow appWindow)
+    {
+        try
+        {
+            var path = Path.Combine(AppContext.BaseDirectory, "Assets", "macshot.ico");
+            if (File.Exists(path))
+            {
+                appWindow.SetIcon(path);
+            }
+        }
+        catch (Exception)
+        {
+            // Cosmetic, and already reported once by the tray icon if the file is gone.
+        }
+    }
+
+    /// <summary>
     /// Puts the window in front and gives it the keyboard.
     /// </summary>
     /// <remarks>

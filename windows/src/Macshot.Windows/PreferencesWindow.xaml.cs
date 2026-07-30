@@ -56,7 +56,9 @@ public sealed partial class PreferencesWindow : Window
         var width = (int)(WidthDips * monitor.Scale);
         var height = (int)(HeightDips * monitor.Scale);
 
-        this.GetAppWindow().MoveAndResize(new RectInt32(
+        var appWindow = this.GetAppWindow();
+        appWindow.UseAppIcon();
+        appWindow.MoveAndResize(new RectInt32(
             (int)(monitor.WorkArea.X + ((monitor.WorkArea.Width - width) / 2)),
             (int)(monitor.WorkArea.Y + ((monitor.WorkArea.Height - height) / 2)),
             width,

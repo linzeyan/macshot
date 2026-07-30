@@ -15,7 +15,17 @@
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
     <ApplicationManifest>app.manifest</ApplicationManifest>
+
+    <!-- The same artwork the Mac app uses, converted to a multi-resolution .ico. This
+         gives the executable its own icon in Explorer and Alt+Tab; the notification-area
+         icon loads the same file at run time, because the shell wants a specific pixel
+         size for the current DPI and only the file has every size in it. -->
+    <ApplicationIcon>Assets\macshot.ico</ApplicationIcon>
   </PropertyGroup>
+
+  <ItemGroup>
+    <Content Include="Assets\macshot.ico" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
 
   <!-- The offline variant, selected with -p:Variant=Offline. The same tree with every
        network feature compiled out rather than a second project, because a fork would

@@ -35,6 +35,14 @@ public sealed class TrayIconService : IDisposable
     private const int ApplicationIcon = 32512;
     private const uint IconId = 1;
 
+    private const uint ImageTypeIcon = 1;
+    private const uint LoadFromFile = 0x00000010;
+
+    /// <summary>SM_CXSMICON / SM_CYSMICON: the size the shell wants for a tray icon.</summary>
+    private const int SmallIconWidth = 49;
+
+    private const int SmallIconHeight = 50;
+
     private readonly MessageWindow _window;
     private readonly List<MenuEntry> _menuItems = [];
     private bool _disposed;
@@ -48,9 +56,7 @@ public sealed class TrayIconService : IDisposable
         data.Flags = NotifyIconFlagMessage | NotifyIconFlagIcon | NotifyIconFlagTip;
         data.CallbackMessage = TrayCallbackMessage;
 
-        // The stock application icon keeps the shell entry point working without a
-        // packaged asset. Replace it with the macshot icon once branding lands.
-        data.Icon = LoadIcon(IntPtr.Zero, new IntPtr(ApplicationIcon));
+        data.Icon = LoadTrayIcon();
         data.Tip = tooltip;
 
         if (!ShellNotifyIcon(NotifyIconAdd, ref data))
@@ -224,6 +230,55 @@ public sealed class TrayIconService : IDisposable
     }
 
     /// <summary>
+    /// The macshot icon at the size the shell wants for the current DPI, falling back
+    /// to the stock application icon.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Loaded from the file rather than from the executable's embedded resource, and at
+    /// an explicit size rather than whatever comes first. The notification area asks for
+    /// a small-icon-sized bitmap, which is 16 pixels at 100% and 24 at 150%, and
+    /// <c>LoadImage</c> given those dimensions picks the matching frame out of the
+    /// multi-resolution file. Letting it scale a 256-pixel frame down instead is what
+    /// makes a tray icon look muddy next to every other one in the row.
+    /// </para>
+    /// <para>
+    /// A failure falls back to the stock icon rather than throwing. An icon that is not
+    /// macshot's is a cosmetic fault; no icon at all is an app with no way in.
+    /// </para>
+    /// </remarks>
+    private static IntPtr LoadTrayIcon()
+    {
+        try
+        {
+            var path = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "macshot.ico");
+            if (File.Exists(path))
+            {
+                var icon = LoadImage(
+                    IntPtr.Zero,
+                    path,
+                    ImageTypeIcon,
+                    GetSystemMetrics(SmallIconWidth),
+                    GetSystemMetrics(SmallIconHeight),
+                    LoadFromFile);
+
+                if (icon != IntPtr.Zero)
+                {
+                    return icon;
+                }
+            }
+
+            DiagnosticLog.Write($"The macshot icon could not be loaded from '{path}'; using the stock icon.");
+        }
+        catch (Exception exception)
+        {
+            DiagnosticLog.Write($"The macshot icon could not be loaded: {exception.Message}");
+        }
+
+        return LoadIcon(IntPtr.Zero, new IntPtr(ApplicationIcon));
+    }
+
+    /// <summary>
     /// A popup holding the given entries, or a single greyed line when there are
     /// none — an empty submenu opens as a blank rectangle, which reads as a defect
     /// rather than as "nothing here yet".
@@ -262,6 +317,18 @@ public sealed class TrayIconService : IDisposable
 
     [DllImport("user32.dll", EntryPoint = "LoadIconW", CharSet = CharSet.Unicode)]
     private static extern IntPtr LoadIcon(IntPtr instance, IntPtr iconName);
+
+    [DllImport("user32.dll", EntryPoint = "LoadImageW", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern IntPtr LoadImage(
+        IntPtr instance,
+        string name,
+        uint type,
+        int width,
+        int height,
+        uint flags);
+
+    [DllImport("user32.dll")]
+    private static extern int GetSystemMetrics(int index);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr CreatePopupMenu();

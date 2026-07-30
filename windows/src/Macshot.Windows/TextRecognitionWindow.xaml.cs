@@ -32,6 +32,7 @@ public sealed partial class TextRecognitionWindow : Window
         RecognizedTextBox.Text = text ?? string.Empty;
         StatusText.Text = string.IsNullOrWhiteSpace(text) ? "No text was recognized." : string.Empty;
 
+        this.GetAppWindow().UseAppIcon();
         Closed += (_, _) => _closing.Cancel();
 
 #if OFFLINE
