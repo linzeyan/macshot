@@ -3,137 +3,186 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="Macshot Preferences">
+    <!-- Grouped into tabs rather than stacked in one scroll. Nine headings in a single
+         column, in the order the features happened to be written, means the setting
+         being looked for is found by scrolling past eight that are not it. The four
+         names mirror the macOS product's tabs so the two are learnable as one app. -->
     <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" RowDefinitions="*,Auto">
-        <ScrollViewer Padding="20">
-            <StackPanel Spacing="16">
-                <TextBlock Text="Output" Style="{StaticResource SubtitleTextBlockStyle}" />
+        <Pivot>
+            <PivotItem Header="General">
+                <ScrollViewer>
+                    <StackPanel Spacing="20" Padding="4,8,4,8">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Image" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <ComboBox
+                                x:Name="FormatBox"
+                                Header="Format"
+                                HorizontalAlignment="Stretch"
+                                SelectionChanged="Format_SelectionChanged" />
+                            <StackPanel x:Name="QualityPanel" Spacing="4" Margin="0,8,0,0">
+                                <TextBlock Text="Quality" />
+                                <Slider x:Name="QualitySlider" Minimum="1" Maximum="100" StepFrequency="1" />
+                            </StackPanel>
+                        </StackPanel>
 
-                <ComboBox x:Name="FormatBox" Header="Image format" SelectionChanged="Format_SelectionChanged" />
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Save folder" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
+                                <TextBox x:Name="DirectoryBox" PlaceholderText="Pictures\Macshot" IsReadOnly="True" />
+                                <Button Grid.Column="1" Content="Browse" Click="Browse_Click" />
+                                <Button Grid.Column="2" Content="Reset" Click="ResetDirectory_Click" />
+                            </Grid>
+                        </StackPanel>
 
-                <StackPanel x:Name="QualityPanel" Spacing="4">
-                    <TextBlock Text="JPEG quality" />
-                    <Slider x:Name="QualitySlider" Minimum="1" Maximum="100" StepFrequency="1" />
-                </StackPanel>
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="File name" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBox x:Name="TemplateBox" TextChanged="Template_TextChanged" />
+                            <!-- What the template resolves to right now. A template is the
+                                 one setting whose effect is invisible until a file has
+                                 already been written under the wrong name. -->
+                            <TextBlock
+                                x:Name="TemplatePreview"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <TextBlock
+                                Text="Tokens: {yyyy} {yy} {MM} {dd} {HH} {mm} {ss}"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
 
-                <StackPanel Spacing="4">
-                    <TextBlock Text="Save folder" />
-                    <Grid ColumnDefinitions="*,Auto,Auto" ColumnSpacing="8">
-                        <TextBox x:Name="DirectoryBox" PlaceholderText="Pictures\Macshot" IsReadOnly="True" />
-                        <Button Grid.Column="1" Content="Browse" Click="Browse_Click" />
-                        <Button Grid.Column="2" Content="Reset" Click="ResetDirectory_Click" />
-                    </Grid>
-                </StackPanel>
+                        <StackPanel Spacing="8">
+                            <TextBlock Text="After a capture" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <ToggleSwitch x:Name="ClipboardSwitch" Header="Copy to the clipboard" />
+                            <ToggleSwitch x:Name="AutoSaveSwitch" Header="Save to the save folder" />
+                            <ToggleSwitch x:Name="ThumbnailSwitch" Header="Show the floating thumbnail" />
+                            <NumberBox
+                                x:Name="ThumbnailSecondsBox"
+                                Header="Dismiss the thumbnail after (seconds)"
+                                Minimum="1"
+                                Maximum="60"
+                                SpinButtonPlacementMode="Compact" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </PivotItem>
 
-                <StackPanel Spacing="4">
-                    <TextBlock Text="File name template" />
-                    <TextBox x:Name="TemplateBox" TextChanged="Template_TextChanged" />
-                    <TextBlock
-                        x:Name="TemplatePreview"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                    <TextBlock
-                        Text="Tokens: {yyyy} {yy} {MM} {dd} {HH} {mm} {ss}"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                </StackPanel>
+            <PivotItem Header="Capture">
+                <ScrollViewer>
+                    <StackPanel Spacing="20" Padding="4,8,4,8">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Shortcuts" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <TextBox x:Name="CaptureAreaHotkeyBox" Header="Capture area" />
+                            <TextBox x:Name="CaptureAllScreensHotkeyBox" Header="Capture all screens" Margin="0,8,0,0" />
+                            <TextBox x:Name="RecordScreenHotkeyBox" Header="Record screen" Margin="0,8,0,0" />
+                            <TextBlock
+                                Text="Written as Ctrl+Shift+X. Ctrl, Alt, Shift and Win may be combined, and at least one is required — a shortcut with no modifier would swallow that key in every program on the machine."
+                                TextWrapping="Wrap"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
 
-                <TextBlock Text="Diagnostics" Style="{StaticResource SubtitleTextBlockStyle}" />
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Selection" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <ToggleSwitch x:Name="RememberSelectionSwitch" Header="Offer the last selection again" />
+                            <TextBlock
+                                Text="The next capture draws the previous region on the display it was taken from, and Enter takes it again. Off by default, because a selection that reappears on its own is a surprise until you know the setting exists."
+                                TextWrapping="Wrap"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
 
-                <ToggleSwitch x:Name="VerboseLoggingSwitch" Header="Write a detailed log" />
-                <TextBlock
-                    Text="Records each step — which display, which capture backend, what size, which branch — next to this settings file. Turn it on before reproducing a fault, then attach the log. It never contains your API key or the text that was recognized."
-                    TextWrapping="Wrap"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <Button Content="Open the log folder" Click="OpenLogFolder_Click" HorizontalAlignment="Left" />
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Delayed capture" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <NumberBox
+                                x:Name="DelaySecondsBox"
+                                Header="Count down for (seconds)"
+                                Minimum="1"
+                                Maximum="60"
+                                SpinButtonPlacementMode="Compact" />
+                            <TextBlock
+                                Text="Used by &quot;Capture area after a delay&quot; in the notification-area menu, for capturing a menu or a hover state that would close if you reached for macshot. The keyboard shortcut stays immediate."
+                                TextWrapping="Wrap"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </PivotItem>
 
-                <!-- Collapsed in the offline build, which contains no translator to
-                     give a key to. See TranslationService. -->
-                <StackPanel x:Name="TranslationSection" Spacing="4">
-                    <TextBlock Text="Translation" Style="{StaticResource SubtitleTextBlockStyle}" />
-                    <PasswordBox x:Name="TranslateKeyBox" Header="Google Cloud Translation API key" />
-                    <TextBlock
-                        Text="Your own key, for your own project. Recognized text is sent to Google only when Translate is pressed. Without a key, Translate says so and sends nothing."
-                        TextWrapping="Wrap"
-                        Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                </StackPanel>
+            <PivotItem Header="Recording">
+                <ScrollViewer>
+                    <StackPanel Spacing="20" Padding="4,8,4,8">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Format" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <ComboBox x:Name="RecordingFormatBox" HorizontalAlignment="Stretch" />
+                            <TextBlock
+                                Text="GIF is written smaller and slower than MP4, because every GIF frame is a whole image."
+                                TextWrapping="Wrap"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </PivotItem>
 
-                <TextBlock Text="Selection" Style="{StaticResource SubtitleTextBlockStyle}" />
+            <PivotItem Header="Advanced">
+                <ScrollViewer>
+                    <StackPanel Spacing="20" Padding="4,8,4,8">
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="History" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <NumberBox
+                                x:Name="HistorySizeBox"
+                                Header="Keep the last (captures)"
+                                Minimum="0"
+                                Maximum="200"
+                                SpinButtonPlacementMode="Compact" />
+                            <TextBlock
+                                Text="Kept under macshot's own data folder, separately from the save folder, and offered in the notification-area menu. Zero keeps none."
+                                TextWrapping="Wrap"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <Button Content="Clear history now" Click="ClearHistory_Click" HorizontalAlignment="Left" />
+                        </StackPanel>
 
-                <ToggleSwitch x:Name="RememberSelectionSwitch" Header="Offer the last selection again" />
-                <TextBlock
-                    Text="The next capture draws the previous region on the display it was taken from, and Enter takes it again. Off by default, because a selection that reappears on its own is a surprise until you know the setting exists."
-                    TextWrapping="Wrap"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <!-- Collapsed in the offline build, which contains no translator to
+                             give a key to. See TranslationService. -->
+                        <StackPanel x:Name="TranslationSection" Spacing="4">
+                            <TextBlock Text="Translation" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <PasswordBox x:Name="TranslateKeyBox" Header="Google Cloud Translation API key" />
+                            <TextBlock
+                                Text="Your own key, for your own project. Recognized text is sent to Google only when Translate is pressed. Without a key, Translate says so and sends nothing."
+                                TextWrapping="Wrap"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
 
-                <TextBlock Text="Shortcuts" Style="{StaticResource SubtitleTextBlockStyle}" />
+                        <StackPanel Spacing="4">
+                            <TextBlock Text="Diagnostics" Style="{StaticResource BodyStrongTextBlockStyle}" />
+                            <ToggleSwitch x:Name="VerboseLoggingSwitch" Header="Write a detailed log" />
+                            <TextBlock
+                                Text="Records each step — which display, which capture backend, what size, which branch — next to this settings file. Turn it on before reproducing a fault, then attach the log. It never contains your API key or the text that was recognized."
+                                TextWrapping="Wrap"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                            <Button Content="Open the log folder" Click="OpenLogFolder_Click" HorizontalAlignment="Left" />
+                        </StackPanel>
+                    </StackPanel>
+                </ScrollViewer>
+            </PivotItem>
+        </Pivot>
 
-                <TextBox x:Name="CaptureAreaHotkeyBox" Header="Capture area" />
-                <TextBox x:Name="CaptureAllScreensHotkeyBox" Header="Capture all screens" />
-                <TextBox x:Name="RecordScreenHotkeyBox" Header="Record screen" />
-                <TextBlock
-                    Text="Written as Ctrl+Shift+X. Ctrl, Alt, Shift and Win may be combined, and at least one is required — a shortcut with no modifier would swallow that key in every program on the machine."
-                    TextWrapping="Wrap"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-
-                <TextBlock Text="History" Style="{StaticResource SubtitleTextBlockStyle}" />
-
-                <NumberBox
-                    x:Name="HistorySizeBox"
-                    Header="Keep the last (captures)"
-                    Minimum="0"
-                    Maximum="200"
-                    SpinButtonPlacementMode="Compact" />
-                <TextBlock
-                    Text="Kept under macshot's own data folder, separately from the save folder, and offered in the notification-area menu. Zero keeps none."
-                    TextWrapping="Wrap"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-                <Button Content="Clear history now" Click="ClearHistory_Click" HorizontalAlignment="Left" />
-
-                <TextBlock Text="Delayed capture" Style="{StaticResource SubtitleTextBlockStyle}" />
-
-                <NumberBox
-                    x:Name="DelaySecondsBox"
-                    Header="Count down for (seconds)"
-                    Minimum="1"
-                    Maximum="60"
-                    SpinButtonPlacementMode="Compact" />
-                <TextBlock
-                    Text="Used by &quot;Capture area after a delay&quot; in the notification-area menu, for capturing a menu or a hover state. The keyboard shortcut stays immediate."
-                    TextWrapping="Wrap"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-
-                <TextBlock Text="Recording" Style="{StaticResource SubtitleTextBlockStyle}" />
-
-                <ComboBox x:Name="RecordingFormatBox" Header="Recording format" />
-                <TextBlock
-                    Text="GIF is written smaller and slower than MP4, because every GIF frame is a whole image."
-                    TextWrapping="Wrap"
-                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-
-                <TextBlock Text="After a capture" Style="{StaticResource SubtitleTextBlockStyle}" />
-
-                <ToggleSwitch x:Name="ClipboardSwitch" Header="Copy to the clipboard" />
-                <ToggleSwitch x:Name="AutoSaveSwitch" Header="Save to the save folder" />
-                <ToggleSwitch x:Name="ThumbnailSwitch" Header="Show the floating thumbnail" />
-                <NumberBox
-                    x:Name="ThumbnailSecondsBox"
-                    Header="Dismiss the thumbnail after (seconds)"
-                    Minimum="1"
-                    Maximum="60"
-                    SpinButtonPlacementMode="Compact" />
-            </StackPanel>
-        </ScrollViewer>
-
-        <StackPanel
+        <!-- Outside the tabs on purpose: Save writes every tab, and a Save button per
+             tab would invite the belief that it only writes the one it is sitting in. -->
+        <Grid
             Grid.Row="1"
-            Orientation="Horizontal"
-            HorizontalAlignment="Right"
-            Spacing="8"
-            Padding="20">
+            Padding="20,12,20,16"
+            ColumnDefinitions="*,Auto,Auto"
+            ColumnSpacing="8"
+            Background="{ThemeResource LayerFillColorDefaultBrush}"
+            BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
+            BorderThickness="0,1,0,0">
             <TextBlock
                 x:Name="StatusText"
                 VerticalAlignment="Center"
+                TextWrapping="Wrap"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
-            <Button Content="Close" Click="Close_Click" />
-            <Button Content="Save" Click="Save_Click" Style="{StaticResource AccentButtonStyle}" />
-        </StackPanel>
+            <Button Grid.Column="1" Content="Close" Click="Close_Click" />
+            <Button
+                Grid.Column="2"
+                Content="Save"
+                Click="Save_Click"
+                Style="{StaticResource AccentButtonStyle}" />
+        </Grid>
     </Grid>
 </Window>

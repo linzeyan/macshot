@@ -42,6 +42,12 @@ public sealed partial class CaptureOverlayWindow : Window
     /// <summary>The standing instruction before anything is chosen. Matches the XAML default.</summary>
     private const string SelectionHint = "Drag to capture • Click a window to take it • Esc to cancel";
 
+    /// <summary>
+    /// The box every tool icon is drawn in. Small enough that nine buttons stay a strip
+    /// rather than a row of tiles.
+    /// </summary>
+    private const double IconExtent = 16;
+
     private const string SamplingHint = "Click to take the colour under the pointer • Esc to stop";
 
     private const string RememberedHint =
@@ -951,10 +957,19 @@ public sealed partial class CaptureOverlayWindow : Window
         {
             var button = new ToggleButton
             {
-                Content = Label(tool),
+                Content = ToolIcon(tool),
                 Tag = tool,
                 IsChecked = tool == _editor.Tool,
+
+                // Square and tight, so nine of them are a compact strip rather than a
+                // sentence. The default button padding is sized for words.
+                MinWidth = 0,
+                Padding = new Thickness(8),
             };
+
+            // The name has to remain reachable: a picture is faster once known and
+            // useless before that, and hover is where the answer belongs.
+            ToolTipService.SetToolTip(button, Label(tool));
             button.Click += ToolButton_Click;
             _toolButtons[tool] = button;
             ToolButtons.Children.Add(button);
@@ -1197,6 +1212,147 @@ public sealed partial class CaptureOverlayWindow : Window
         AnnotationTool.Blur => "Blur",
         _ => tool.ToString(),
     };
+
+    /// <summary>The icon for a tool: the mark it makes, drawn small.</summary>
+    /// <remarks>
+    /// <para>
+    /// Shapes rather than words. A row of word buttons is wide, slow to scan, and tells
+    /// a beginner nothing they did not already know from the word; a tool showing its
+    /// own shape needs no legend. The word survives as the tooltip, which is where a
+    /// name belongs once the picture carries the meaning.
+    /// </para>
+    /// <para>
+    /// Built from <c>Line</c>, <c>Rectangle</c> and <c>Ellipse</c> rather than icon-font
+    /// codepoints. A codepoint written without a Windows to look at renders as an empty
+    /// box when it is wrong, which is worse than the word it replaced — and half of
+    /// these have no glyph in the icon font anyway.
+    /// </para>
+    /// </remarks>
+    private static FrameworkElement ToolIcon(AnnotationTool tool)
+    {
+        var canvas = new Canvas { Width = IconExtent, Height = IconExtent };
+
+        switch (tool)
+        {
+        case AnnotationTool.Line:
+            canvas.Children.Add(Stroke(2, 14, 14, 2));
+            break;
+
+        case AnnotationTool.Arrow:
+            canvas.Children.Add(Stroke(2, 14, 14, 2));
+            canvas.Children.Add(Stroke(14, 2, 8.5, 2.5));
+            canvas.Children.Add(Stroke(14, 2, 13.5, 7.5));
+            break;
+
+        case AnnotationTool.Pencil:
+            // A zigzag rather than a straight line: what separates this from the line
+            // tool is that the stroke follows the hand.
+            canvas.Children.Add(Stroke(2, 12, 6, 4));
+            canvas.Children.Add(Stroke(6, 4, 10, 12));
+            canvas.Children.Add(Stroke(10, 12, 14, 5));
+            break;
+
+        case AnnotationTool.Marker:
+            // Wide and translucent, which is the whole difference from the pencil.
+            canvas.Children.Add(Stroke(2, 13, 14, 3, thickness: 5, opacity: 0.55));
+            break;
+
+        case AnnotationTool.Rectangle:
+            canvas.Children.Add(Box(filled: false));
+            break;
+
+        case AnnotationTool.FilledRectangle:
+            canvas.Children.Add(Box(filled: true));
+            break;
+
+        case AnnotationTool.Ellipse:
+            canvas.Children.Add(new Ellipse
+            {
+                Width = 13,
+                Height = 10,
+                Stroke = IconBrush(1),
+                StrokeThickness = 1.6,
+                Margin = new Thickness(1.5, 3, 0, 0),
+            });
+            break;
+
+        case AnnotationTool.Pixelate:
+            // Four blocks in a checker, which is what the effect looks like at the size
+            // anyone actually notices it.
+            canvas.Children.Add(Block(2, 3, 1));
+            canvas.Children.Add(Block(8, 3, 0.45));
+            canvas.Children.Add(Block(2, 9, 0.45));
+            canvas.Children.Add(Block(8, 9, 1));
+            break;
+
+        case AnnotationTool.Blur:
+            // Nested rings fading outwards: the same shape losing its edge, which is
+            // what distinguishes it from the hard blocks above.
+            canvas.Children.Add(Ring(1, 14, 0.35));
+            canvas.Children.Add(Ring(4, 8, 0.7));
+            canvas.Children.Add(Ring(6, 4, 1));
+            break;
+
+        default:
+            // A tool the icon set has not caught up with still has to be usable, so it
+            // falls back to its name rather than to an empty button.
+            return new TextBlock
+            {
+                Text = Label(tool),
+                Foreground = IconBrush(1),
+                FontSize = 12,
+            };
+        }
+
+        return canvas;
+    }
+
+    private static Line Stroke(double x1, double y1, double x2, double y2, double thickness = 1.6, double opacity = 1) =>
+        new()
+        {
+            X1 = x1,
+            Y1 = y1,
+            X2 = x2,
+            Y2 = y2,
+            Stroke = IconBrush(opacity),
+            StrokeThickness = thickness,
+            StrokeStartLineCap = PenLineCap.Round,
+            StrokeEndLineCap = PenLineCap.Round,
+        };
+
+    private static Rectangle Box(bool filled) => new()
+    {
+        Width = 12,
+        Height = 9,
+        Stroke = IconBrush(1),
+        StrokeThickness = 1.6,
+        Fill = filled ? IconBrush(1) : null,
+        Margin = new Thickness(2, 3.5, 0, 0),
+    };
+
+    private static Rectangle Block(double x, double y, double opacity) => new()
+    {
+        Width = 5,
+        Height = 4,
+        Fill = IconBrush(opacity),
+        Margin = new Thickness(x, y, 0, 0),
+    };
+
+    private static Ellipse Ring(double inset, double extent, double opacity) => new()
+    {
+        Width = extent,
+        Height = extent,
+        Stroke = IconBrush(opacity),
+        StrokeThickness = 1.4,
+        Margin = new Thickness(inset + 1, inset, 0, 0),
+    };
+
+    /// <summary>
+    /// White, because the toolbar is dark whatever the system theme is. A
+    /// theme-adaptive brush would be invisible on it in light mode.
+    /// </summary>
+    private static SolidColorBrush IconBrush(double opacity) =>
+        new(Color.FromArgb((byte)(255 * opacity), 255, 255, 255));
 
     private void RenderAnnotations() => _annotationPreview?.Render(_editor.VisibleAnnotations);
 

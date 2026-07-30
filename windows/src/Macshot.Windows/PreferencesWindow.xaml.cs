@@ -4,6 +4,7 @@ using Macshot.Windows.Core.Output;
 using Macshot.Windows.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Windows.Graphics;
 using Windows.Storage.Pickers;
 using WinRT.Interop;
 
@@ -22,6 +23,14 @@ namespace Macshot.Windows;
 /// </remarks>
 public sealed partial class PreferencesWindow : Window
 {
+    /// <summary>
+    /// Chosen so the longest tab needs no scrolling on a 1080p display, which is the
+    /// smallest screen worth designing this for.
+    /// </summary>
+    private const double WidthDips = 640;
+
+    private const double HeightDips = 700;
+
     private readonly SettingsStore _settings;
 
     public PreferencesWindow(SettingsStore settings)
@@ -29,6 +38,29 @@ public sealed partial class PreferencesWindow : Window
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         InitializeComponent();
         Load(_settings.Current);
+        PlaceOnScreen();
+    }
+
+    /// <summary>
+    /// Opens at a size the content fits in, in the middle of the primary display.
+    /// </summary>
+    /// <remarks>
+    /// WinUI's default is a small cascaded window, so the first thing anyone does with
+    /// macshot's preferences would be to drag it bigger before a single setting can be
+    /// read. Centred rather than cascaded because macshot has no other window for this
+    /// one to cascade from — it would appear near the top-left corner for no reason.
+    /// </remarks>
+    private void PlaceOnScreen()
+    {
+        var monitor = MonitorEnumerator.Enumerate().Layout.Primary;
+        var width = (int)(WidthDips * monitor.Scale);
+        var height = (int)(HeightDips * monitor.Scale);
+
+        this.GetAppWindow().MoveAndResize(new RectInt32(
+            (int)(monitor.WorkArea.X + ((monitor.WorkArea.Width - width) / 2)),
+            (int)(monitor.WorkArea.Y + ((monitor.WorkArea.Height - height) / 2)),
+            width,
+            height));
     }
 
     private void Load(CaptureSettings settings)

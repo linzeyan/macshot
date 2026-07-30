@@ -19,7 +19,11 @@
             <Button Content="Copy" Click="Copy_Click" />
             <Button Content="Save" Click="Save_Click" />
             <Button Content="Pin" Click="Pin_Click" />
-            <Button Content="Edit" Click="Edit_Click" />
+            <!-- "Open", not "Edit", until there is a standalone editor window for it to
+                 open into. The window it reaches today can copy and save but has no
+                 annotation tools, and a button promising editing that opens something
+                 you cannot edit in is worse than one that promises less. -->
+            <Button Content="Open" Click="Edit_Click" />
             <Button Content="Close" Click="Close_Click" />
         </StackPanel>
     </Grid>
