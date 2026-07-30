@@ -1,0 +1,51 @@
+<Window
+    x:Class="Macshot.Windows.HistoryWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:local="using:Macshot.Windows"
+    Title="macshot history">
+
+    <Grid Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" RowDefinitions="*,Auto">
+        <!-- Pictures, not filenames. Which capture is wanted is answered by looking at
+             it; a list of timestamps makes the user open three to find one. -->
+        <GridView
+            x:Name="Captures"
+            Padding="12"
+            IsItemClickEnabled="True"
+            SelectionMode="None"
+            ItemClick="Captures_ItemClick">
+            <GridView.ItemTemplate>
+                <DataTemplate x:DataType="local:HistoryTile">
+                    <StackPanel Width="200" Margin="4" Spacing="4">
+                        <Border
+                            Height="130"
+                            Background="{ThemeResource SubtleFillColorSecondaryBrush}"
+                            CornerRadius="4">
+                            <Image Source="{x:Bind Thumbnail}" Stretch="Uniform" />
+                        </Border>
+                        <TextBlock Text="{x:Bind Label}" />
+                    </StackPanel>
+                </DataTemplate>
+            </GridView.ItemTemplate>
+        </GridView>
+
+        <!-- Shown in place of the grid when there is nothing in it, because an empty
+             window says nothing about whether history is off or simply new. -->
+        <TextBlock
+            x:Name="EmptyText"
+            Text="No captures yet. Every capture macshot saves appears here."
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center"
+            Visibility="Collapsed"
+            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+        <Grid Grid.Row="1" Padding="12" ColumnDefinitions="*,Auto,Auto">
+            <TextBlock
+                x:Name="StatusText"
+                VerticalAlignment="Center"
+                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+            <Button Grid.Column="1" Content="Open folder" Click="OpenFolder_Click" />
+            <Button Grid.Column="2" Content="Clear history" Margin="8,0,0,0" Click="Clear_Click" />
+        </Grid>
+    </Grid>
+</Window>

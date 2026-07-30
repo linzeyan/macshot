@@ -44,7 +44,11 @@ public sealed partial class ThumbnailWindow : Window
     /// <summary>Raised with the capture the user wants opened in the preview window.</summary>
     public event EventHandler<CapturedFrame>? EditRequested;
 
-    public async Task ShowAsync()
+    /// <summary>
+    /// Shows the panel <paramref name="stackIndex"/> places up the corner, so a second
+    /// capture stands above the first rather than on top of it.
+    /// </summary>
+    public async Task ShowAsync(int stackIndex = 0)
     {
         var source = new SoftwareBitmapSource();
         await source.SetBitmapAsync(_frame.ToSoftwareBitmap());
@@ -55,17 +59,37 @@ public sealed partial class ThumbnailWindow : Window
         presenter.IsAlwaysOnTop = true;
         presenter.IsResizable = false;
 
-        appWindow.MoveAndResize(PlaceBottomRight());
+        appWindow.MoveAndResize(PlaceBottomRight(stackIndex));
         Activate();
         _dismissTimer.Start();
     }
 
     /// <summary>
+    /// Moves the panel to a new place in the stack, for when one below it is dismissed.
+    /// </summary>
+    /// <remarks>
+    /// Failures are swallowed on purpose: the window may have been closed between the
+    /// owner deciding to restack and this running, and a panel that could not be nudged
+    /// is not worth a message about.
+    /// </remarks>
+    public void Restack(int stackIndex)
+    {
+        try
+        {
+            this.GetAppWindow().MoveAndResize(PlaceBottomRight(stackIndex));
+        }
+        catch (Exception exception)
+        {
+            DiagnosticLog.Verbose($"Could not restack a thumbnail: {exception.Message}");
+        }
+    }
+
+    /// <summary>
     /// Bottom-right of the primary display's work area, which is where Windows puts
     /// transient notifications, and inside the work area so the taskbar does not
-    /// cover the buttons.
+    /// cover the buttons. Each place in the stack is one panel higher.
     /// </summary>
-    private static RectInt32 PlaceBottomRight()
+    private static RectInt32 PlaceBottomRight(int stackIndex)
     {
         var monitor = MonitorEnumerator.Enumerate().Layout.Primary;
         var width = (int)(WidthDips * monitor.Scale);
@@ -74,7 +98,7 @@ public sealed partial class ThumbnailWindow : Window
 
         return new RectInt32(
             (int)monitor.WorkArea.Right - width - margin,
-            (int)monitor.WorkArea.Bottom - height - margin,
+            (int)monitor.WorkArea.Bottom - height - margin - (stackIndex * (height + margin)),
             width,
             height);
     }

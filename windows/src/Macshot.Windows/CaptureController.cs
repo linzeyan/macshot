@@ -29,12 +29,20 @@ public sealed class CaptureController : IDisposable
     private const int CommandQuit = 4;
     private const int CommandRecordScreen = 5;
     private const int CommandCaptureAfterDelay = 6;
+    private const int CommandHistory = 7;
 
     /// <summary>
     /// Where the recent-capture entries start. They are numbered at the moment the
     /// menu is opened, so they need a range of their own that the fixed commands
     /// above can never grow into.
     /// </summary>
+    /// <summary>
+    /// How many floating panels may stand at once. Three is enough for the "capture,
+    /// capture, capture, now deal with them" pass the tool invites, and few enough that
+    /// the column stays in the corner it belongs in.
+    /// </summary>
+    private const int MaxThumbnails = 3;
+
     private const int CommandRecentFirst = 100;
 
     /// <summary>
@@ -80,7 +88,9 @@ public sealed class CaptureController : IDisposable
     private readonly List<CaptureOverlayWindow> _overlays = [];
     private readonly List<PinWindow> _pins = [];
     private EditorWindow? _editor;
-    private ThumbnailWindow? _thumbnail;
+    private HistoryWindow? _history;
+    /// <summary>The floating panels on show, oldest first.</summary>
+    private readonly List<ThumbnailWindow> _thumbnails = [];
     private PreferencesWindow? _preferences;
 
     /// <summary>
@@ -133,6 +143,7 @@ public sealed class CaptureController : IDisposable
         _trayIcon.AddMenuItem(CommandRecordScreen, "Record screen");
         _trayIcon.AddSeparator();
         _trayIcon.AddSubmenu("Recent captures", RecentMenuEntries);
+        _trayIcon.AddMenuItem(CommandHistory, "History...");
         _trayIcon.AddSeparator();
         _trayIcon.AddMenuItem(CommandPreferences, "Preferences...");
         _trayIcon.AddMenuItem(CommandQuit, "Quit macshot");
@@ -385,8 +396,13 @@ public sealed class CaptureController : IDisposable
         // capture it belongs to does not go on to raise overlays over a quitting app.
         _countdown?.Close();
 
-        _thumbnail?.Close();
+        foreach (var thumbnail in _thumbnails.ToArray())
+        {
+            thumbnail.Close();
+        }
+
         _editor?.Close();
+        _history?.Close();
         _preferences?.Close();
         foreach (var pin in _pins.ToArray())
         {
@@ -417,6 +433,9 @@ public sealed class CaptureController : IDisposable
         case CommandRecordScreen:
             Post(ToggleRecordingAsync);
             break;
+        case CommandHistory:
+            Post(ShowHistoryAsync);
+            return;
         case CommandPreferences:
             _dispatcher.TryEnqueue(ShowPreferences);
             break;
@@ -518,25 +537,49 @@ public sealed class CaptureController : IDisposable
         }
     }
 
+    /// <summary>
+    /// Offers a capture in a floating panel, stacked above whatever is already there.
+    /// </summary>
+    /// <remarks>
+    /// Stacked rather than replaced, because taking three captures in a row is how the
+    /// tool is used, and a panel that vanishes as the next capture is taken takes its
+    /// copy of those pixels with it. Capped at <see cref="MaxThumbnails"/>: the point of
+    /// the panel is that a capture does not interrupt the work, and a column of them
+    /// climbing the screen would.
+    /// </remarks>
     private async Task ShowThumbnailAsync(CapturedFrame frame)
     {
-        // Only the newest capture is offered: a stack of panels would cover the
-        // corner of the screen the user is trying to work in.
-        _thumbnail?.Close();
+        // The oldest go, so the one just taken is always the one on show. Counted up
+        // front rather than looped until short enough: how promptly a closed window is
+        // taken off the list is WinUI's business, not a condition to spin on.
+        foreach (var oldest in _thumbnails.Take(_thumbnails.Count - MaxThumbnails + 1).ToArray())
+        {
+            oldest.Close();
+        }
 
         var thumbnail = new ThumbnailWindow(frame, _settings);
         thumbnail.PinRequested += (_, pinned) => Post(() => PinAsync(pinned));
         thumbnail.EditRequested += (_, captured) => Post(() => ShowEditorAsync(captured));
         thumbnail.Closed += (_, _) =>
         {
-            if (ReferenceEquals(_thumbnail, thumbnail))
-            {
-                _thumbnail = null;
-            }
+            _thumbnails.Remove(thumbnail);
+            Restack();
         };
 
-        _thumbnail = thumbnail;
-        await thumbnail.ShowAsync();
+        _thumbnails.Add(thumbnail);
+        await thumbnail.ShowAsync(_thumbnails.Count - 1);
+    }
+
+    /// <summary>
+    /// Closes the gap a dismissed panel leaves, so the column stays against the corner
+    /// instead of floating in the middle of the screen with a hole in it.
+    /// </summary>
+    private void Restack()
+    {
+        for (var index = 0; index < _thumbnails.Count; index++)
+        {
+            _thumbnails[index].Restack(index);
+        }
     }
 
     private async Task PinAsync(CapturedFrame frame)
@@ -601,6 +644,37 @@ public sealed class CaptureController : IDisposable
         {
             DiagnosticLog.Write($"Could not open the past capture '{path}': {exception.Message}");
         }
+    }
+
+    /// <summary>
+    /// Opens the history panel, and opens whatever is picked there in the editor.
+    /// </summary>
+    /// <remarks>
+    /// One at a time, like the editor: a second panel would be a second window called
+    /// macshot history showing the same folder.
+    /// </remarks>
+    private async Task ShowHistoryAsync()
+    {
+        if (_history is { } existing)
+        {
+            existing.Activate();
+            return;
+        }
+
+        var history = new HistoryWindow();
+        history.OpenRequested += (_, entry) => Post(async () =>
+            await ShowEditorAsync(await ImageLoader.LoadAsync(entry.Path)));
+
+        history.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_history, history))
+            {
+                _history = null;
+            }
+        };
+
+        _history = history;
+        await history.ShowAsync();
     }
 
     private void ShowPreferences()
