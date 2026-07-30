@@ -76,6 +76,13 @@ public sealed partial class PreferencesWindow : Window
     /// </summary>
     private void Sections_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
+        // The first item is selected in the markup, so this can fire while the tree is
+        // still being built and before the pages it switches between exist.
+        if (GeneralPage is null)
+        {
+            return;
+        }
+
         var chosen = (args.SelectedItem as NavigationViewItem)?.Tag as string;
 
         foreach (var (tag, page) in Pages())
