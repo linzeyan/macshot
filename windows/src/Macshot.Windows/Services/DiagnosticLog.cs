@@ -85,10 +85,13 @@ public static class DiagnosticLog
     {
         try
         {
-            var directory = System.IO.Path.GetDirectoryName(Path);
-            if (directory is not null)
+            // Qualified, and so is every other BCL file API in this class: the members
+            // below are named Path and Directory, which shadow the types of the same
+            // name inside it. The names are worth keeping — they are what a caller
+            // wants to read — so the cost is paid here.
+            if (!string.IsNullOrEmpty(Directory))
             {
-                Directory.CreateDirectory(directory);
+                System.IO.Directory.CreateDirectory(Directory);
             }
 
             if (File.Exists(Path) && new FileInfo(Path).Length > MaximumBytes)

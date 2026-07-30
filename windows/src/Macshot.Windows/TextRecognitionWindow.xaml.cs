@@ -16,7 +16,14 @@ namespace Macshot.Windows;
 /// </remarks>
 public sealed partial class TextRecognitionWindow : Window
 {
+    /// <summary>
+    /// Only the build that can translate has any use for the settings here. Kept behind
+    /// the same condition as the code that reads it, because a field assigned and never
+    /// read is a warning, and warnings are errors in this project.
+    /// </summary>
+#if !OFFLINE
     private readonly SettingsStore _settings;
+#endif
 
     /// <summary>
     /// Cancelled when the window closes, so a request still in flight cannot come back
@@ -26,7 +33,13 @@ public sealed partial class TextRecognitionWindow : Window
 
     public TextRecognitionWindow(string text, SettingsStore settings)
     {
-        _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        // Checked in both builds even though only one keeps it: the caller passing null
+        // is a defect either way, and it should not be a defect that only shows up in
+        // one variant.
+        ArgumentNullException.ThrowIfNull(settings);
+#if !OFFLINE
+        _settings = settings;
+#endif
 
         InitializeComponent();
         RecognizedTextBox.Text = text ?? string.Empty;

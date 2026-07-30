@@ -1,3 +1,4 @@
+using System.Globalization;
 using System.Runtime.InteropServices;
 
 namespace Macshot.Windows.Services;
@@ -235,12 +236,17 @@ public sealed class TrayIconService : IDisposable
     /// </summary>
     /// <remarks>
     /// <para>
-    /// Loaded from the file rather than from the executable's embedded resource, and at
-    /// an explicit size rather than whatever comes first. The notification area asks for
-    /// a small-icon-sized bitmap, which is 16 pixels at 100% and 24 at 150%, and
-    /// <c>LoadImage</c> given those dimensions picks the matching frame out of the
-    /// multi-resolution file. Letting it scale a 256-pixel frame down instead is what
-    /// makes a tray icon look muddy next to every other one in the row.
+    /// Asked for at an explicit size rather than taking whatever frame comes first. The
+    /// notification area wants a small-icon-sized bitmap, which is 16 pixels at 100% and
+    /// 24 at 150%, and <c>LoadImage</c> given those dimensions picks the matching frame
+    /// out of the icon group. Letting the shell scale a 256-pixel frame down instead is
+    /// what makes a tray icon look muddy next to every other one in the row.
+    /// </para>
+    /// <para>
+    /// The loose file first, then the copy embedded in the executable. Two sources
+    /// because only one of them is certain: the embedded copy is there whenever the
+    /// build succeeded, while the loose one depends on the output being copied and can
+    /// be replaced without a rebuild.
     /// </para>
     /// <para>
     /// A failure falls back to the stock icon rather than throwing. An icon that is not
@@ -249,26 +255,40 @@ public sealed class TrayIconService : IDisposable
     /// </remarks>
     private static IntPtr LoadTrayIcon()
     {
+        var width = GetSystemMetrics(SmallIconWidth);
+        var height = GetSystemMetrics(SmallIconHeight);
+
         try
         {
+            // The loose file first, because it is the copy that can be replaced without
+            // rebuilding.
             var path = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "macshot.ico");
             if (File.Exists(path))
             {
-                var icon = LoadImage(
-                    IntPtr.Zero,
-                    path,
-                    ImageTypeIcon,
-                    GetSystemMetrics(SmallIconWidth),
-                    GetSystemMetrics(SmallIconHeight),
-                    LoadFromFile);
-
-                if (icon != IntPtr.Zero)
+                var fromFile = LoadImage(IntPtr.Zero, path, ImageTypeIcon, width, height, LoadFromFile);
+                if (fromFile != IntPtr.Zero)
                 {
-                    return icon;
+                    return fromFile;
                 }
             }
 
-            DiagnosticLog.Write($"The macshot icon could not be loaded from '{path}'; using the stock icon.");
+            // Then the copy embedded in the executable by ApplicationIcon, which is
+            // there whether or not the loose one was copied to the output. Asking for a
+            // size still picks the right frame out of the icon group.
+            var embedded = LoadImage(
+                GetModuleHandle(null),
+                "#" + ApplicationIcon.ToString(CultureInfo.InvariantCulture),
+                ImageTypeIcon,
+                width,
+                height,
+                0);
+
+            if (embedded != IntPtr.Zero)
+            {
+                return embedded;
+            }
+
+            DiagnosticLog.Write("The macshot icon could not be loaded; using the stock Windows icon.");
         }
         catch (Exception exception)
         {
@@ -329,6 +349,9 @@ public sealed class TrayIconService : IDisposable
 
     [DllImport("user32.dll")]
     private static extern int GetSystemMetrics(int index);
+
+    [DllImport("kernel32.dll", EntryPoint = "GetModuleHandleW", CharSet = CharSet.Unicode)]
+    private static extern IntPtr GetModuleHandle(string? moduleName);
 
     [DllImport("user32.dll", SetLastError = true)]
     private static extern IntPtr CreatePopupMenu();

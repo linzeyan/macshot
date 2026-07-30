@@ -23,8 +23,12 @@
     <ApplicationIcon>Assets\macshot.ico</ApplicationIcon>
   </PropertyGroup>
 
+  <!-- Update rather than Include: the SDK already globs this file as None, and adding
+       it a second time as Content is a duplicate-item build failure. Copying it is only
+       an optimization anyway — the icon is embedded in the executable by
+       ApplicationIcon above, and TrayIconService falls back to reading it from there. -->
   <ItemGroup>
-    <Content Include="Assets\macshot.ico" CopyToOutputDirectory="PreserveNewest" />
+    <None Update="Assets\macshot.ico" CopyToOutputDirectory="PreserveNewest" />
   </ItemGroup>
 
   <!-- The offline variant, selected with -p:Variant=Offline. The same tree with every
