@@ -24,3 +24,33 @@ jobs:
           dotnet-version: 8.0.x
       - run: dotnet build windows/Macshot.Windows.sln --configuration Release --warnaserror
       - run: dotnet test windows/Macshot.Windows.sln --configuration Release --no-build
+
+      # The offline variant is a second compilation of the same tree, so it can break on
+      # its own: a field only the network code reads becomes assigned-and-never-used,
+      # which is a warning, which is an error here. That is exactly how it broke the
+      # first time, and building only the normal variant could not see it.
+      #
+      # Not --no-restore and not sharing the output: the variant changes DefineConstants
+      # and the assembly name, so it is a genuinely different build and must not reuse
+      # the one above.
+      - name: Build the offline variant
+        run: >
+          dotnet build windows/src/Macshot.Windows/Macshot.Windows.csproj
+          --configuration Release --warnaserror -p:Variant=Offline
+
+      # The point of the variant, asserted rather than trusted. A control collapsed at
+      # run time would leave the endpoint in the binary, and nothing else in the build
+      # would notice.
+      - name: The offline build must contain no translation endpoint
+        shell: pwsh
+        run: |
+          $assembly = Get-ChildItem -Recurse -Filter Macshot.Windows.Offline.dll `
+            windows/src/Macshot.Windows/bin/Release | Select-Object -First 1
+          if (-not $assembly) { throw "The offline assembly was not produced." }
+          $bytes = [System.IO.File]::ReadAllBytes($assembly.FullName)
+          $text = [System.Text.Encoding]::Unicode.GetString($bytes) +
+                  [System.Text.Encoding]::ASCII.GetString($bytes)
+          if ($text -match 'translation\.googleapis\.com') {
+            throw "The offline build contains the translation endpoint."
+          }
+          Write-Host "$($assembly.Name) contains no translation endpoint."
