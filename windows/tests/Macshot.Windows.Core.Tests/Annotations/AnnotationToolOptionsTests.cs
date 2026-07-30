@@ -55,6 +55,14 @@ public sealed class AnnotationToolOptionsTests
     }
 
     [TestMethod]
+    public void OnlyTheArrowTool_TakesTheEndsPicker()
+    {
+        // Nothing else in the toolbar has ends to choose between.
+        Assert.IsTrue(AnnotationToolOptions.UsesArrowStyle(AnnotationTool.Arrow));
+        Assert.IsFalse(AnnotationToolOptions.UsesArrowStyle(AnnotationTool.Line));
+    }
+
+    [TestMethod]
     public void OnlyTheStampTool_TakesTheEmojiPicker()
     {
         Assert.IsTrue(AnnotationToolOptions.UsesStamp(AnnotationTool.Stamp));

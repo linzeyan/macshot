@@ -137,6 +137,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         StyleColorPicker.ColorChanged += StyleColor_Changed;
         StrokeWidthSlider.ValueChanged += StrokeWidth_Changed;
         LineStyleBox.SelectionChanged += LineStyle_Changed;
+        ArrowStyleBox.SelectionChanged += ArrowStyle_Changed;
         StampChoices.SelectionChanged += StampChoice_Changed;
     }
 
@@ -234,6 +235,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         SizeLabel.Text = SizeLabelFor(tool);
 
         LineStyleBox.Visibility = Show(AnnotationToolOptions.UsesLineStyle(tool));
+        ArrowStyleBox.Visibility = Show(AnnotationToolOptions.UsesArrowStyle(tool));
         StampButton.Visibility = Show(AnnotationToolOptions.UsesStamp(tool));
     }
 
@@ -300,6 +302,8 @@ public sealed partial class AnnotationToolbarView : UserControl
 
             LineStyleBox.ItemsSource = Enum.GetValues<LineStyle>().Select(style => style.ToString()).ToList();
             LineStyleBox.SelectedIndex = (int)_loadedStyle.LineStyle;
+            ArrowStyleBox.ItemsSource = Enum.GetValues<ArrowStyle>().Select(style => style.ToString()).ToList();
+            ArrowStyleBox.SelectedIndex = (int)_loadedStyle.ArrowStyle;
             StrokeWidthSlider.Value = _loadedStyle.StrokeWidth;
             StyleColorPicker.Color = ToUiColor(_loadedStyle.Color);
         }
@@ -369,6 +373,8 @@ public sealed partial class AnnotationToolbarView : UserControl
 
     private void LineStyle_Changed(object sender, SelectionChangedEventArgs e) => ApplyStyle();
 
+    private void ArrowStyle_Changed(object sender, SelectionChangedEventArgs e) => ApplyStyle();
+
     /// <summary>
     /// The style applies to marks drawn from now on. Restyling what is already on the
     /// canvas would need a selection, which is a separate feature.
@@ -383,7 +389,8 @@ public sealed partial class AnnotationToolbarView : UserControl
             || _editor is not { } editor
             || StyleColorPicker is null
             || StrokeWidthSlider is null
-            || LineStyleBox is null)
+            || LineStyleBox is null
+            || ArrowStyleBox is null)
         {
             return;
         }
@@ -392,7 +399,10 @@ public sealed partial class AnnotationToolbarView : UserControl
         editor.Style = new AnnotationStyle(
             new AnnotationColor(color.R, color.G, color.B, color.A),
             Math.Max(1, StrokeWidthSlider.Value),
-            LineStyleBox.SelectedIndex >= 0 ? (LineStyle)LineStyleBox.SelectedIndex : LineStyle.Solid);
+            LineStyleBox.SelectedIndex >= 0 ? (LineStyle)LineStyleBox.SelectedIndex : LineStyle.Solid,
+            ArrowStyle: ArrowStyleBox.SelectedIndex >= 0
+                ? (ArrowStyle)ArrowStyleBox.SelectedIndex
+                : ArrowStyle.Filled);
         UpdateColorSwatch();
     }
 

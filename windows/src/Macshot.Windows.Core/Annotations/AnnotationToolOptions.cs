@@ -48,6 +48,9 @@ public static class AnnotationToolOptions
         or AnnotationTool.Rectangle
         or AnnotationTool.Ellipse;
 
+    /// <summary>Whether the arrow-ends picker applies.</summary>
+    public static bool UsesArrowStyle(AnnotationTool tool) => tool == AnnotationTool.Arrow;
+
     /// <summary>Whether the emoji picker applies.</summary>
     public static bool UsesStamp(AnnotationTool tool) => tool == AnnotationTool.Stamp;
 

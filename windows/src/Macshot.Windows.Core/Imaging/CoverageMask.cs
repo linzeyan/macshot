@@ -101,6 +101,56 @@ internal sealed class CoverageMask
         }
     }
 
+    /// <summary>
+    /// Adds a filled polygon, antialiased along every edge.
+    /// </summary>
+    /// <remarks>
+    /// Scanline fill with four sample rows per pixel. The horizontal coverage of a span
+    /// is exact — a span knows where it starts and ends within a pixel — so only the
+    /// vertical direction is sampled, which is where an arrow head's sloping edges need
+    /// it and where a stamped disc would be too coarse to help.
+    /// </remarks>
+    internal void AddPolygon(IReadOnlyList<CapturePoint> polygon)
+    {
+        ArgumentNullException.ThrowIfNull(polygon);
+
+        // Two points enclose no area, so there is nothing to fill.
+        if (polygon.Count < 3)
+        {
+            return;
+        }
+
+        const int SamplesPerRow = 4;
+        var firstRow = Math.Max(Top, (int)Math.Floor(polygon.Min(point => point.Y)));
+        var lastRow = Math.Min(Top + Height - 1, (int)Math.Ceiling(polygon.Max(point => point.Y)));
+
+        var row = new double[Width];
+        var crossings = new List<double>(polygon.Count);
+
+        for (var y = firstRow; y <= lastRow; y++)
+        {
+            Array.Clear(row);
+
+            for (var sample = 0; sample < SamplesPerRow; sample++)
+            {
+                var sampleY = y + ((sample + 0.5) / SamplesPerRow);
+                CrossingsAt(polygon, sampleY, crossings);
+
+                // Pairs, not singles: between one crossing and the next the sample row is
+                // inside the polygon, which is what fills a concave shape correctly too.
+                for (var pair = 0; pair + 1 < crossings.Count; pair += 2)
+                {
+                    AddSpan(row, crossings[pair], crossings[pair + 1], 1d / SamplesPerRow);
+                }
+            }
+
+            for (var x = 0; x < Width; x++)
+            {
+                Accumulate(Left + x, y, Math.Min(row[x], 1));
+            }
+        }
+    }
+
     internal void Composite(byte[] framePixels, int frameWidth, AnnotationColor color, double opacity)
     {
         var alpha = color.Alpha / 255d * opacity;
@@ -125,6 +175,54 @@ internal sealed class CoverageMask
                 framePixels[offset + 1] = Blend(framePixels[offset + 1], color.Green, blend);
                 framePixels[offset + 2] = Blend(framePixels[offset + 2], color.Red, blend);
                 framePixels[offset + 3] = byte.MaxValue;
+            }
+        }
+    }
+
+    /// <summary>
+    /// Where the polygon's edges cross one sample row, in order across the mask.
+    /// </summary>
+    /// <remarks>
+    /// An edge counts at its upper end and not its lower one. Counting both would find
+    /// two crossings where two edges meet at a vertex, and the fill would stop there.
+    /// </remarks>
+    private static void CrossingsAt(IReadOnlyList<CapturePoint> polygon, double sampleY, List<double> crossings)
+    {
+        crossings.Clear();
+
+        for (var index = 0; index < polygon.Count; index++)
+        {
+            var from = polygon[index];
+            var to = polygon[(index + 1) % polygon.Count];
+            if (from.Y == to.Y)
+            {
+                continue;
+            }
+
+            var top = Math.Min(from.Y, to.Y);
+            var bottom = Math.Max(from.Y, to.Y);
+            if (sampleY < top || sampleY >= bottom)
+            {
+                continue;
+            }
+
+            crossings.Add(from.X + ((sampleY - from.Y) / (to.Y - from.Y) * (to.X - from.X)));
+        }
+
+        crossings.Sort();
+    }
+
+    private void AddSpan(double[] row, double startX, double endX, double weight)
+    {
+        var first = Math.Max(Left, (int)Math.Floor(startX));
+        var last = Math.Min(Left + Width - 1, (int)Math.Ceiling(endX));
+
+        for (var x = first; x <= last; x++)
+        {
+            var overlap = Math.Clamp(Math.Min(endX, x + 1) - Math.Max(startX, x), 0, 1);
+            if (overlap > 0)
+            {
+                row[x - Left] += overlap * weight;
             }
         }
     }

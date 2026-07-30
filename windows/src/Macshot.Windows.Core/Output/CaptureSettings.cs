@@ -78,6 +78,9 @@ public sealed record CaptureSettings
 
     public LineStyle AnnotationLineStyle { get; init; } = LineStyle.Solid;
 
+    /// <summary>Which ends the arrow tool draws.</summary>
+    public ArrowStyle AnnotationArrowStyle { get; init; } = ArrowStyle.Filled;
+
     /// <summary>
     /// Rounds off a freehand stroke once it is finished. On by default: a path sampled
     /// from a mouse is a staircase, and nobody draws one on purpose. Configured rather
@@ -238,7 +241,11 @@ public sealed record CaptureSettings
         var color = Annotations.AnnotationColor.TryParseHex(AnnotationColor, out var parsed)
             ? parsed
             : AnnotationStyle.Default.Color;
-        return new AnnotationStyle(color, Math.Clamp(AnnotationStrokeWidth, MinStrokeWidth, MaxStrokeWidth), AnnotationLineStyle);
+        return new AnnotationStyle(
+            color,
+            Math.Clamp(AnnotationStrokeWidth, MinStrokeWidth, MaxStrokeWidth),
+            AnnotationLineStyle,
+            ArrowStyle: AnnotationArrowStyle);
     }
 
     public CaptureSettings WithAnnotationStyle(AnnotationStyle style)
@@ -250,6 +257,7 @@ public sealed record CaptureSettings
             AnnotationColor = style.Color.ToHex(),
             AnnotationStrokeWidth = style.StrokeWidth,
             AnnotationLineStyle = style.LineStyle,
+            AnnotationArrowStyle = style.ArrowStyle,
         };
     }
 
@@ -280,6 +288,7 @@ public sealed record CaptureSettings
                 ? Math.Clamp(AnnotationStrokeWidth, MinStrokeWidth, MaxStrokeWidth)
                 : AnnotationStyle.Default.StrokeWidth,
             AnnotationLineStyle = Enum.IsDefined(AnnotationLineStyle) ? AnnotationLineStyle : LineStyle.Solid,
+            AnnotationArrowStyle = Enum.IsDefined(AnnotationArrowStyle) ? AnnotationArrowStyle : ArrowStyle.Filled,
             DelaySeconds = Math.Clamp(DelaySeconds, MinDelaySeconds, MaxDelaySeconds),
             HistorySize = Math.Clamp(HistorySize, 0, MaxHistorySize),
 

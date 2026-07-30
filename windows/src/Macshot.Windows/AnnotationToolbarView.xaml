@@ -79,6 +79,13 @@
 
                 <ComboBox x:Name="LineStyleBox" VerticalAlignment="Center" />
 
+                <!-- Which ends the arrow tool draws. Shown only for that tool, since
+                     nothing else has ends to choose. -->
+                <ComboBox
+                    x:Name="ArrowStyleBox"
+                    VerticalAlignment="Center"
+                    ToolTipService.ToolTip="Arrow ends" />
+
                 <!-- Which emoji the stamp tool places. Populated in code from
                      StampGlyph.Choices so the picker and the renderer cannot
                      offer different sets. -->

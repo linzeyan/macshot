@@ -126,7 +126,7 @@ public static class AnnotationRasterizer
             CompositeStrokes(pixels, width, height, [BuildShaftPath(annotation)], annotation);
             break;
         case AnnotationTool.Arrow:
-            CompositeStrokes(pixels, width, height, BuildArrowPaths(annotation), annotation);
+            CompositeArrow(pixels, width, height, annotation);
             break;
         case AnnotationTool.Measure:
             CompositeStrokes(pixels, width, height, BuildMeasurePaths(annotation), annotation);
@@ -491,46 +491,137 @@ public static class AnnotationRasterizer
         return turned;
     }
 
-    private static IReadOnlyList<CapturePoint[]> BuildArrowPaths(Annotation annotation)
+    /// <summary>
+    /// Draws an arrow: shaft and any bar as strokes, any head as a filled triangle,
+    /// through one mask so the parts cannot show their seams through a translucent
+    /// colour.
+    /// </summary>
+    private static void CompositeArrow(byte[] pixels, int width, int height, Annotation annotation)
     {
-        // Taken from the tangent where the shaft arrives rather than from the straight
-        // line between the ends, so a bent arrow's head still points along the curve.
         var shaft = BuildShaftPath(annotation);
-        var approach = shaft.Length >= 2 ? shaft[^2] : annotation.Start;
+        var style = annotation.Style.ArrowStyle;
 
-        var angle = Math.Atan2(
-            annotation.End.Y - approach.Y,
-            annotation.End.X - approach.X);
-        var headLength = Math.Max(annotation.Style.StrokeWidth * 4, 10);
-        var left = new CapturePoint(
-            annotation.End.X - headLength * Math.Cos(angle - Math.PI / 6),
-            annotation.End.Y - headLength * Math.Sin(angle - Math.PI / 6));
-        var right = new CapturePoint(
-            annotation.End.X - headLength * Math.Cos(angle + Math.PI / 6),
-            annotation.End.Y - headLength * Math.Sin(angle + Math.PI / 6));
+        var strokes = new List<CapturePoint[]> { shaft };
+        var fills = new List<CapturePoint[]>();
+
+        if (style == ArrowStyle.Open)
+        {
+            // Drawn rather than solid: the two sides of the same triangle, left open.
+            var head = ArrowHead(annotation, shaft, atEnd: true);
+            strokes.Add([head[0], head[1]]);
+            strokes.Add([head[0], head[2]]);
+        }
+        else
+        {
+            fills.Add(ArrowHead(annotation, shaft, atEnd: true));
+        }
+
+        if (style == ArrowStyle.Double)
+        {
+            fills.Add(ArrowHead(annotation, shaft, atEnd: false));
+        }
+        else if (style == ArrowStyle.Tail)
+        {
+            strokes.Add(TailBar(annotation, shaft));
+        }
+
+        CompositeShape(pixels, width, height, strokes, fills, annotation);
+    }
+
+    /// <summary>
+    /// The triangle at one end of an arrow, tip first.
+    /// </summary>
+    /// <remarks>
+    /// The direction is taken from the tangent where the shaft arrives rather than from
+    /// the straight line between the ends, so a bent arrow's head still points along the
+    /// curve.
+    /// </remarks>
+    private static CapturePoint[] ArrowHead(Annotation annotation, CapturePoint[] shaft, bool atEnd)
+    {
+        var tip = atEnd ? annotation.End : annotation.Start;
+        var approach = shaft.Length >= 2
+            ? (atEnd ? shaft[^2] : shaft[1])
+            : (atEnd ? annotation.Start : annotation.End);
+
+        var angle = Math.Atan2(tip.Y - approach.Y, tip.X - approach.X);
+        var headLength = ArrowHeadLength(annotation.Style.StrokeWidth);
 
         return
         [
-            shaft,
-            [annotation.End, left],
-            [annotation.End, right],
+            tip,
+            new CapturePoint(
+                tip.X - headLength * Math.Cos(angle - Math.PI / 6),
+                tip.Y - headLength * Math.Sin(angle - Math.PI / 6)),
+            new CapturePoint(
+                tip.X - headLength * Math.Cos(angle + Math.PI / 6),
+                tip.Y - headLength * Math.Sin(angle + Math.PI / 6)),
         ];
     }
+
+    /// <summary>
+    /// The bar across the near end of a tailed arrow, square to the shaft where it
+    /// leaves, so the arrow says where it starts as well as where it points.
+    /// </summary>
+    private static CapturePoint[] TailBar(Annotation annotation, CapturePoint[] shaft)
+    {
+        var leaving = shaft.Length >= 2 ? shaft[1] : annotation.End;
+        var angle = Math.Atan2(
+            leaving.Y - annotation.Start.Y,
+            leaving.X - annotation.Start.X) + (Math.PI / 2);
+
+        // Half a head's length either side: wide enough to read as a deliberate end,
+        // narrow enough that it cannot be mistaken for a head of its own.
+        var reach = ArrowHeadLength(annotation.Style.StrokeWidth) / 2;
+
+        return
+        [
+            new CapturePoint(
+                annotation.Start.X - reach * Math.Cos(angle),
+                annotation.Start.Y - reach * Math.Sin(angle)),
+            new CapturePoint(
+                annotation.Start.X + reach * Math.Cos(angle),
+                annotation.Start.Y + reach * Math.Sin(angle)),
+        ];
+    }
+
+    /// <summary>
+    /// How far a head reaches back from its tip. Grows with the stroke, with a floor so
+    /// a hairline arrow still ends in something visible.
+    /// </summary>
+    private static double ArrowHeadLength(double strokeWidth) => Math.Max(strokeWidth * 4, 10);
 
     private static void CompositeStrokes(
         byte[] pixels,
         int width,
         int height,
         IReadOnlyList<CapturePoint[]> paths,
+        Annotation annotation) =>
+        CompositeShape(pixels, width, height, paths, [], annotation);
+
+    /// <summary>
+    /// Draws a mark made of stroked paths, filled polygons, or both.
+    /// </summary>
+    /// <remarks>
+    /// One mask for all of it. Compositing the strokes and then the fills would blend
+    /// their overlap twice, which a solid colour hides and a translucent one shows as a
+    /// darker seam where an arrow's head meets its shaft.
+    /// </remarks>
+    private static void CompositeShape(
+        byte[] pixels,
+        int width,
+        int height,
+        IReadOnlyList<CapturePoint[]> paths,
+        IReadOnlyList<CapturePoint[]> fills,
         Annotation annotation)
     {
         var style = annotation.Style;
         paths = Oriented(annotation, paths);
+        fills = Oriented(annotation, fills);
 
         // Bounds come from the built geometry, not from the annotation's start and
         // end points: an arrow head reaches outside the shaft's bounding box, and a
         // rotated shape outside its upright one.
-        if (!TryGetPathBounds(paths, out var bounds))
+        if (!TryGetPathBounds([.. paths, .. fills], out var bounds))
         {
             return;
         }
@@ -544,6 +635,11 @@ public static class AnnotationRasterizer
         foreach (var path in paths)
         {
             StrokePath(mask, path, style);
+        }
+
+        foreach (var fill in fills)
+        {
+            mask.AddPolygon(fill);
         }
 
         mask.Composite(pixels, width, style.Color, style.Opacity);

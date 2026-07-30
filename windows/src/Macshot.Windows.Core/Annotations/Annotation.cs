@@ -41,7 +41,8 @@ public sealed record AnnotationStyle(
     AnnotationColor Color,
     double StrokeWidth,
     LineStyle LineStyle = LineStyle.Solid,
-    double Opacity = 1)
+    double Opacity = 1,
+    ArrowStyle ArrowStyle = ArrowStyle.Filled)
 {
     public static AnnotationStyle Default { get; } = new(new AnnotationColor(76, 194, 255), 3);
 
