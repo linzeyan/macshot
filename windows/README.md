@@ -65,7 +65,10 @@ adjusted with the eight grips or the arrow keys. Annotate with the toolbar,
 `Enter` to finish, `Esc` to cancel. `Ctrl+Z` / `Ctrl+Shift+Z` undo and redo.
 
 The first tool is a pointer: it selects a mark already drawn so it can be moved,
-reshaped by its handles, turned, bent, or deleted.
+reshaped by its handles, turned, bent, or deleted. Each tool is offered only the
+options it uses — arrow ends, rounded corners, a dash pattern, an emoji — so the
+bar never shows a control that would do nothing. Picking a colour magnifies the
+pixels under the pointer, and a label breaks its line on `Shift+Enter`.
 
 For anything more than a few marks, press **Editor** for a resizable window with
 zoom, cropping, flipping and gradient backgrounds. A past capture reopens there
