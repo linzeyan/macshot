@@ -23,46 +23,57 @@
                  Above the screenshot and below the marquee, so the edge of the region
                  stays the brightest line on the screen. -->
             <Canvas x:Name="DimLayer" IsHitTestVisible="False">
-                <Rectangle x:Name="DimTop" Fill="#8C000000" />
-                <Rectangle x:Name="DimBottom" Fill="#8C000000" />
-                <Rectangle x:Name="DimLeft" Fill="#8C000000" />
-                <Rectangle x:Name="DimRight" Fill="#8C000000" />
+                <Rectangle x:Name="DimTop" Fill="#73000000" />
+                <Rectangle x:Name="DimBottom" Fill="#73000000" />
+                <Rectangle x:Name="DimLeft" Fill="#73000000" />
+                <Rectangle x:Name="DimRight" Fill="#73000000" />
             </Canvas>
 
+            <!-- Input only. Everything it used to hold is drawn above the preview now;
+                 what is left is a transparent surface the whole capture's worth of
+                 pointer events arrive on. -->
             <local:PointerCanvas
                 x:Name="SelectionCanvas"
                 Background="Transparent"
                 PointerPressed="SelectionCanvas_PointerPressed"
                 PointerMoved="SelectionCanvas_PointerMoved"
                 PointerReleased="SelectionCanvas_PointerReleased"
-                PointerWheelChanged="SelectionCanvas_PointerWheelChanged">
-                <!-- Declared before the marquee so a selection being dragged out draws
-                     over the window highlight it is replacing, not under it. -->
-                <Rectangle
-                    x:Name="SnapHighlight"
-                    Visibility="Collapsed"
-                    Stroke="#4CC2FF"
-                    StrokeThickness="2"
-                    RadiusX="4"
-                    RadiusY="4"
-                    Fill="#144CC2FF" />
-
-                <!-- Outlined but not filled: what is inside is the capture, and it is
-                     shown as it will be delivered. Everything outside is darkened
-                     instead, which is what says where the edges are. -->
-                <Rectangle
-                    x:Name="SelectionRectangle"
-                    Visibility="Collapsed"
-                    Stroke="#4CC2FF"
-                    StrokeThickness="2" />
-            </local:PointerCanvas>
+                PointerWheelChanged="SelectionCanvas_PointerWheelChanged" />
 
             <!-- Above SelectionCanvas so marks are not tinted by the selection fill. The
                  same surface the editor window draws on; its own layers are not hit
                  testable, so pointer input keeps reaching the selection canvas below. -->
             <local:AnnotationCanvasView x:Name="AnnotationCanvas" />
 
-            <!-- The selection's grips, above the preview because they straddle its edge:
+            <!-- The marquee, above the preview. The preview is placed exactly on the
+                 region, so declared any lower it covered the inner half of the outline
+                 and — wherever the layout units rounded outwards — all of it, which left
+                 the region with no visible edge for as long as it was being annotated.
+                 macOS draws this border after the annotations for the same reason. -->
+            <Canvas x:Name="SelectionMarquee" IsHitTestVisible="False">
+                <!-- Declared before the marquee so a selection being dragged out draws
+                     over the window highlight it is replacing, not under it. -->
+                <Rectangle
+                    x:Name="SnapHighlight"
+                    Visibility="Collapsed"
+                    Stroke="#D9007AFF"
+                    StrokeThickness="2"
+                    RadiusX="4"
+                    RadiusY="4"
+                    Fill="#14007AFF" />
+
+                <!-- Outlined but not filled: what is inside is the capture, and it is
+                     shown as it will be delivered. Everything outside is darkened
+                     instead, which is what says where the edges are. The stroke is
+                     assigned in code, from the toolbar's accent, so the region and the
+                     toolbar that hangs off it are never two different colours. -->
+                <Rectangle
+                    x:Name="SelectionRectangle"
+                    Visibility="Collapsed"
+                    StrokeThickness="2" />
+            </Canvas>
+
+            <!-- The selection's grips, above the marquee because they straddle its edge:
                  declared any lower, the preview would cover their inner half and leave
                  eight half-squares. Not hit testable either — which grip a point grabs is
                  arithmetic SelectionHandles answers, so these only have to be visible. -->

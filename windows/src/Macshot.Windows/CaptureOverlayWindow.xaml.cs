@@ -20,7 +20,6 @@ using Microsoft.UI.Xaml.Shapes;
 using Windows.Foundation;
 using Windows.Graphics;
 using Windows.System;
-using Windows.UI;
 using Windows.UI.Core;
 
 namespace Macshot.Windows;
@@ -853,17 +852,23 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private void BuildGrips()
     {
+        // The same brush the toolbar paints its selected button with, rather than a copy
+        // of its colour: ToolbarPalette repaints in place, so a chosen accent reaches the
+        // region's edge and its grips without the overlay being rebuilt.
+        SelectionRectangle.Stroke = ToolbarPalette.AccentBrush;
+
         foreach (var handle in SelectionHandles.All)
         {
             var grip = new Rectangle
             {
                 Visibility = Visibility.Collapsed,
 
-                // The marquee's own blue filled in, outlined in white so a grip is
-                // still findable against a blue window behind it.
-                Fill = new SolidColorBrush(Color.FromArgb(255, 0x4C, 0xC2, 0xFF)),
-                Stroke = new SolidColorBrush(Color.FromArgb(255, 255, 255, 255)),
-                StrokeThickness = 1,
+                // Accent-filled circles with no outline, which is what macOS draws.
+                // A radius of half the grip is a circle, and XAML holds a radius to half
+                // the extent it is given, so it stays one at every display scale.
+                Fill = ToolbarPalette.AccentBrush,
+                RadiusX = SelectionHandles.Size / 2,
+                RadiusY = SelectionHandles.Size / 2,
             };
 
             _grips[handle] = grip;
