@@ -128,6 +128,7 @@ public sealed partial class AnnotationToolbarView : UserControl
 
         BuildToolButtons();
         LoadStyle();
+        ShowOptionsFor(editor.Tool);
 
         StyleColorPicker.ColorChanged += StyleColor_Changed;
         StrokeWidthSlider.ValueChanged += StrokeWidth_Changed;
@@ -202,8 +203,49 @@ public sealed partial class AnnotationToolbarView : UserControl
             button.IsChecked = candidate == tool;
         }
 
+        ShowOptionsFor(tool);
         Changed?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>
+    /// Shows the style controls this tool actually reads, and hides the rest.
+    /// </summary>
+    /// <remarks>
+    /// A dash pattern on a pixelated block and a colour on a blur are controls that do
+    /// nothing, and a row full of those teaches the user that none of them mean anything.
+    /// <see cref="AnnotationToolOptions"/> answers because the answers are facts about
+    /// the rasterizer, not about this row.
+    /// </remarks>
+    private void ShowOptionsFor(AnnotationTool tool)
+    {
+        ColorButton.Visibility = Show(AnnotationToolOptions.UsesColor(tool));
+
+        // The sampler follows the colour: it exists to set the swatch beside it, and
+        // offering it while that swatch is hidden would be offering to change something
+        // the tool in hand ignores.
+        PickColorButton.Visibility = ColorButton.Visibility;
+
+        SizeLabel.Visibility = Show(AnnotationToolOptions.UsesSize(tool));
+        StrokeWidthSlider.Visibility = SizeLabel.Visibility;
+        SizeLabel.Text = SizeLabelFor(tool);
+
+        LineStyleBox.Visibility = Show(AnnotationToolOptions.UsesLineStyle(tool));
+        StampButton.Visibility = Show(AnnotationToolOptions.UsesStamp(tool));
+    }
+
+    private static Visibility Show(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;
+
+    /// <summary>
+    /// What the size slider is called for this tool. One slider, three jobs — a stroke
+    /// width, the size of a glyph, the coarseness of an effect — and a label that says
+    /// "Width" over a blur radius is worse than no label.
+    /// </summary>
+    private static string SizeLabelFor(AnnotationTool tool) => AnnotationToolOptions.SizeMeaning(tool) switch
+    {
+        AnnotationSizeMeaning.Extent => "Size",
+        AnnotationSizeMeaning.Strength => "Strength",
+        _ => "Width",
+    };
 
     private void BuildToolButtons()
     {

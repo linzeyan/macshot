@@ -37,7 +37,7 @@
             </StackPanel>
 
             <StackPanel Orientation="Horizontal" Spacing="10" VerticalAlignment="Center">
-                <Button Padding="6" ToolTipService.ToolTip="Colour">
+                <Button x:Name="ColorButton" Padding="6" ToolTipService.ToolTip="Colour">
                     <Border
                         x:Name="ColorSwatch"
                         Width="20"
@@ -66,7 +66,9 @@
                     ToolTipService.ToolTip="Take a colour from the screen"
                     Click="PickColor_Click" />
 
-                <TextBlock Text="Width" Foreground="White" VerticalAlignment="Center" />
+                <!-- The label is set in code: one slider is a stroke width, a glyph
+                     size, or the strength of an effect, depending on the tool. -->
+                <TextBlock x:Name="SizeLabel" Text="Width" Foreground="White" VerticalAlignment="Center" />
                 <Slider
                     x:Name="StrokeWidthSlider"
                     Width="120"
