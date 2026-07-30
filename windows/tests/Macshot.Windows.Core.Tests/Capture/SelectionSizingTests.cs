@@ -112,6 +112,51 @@ public sealed class SelectionSizingTests
     }
 
     [TestMethod]
+    public void ADraggedGripKeepsTheLockedShapeWithTheOppositeCornerStill()
+    {
+        // A lock that only applied to typed numbers would come apart the first time
+        // anyone touched a grip, which is how the region is adjusted the rest of the time.
+        var held = SelectionSizing.ConstrainToAspect(
+            new CaptureRegion(100, 100, 320, 40),
+            16.0 / 9.0,
+            SelectionHandle.BottomRight,
+            Screen);
+
+        Assert.AreEqual(100, held.X, "the corner opposite the grip has not moved");
+        Assert.AreEqual(100, held.Y);
+        Assert.AreEqual(320, held.Width, "the axis dragged furthest drives");
+        Assert.AreEqual(180, held.Height);
+    }
+
+    [TestMethod]
+    public void AnEdgeGripDrivesItsOwnAxisAndCentresTheOther()
+    {
+        var held = SelectionSizing.ConstrainToAspect(
+            new CaptureRegion(100, 100, 400, 200),
+            1,
+            SelectionHandle.Bottom,
+            Screen);
+
+        Assert.AreEqual(200, held.Width, "the height it was dragged to drives the width");
+        Assert.AreEqual(200, held.Height);
+        Assert.AreEqual(300, held.X + (held.Width / 2), "the derived width stays centred");
+        Assert.AreEqual(100, held.Y, "the top edge, opposite the grip, has not moved");
+    }
+
+    [TestMethod]
+    public void ALockedShapeSurvivesBeingDraggedOffTheScreen()
+    {
+        var held = SelectionSizing.ConstrainToAspect(
+            new CaptureRegion(0, 0, 1920, 400),
+            1,
+            SelectionHandle.BottomRight,
+            Screen);
+
+        Assert.AreEqual(held.Width, held.Height, "still square");
+        Assert.IsTrue(held.Bottom <= Screen.Bottom, $"ran off the bottom at {held.Bottom}");
+    }
+
+    [TestMethod]
     public void EveryRatioPresetIsAShapeAndEverySizePresetIsAMeasurement()
     {
         // The menu is split into two sections that do different things, and a preset in

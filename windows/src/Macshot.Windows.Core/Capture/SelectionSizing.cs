@@ -95,6 +95,92 @@ public static class SelectionSizing
     }
 
     /// <summary>
+    /// A region a grip has just dragged out, held to <paramref name="aspect"/>.
+    /// </summary>
+    /// <remarks>
+    /// A locked shape that only applied to typed numbers would come apart the first time
+    /// anyone touched a grip, which is how the region is adjusted the rest of the time.
+    /// The edge or corner being dragged drives one dimension and the other follows: the
+    /// side handles drive the axis they move along, and a corner is driven by whichever
+    /// axis was dragged furthest, so the region follows the pointer rather than fighting
+    /// it. Whatever is opposite the grip stays put, which is what a resize means.
+    /// </remarks>
+    public static CaptureRegion ConstrainToAspect(
+        CaptureRegion dragged,
+        double aspect,
+        SelectionHandle handle,
+        CaptureRegion bounds,
+        double minimum = 1)
+    {
+        if (aspect <= 0 || handle == SelectionHandle.None || dragged.IsEmpty)
+        {
+            return dragged;
+        }
+
+        var width = dragged.Width;
+        var height = dragged.Height;
+
+        switch (handle)
+        {
+            case SelectionHandle.Top or SelectionHandle.Bottom:
+                width = height * aspect;
+                break;
+
+            case SelectionHandle.Left or SelectionHandle.Right:
+                height = width / aspect;
+                break;
+
+            default:
+                if (width / aspect >= height)
+                {
+                    height = width / aspect;
+                }
+                else
+                {
+                    width = height * aspect;
+                }
+
+                break;
+        }
+
+        // Both together, or holding the shape would be the first thing given up at the
+        // limits — which is where a ratio lock is most obviously either working or not.
+        if (width < minimum || height < minimum)
+        {
+            var grow = Math.Max(minimum / width, minimum / height);
+            width *= grow;
+            height *= grow;
+        }
+
+        if (width > bounds.Width || height > bounds.Height)
+        {
+            var shrink = Math.Min(bounds.Width / width, bounds.Height / height);
+            width *= shrink;
+            height *= shrink;
+        }
+
+        var left = handle switch
+        {
+            SelectionHandle.TopLeft or SelectionHandle.Left or SelectionHandle.BottomLeft => dragged.Right - width,
+            SelectionHandle.Top or SelectionHandle.Bottom => dragged.X + ((dragged.Width - width) / 2),
+            _ => dragged.X,
+        };
+
+        var top = handle switch
+        {
+            SelectionHandle.TopLeft or SelectionHandle.Top or SelectionHandle.TopRight => dragged.Bottom - height,
+            SelectionHandle.Left or SelectionHandle.Right => dragged.Y + ((dragged.Height - height) / 2),
+            _ => dragged.Y,
+        };
+
+        return new CaptureRegion(
+            Math.Clamp(left, bounds.X, Math.Max(bounds.X, bounds.Right - width)),
+            Math.Clamp(top, bounds.Y, Math.Max(bounds.Y, bounds.Bottom - height)),
+            width,
+            height);
+    }
+
+    /// <summary>
     /// The selection reshaped to <paramref name="aspect"/>, keeping roughly the size it
     /// already had. Locking a ratio is asking for that shape now, not only for the next
     /// drag.

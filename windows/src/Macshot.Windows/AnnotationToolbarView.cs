@@ -69,6 +69,9 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// </summary>
     private (CaptureRegion Selection, CaptureRegion Screen, CaptureRegion Avoid)? _placedAround;
 
+    /// <summary>Where the strips ended up, for anything else that has to keep clear.</summary>
+    private ToolbarLayout? _placedLayout;
+
     /// <summary>The style the toolbar started from, so only a real change is written back.</summary>
     private AnnotationStyle _loadedStyle = AnnotationStyle.Default;
 
@@ -193,6 +196,7 @@ public sealed partial class AnnotationToolbarView : UserControl
             ? FixedCorners(screen, sizes)
             : ToolbarPlacement.For(selection, screen, sizes, avoid);
 
+        _placedLayout = layout;
         Place(_tools, layout.Tools);
         Place(_actions, layout.Actions);
 
@@ -200,6 +204,25 @@ public sealed partial class AnnotationToolbarView : UserControl
         {
             _optionsRow.Width = layout.OptionsRow.Width;
             Place(_optionsRow, layout.OptionsRow);
+        }
+    }
+
+    /// <summary>
+    /// Where the strips are, for whatever else has to share the screen with them. Empty
+    /// while the toolbar is hidden or before it has been placed.
+    /// </summary>
+    public IReadOnlyList<CaptureRegion> Occupies
+    {
+        get
+        {
+            if (Visibility != Visibility.Visible || _placedLayout is not { } layout)
+            {
+                return [];
+            }
+
+            return _optionsRow.Visibility == Visibility.Visible
+                ? [layout.Tools, layout.Actions, layout.OptionsRow]
+                : [layout.Tools, layout.Actions];
         }
     }
 

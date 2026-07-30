@@ -60,6 +60,10 @@
                 Foreground="White" />
         </Border>
 
+        <!-- The width × height box, which is put here in code so it can stay internal to
+             the assembly like the rest of the toolbar's parts. -->
+        <Canvas x:Name="SizeBoxLayer" />
+
         <!-- The tools, the actions and the tool options, each placed around the chosen
              region rather than pinned to the display. Fills the window so it has the
              room to put them anywhere; a Canvas with no background is only hit testable

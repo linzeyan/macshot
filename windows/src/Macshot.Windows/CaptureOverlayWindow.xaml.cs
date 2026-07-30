@@ -4,6 +4,7 @@ using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Recognition;
 using Macshot.Windows.Rendering;
 using Macshot.Windows.Services;
+using Macshot.Windows.Toolbar;
 using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
@@ -85,6 +86,12 @@ public sealed partial class CaptureOverlayWindow : Window
     private readonly Dictionary<SelectionHandle, Rectangle> _grips = [];
 
     /// <summary>
+    /// The region's size, shown against it and typed into. Held here rather than declared
+    /// in the markup so it can stay internal to the assembly like the toolbar's own parts.
+    /// </summary>
+    private readonly ResolutionBox _sizeBox = new();
+
+    /// <summary>
     /// This display's mapping between frame pixels and the layout units the overlay's
     /// chrome is arranged in. Built once: it depends only on the monitor.
     /// </summary>
@@ -151,6 +158,11 @@ public sealed partial class CaptureOverlayWindow : Window
     /// <summary>Where a move has reached, which is not taken until it is let go.</summary>
     private CaptureRegion _movePending;
 
+    /// <summary>
+    /// The shape the selection is being held to, or null when it is freeform.
+    /// </summary>
+    private double? _lockedAspect;
+
     public CaptureOverlayWindow(
         CapturedFrame desktopFrame,
         MonitorLayout layout,
@@ -213,6 +225,7 @@ public sealed partial class CaptureOverlayWindow : Window
         PreviewImage.Source = source;
         BuildGrips();
         WireToolbar();
+        WireSizeBox();
         WireCanvas();
 
         // Covers both finishing and cancelling: the owner closes every overlay either
@@ -693,7 +706,8 @@ public sealed partial class CaptureOverlayWindow : Window
             _placement);
 
         AnnotationToolbar.ShowToolbar(true);
-        RepositionToolbar(region);
+        _sizeBox.Visibility = Visibility.Visible;
+        RepositionChrome(region);
         HintText.Text = AnnotatingHint;
 
         // The other displays' overlays are always on top, so they have to go before
@@ -793,9 +807,19 @@ public sealed partial class CaptureOverlayWindow : Window
     /// user put it, which is what an intersection does and what moving the whole
     /// rectangle would not.
     /// </remarks>
-    private CaptureRegion ResizedTo(PointerRoutedEventArgs e) => SelectionHandles
-        .Resize(_resizeFrom, _resizing, ToFrame(e), e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift))
-        .Intersect(MonitorBounds);
+    private CaptureRegion ResizedTo(PointerRoutedEventArgs e)
+    {
+        var dragged = SelectionHandles
+            .Resize(_resizeFrom, _resizing, ToFrame(e), e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift))
+            .Intersect(MonitorBounds);
+
+        // A held shape applies to the grips too. One that only applied to typed numbers
+        // would come apart the first time anyone dragged an edge, which is how the region
+        // is adjusted the rest of the time.
+        return _lockedAspect is { } aspect
+            ? SelectionSizing.ConstrainToAspect(dragged, aspect, _resizing, MonitorBounds)
+            : dragged;
+    }
 
     /// <summary>
     /// Shows where a region is heading mid-drag, without re-cropping.
@@ -812,19 +836,54 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         PlaceChrome(SelectionRectangle, region);
         PlaceGrips(region);
-        RepositionToolbar(region);
+        RepositionChrome(region);
     }
 
     /// <summary>
-    /// Puts the toolbar around a frame-space region, on this display.
+    /// Puts the toolbar and the size box around a frame-space region, on this display.
     /// </summary>
     /// <remarks>
-    /// The toolbar hangs off the region rather than off the screen, so it moves with every
-    /// adjustment the way it does on macOS. Layout units go in, because the strips are
-    /// arranged by WinUI while the region is in desktop pixels.
+    /// Both hang off the region rather than off the screen, so they move with every
+    /// adjustment the way they do on macOS. Layout units go in, because they are arranged
+    /// by WinUI while the region is in desktop pixels.
     /// </remarks>
-    private void RepositionToolbar(CaptureRegion region) =>
-        AnnotationToolbar.Reposition(ToLayout(region), LayoutBounds);
+    private void RepositionChrome(CaptureRegion region)
+    {
+        var selection = ToLayout(region);
+        var screen = LayoutBounds;
+
+        _sizeBox.Show(region.Width, region.Height);
+
+        // The box first, so the toolbar knows what to keep clear of, and the box again
+        // once the strips have settled. Each is placed around the other, and a single pass
+        // would leave whichever went first sitting under the other.
+        PlaceSizeBox(selection, screen);
+        AnnotationToolbar.Reposition(selection, screen, _sizeBoxBounds);
+        PlaceSizeBox(selection, screen);
+    }
+
+    /// <summary>Where the size box last landed, in layout units.</summary>
+    private CaptureRegion _sizeBoxBounds;
+
+    private void PlaceSizeBox(CaptureRegion selection, CaptureRegion screen)
+    {
+        // Left exactly where it is mid-edit: moving the box under the caret is how a
+        // typed number ends up going somewhere else.
+        if (_sizeBox.Visibility != Visibility.Visible || _sizeBox.IsEditing)
+        {
+            return;
+        }
+
+        _sizeBoxBounds = ResolutionBoxPlacement.For(
+            selection,
+            screen,
+            _sizeBox.PreferredSize,
+            AnnotationToolbar.Occupies,
+            _sizeBox.DimensionsCenter);
+
+        Canvas.SetLeft(_sizeBox, _sizeBoxBounds.X);
+        Canvas.SetTop(_sizeBox, _sizeBoxBounds.Y);
+    }
 
     /// <summary>This display, in the layout units the overlay's chrome is arranged in.</summary>
     private CaptureRegion LayoutBounds =>
@@ -957,7 +1016,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         PlaceChrome(SelectionRectangle, taken);
         PlaceGrips(taken);
-        RepositionToolbar(taken);
+        RepositionChrome(taken);
 
         if (taken == current)
         {
@@ -1004,7 +1063,8 @@ public sealed partial class CaptureOverlayWindow : Window
         // While the entry box has focus the keyboard is its: Delete edits the text
         // instead of deleting an annotation, and Ctrl+Z takes back typing. Enter and
         // Escape are handled on the box itself, which is why they never arrive here.
-        if (AnnotationCanvas.IsTyping)
+        // The size box borrows it the same way while a number is being typed into it.
+        if (AnnotationCanvas.IsTyping || _sizeBox.IsEditing)
         {
             return;
         }
@@ -1103,6 +1163,75 @@ public sealed partial class CaptureOverlayWindow : Window
         AnnotationToolbar.Changed += (_, _) => RenderAnnotations();
         AnnotationToolbar.ColorSamplingToggled += (_, armed) => SetColorSampling(armed);
         AnnotationToolbar.CommandInvoked += (_, command) => RunToolbarCommand(command);
+    }
+
+    /// <summary>
+    /// Binds the size box: what it reads out, and what typing into it does.
+    /// </summary>
+    private void WireSizeBox()
+    {
+        SizeBoxLayer.Children.Add(_sizeBox);
+        _sizeBox.Visibility = Visibility.Collapsed;
+        _sizeBox.SizeCommitted += (_, request) => ApplyTypedSize(request);
+        _sizeBox.PresetPicked += (_, preset) => ApplyPreset(preset);
+
+        // The overlay's keyboard is only on loan to the fields. Without this, Escape and
+        // every tool shortcut would keep going to a text box the user has finished with.
+        _sizeBox.EditingEnded += (_, _) => OverlayRoot.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>
+    /// Resizes the region to a typed size, around its own middle.
+    /// </summary>
+    private void ApplyTypedSize(SizeRequest request)
+    {
+        if (_selection is not { } current)
+        {
+            return;
+        }
+
+        // Same as moving it: a window capture typed to a different size is no longer the
+        // window, so it becomes an ordinary region cropped out of the screenshot.
+        _regionIsAdjustable = true;
+
+        ApplyRegion(SelectionSizing.Resize(
+            current,
+            request.Width,
+            request.Height,
+            MonitorBounds,
+            _lockedAspect,
+            request.Edited));
+    }
+
+    /// <summary>
+    /// Takes a shape or an exact size from the presets menu.
+    /// </summary>
+    /// <remarks>
+    /// A shape is held from here on, so dragging a grip keeps it. An exact size is a
+    /// one-off and clears whatever shape was being held: asking for 1920 × 1080 while a
+    /// 1 : 1 lock quietly squared it off would be the menu contradicting itself.
+    /// </remarks>
+    private void ApplyPreset(ResolutionPreset preset)
+    {
+        if (_selection is not { } current)
+        {
+            return;
+        }
+
+        _regionIsAdjustable = true;
+
+        if (preset.IsExact)
+        {
+            _lockedAspect = null;
+            ApplyRegion(SelectionSizing.Resize(current, preset.Width, preset.Height, MonitorBounds));
+            return;
+        }
+
+        _lockedAspect = preset.Aspect;
+        if (preset.Aspect is { } aspect)
+        {
+            ApplyRegion(SelectionSizing.ApplyAspect(current, aspect, MonitorBounds));
+        }
     }
 
     /// <summary>
