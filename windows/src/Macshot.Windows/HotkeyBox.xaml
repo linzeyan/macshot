@@ -15,6 +15,7 @@
         <Button
             x:Name="RecordButton"
             MinWidth="200"
+            FontSize="13"
             HorizontalContentAlignment="Left"
             Click="Record_Click"
             KeyDown="Record_KeyDown"

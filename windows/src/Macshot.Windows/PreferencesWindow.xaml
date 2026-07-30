@@ -16,9 +16,10 @@
             <!-- Uppercase in the markup rather than by a transform, because XAML has none
                  and macOS does it in code for the same reason. -->
             <Style x:Key="SectionHeading" TargetType="TextBlock">
-                <Setter Property="FontSize" Value="12" />
+                <Setter Property="FontSize" Value="10" />
                 <Setter Property="FontWeight" Value="SemiBold" />
                 <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+                <!-- 4 here plus the section's own 6 is the 10 macOS puts after a heading. -->
                 <Setter Property="Margin" Value="0,0,0,4" />
             </Style>
 
@@ -28,29 +29,41 @@
                  one form rather than six. -->
             <Style x:Key="RowLabel" TargetType="TextBlock">
                 <Setter Property="Width" Value="180" />
+                <!-- 13, macOS's body size, not WinUI's 14. Every control on the page is
+                     set to 13 for the same reason: the form has to read as one form, and
+                     a label a point smaller than the box beside it reads as a mistake. -->
+                <Setter Property="FontSize" Value="13" />
                 <Setter Property="TextAlignment" Value="Right" />
                 <Setter Property="TextWrapping" Value="Wrap" />
+                <Setter Property="VerticalAlignment" Value="Center" />
+            </Style>
+
+            <!-- Anything sitting in a row beside a label: matched to the label rather than
+                 left at WinUI's default. -->
+            <Style x:Key="RowText" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="13" />
                 <Setter Property="VerticalAlignment" Value="Center" />
             </Style>
 
             <!-- Indented to where the controls start, so a caption reads as belonging to
                  the control above it rather than to the label beside it. -->
             <Style x:Key="Caption" TargetType="TextBlock">
-                <Setter Property="Margin" Value="192,0,0,0" />
-                <Setter Property="FontSize" Value="12" />
+                <Setter Property="Margin" Value="188,0,0,0" />
+                <Setter Property="FontSize" Value="10" />
                 <Setter Property="TextWrapping" Value="Wrap" />
                 <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
             </Style>
 
             <!-- A control with no label of its own: a tick box says what it is itself. -->
             <Style x:Key="Unlabelled" TargetType="CheckBox">
-                <Setter Property="Margin" Value="192,0,0,0" />
+                <Setter Property="Margin" Value="188,0,0,0" />
+                <Setter Property="FontSize" Value="13" />
                 <Setter Property="MinWidth" Value="0" />
             </Style>
 
             <Style x:Key="Row" TargetType="StackPanel">
                 <Setter Property="Orientation" Value="Horizontal" />
-                <Setter Property="Spacing" Value="12" />
+                <Setter Property="Spacing" Value="8" />
             </Style>
 
             <Style x:Key="Section" TargetType="StackPanel">
@@ -116,7 +129,7 @@
         <!-- All six pages exist at once and one is shown. A Frame would rebuild the page
              on every click, and a change on any page writes every page — one that has been
              navigated away from must still hold what was typed into it. -->
-        <Grid Grid.Row="1" Padding="20,8,20,8">
+        <Grid Grid.Row="1" Padding="20,16,20,16">
             <!-- Appearance and the settings file, which is what macshot's General page
                  holds that this port has: it has no language of its own to pick, nothing
                  to launch at login and no updater to point at a channel. -->
@@ -133,7 +146,7 @@
                             Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="" Style="{StaticResource RowLabel}" />
-                            <Button Content="Back to macshot's colours" Click="ResetToolbarColors_Click" />
+                            <Button Content="Back to macshot's colours" FontSize="13" Click="ResetToolbarColors_Click" />
                         </StackPanel>
                     </StackPanel>
 
@@ -171,22 +184,24 @@
                             <NumberBox
                                 x:Name="ThumbnailSecondsBox"
                                 Width="120"
+                                FontSize="13"
                                 Minimum="1"
                                 Maximum="60"
                                 SpinButtonPlacementMode="Compact"
                                 ValueChanged="Setting_NumberChanged" />
-                            <TextBlock Text="seconds" VerticalAlignment="Center" />
+                            <TextBlock Text="seconds" Style="{StaticResource RowText}" />
                         </StackPanel>
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Delayed capture:" Style="{StaticResource RowLabel}" />
                             <NumberBox
                                 x:Name="DelaySecondsBox"
                                 Width="120"
+                                FontSize="13"
                                 Minimum="1"
                                 Maximum="60"
                                 SpinButtonPlacementMode="Compact"
                                 ValueChanged="Setting_NumberChanged" />
-                            <TextBlock Text="seconds" VerticalAlignment="Center" />
+                            <TextBlock Text="seconds" Style="{StaticResource RowText}" />
                         </StackPanel>
                         <TextBlock
                             Text="Used by &quot;Capture area after a delay&quot; in the notification-area menu, for capturing a menu or a hover state that would close if you reached for macshot. The keyboard shortcut stays immediate."
@@ -200,14 +215,15 @@
                         <TextBlock Text="OUTPUT" Style="{StaticResource SectionHeading}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Save folder:" Style="{StaticResource RowLabel}" />
-                            <TextBox x:Name="DirectoryBox" Width="240" PlaceholderText="Pictures\Macshot" IsReadOnly="True" />
-                            <Button Content="Browse" Click="Browse_Click" />
-                            <Button Content="Reset" Click="ResetDirectory_Click" />
+                            <TextBox x:Name="DirectoryBox" FontSize="13" Width="240" PlaceholderText="Pictures\Macshot" IsReadOnly="True" />
+                            <Button Content="Browse" FontSize="13" Click="Browse_Click" />
+                            <Button Content="Reset" FontSize="13" Click="ResetDirectory_Click" />
                         </StackPanel>
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="File name:" Style="{StaticResource RowLabel}" />
                             <TextBox
                                 x:Name="TemplateBox"
+                                FontSize="13"
                                 Width="240"
                                 TextChanged="Template_TextChanged"
                                 LostFocus="Setting_LostFocus" />
@@ -219,7 +235,7 @@
                         <TextBlock Text="Tokens: {yyyy} {yy} {MM} {dd} {HH} {mm} {ss}" Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Format:" Style="{StaticResource RowLabel}" />
-                            <ComboBox x:Name="FormatBox" Width="160" SelectionChanged="Format_SelectionChanged" />
+                            <ComboBox x:Name="FormatBox" FontSize="13" Width="160" SelectionChanged="Format_SelectionChanged" />
                         </StackPanel>
                         <StackPanel x:Name="QualityPanel" Style="{StaticResource Row}">
                             <TextBlock Text="Quality:" Style="{StaticResource RowLabel}" />
@@ -251,18 +267,19 @@
                             <NumberBox
                                 x:Name="HistorySizeBox"
                                 Width="120"
+                                FontSize="13"
                                 Minimum="0"
                                 Maximum="200"
                                 SpinButtonPlacementMode="Compact"
                                 ValueChanged="Setting_NumberChanged" />
-                            <TextBlock Text="captures" VerticalAlignment="Center" />
+                            <TextBlock Text="captures" Style="{StaticResource RowText}" />
                         </StackPanel>
                         <TextBlock
                             Text="Kept under macshot's own data folder, separately from the save folder, and offered in the notification-area menu. Zero keeps none."
                             Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="" Style="{StaticResource RowLabel}" />
-                            <Button Content="Clear history now" Click="ClearHistory_Click" />
+                            <Button Content="Clear history now" FontSize="13" Click="ClearHistory_Click" />
                         </StackPanel>
                     </StackPanel>
 
@@ -272,7 +289,7 @@
                         <TextBlock Text="TRANSLATION" Style="{StaticResource SectionHeading}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Google API key:" Style="{StaticResource RowLabel}" />
-                            <PasswordBox x:Name="TranslateKeyBox" Width="240" LostFocus="Setting_LostFocus" />
+                            <PasswordBox x:Name="TranslateKeyBox" FontSize="13" Width="240" LostFocus="Setting_LostFocus" />
                         </StackPanel>
                         <TextBlock
                             Text="Your own key, for your own project. Recognized text is sent to Google only when Translate is pressed. Without a key, Translate says so and sends nothing."
@@ -320,12 +337,12 @@
                             Style="{StaticResource Caption}" />
                         <!-- Filled in code from the toolbar's own list, so a tool added
                              later appears here without this page being edited. -->
-                        <StackPanel x:Name="ToolToggles" Margin="192,4,0,0" Spacing="2" />
+                        <StackPanel x:Name="ToolToggles" Margin="188,4,0,0" Spacing="2" />
                         <CheckBox
                             x:Name="SmoothPencilCheck"
                             Content="Smooth freehand strokes"
                             Style="{StaticResource Unlabelled}"
-                            Margin="192,8,0,0"
+                            Margin="188,8,0,0"
                             Checked="Setting_Toggled"
                             Unchecked="Setting_Toggled" />
                         <TextBlock
@@ -341,7 +358,7 @@
                         <TextBlock Text="OUTPUT" Style="{StaticResource SectionHeading}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Format:" Style="{StaticResource RowLabel}" />
-                            <ComboBox x:Name="RecordingFormatBox" Width="160" SelectionChanged="Setting_SelectionChanged" />
+                            <ComboBox x:Name="RecordingFormatBox" FontSize="13" Width="160" SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
                         <TextBlock
                             Text="GIF is written smaller and slower than MP4, because every GIF frame is a whole image."
@@ -374,7 +391,7 @@
                             Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="" Style="{StaticResource RowLabel}" />
-                            <Button Content="Open the log folder" Click="OpenLogFolder_Click" />
+                            <Button Content="Open the log folder" FontSize="13" Click="OpenLogFolder_Click" />
                         </StackPanel>
                     </StackPanel>
                 </StackPanel>

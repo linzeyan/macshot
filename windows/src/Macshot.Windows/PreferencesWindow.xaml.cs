@@ -102,7 +102,9 @@ public sealed partial class PreferencesWindow : Window
     {
         foreach (var tool in ToolbarActions.ToolOrder)
         {
-            var toggle = new CheckBox { Content = ToolbarActions.Tooltip(tool), MinWidth = 0 };
+            // 13 to match the markup's rows rather than WinUI's 14: these sit in the same
+            // column as the tick boxes the markup declares.
+            var toggle = new CheckBox { Content = ToolbarActions.Tooltip(tool), MinWidth = 0, FontSize = 13 };
             toggle.Checked += Setting_Changed;
             toggle.Unchecked += Setting_Changed;
             _toolToggles[tool] = toggle;
