@@ -60,13 +60,10 @@
                 Foreground="White" />
         </Border>
 
-        <!-- The same bar the editor window uses. Bound to this overlay's editor in
-             ShowAsync; everything it does arrives back as an event. -->
-        <local:AnnotationToolbarView
-            x:Name="AnnotationToolbar"
-            Visibility="Collapsed"
-            HorizontalAlignment="Center"
-            VerticalAlignment="Bottom"
-            Margin="0,0,0,32" />
+        <!-- The tools, the actions and the tool options, each placed around the chosen
+             region rather than pinned to the display. Fills the window so it has the
+             room to put them anywhere; a Canvas with no background is only hit testable
+             where its children are, so the gaps still reach the surfaces below. -->
+        <local:AnnotationToolbarView x:Name="AnnotationToolbar" Visibility="Collapsed" />
     </Grid>
 </Window>

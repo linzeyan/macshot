@@ -474,7 +474,7 @@ public sealed class CaptureController : IDisposable
         }
     }
 
-    private async void OnCaptureCompleted(object? sender, CapturedFrame result)
+    private async void OnCaptureCompleted(object? sender, CaptureCompletion result)
     {
         // Inside the try with the delivery: this runs from the overlay's own input
         // handler, closing the very window whose event is still on the stack, and an
@@ -482,11 +482,52 @@ public sealed class CaptureController : IDisposable
         try
         {
             DismissOverlays();
-            await DeliverAsync(result);
+            await DeliverAsync(result.Frame, result.Outcome);
         }
         catch (Exception exception)
         {
             ReportError(exception);
+        }
+    }
+
+    /// <summary>
+    /// Hands a finished capture to the one place the user named on the toolbar, rather
+    /// than to everything the preferences ask for.
+    /// </summary>
+    /// <remarks>
+    /// History is written whichever button was pressed, the same as it is for an ordinary
+    /// delivery: it is the net under every capture, not one of the destinations.
+    /// </remarks>
+    private async Task DeliverAsync(CapturedFrame frame, CaptureOutcome outcome)
+    {
+        if (outcome is CaptureOutcome.Deliver)
+        {
+            await DeliverAsync(frame);
+            return;
+        }
+
+        DiagnosticLog.Verbose($"delivering {frame.Width}x{frame.Height} to {outcome}, asked for on the toolbar");
+
+        var settings = _settings.Current;
+        switch (outcome)
+        {
+            case CaptureOutcome.Copy:
+                await ImageDelivery.CopyToClipboardAsync(frame);
+                break;
+
+            case CaptureOutcome.Save:
+                await ImageDelivery.SaveAsync(frame, settings);
+                break;
+
+            default:
+                break;
+        }
+
+        await ScreenshotHistory.RecordAsync(frame, settings);
+
+        if (outcome is CaptureOutcome.Pin)
+        {
+            await PinAsync(frame);
         }
     }
 

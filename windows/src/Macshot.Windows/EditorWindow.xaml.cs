@@ -122,15 +122,68 @@ public sealed partial class EditorWindow : Window
 
     private void WireToolbar()
     {
+        // Before binding: it decides which actions the strip carries, and cancelling a
+        // capture or moving a region are not among them here.
+        AnnotationToolbar.EditorMode = true;
+
         AnnotationToolbar.Bind(_editor, _settings);
         AnnotationToolbar.Changed += (_, _) => AnnotationCanvas.Render();
-        AnnotationToolbar.UndoRequested += (_, _) => Undo();
-        AnnotationToolbar.RedoRequested += (_, _) => Redo();
         AnnotationToolbar.ColorSamplingToggled += (_, armed) => SetColorSampling(armed);
-        AnnotationToolbar.ReadTextRequested += (_, _) => _ = ReadTextAsync();
-        AnnotationToolbar.RedactRequested += (_, _) => _ = RedactPiiAsync();
-        AnnotationToolbar.DoneRequested += (_, _) => _ = FinishAsync();
+        AnnotationToolbar.CommandInvoked += (_, command) => RunToolbarCommand(command);
+        AnnotationToolbar.ShowToolbar(true);
+
+        // The strips sit at fixed corners of the window here rather than around a
+        // selection, so what they are placed against is the window itself — and it is
+        // resizable, so they are placed again every time it changes.
+        EditorRoot.SizeChanged += (_, args) => AnnotationToolbar.Reposition(
+            default,
+            new CaptureRegion(0, 0, args.NewSize.Width, args.NewSize.Height));
+
         Closed += (_, _) => AnnotationToolbar.PersistStyle();
+    }
+
+    /// <summary>
+    /// What the action buttons do here. Copy, save and pin leave the window open: the
+    /// editor is somewhere the user works, and one that closed itself after handing over a
+    /// copy would take the rest of the session's marks with it.
+    /// </summary>
+    private void RunToolbarCommand(ToolbarCommand command)
+    {
+        switch (command)
+        {
+            case ToolbarCommand.Undo:
+                Undo();
+                return;
+
+            case ToolbarCommand.Redo:
+                Redo();
+                return;
+
+            case ToolbarCommand.ReadText:
+                _ = ReadTextAsync();
+                return;
+
+            case ToolbarCommand.Redact:
+                _ = RedactPiiAsync();
+                return;
+
+            case ToolbarCommand.Copy:
+                _ = CopyAsync();
+                return;
+
+            case ToolbarCommand.Save:
+                _ = SaveAsync();
+                return;
+
+            case ToolbarCommand.Pin:
+                _ = PinAsync();
+                return;
+
+            default:
+                // Choosing a tool and choosing a colour are the toolbar's own business,
+                // and the overlay's actions are not offered here at all.
+                return;
+        }
     }
 
     private void WireCanvas()
@@ -148,8 +201,9 @@ public sealed partial class EditorWindow : Window
     }
 
     /// <summary>
-    /// Builds the buttons only an editor has: the three image operations, and the three
-    /// ways out that do not close the window.
+    /// Builds the buttons only an editor has: the operations that change the pixels
+    /// themselves. Where the marked-up image goes is on the toolbar, which is the same
+    /// here as it is over a capture.
     /// </summary>
     private void BuildActions()
     {
@@ -157,13 +211,13 @@ public sealed partial class EditorWindow : Window
         _cropButton.Click += Crop_Click;
 
         var flip = new Button { Content = "Flip" };
-        var flipMenu = new MenuFlyout { Placement = FlyoutPlacementMode.Top };
+        var flipMenu = new MenuFlyout { Placement = FlyoutPlacementMode.Bottom };
         flipMenu.Items.Add(MenuItem("Horizontal", () => FlipImage(horizontal: true)));
         flipMenu.Items.Add(MenuItem("Vertical", () => FlipImage(horizontal: false)));
         flip.Flyout = flipMenu;
 
         var frame = new Button { Content = "Frame" };
-        var frameMenu = new MenuFlyout { Placement = FlyoutPlacementMode.Top };
+        var frameMenu = new MenuFlyout { Placement = FlyoutPlacementMode.Bottom };
         for (var index = 0; index < BeautifyRenderer.Styles.Count; index++)
         {
             // Captured by value: the loop variable would otherwise be read at click time,
@@ -174,22 +228,10 @@ public sealed partial class EditorWindow : Window
 
         frame.Flyout = frameMenu;
 
-        var copy = new Button { Content = "Copy" };
-        copy.Click += (_, _) => _ = CopyAsync();
-
-        var save = new Button { Content = "Save" };
-        save.Click += (_, _) => _ = SaveAsync();
-
-        var pin = new Button { Content = "Pin" };
-        pin.Click += (_, _) => _ = PinAsync();
-
-        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-        foreach (var button in new FrameworkElement[] { _cropButton, flip, frame, copy, save, pin })
+        foreach (var button in new FrameworkElement[] { _cropButton, flip, frame })
         {
-            row.Children.Add(button);
+            ImageOperations.Children.Add(button);
         }
-
-        AnnotationToolbar.Actions = row;
     }
 
     private static MenuFlyoutItem MenuItem(string text, Action invoke)

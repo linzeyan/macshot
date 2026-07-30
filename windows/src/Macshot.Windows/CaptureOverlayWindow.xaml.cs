@@ -50,6 +50,8 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private const string SamplingHint = "Click to take the colour under the pointer • Esc to stop";
 
+    private const string MovingHint = "Move the region with the pointer • Click to place it • Esc to leave it";
+
     private const string RememberedHint =
         "Enter to take the last selection again • Drag for a new one • Esc to cancel";
 
@@ -128,6 +130,27 @@ public sealed partial class CaptureOverlayWindow : Window
     /// <summary>The window under the pointer, in frame space, while none is chosen yet.</summary>
     private CaptureWindow? _hoveredWindow;
 
+    /// <summary>
+    /// Where the region was when the move button was pressed. Non-null for as long as the
+    /// region is following the pointer.
+    /// </summary>
+    private CaptureRegion? _movingFrom;
+
+    /// <summary>
+    /// The pointer's hold on the region being moved, taken on the first movement rather
+    /// than when the button was pressed.
+    /// </summary>
+    /// <remarks>
+    /// The press that starts a move lands on a button outside the region, so an offset of
+    /// zero would teleport the region under the toolbar the instant the pointer twitched.
+    /// Measuring from wherever the pointer is when the move actually starts keeps the
+    /// region where the user left it and moves it by exactly as much as the pointer moves.
+    /// </remarks>
+    private CapturePoint? _moveGrip;
+
+    /// <summary>Where a move has reached, which is not taken until it is let go.</summary>
+    private CaptureRegion _movePending;
+
     public CaptureOverlayWindow(
         CapturedFrame desktopFrame,
         MonitorLayout layout,
@@ -148,11 +171,11 @@ public sealed partial class CaptureOverlayWindow : Window
     }
 
     /// <summary>
-    /// Raised with the finished image: the selection cropped out of the capture with
-    /// every annotation already burned in. The owner receives pixels rather than a
-    /// region because only this window knows what was drawn on it.
+    /// Raised with the finished image and what was asked of it: the selection cropped out
+    /// of the capture with every annotation already burned in. The owner receives pixels
+    /// rather than a region because only this window knows what was drawn on it.
     /// </summary>
-    public event EventHandler<CapturedFrame>? CaptureCompleted;
+    public event EventHandler<CaptureCompletion>? CaptureCompleted;
 
     /// <summary>
     /// Raised once this overlay owns the capture, so the owner can close the
@@ -307,6 +330,14 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
 
+        // A move ends on the click that places the region, and that click does nothing
+        // else: it is the user putting the region down, not starting a mark inside it.
+        if (_movingFrom is not null)
+        {
+            EndRegionMove(keep: true);
+            return;
+        }
+
         if (IsAnnotating)
         {
             // Ahead of the tools: the grips are drawn over the selection's edge, so a
@@ -355,6 +386,14 @@ public sealed partial class CaptureOverlayWindow : Window
             var sampling = ToFrame(e);
             HintText.Text = $"{SamplingHint} • {SampleAt(sampling).ToHex()}";
             Loupe().Track(sampling);
+            return;
+        }
+
+        // Ahead of everything else that reads the pointer: while the region is following
+        // it, nothing else is.
+        if (_movingFrom is not null)
+        {
+            UpdateRegionMove(ToFrame(e));
             return;
         }
 
@@ -412,6 +451,12 @@ public sealed partial class CaptureOverlayWindow : Window
         if (AnnotationToolbar.IsSamplingColor)
         {
             SelectionCanvas.UseCursor(InputSystemCursorShape.Cross);
+            return;
+        }
+
+        if (_movingFrom is not null)
+        {
+            SelectionCanvas.UseCursor(InputSystemCursorShape.SizeAll);
             return;
         }
 
@@ -647,7 +692,8 @@ public sealed partial class CaptureOverlayWindow : Window
             region,
             _placement);
 
-        AnnotationToolbar.Visibility = Visibility.Visible;
+        AnnotationToolbar.ShowToolbar(true);
+        RepositionToolbar(region);
         HintText.Text = AnnotatingHint;
 
         // The other displays' overlays are always on top, so they have to go before
@@ -766,6 +812,111 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         PlaceChrome(SelectionRectangle, region);
         PlaceGrips(region);
+        RepositionToolbar(region);
+    }
+
+    /// <summary>
+    /// Puts the toolbar around a frame-space region, on this display.
+    /// </summary>
+    /// <remarks>
+    /// The toolbar hangs off the region rather than off the screen, so it moves with every
+    /// adjustment the way it does on macOS. Layout units go in, because the strips are
+    /// arranged by WinUI while the region is in desktop pixels.
+    /// </remarks>
+    private void RepositionToolbar(CaptureRegion region) =>
+        AnnotationToolbar.Reposition(ToLayout(region), LayoutBounds);
+
+    /// <summary>This display, in the layout units the overlay's chrome is arranged in.</summary>
+    private CaptureRegion LayoutBounds =>
+        new(0, 0, _monitor.Bounds.Width / _monitor.Scale, _monitor.Bounds.Height / _monitor.Scale);
+
+    /// <summary>A frame-space region as chrome over this display sees it.</summary>
+    private CaptureRegion ToLayout(CaptureRegion region)
+    {
+        var origin = _layout.FrameToPointer(_monitor, new CapturePoint(region.X, region.Y));
+        return new CaptureRegion(
+            origin.X,
+            origin.Y,
+            region.Width / _monitor.Scale,
+            region.Height / _monitor.Scale);
+    }
+
+    /// <summary>
+    /// Hands the region to the pointer, which is the only way to move it with the mouse:
+    /// dragging inside the selection draws a mark, and taking that gesture over would cost
+    /// the tools the one thing they are for.
+    /// </summary>
+    /// <remarks>
+    /// It runs until the next click rather than until the button is let go, the way it
+    /// does on macOS. The press that starts it is a button click, and by the time a click
+    /// has happened the mouse is already up — so "let go to place it" would place the
+    /// region before it had moved at all.
+    /// </remarks>
+    private void BeginRegionMove()
+    {
+        if (_selection is not { } region || _movingFrom is not null)
+        {
+            return;
+        }
+
+        // Moving a window capture makes it an ordinary region: its pixels stop being the
+        // window's own the moment it is over something else, so from here it is cropped
+        // out of the screenshot like any other and its grips come back with it.
+        _regionIsAdjustable = true;
+
+        _movingFrom = region;
+        _movePending = region;
+        _moveGrip = null;
+        HintText.Text = MovingHint;
+        SelectionCanvas.UseCursor(InputSystemCursorShape.SizeAll);
+        PlaceGrips(region);
+    }
+
+    /// <summary>
+    /// Ends a move, either taking where the region has reached or putting it back.
+    /// </summary>
+    private void EndRegionMove(bool keep)
+    {
+        if (_movingFrom is not { } original)
+        {
+            return;
+        }
+
+        var moved = _movePending;
+        _movingFrom = null;
+        _moveGrip = null;
+        HintText.Text = AnnotatingHint;
+
+        if (keep)
+        {
+            ApplyRegion(moved);
+            return;
+        }
+
+        ShowPendingRegion(original);
+    }
+
+    /// <summary>
+    /// Follows the pointer with the region being moved, keeping it on this display.
+    /// </summary>
+    private void UpdateRegionMove(CapturePoint pointer)
+    {
+        if (_movingFrom is not { } original)
+        {
+            return;
+        }
+
+        _moveGrip ??= new CapturePoint(pointer.X - original.X, pointer.Y - original.Y);
+
+        _movePending = SelectionHandles.ClampTo(
+            new CaptureRegion(
+                pointer.X - _moveGrip.Value.X,
+                pointer.Y - _moveGrip.Value.Y,
+                original.Width,
+                original.Height),
+            MonitorBounds);
+
+        ShowPendingRegion(_movePending);
     }
 
     /// <summary>
@@ -806,6 +957,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         PlaceChrome(SelectionRectangle, taken);
         PlaceGrips(taken);
+        RepositionToolbar(taken);
 
         if (taken == current)
         {
@@ -874,6 +1026,14 @@ public sealed partial class CaptureOverlayWindow : Window
                     return;
                 }
 
+                // A move in flight is the next thing given up, and giving it up leaves the
+                // region where it was rather than where the pointer has dragged it to.
+                if (_movingFrom is not null)
+                {
+                    EndRegionMove(keep: false);
+                    return;
+                }
+
                 // The first Escape abandons a half-drawn mark; only an Escape with
                 // nothing in flight throws the whole capture away.
                 if (_editor.Cancel())
@@ -934,34 +1094,79 @@ public sealed partial class CaptureOverlayWindow : Window
 
     /// <summary>
     /// Binds the shared toolbar to this overlay's editor and answers the things only the
-    /// overlay can: which pixels a colour sample comes from, and what Done means.
+    /// overlay can: which pixels a colour sample comes from, and what each action means
+    /// here.
     /// </summary>
     private void WireToolbar()
     {
         AnnotationToolbar.Bind(_editor, _settings);
         AnnotationToolbar.Changed += (_, _) => RenderAnnotations();
-        AnnotationToolbar.UndoRequested += (_, _) =>
-        {
-            _editor.Undo();
-            RenderAnnotations();
-        };
-        AnnotationToolbar.RedoRequested += (_, _) =>
-        {
-            _editor.Redo();
-            RenderAnnotations();
-        };
         AnnotationToolbar.ColorSamplingToggled += (_, armed) => SetColorSampling(armed);
-        AnnotationToolbar.ReadTextRequested += (_, _) => _ = ReadTextAsync();
-        AnnotationToolbar.RedactRequested += (_, _) => _ = RedactPiiAsync();
-        AnnotationToolbar.DoneRequested += (_, _) => _ = CompleteAsync();
+        AnnotationToolbar.CommandInvoked += (_, command) => RunToolbarCommand(command);
+    }
 
-        // The one action this toolbar has that the editor's does not, for the obvious
-        // reason. Crop, flip and frame live in the editor because they need a window that
-        // can zoom and a title bar to close; this is the way there.
-        var openEditor = new Button { Content = "Editor" };
-        ToolTipService.SetToolTip(openEditor, "Open in the editor window");
-        openEditor.Click += (_, _) => _ = OpenInEditorAsync();
-        AnnotationToolbar.Actions = openEditor;
+    /// <summary>
+    /// What the action buttons do over a live capture.
+    /// </summary>
+    /// <remarks>
+    /// Copy, save and pin each end the capture with one destination rather than with
+    /// whatever the preferences say. A button named Copy that also wrote a file because
+    /// auto-save happened to be on would be the button lying about what it does; Enter is
+    /// the press that means "the usual".
+    /// </remarks>
+    private void RunToolbarCommand(ToolbarCommand command)
+    {
+        switch (command)
+        {
+            case ToolbarCommand.Undo:
+                _editor.Undo();
+                RenderAnnotations();
+                return;
+
+            case ToolbarCommand.Redo:
+                _editor.Redo();
+                RenderAnnotations();
+                return;
+
+            case ToolbarCommand.Cancel:
+                // The whole capture, not this display's overlay: the owner tears every
+                // window down, the same as Escape.
+                Cancelled?.Invoke(this, EventArgs.Empty);
+                return;
+
+            case ToolbarCommand.MoveSelection:
+                BeginRegionMove();
+                return;
+
+            case ToolbarCommand.OpenEditor:
+                _ = OpenInEditorAsync();
+                return;
+
+            case ToolbarCommand.ReadText:
+                _ = ReadTextAsync();
+                return;
+
+            case ToolbarCommand.Redact:
+                _ = RedactPiiAsync();
+                return;
+
+            case ToolbarCommand.Copy:
+                _ = CompleteAsync(CaptureOutcome.Copy);
+                return;
+
+            case ToolbarCommand.Save:
+                _ = CompleteAsync(CaptureOutcome.Save);
+                return;
+
+            case ToolbarCommand.Pin:
+                _ = CompleteAsync(CaptureOutcome.Pin);
+                return;
+
+            default:
+                // Choosing a tool and choosing a colour are the toolbar's own business
+                // and never reach the host.
+                return;
+        }
     }
 
     /// <summary>
@@ -1073,7 +1278,7 @@ public sealed partial class CaptureOverlayWindow : Window
     /// resolution over this exact crop, so re-rendering could only introduce a
     /// difference between what was approved and what is handed over.
     /// </summary>
-    private async Task CompleteAsync()
+    private async Task CompleteAsync(CaptureOutcome outcome = CaptureOutcome.Deliver)
     {
         if (!IsAnnotating)
         {
@@ -1081,9 +1286,9 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         // Text still in the entry box is part of the capture the moment the user
-        // finishes it, and clicking Done is finishing it. Every queued placement has to
-        // land before the pixels are taken, or the delivered image is missing a mark the
-        // user made.
+        // finishes it, and asking for the capture is finishing it. Every queued placement
+        // has to land before the pixels are taken, or the delivered image is missing a
+        // mark the user made.
         await AnnotationCanvas.FlushAsync();
 
         if (_selection is { } taken)
@@ -1093,7 +1298,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         if (AnnotationCanvas.ToFrame() is { } finished)
         {
-            CaptureCompleted?.Invoke(this, finished);
+            CaptureCompleted?.Invoke(this, new CaptureCompletion(finished, outcome));
         }
     }
 

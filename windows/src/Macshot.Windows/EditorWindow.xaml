@@ -64,10 +64,22 @@
             <TextBlock x:Name="HintText" Foreground="White" />
         </Border>
 
-        <local:AnnotationToolbarView
-            x:Name="AnnotationToolbar"
-            HorizontalAlignment="Center"
-            VerticalAlignment="Bottom"
-            Margin="0,0,0,24" />
+        <!-- The operations that change the pixels rather than draw on them. A bar of their
+             own along the top, the way the macOS editor has: they belong to this window
+             rather than to the toolbar, which is the same in both places. Dark whatever the
+             system theme is, to match the toolbar it shares a window with. -->
+        <Border
+            x:Name="ImageOperationsBar"
+            HorizontalAlignment="Left"
+            VerticalAlignment="Top"
+            Margin="12"
+            Padding="6"
+            Background="#CC1F1F1F"
+            CornerRadius="6"
+            RequestedTheme="Dark">
+            <StackPanel x:Name="ImageOperations" Orientation="Horizontal" Spacing="6" />
+        </Border>
+
+        <local:AnnotationToolbarView x:Name="AnnotationToolbar" />
     </Grid>
 </Window>
