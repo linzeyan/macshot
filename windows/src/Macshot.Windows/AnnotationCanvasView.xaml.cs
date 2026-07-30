@@ -7,8 +7,14 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Shapes;
 
+// Imported rather than written out at each use site: inside namespace Macshot.Windows
+// the name "Windows" binds to Macshot.Windows, so a qualified Point resolves to
+// Macshot.Point and does not compile.
+using Windows.Foundation;
 using Windows.System;
+using Windows.UI;
 
 namespace Macshot.Windows;
 
@@ -33,6 +39,16 @@ namespace Macshot.Windows;
 /// </remarks>
 public sealed partial class AnnotationCanvasView : UserControl
 {
+    /// <summary>
+    /// How big a grab handle is drawn, in layout units. Smaller than
+    /// <see cref="AnnotationHandles.GrabRadius"/> is generous with, because a handle drawn
+    /// as large as its catchment would cover the mark it belongs to.
+    /// </summary>
+    private const double HandleSize = 9;
+
+    private readonly Brush _chromeStroke = new SolidColorBrush(Color.FromArgb(255, 76, 194, 255));
+    private readonly Brush _handleFill = new SolidColorBrush(Color.FromArgb(255, 255, 255, 255));
+
     private AnnotationEditor? _editor;
     private IFramePlacement _placement = new ImageFramePlacement();
     private Action<string> _reportHint = _ => { };
@@ -96,7 +112,98 @@ public sealed partial class AnnotationCanvasView : UserControl
     /// <summary>The pixels on show, ready to be delivered.</summary>
     public CapturedFrame? ToFrame() => _preview?.ToFrame();
 
-    public void Render() => _preview?.Render(_editor?.VisibleAnnotations ?? []);
+    public void Render()
+    {
+        _preview?.Render(_editor?.VisibleAnnotations ?? []);
+        DrawSelectionChrome();
+    }
+
+    /// <summary>
+    /// Redraws the outline and handles around the selected mark.
+    /// </summary>
+    /// <remarks>
+    /// Rebuilt from scratch on every render rather than kept and moved. A selection is one
+    /// small shape and at most five handles, and the alternative is a cache that has to
+    /// know when a rotation, a reshape or an undo invalidated it — which is every render
+    /// this is called from anyway.
+    /// </remarks>
+    private void DrawSelectionChrome()
+    {
+        SelectionLayer.Children.Clear();
+
+        if (_editor?.SelectionShown is not { } shown)
+        {
+            return;
+        }
+
+        var outline = AnnotationHandles.Outline(shown).Select(_placement.ToLayout).ToArray();
+        var border = new Polygon
+        {
+            Stroke = _chromeStroke,
+            StrokeThickness = 1,
+
+            // Dashed, so an outline drawn around a rectangle the user drew cannot be
+            // mistaken for a second rectangle they did not.
+            StrokeDashArray = new DoubleCollection { 4, 3 },
+            IsHitTestVisible = false,
+        };
+
+        // Added to the collection the shape already owns rather than assigning a new one,
+        // because the XAML collection types are not all constructible from code.
+        foreach (var corner in outline)
+        {
+            border.Points.Add(corner);
+        }
+
+        SelectionLayer.Children.Add(border);
+
+        foreach (var handle in _editor.Handles)
+        {
+            AddHandle(handle, outline);
+        }
+    }
+
+    private void AddHandle(AnnotationHandle handle, IReadOnlyList<Point> outline)
+    {
+        var at = _placement.ToLayout(handle.Position);
+
+        if (handle.Kind == AnnotationHandleKind.Rotate)
+        {
+            // Tethered to the edge it swings, so a circle floating clear of the shape is
+            // legibly part of it rather than a stray mark.
+            var top = new Point((outline[0].X + outline[1].X) / 2, (outline[0].Y + outline[1].Y) / 2);
+            SelectionLayer.Children.Add(new Line
+            {
+                X1 = top.X,
+                Y1 = top.Y,
+                X2 = at.X,
+                Y2 = at.Y,
+                Stroke = _chromeStroke,
+                StrokeThickness = 1,
+                IsHitTestVisible = false,
+            });
+        }
+
+        var round = handle.Kind is AnnotationHandleKind.Rotate or AnnotationHandleKind.Bend;
+        var shape = new Rectangle
+        {
+            Width = HandleSize,
+            Height = HandleSize,
+
+            // Round for the two handles that change something other than a position, so
+            // the shape of the grab point says what letting go will do.
+            RadiusX = round ? HandleSize / 2 : 1,
+            RadiusY = round ? HandleSize / 2 : 1,
+            Fill = _handleFill,
+            Stroke = _chromeStroke,
+            StrokeThickness = 1,
+            IsHitTestVisible = false,
+        };
+
+        Canvas.SetLeft(shape, at.X - (HandleSize / 2));
+        Canvas.SetTop(shape, at.Y - (HandleSize / 2));
+        SelectionLayer.Children.Add(shape);
+    }
 
     /// <summary>
     /// Whether <paramref name="tool"/> is placed with a click rather than dragged out.

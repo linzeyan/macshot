@@ -1,0 +1,437 @@
+using Macshot.Windows.Core.Capture;
+
+namespace Macshot.Windows.Core.Annotations;
+
+/// <summary>What one grab point on a selected annotation does.</summary>
+public enum AnnotationHandleKind
+{
+    /// <summary>Moves the end a linear mark was drawn from.</summary>
+    Start,
+
+    /// <summary>Moves the end a linear mark was drawn to.</summary>
+    End,
+
+    /// <summary>Pulls the middle of a line or arrow off the straight path.</summary>
+    Bend,
+
+    TopLeft,
+    TopRight,
+    BottomLeft,
+    BottomRight,
+
+    /// <summary>Turns an area shape about the centre of its upright bounds.</summary>
+    Rotate,
+}
+
+/// <summary>One grab point, in frame space, already turned with the shape it belongs to.</summary>
+public readonly record struct AnnotationHandle(AnnotationHandleKind Kind, CapturePoint Position);
+
+/// <summary>
+/// The grab points that let an annotation already drawn be reshaped: its ends moved, its
+/// corners dragged, its body turned, its line bowed.
+/// </summary>
+/// <remarks>
+/// <para>
+/// The counterpart of <see cref="Capture.SelectionHandles"/>, which does the same job for
+/// the capture region. Kept out of the UI layer for the same reason: which handles a tool
+/// offers and where a drag puts them is the behaviour worth testing, and none of it needs
+/// a display.
+/// </para>
+/// <para>
+/// Every position comes back turned by the annotation's own <see cref="Annotation.Rotation"/>
+/// so a handle sits on the shape as drawn, and every drag is answered in the shape's own
+/// upright frame. That pairing is what keeps a rotated rectangle's corners draggable
+/// without the rotation and the resize fighting each other.
+/// </para>
+/// </remarks>
+public static class AnnotationHandles
+{
+    /// <summary>
+    /// How near a press has to be to count as grabbing a handle, in frame pixels.
+    /// </summary>
+    /// <remarks>
+    /// Larger than the drawn square, because the handle is a target rather than a
+    /// decoration, and a mark thin enough to need reshaping is one whose handles are hard
+    /// to hit exactly.
+    /// </remarks>
+    public const double GrabRadius = 10;
+
+    /// <summary>
+    /// How far outside the top edge the rotation handle floats, in frame pixels.
+    /// </summary>
+    /// <remarks>
+    /// Off the shape rather than on it, so it cannot be confused with the corner beside
+    /// it, and far enough that the first pixel of the drag already describes an angle.
+    /// </remarks>
+    public const double RotateReach = 24;
+
+    /// <summary>
+    /// How far a line may be bowed, as the fraction of its length its middle is pulled
+    /// off the straight path. Past this the curve doubles back on itself and the handle
+    /// stops following the pointer, which reads as the drag having broken.
+    /// </summary>
+    public const double MaximumBend = 1;
+
+    /// <summary>
+    /// The handles <paramref name="annotation"/> offers, or nothing for a mark that only
+    /// moves.
+    /// </summary>
+    /// <remarks>
+    /// A freeform stroke has no two points that describe it, so dragging one would have to
+    /// distort every sample by some rule the user never chose. A sprite is composited one
+    /// pixel to one pixel, so a resize would either scale glyphs into mush or leave the
+    /// bounds disagreeing with what is drawn. Both move and nothing more.
+    /// </remarks>
+    public static IReadOnlyList<AnnotationHandle> For(Annotation annotation)
+    {
+        ArgumentNullException.ThrowIfNull(annotation);
+
+        if (!annotation.IsMovable || annotation.Points.Count > 0 || annotation.Sprite is not null)
+        {
+            return [];
+        }
+
+        return IsLinear(annotation.Tool) ? LinearHandles(annotation) : AreaHandles(annotation);
+    }
+
+    /// <summary>
+    /// The handle <paramref name="point"/> grabs, or null when it grabs none. The nearest
+    /// one wins, so handles that overlap on a mark too small to separate them still each
+    /// have a side of the shape that reaches them.
+    /// </summary>
+    public static AnnotationHandle? At(Annotation annotation, CapturePoint point, double radius = GrabRadius)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegative(radius);
+
+        AnnotationHandle? nearest = null;
+        var nearestDistance = double.MaxValue;
+
+        foreach (var handle in For(annotation))
+        {
+            var distance = Distance(handle.Position, point);
+            if (distance <= radius && distance < nearestDistance)
+            {
+                nearest = handle;
+                nearestDistance = distance;
+            }
+        }
+
+        return nearest;
+    }
+
+    /// <summary>
+    /// The annotation as dragging <paramref name="kind"/> to <paramref name="point"/>
+    /// leaves it. A handle this annotation does not offer leaves it alone rather than
+    /// throwing: a drag that outlived the shape it started on is a UI mistake, and losing
+    /// the mark over it would be a worse one.
+    /// </summary>
+    public static Annotation Drag(
+        Annotation annotation,
+        AnnotationHandleKind kind,
+        CapturePoint point,
+        EditorModifiers modifiers = EditorModifiers.None)
+    {
+        ArgumentNullException.ThrowIfNull(annotation);
+
+        if (!Offers(annotation, kind))
+        {
+            return annotation;
+        }
+
+        // The rotation handle is the one drag that reads the pointer where it really is;
+        // every other one works in the shape's upright frame, which is where Start and End
+        // live.
+        if (kind == AnnotationHandleKind.Rotate)
+        {
+            return annotation with { Rotation = AngleTo(annotation, point, modifiers) };
+        }
+
+        var upright = Turn(point, Centre(annotation), -annotation.Rotation);
+
+        return kind switch
+        {
+            AnnotationHandleKind.Start => annotation with
+            {
+                Start = Constrain(annotation.End, upright, modifiers),
+            },
+            AnnotationHandleKind.End => annotation with
+            {
+                End = Constrain(annotation.Start, upright, modifiers),
+            },
+            AnnotationHandleKind.Bend => annotation with { Bend = BendTo(annotation, upright) },
+            AnnotationHandleKind.TopLeft
+                or AnnotationHandleKind.TopRight
+                or AnnotationHandleKind.BottomLeft
+                or AnnotationHandleKind.BottomRight => ResizeCorner(annotation, kind, upright, modifiers),
+            _ => annotation,
+        };
+    }
+
+    /// <summary>
+    /// The four corners of the annotation's bounds, turned with it, clockwise from the top
+    /// left: what a canvas outlines a selection with.
+    /// </summary>
+    /// <remarks>
+    /// Offered even for the marks that have no handles, because a selected sprite or
+    /// stroke still has to look selected — otherwise a click that hit nothing and a click
+    /// that selected something are the same picture.
+    /// </remarks>
+    public static IReadOnlyList<CapturePoint> Outline(Annotation annotation)
+    {
+        ArgumentNullException.ThrowIfNull(annotation);
+
+        var bounds = annotation.BoundingRect;
+        var centre = Centre(annotation);
+
+        return
+        [
+            Turn(new CapturePoint(bounds.X, bounds.Y), centre, annotation.Rotation),
+            Turn(new CapturePoint(bounds.Right, bounds.Y), centre, annotation.Rotation),
+            Turn(new CapturePoint(bounds.Right, bounds.Bottom), centre, annotation.Rotation),
+            Turn(new CapturePoint(bounds.X, bounds.Bottom), centre, annotation.Rotation),
+        ];
+    }
+
+    private static bool Offers(Annotation annotation, AnnotationHandleKind kind)
+    {
+        foreach (var handle in For(annotation))
+        {
+            if (handle.Kind == kind)
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// Whether two annotations differ in anything a handle drag can change, which is what
+    /// tells a released drag from a click on a handle.
+    /// </summary>
+    public static bool Differ(Annotation left, Annotation right)
+    {
+        ArgumentNullException.ThrowIfNull(left);
+        ArgumentNullException.ThrowIfNull(right);
+
+        return left.Start != right.Start
+            || left.End != right.End
+            || left.Rotation != right.Rotation
+            || left.Bend != right.Bend;
+    }
+
+    /// <summary>
+    /// Tools drawn as a path from one point to another, rather than filling the rectangle
+    /// between them.
+    /// </summary>
+    private static bool IsLinear(AnnotationTool tool) => tool
+        is AnnotationTool.Line
+        or AnnotationTool.Arrow
+        or AnnotationTool.Marker
+        or AnnotationTool.Highlight
+        or AnnotationTool.Measure;
+
+    private static IReadOnlyList<AnnotationHandle> LinearHandles(Annotation annotation)
+    {
+        var centre = Centre(annotation);
+        var handles = new List<AnnotationHandle>(3)
+        {
+            new(AnnotationHandleKind.Start, Turn(annotation.Start, centre, annotation.Rotation)),
+            new(AnnotationHandleKind.End, Turn(annotation.End, centre, annotation.Rotation)),
+        };
+
+        // Only where the rasterizer can draw the curve. A ruler bowed off its own reading
+        // would be measuring a distance it no longer spans.
+        if (annotation.Tool is AnnotationTool.Line or AnnotationTool.Arrow)
+        {
+            handles.Add(new AnnotationHandle(
+                AnnotationHandleKind.Bend,
+                Turn(BendGrip(annotation), centre, annotation.Rotation)));
+        }
+
+        return handles;
+    }
+
+    private static IReadOnlyList<AnnotationHandle> AreaHandles(Annotation annotation)
+    {
+        var bounds = annotation.BoundingRect;
+        var centre = Centre(annotation);
+
+        return
+        [
+            new(AnnotationHandleKind.TopLeft, Turn(new CapturePoint(bounds.X, bounds.Y), centre, annotation.Rotation)),
+            new(AnnotationHandleKind.TopRight, Turn(new CapturePoint(bounds.Right, bounds.Y), centre, annotation.Rotation)),
+            new(AnnotationHandleKind.BottomLeft, Turn(new CapturePoint(bounds.X, bounds.Bottom), centre, annotation.Rotation)),
+            new(AnnotationHandleKind.BottomRight, Turn(new CapturePoint(bounds.Right, bounds.Bottom), centre, annotation.Rotation)),
+            new(AnnotationHandleKind.Rotate, Turn(
+                new CapturePoint(centre.X, bounds.Y - RotateReach),
+                centre,
+                annotation.Rotation)),
+        ];
+    }
+
+    /// <summary>
+    /// Where the bend handle sits: on the curve's own middle, so the handle is a point of
+    /// the line it bends rather than a control point floating beside it.
+    /// </summary>
+    private static CapturePoint BendGrip(Annotation annotation)
+    {
+        var (mid, acrossX, acrossY) = Across(annotation);
+        return new CapturePoint(
+            mid.X + (acrossX * annotation.Bend),
+            mid.Y + (acrossY * annotation.Bend));
+    }
+
+    private static double BendTo(Annotation annotation, CapturePoint point)
+    {
+        var (mid, acrossX, acrossY) = Across(annotation);
+        var lengthSquared = (acrossX * acrossX) + (acrossY * acrossY);
+        if (lengthSquared == 0)
+        {
+            return annotation.Bend;
+        }
+
+        // The component of the drag along the perpendicular, as a fraction of the line's
+        // length: sideways pulls bow the line, along-the-line movement does nothing.
+        var bend = (((point.X - mid.X) * acrossX) + ((point.Y - mid.Y) * acrossY)) / lengthSquared;
+        return Math.Clamp(bend, -MaximumBend, MaximumBend);
+    }
+
+    /// <summary>The midpoint of a linear mark, and the perpendicular a bend runs along.</summary>
+    private static (CapturePoint Mid, double AcrossX, double AcrossY) Across(Annotation annotation)
+    {
+        var deltaX = annotation.End.X - annotation.Start.X;
+        var deltaY = annotation.End.Y - annotation.Start.Y;
+        var mid = new CapturePoint(
+            (annotation.Start.X + annotation.End.X) / 2,
+            (annotation.Start.Y + annotation.End.Y) / 2);
+
+        return (mid, -deltaY, deltaX);
+    }
+
+    private static Annotation ResizeCorner(
+        Annotation annotation,
+        AnnotationHandleKind kind,
+        CapturePoint point,
+        EditorModifiers modifiers)
+    {
+        var bounds = annotation.BoundingRect;
+
+        // The corner across the shape from the one being dragged stays put, which is what
+        // makes a resize feel anchored rather than a move with a size change.
+        var anchor = kind switch
+        {
+            AnnotationHandleKind.TopLeft => new CapturePoint(bounds.Right, bounds.Bottom),
+            AnnotationHandleKind.TopRight => new CapturePoint(bounds.X, bounds.Bottom),
+            AnnotationHandleKind.BottomLeft => new CapturePoint(bounds.Right, bounds.Y),
+            _ => new CapturePoint(bounds.X, bounds.Y),
+        };
+
+        // Start and End are rewritten to the anchor and the pointer rather than kept in
+        // the order they were drawn, because an area shape is its bounding rectangle and
+        // the rasterizer reads nothing else from them.
+        return annotation with
+        {
+            Start = anchor,
+            End = Square(anchor, point, modifiers),
+        };
+    }
+
+    private static CapturePoint Constrain(CapturePoint anchor, CapturePoint point, EditorModifiers modifiers)
+    {
+        if (!modifiers.HasFlag(EditorModifiers.Constrain))
+        {
+            return point;
+        }
+
+        var deltaX = point.X - anchor.X;
+        var deltaY = point.Y - anchor.Y;
+        var length = Math.Sqrt((deltaX * deltaX) + (deltaY * deltaY));
+        if (length == 0)
+        {
+            return point;
+        }
+
+        // The same 45 degree snap a shift-drag draws with, so reshaping a line and drawing
+        // it land on the same angles.
+        var step = Math.PI / 4;
+        var angle = Math.Round(Math.Atan2(deltaY, deltaX) / step) * step;
+        return new CapturePoint(anchor.X + (length * Math.Cos(angle)), anchor.Y + (length * Math.Sin(angle)));
+    }
+
+    private static CapturePoint Square(CapturePoint anchor, CapturePoint point, EditorModifiers modifiers)
+    {
+        if (!modifiers.HasFlag(EditorModifiers.Constrain))
+        {
+            return point;
+        }
+
+        var deltaX = point.X - anchor.X;
+        var deltaY = point.Y - anchor.Y;
+        var size = Math.Max(Math.Abs(deltaX), Math.Abs(deltaY));
+        return new CapturePoint(
+            anchor.X + Math.CopySign(size, deltaX),
+            anchor.Y + Math.CopySign(size, deltaY));
+    }
+
+    /// <summary>
+    /// The angle the rotation handle is being dragged to, measured so that leaving the
+    /// handle where it started leaves the shape upright.
+    /// </summary>
+    private static double AngleTo(Annotation annotation, CapturePoint point, EditorModifiers modifiers)
+    {
+        var centre = Centre(annotation);
+        var deltaX = point.X - centre.X;
+        var deltaY = point.Y - centre.Y;
+        if (deltaX == 0 && deltaY == 0)
+        {
+            return annotation.Rotation;
+        }
+
+        // The handle floats above the shape, so straight up is no rotation at all.
+        var angle = Math.Atan2(deltaY, deltaX) + (Math.PI / 2);
+        if (!modifiers.HasFlag(EditorModifiers.Constrain))
+        {
+            return angle;
+        }
+
+        // 45 degrees rather than the 90 macOS snaps to: a shape built from upright bounds
+        // is barely changed by a quarter turn, so the diagonals are the orientations a
+        // snap can actually give the user that dragging the corners cannot.
+        var step = Math.PI / 4;
+        return Math.Round(angle / step) * step;
+    }
+
+    private static CapturePoint Centre(Annotation annotation)
+    {
+        var bounds = annotation.BoundingRect;
+        return new CapturePoint(bounds.X + (bounds.Width / 2), bounds.Y + (bounds.Height / 2));
+    }
+
+    /// <summary>
+    /// Turns a point about a centre, the same way the rasterizer turns the paths it draws.
+    /// </summary>
+    private static CapturePoint Turn(CapturePoint point, CapturePoint centre, double rotation)
+    {
+        if (rotation == 0)
+        {
+            return point;
+        }
+
+        var sin = Math.Sin(rotation);
+        var cos = Math.Cos(rotation);
+        var offsetX = point.X - centre.X;
+        var offsetY = point.Y - centre.Y;
+
+        return new CapturePoint(
+            centre.X + (offsetX * cos) - (offsetY * sin),
+            centre.Y + (offsetX * sin) + (offsetY * cos));
+    }
+
+    private static double Distance(CapturePoint left, CapturePoint right)
+    {
+        var deltaX = left.X - right.X;
+        var deltaY = left.Y - right.Y;
+        return Math.Sqrt((deltaX * deltaX) + (deltaY * deltaY));
+    }
+}

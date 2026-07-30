@@ -14,6 +14,12 @@
              been arranged, so they cannot simply be built on the side. -->
         <Canvas x:Name="SpriteHost" IsHitTestVisible="False" />
 
+        <!-- The chrome around the selected mark: its outline and its grab handles. A
+             layer of its own above the preview, because it must never reach the pixels
+             that get delivered — the rasterizer draws marks, not the furniture for
+             editing them. -->
+        <Canvas x:Name="SelectionLayer" IsHitTestVisible="False" />
+
         <!-- The text tool's entry box lives here. Unlike the layers above it this one
              is hit testable, but a Canvas with no background only hit tests its
              children, so a click anywhere else still reaches the host below. -->

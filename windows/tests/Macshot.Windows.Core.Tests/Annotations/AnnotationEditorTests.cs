@@ -217,6 +217,113 @@ public sealed class AnnotationEditorTests
         Assert.IsNull(editor.Selected);
     }
 
+    [TestMethod]
+    public void Handles_AreOfferedOnlyWhileTheSelectToolIsActive()
+    {
+        // They are chrome the user cannot grab with a drawing tool armed, and chrome that
+        // cannot be used is chrome in the way of the mark being drawn.
+        var editor = NewEditor(AnnotationTool.Rectangle);
+        Drag(editor, new CapturePoint(10, 10), new CapturePoint(60, 40));
+
+        editor.Tool = AnnotationTool.Select;
+        Drag(editor, new CapturePoint(10, 10), new CapturePoint(10, 10));
+        Assert.AreNotEqual(0, editor.Handles.Count);
+
+        editor.Tool = AnnotationTool.Arrow;
+
+        Assert.AreEqual(0, editor.Handles.Count);
+    }
+
+    [TestMethod]
+    public void GrabbingAHandle_ReshapesTheMarkInsteadOfMovingIt()
+    {
+        var editor = NewEditor(AnnotationTool.Rectangle);
+        Drag(editor, new CapturePoint(10, 10), new CapturePoint(60, 40));
+
+        editor.Tool = AnnotationTool.Select;
+        Select(editor, new CapturePoint(10, 10));
+        Drag(editor, new CapturePoint(60, 40), new CapturePoint(100, 80));
+
+        var bounds = editor.Document.Annotations[0].BoundingRect;
+        Assert.AreEqual(10, bounds.X, 1e-9, "the anchored corner must not move");
+        Assert.AreEqual(100, bounds.Right, 1e-9);
+        Assert.AreEqual(80, bounds.Bottom, 1e-9);
+    }
+
+    [TestMethod]
+    public void GrabbingAHandle_KeepsTheWholeReshapeToOneUndoStep()
+    {
+        var editor = NewEditor(AnnotationTool.Rectangle);
+        Drag(editor, new CapturePoint(10, 10), new CapturePoint(60, 40));
+
+        editor.Tool = AnnotationTool.Select;
+        Select(editor, new CapturePoint(10, 10));
+        editor.PointerPressed(new CapturePoint(60, 40));
+        editor.PointerMoved(new CapturePoint(70, 50));
+        editor.PointerMoved(new CapturePoint(80, 60));
+        editor.PointerReleased(new CapturePoint(80, 60));
+
+        editor.Undo();
+
+        Assert.AreEqual(60, editor.Document.Annotations[0].BoundingRect.Right, 1e-9);
+    }
+
+    [TestMethod]
+    public void RotatingWithAHandle_IsCommittedEvenThoughNoPointMoved()
+    {
+        var editor = NewEditor(AnnotationTool.Rectangle);
+        Drag(editor, new CapturePoint(0, 0), new CapturePoint(40, 40));
+
+        editor.Tool = AnnotationTool.Select;
+        Select(editor, new CapturePoint(0, 0));
+        var rotate = editor.Handles.Single(handle => handle.Kind == AnnotationHandleKind.Rotate).Position;
+        Drag(editor, rotate, new CapturePoint(100, 20));
+
+        Assert.AreEqual(Math.PI / 2, editor.Document.Annotations[0].Rotation, 1e-9);
+    }
+
+    [TestMethod]
+    public void AHandleUnderALaterMark_IsStillGrabbable()
+    {
+        // Otherwise reshaping the rectangle beneath a stamp would mean moving the stamp
+        // out of the way first, and putting it back afterwards.
+        var editor = NewEditor(AnnotationTool.Rectangle);
+        Drag(editor, new CapturePoint(10, 10), new CapturePoint(60, 40));
+        editor.Tool = AnnotationTool.FilledRectangle;
+        Drag(editor, new CapturePoint(50, 30), new CapturePoint(90, 70));
+
+        editor.Tool = AnnotationTool.Select;
+        Select(editor, new CapturePoint(10, 10));
+        Drag(editor, new CapturePoint(60, 40), new CapturePoint(60, 60));
+
+        Assert.AreEqual(60, editor.Document.Annotations[0].BoundingRect.Bottom, 1e-9);
+        Assert.AreEqual(
+            AnnotationTool.Rectangle,
+            editor.Selected?.Tool,
+            "the press must not have selected the mark drawn over the handle");
+    }
+
+    [TestMethod]
+    public void SelectionShown_TracksTheDragRatherThanWhereTheMarkWas()
+    {
+        var editor = NewEditor(AnnotationTool.Rectangle);
+        Drag(editor, new CapturePoint(10, 10), new CapturePoint(60, 40));
+
+        editor.Tool = AnnotationTool.Select;
+        Select(editor, new CapturePoint(10, 10));
+        editor.PointerPressed(new CapturePoint(60, 40));
+        editor.PointerMoved(new CapturePoint(90, 70));
+
+        Assert.AreEqual(90, editor.SelectionShown?.BoundingRect.Right ?? 0, 1e-9);
+    }
+
+    /// <summary>Clicks a mark with the select tool, which is what arms its handles.</summary>
+    private static void Select(AnnotationEditor editor, CapturePoint point)
+    {
+        editor.PointerPressed(point);
+        editor.PointerReleased(point);
+    }
+
     private static AnnotationEditor NewEditor(AnnotationTool tool)
     {
         return new AnnotationEditor(new AnnotationDocument()) { Tool = tool };

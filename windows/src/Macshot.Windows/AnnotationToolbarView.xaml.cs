@@ -207,7 +207,7 @@ public sealed partial class AnnotationToolbarView : UserControl
 
     private void BuildToolButtons()
     {
-        foreach (var tool in AnnotationRasterizer.SupportedTools)
+        foreach (var tool in ToolOrder)
         {
             var button = new ToggleButton
             {
@@ -361,8 +361,21 @@ public sealed partial class AnnotationToolbarView : UserControl
     private static Color ToUiColor(AnnotationColor color) =>
         new() { A = color.Alpha, R = color.Red, G = color.Green, B = color.Blue };
 
+    /// <summary>
+    /// The tools the strip offers, in the order they appear.
+    /// </summary>
+    /// <remarks>
+    /// The pointer first, then everything the rasterizer can draw. Select is added here
+    /// rather than to <see cref="AnnotationRasterizer.SupportedTools"/> because that list
+    /// is what the rasterizer draws, and selecting draws nothing — it reshapes marks that
+    /// are already there.
+    /// </remarks>
+    private static IReadOnlyList<AnnotationTool> ToolOrder { get; } =
+        [AnnotationTool.Select, .. AnnotationRasterizer.SupportedTools];
+
     private static string Label(AnnotationTool tool) => tool switch
     {
+        AnnotationTool.Select => "Select",
         AnnotationTool.Arrow => "Arrow",
         AnnotationTool.Rectangle => "Box",
         AnnotationTool.Ellipse => "Ellipse",
@@ -462,6 +475,15 @@ public sealed partial class AnnotationToolbarView : UserControl
             canvas.Children.Add(Stroke(3, 8, 13, 8));
             canvas.Children.Add(Stroke(3, 4, 3, 12));
             canvas.Children.Add(Stroke(13, 4, 13, 12));
+            break;
+
+        case AnnotationTool.Select:
+            // A pointer, because this is the one tool that changes what is already there
+            // instead of adding to it. Drawn as the outline of a cursor arrow.
+            canvas.Children.Add(Stroke(3, 2, 3, 13));
+            canvas.Children.Add(Stroke(3, 2, 11, 9.5));
+            canvas.Children.Add(Stroke(3, 13, 6.5, 9.5));
+            canvas.Children.Add(Stroke(6.5, 9.5, 11, 9.5));
             break;
 
         case AnnotationTool.Loupe:

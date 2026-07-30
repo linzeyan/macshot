@@ -36,6 +36,7 @@ public sealed class AnnotationEditor
     private CapturePoint _origin;
     private List<CapturePoint>? _freeformSamples;
     private Annotation? _dragTarget;
+    private AnnotationHandleKind? _handle;
     private bool _isPressed;
 
     public AnnotationEditor(AnnotationDocument document)
@@ -69,6 +70,20 @@ public sealed class AnnotationEditor
     public Annotation? Draft { get; private set; }
 
     public Annotation? Selected { get; private set; }
+
+    /// <summary>
+    /// The selected annotation as it stands right now: its in-flight copy while a handle
+    /// or a move is being dragged, so the chrome drawn around it tracks the drag instead
+    /// of staying where the shape used to be.
+    /// </summary>
+    public Annotation? SelectionShown => _dragTarget is not null && Draft is not null ? Draft : Selected;
+
+    /// <summary>
+    /// The handles the canvas should draw. Empty unless the select tool is active, because
+    /// they are only grabbable then and chrome that cannot be used is chrome in the way.
+    /// </summary>
+    public IReadOnlyList<AnnotationHandle> Handles =>
+        _tool == AnnotationTool.Select && SelectionShown is { } shown ? AnnotationHandles.For(shown) : [];
 
     public bool IsDragging => _isPressed && Draft is not null;
 
@@ -129,7 +144,9 @@ public sealed class AnnotationEditor
 
         if (_dragTarget is not null)
         {
-            Draft = _dragTarget.Translate(point.X - _origin.X, point.Y - _origin.Y);
+            Draft = _handle is { } handle
+                ? AnnotationHandles.Drag(_dragTarget, handle, point, modifiers)
+                : _dragTarget.Translate(point.X - _origin.X, point.Y - _origin.Y);
             return;
         }
 
@@ -158,6 +175,7 @@ public sealed class AnnotationEditor
         var dragTarget = _dragTarget;
         Draft = null;
         _dragTarget = null;
+        _handle = null;
         _freeformSamples = null;
 
         if (draft is null)
@@ -169,7 +187,7 @@ public sealed class AnnotationEditor
         {
             // The whole drag is one undo step. Committing every intermediate
             // position would make Ctrl+Z replay the mouse path.
-            if (draft.Start != dragTarget.Start || draft.End != dragTarget.End)
+            if (AnnotationHandles.Differ(draft, dragTarget))
             {
                 _document.Replace(draft);
                 Selected = draft;
@@ -196,6 +214,7 @@ public sealed class AnnotationEditor
 
         Draft = null;
         _dragTarget = null;
+        _handle = null;
         _freeformSamples = null;
         _isPressed = false;
         return true;
@@ -231,6 +250,17 @@ public sealed class AnnotationEditor
 
     private void BeginSelection(CapturePoint point)
     {
+        // The selected annotation's handles are tried before anything else, so a handle
+        // can be grabbed even where a later mark covers it — otherwise reshaping the
+        // rectangle under a stamp would be impossible without moving the stamp first.
+        if (Selected is { } selected && AnnotationHandles.At(selected, point) is { } handle)
+        {
+            _handle = handle.Kind;
+            _dragTarget = selected;
+            Draft = selected;
+            return;
+        }
+
         var hit = _document.HitTest(point);
         Selected = hit;
         if (hit is null || !hit.IsMovable)
