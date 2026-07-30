@@ -3,7 +3,9 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Microsoft.UI.Xaml.Shapes;
 
+using Windows.Foundation;
 using Windows.UI;
 
 namespace Macshot.Windows.Toolbar;
@@ -26,13 +28,31 @@ namespace Macshot.Windows.Toolbar;
 /// </remarks>
 internal sealed partial class ToolbarButton : UserControl
 {
+    /// <summary>
+    /// The side of the corner triangle that marks a button with a menu behind it, and how
+    /// far in from the corner it sits. macOS's 4 and 3.
+    /// </summary>
+    private const double MarkSize = 4;
+
+    private const double MarkInset = 3;
+
     private readonly Border _surface;
+
+    /// <summary>Holds the face and, over its bottom-right corner, the menu mark.</summary>
+    private readonly Grid _content;
+
+    private readonly Polygon _menuMark;
     private bool _isHovered;
     private bool _isPressed;
 
     public ToolbarButton(ToolbarItem item)
     {
         Item = item;
+
+        _menuMark = MenuMark();
+        _content = new Grid();
+        _content.Children.Add(FaceOf(item));
+        _content.Children.Add(_menuMark);
 
         _surface = new Border
         {
@@ -43,7 +63,7 @@ internal sealed partial class ToolbarButton : UserControl
             // Transparent rather than unset: a Border with no background is not hit
             // testable, so the gaps between the icon's strokes would swallow the click.
             Background = ToolbarPalette.TransparentBrush,
-            Child = FaceOf(item),
+            Child = _content,
         };
 
         Width = ToolbarPalette.ButtonSize;
@@ -81,7 +101,7 @@ internal sealed partial class ToolbarButton : UserControl
 
         if (iconChanged)
         {
-            _surface.Child = FaceOf(item);
+            SetFace(FaceOf(item));
             ToolTipService.SetToolTip(this, item.Tooltip);
         }
 
@@ -96,7 +116,17 @@ internal sealed partial class ToolbarButton : UserControl
             return;
         }
 
-        _surface.Child = Swatch(color);
+        SetFace(Swatch(color));
+    }
+
+    /// <summary>
+    /// Puts a new face in, leaving the menu mark over it. Replaced rather than the whole
+    /// child, so the mark does not have to be rebuilt every time an icon changes.
+    /// </summary>
+    private void SetFace(UIElement face)
+    {
+        _content.Children.RemoveAt(0);
+        _content.Children.Insert(0, face);
     }
 
     private void Surface_PointerPressed(object sender, PointerRoutedEventArgs e)
@@ -124,6 +154,12 @@ internal sealed partial class ToolbarButton : UserControl
 
     private void Repaint()
     {
+        // Only the tools have a menu behind them: right-clicking one offers to take it off
+        // the strip, and right-clicking anything else does nothing. Without the mark there
+        // is nothing at all to say which is which — macOS draws the same triangle for the
+        // same reason.
+        _menuMark.Visibility = Item.Tool is null ? Visibility.Collapsed : Visibility.Visible;
+
         _surface.Background = _isPressed
             ? ToolbarPalette.PressedBrush
             : Item.IsSelected
@@ -142,6 +178,33 @@ internal sealed partial class ToolbarButton : UserControl
         ToolbarIcons.For(item) ?? Swatch(ToolbarPalette.Icon);
 
     /// <summary>
+    /// The triangle in the bottom-right corner of a button that has a menu behind it: a
+    /// right angle at the corner, the hypotenuse running up and to the right.
+    /// </summary>
+    private static Polygon MenuMark()
+    {
+        var mark = new Polygon
+        {
+            Width = MarkSize,
+            Height = MarkSize,
+            Fill = ToolbarPalette.IconBrush(0.4),
+            HorizontalAlignment = HorizontalAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Bottom,
+            Margin = new Thickness(0, 0, MarkInset, MarkInset),
+
+            // The mark is a hint, not a target: the right-click it stands for works
+            // anywhere on the button, and a shape that took the pointer would put a hole
+            // in the middle of the one it is drawn on.
+            IsHitTestVisible = false,
+        };
+
+        mark.Points.Add(new Point(0, MarkSize));
+        mark.Points.Add(new Point(MarkSize, MarkSize));
+        mark.Points.Add(new Point(MarkSize, 0));
+        return mark;
+    }
+
+    /// <summary>
     /// The colour button: the colour itself, inset, with a hairline border so a colour
     /// close to the strip's own is still a square rather than a hole in it.
     /// </summary>
@@ -151,7 +214,7 @@ internal sealed partial class ToolbarButton : UserControl
         Height = ToolbarPalette.ButtonSize - 12,
         CornerRadius = new CornerRadius(4),
         Background = new SolidColorBrush(color),
-        BorderThickness = new Thickness(1),
+        BorderThickness = new Thickness(0.5),
         BorderBrush = ToolbarPalette.IconBrush(0.4),
         HorizontalAlignment = HorizontalAlignment.Center,
         VerticalAlignment = VerticalAlignment.Center,
