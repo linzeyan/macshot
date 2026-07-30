@@ -119,26 +119,51 @@ public sealed class AnnotationEditor
         }
     }
 
-    public void PointerPressed(CapturePoint point, EditorModifiers modifiers = EditorModifiers.None)
+    /// <summary>
+    /// Starts a gesture. Returns true when it took hold of a mark already drawn rather
+    /// than starting a new one, which is what the caller needs to know before placing a
+    /// label or a badge where the press landed.
+    /// </summary>
+    /// <remarks>
+    /// A click on an existing mark grabs it whatever tool is in hand, so there is no
+    /// pointer tool to switch to first — the same rule macOS uses. The exceptions are
+    /// the tools where grabbing would take the gesture away from what it is for: a
+    /// freehand stroke drawn over an earlier mark is a stroke, not a grab, and the
+    /// text tool only grabs text, because a label placed beside a rectangle is far more
+    /// common than a wish to move the rectangle.
+    /// </remarks>
+    public bool PointerPressed(CapturePoint point, EditorModifiers modifiers = EditorModifiers.None)
     {
         Cancel();
         _isPressed = true;
         _origin = point;
 
-        if (_tool == AnnotationTool.Select)
+        if (GrabsExistingMarks(_tool) && BeginSelection(point))
         {
-            BeginSelection(point);
-            return;
+            return true;
+        }
+
+        // Anything that starts a new mark clears the selection: the chrome around a
+        // mark that is no longer the subject of the gesture is a lie about what Delete
+        // would remove.
+        Selected = null;
+
+        // A sprite tool draws nothing here. Its mark is rasterized by the UI and handed
+        // back, so the press only had to answer whether it grabbed something.
+        if (Annotation.RequiresSprite(_tool))
+        {
+            return false;
         }
 
         if (IsFreeform(_tool))
         {
             _freeformSamples = [point];
             Draft = Annotation.CreateFreeform(_tool, _freeformSamples, Style);
-            return;
+            return false;
         }
 
         Draft = Annotation.Create(_tool, point, point, Style);
+        return false;
     }
 
     public void PointerMoved(CapturePoint point, EditorModifiers modifiers = EditorModifiers.None)
@@ -279,7 +304,11 @@ public sealed class AnnotationEditor
         return redone;
     }
 
-    private void BeginSelection(CapturePoint point)
+    /// <summary>
+    /// Takes hold of the mark under the pointer, or of a handle on the one already
+    /// selected. False when there was nothing there to take.
+    /// </summary>
+    private bool BeginSelection(CapturePoint point)
     {
         // The selected annotation's handles are tried before anything else, so a handle
         // can be grabbed even where a later mark covers it — otherwise reshaping the
@@ -289,19 +318,49 @@ public sealed class AnnotationEditor
             _handle = handle.Kind;
             _dragTarget = selected;
             Draft = selected;
-            return;
+            return true;
         }
 
         var hit = _document.HitTest(point);
-        Selected = hit;
-        if (hit is null || !hit.IsMovable)
+        if (hit is null || !Grabs(_tool, hit))
         {
-            return;
+            // Only the pointer tool clears the selection on a miss. For every other
+            // tool the press is about to draw, and clearing there would be doing it
+            // twice with different rules.
+            if (_tool == AnnotationTool.Select)
+            {
+                Selected = null;
+            }
+
+            return false;
+        }
+
+        Selected = hit;
+        if (!hit.IsMovable)
+        {
+            // Selected, so it can be deleted or restyled, but there is nothing to drag.
+            return true;
         }
 
         _dragTarget = hit;
         Draft = hit;
+        return true;
     }
+
+    /// <summary>
+    /// Whether this tool takes hold of what is already on the canvas. False for the
+    /// freehand tools, which are used to draw over marks often enough that grabbing
+    /// would be wrong more often than right.
+    /// </summary>
+    private static bool GrabsExistingMarks(AnnotationTool tool) =>
+        tool is not (AnnotationTool.Pencil or AnnotationTool.Marker or AnnotationTool.ColorSampler);
+
+    /// <summary>
+    /// Whether this tool grabs that particular mark. The text tool only grabs text: a
+    /// label is usually placed beside a shape, not instead of moving it.
+    /// </summary>
+    private static bool Grabs(AnnotationTool tool, Annotation hit) =>
+        tool != AnnotationTool.Text || hit.Tool == AnnotationTool.Text;
 
     /// <summary>Keeps a selection from pointing at an annotation undo has removed.</summary>
     private void DropStaleSelection()
