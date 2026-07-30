@@ -111,6 +111,45 @@ public sealed class SelectionHandlesTests
     }
 
     [TestMethod]
+    public void RectangleOf_GrowsTheGripWithTheDisplayItIsDrawnOn()
+    {
+        // The grip is a size a hand aims at, so it is ten layout units on every display
+        // rather than ten pixels — which on a 150% display is two thirds of the target
+        // macOS offers for the same gesture.
+        var box = SelectionHandles.RectangleOf(Selection, SelectionHandle.BottomRight, 1.5);
+
+        Assert.AreEqual(SelectionHandles.Size * 1.5, box.Width, 0.001);
+        Assert.AreEqual(SelectionHandles.Size * 1.5, box.Height, 0.001);
+
+        // Still centred on the corner it belongs to, which is what a bigger grip must
+        // not trade away: it grows about its point, not off to one side of it.
+        Assert.AreEqual(300, box.X + (box.Width / 2), 0.001);
+        Assert.AreEqual(260, box.Y + (box.Height / 2), 0.001);
+    }
+
+    [TestMethod]
+    public void HitTest_GrabsAsFarOutAsTheGripIsDrawn()
+    {
+        // Twelve pixels from the corner: outside the grip on a 100% display, inside the
+        // twice-as-large one drawn at 200%. A grip that looks grabbable has to be.
+        var point = new CapturePoint(300 + 12, 260 + 12);
+
+        Assert.AreEqual(SelectionHandle.None, SelectionHandles.HitTest(Selection, point));
+        Assert.AreEqual(SelectionHandle.BottomRight, SelectionHandles.HitTest(Selection, point, 2));
+    }
+
+    [TestMethod]
+    public void For_DropsTheEdgeGripsSoonerOnAScaledDisplay()
+    {
+        // 60 by 60 has room for eight ten-pixel grips and none for eight twenty-pixel
+        // ones, so the same selection offers different grips on different displays.
+        var small = new CaptureRegion(0, 0, 60, 60);
+
+        CollectionAssert.AreEquivalent(SelectionHandles.All.ToArray(), SelectionHandles.For(small).ToArray());
+        Assert.IsTrue(SelectionHandles.For(small, 2).All(SelectionHandles.IsCorner));
+    }
+
+    [TestMethod]
     public void ClampTo_KeepsTheSizeWhenPushedAgainstAnEdge()
     {
         var moved = SelectionHandles.Translate(Selection, -500, -500);

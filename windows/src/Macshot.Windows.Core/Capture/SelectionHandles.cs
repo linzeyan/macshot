@@ -34,16 +34,22 @@ public enum SelectionHandle
 public static class SelectionHandles
 {
     /// <summary>
-    /// The side of a grip, in frame pixels. Large enough to grab without care, small
+    /// The side of a grip, in layout units. Large enough to grab without care, small
     /// enough that eight of them do not cover a small selection entirely.
     /// </summary>
+    /// <remarks>
+    /// Layout units rather than frame pixels, because it is a size a hand aims at: ten
+    /// points is what macOS draws, and ten frame pixels would be two thirds of that on a
+    /// 150% display and half of it on a 200% one. Everything here works in frame pixels,
+    /// so each method takes the display's scale and multiplies this by it.
+    /// </remarks>
     public const double Size = 10;
 
     /// <summary>
-    /// Below this the edge grips would overlap the corners and leave no interior to
-    /// drag the selection by, so only the corners are offered.
+    /// Below this many grips-widths the edge grips would overlap the corners and leave no
+    /// interior to drag the selection by, so only the corners are offered.
     /// </summary>
-    private const double CornersOnlyBelow = Size * 4;
+    private const double CornersOnlyBelow = 4;
 
     public static IReadOnlyList<SelectionHandle> All { get; } =
     [
@@ -66,18 +72,22 @@ public static class SelectionHandles
     ];
 
     /// <summary>The grips worth drawing for a selection of this size, in draw order.</summary>
-    public static IReadOnlyList<SelectionHandle> For(CaptureRegion selection)
+    /// <param name="scale">Frame pixels to the layout unit on the selection's display.</param>
+    public static IReadOnlyList<SelectionHandle> For(CaptureRegion selection, double scale = 1)
     {
-        return selection.Width < CornersOnlyBelow || selection.Height < CornersOnlyBelow
+        var smallest = Size * scale * CornersOnlyBelow;
+        return selection.Width < smallest || selection.Height < smallest
             ? CornersOnly
             : All;
     }
 
-    /// <summary>The square to draw for one grip, centred on its point of the selection.</summary>
-    public static CaptureRegion RectangleOf(CaptureRegion selection, SelectionHandle handle)
+    /// <summary>The box to draw for one grip, centred on its point of the selection.</summary>
+    /// <param name="scale">Frame pixels to the layout unit on the selection's display.</param>
+    public static CaptureRegion RectangleOf(CaptureRegion selection, SelectionHandle handle, double scale = 1)
     {
         var (x, y) = AnchorOf(selection, handle);
-        return new CaptureRegion(x - Size / 2, y - Size / 2, Size, Size);
+        var side = Size * scale;
+        return new CaptureRegion(x - (side / 2), y - (side / 2), side, side);
     }
 
     /// <summary>
@@ -88,14 +98,24 @@ public static class SelectionHandles
     /// edge, and a user aiming at a corner who lands one pixel inside the edge's box
     /// means the corner.
     /// </remarks>
-    public static SelectionHandle HitTest(CaptureRegion selection, CapturePoint point, double tolerance = 2)
+    /// <param name="scale">Frame pixels to the layout unit on the selection's display.</param>
+    /// <param name="tolerance">
+    /// Slack around a grip, in layout units, so a point a hair outside one still grabs it.
+    /// Scaled along with the grip, or a grip would be easier to hit on a 100% display than
+    /// the same-looking grip on a 200% one.
+    /// </param>
+    public static SelectionHandle HitTest(
+        CaptureRegion selection,
+        CapturePoint point,
+        double scale = 1,
+        double tolerance = 2)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(tolerance);
 
-        var offered = For(selection);
+        var offered = For(selection, scale);
         foreach (var handle in offered)
         {
-            if (IsCorner(handle) && Grabs(selection, handle, point, tolerance))
+            if (IsCorner(handle) && Grabs(selection, handle, point, scale, tolerance * scale))
             {
                 return handle;
             }
@@ -103,7 +123,7 @@ public static class SelectionHandles
 
         foreach (var handle in offered)
         {
-            if (!IsCorner(handle) && Grabs(selection, handle, point, tolerance))
+            if (!IsCorner(handle) && Grabs(selection, handle, point, scale, tolerance * scale))
             {
                 return handle;
             }
@@ -197,9 +217,14 @@ public static class SelectionHandles
         handle is SelectionHandle.TopLeft or SelectionHandle.TopRight
             or SelectionHandle.BottomRight or SelectionHandle.BottomLeft;
 
-    private static bool Grabs(CaptureRegion selection, SelectionHandle handle, CapturePoint point, double tolerance)
+    private static bool Grabs(
+        CaptureRegion selection,
+        SelectionHandle handle,
+        CapturePoint point,
+        double scale,
+        double tolerance)
     {
-        var box = RectangleOf(selection, handle);
+        var box = RectangleOf(selection, handle, scale);
         return point.X >= box.X - tolerance
             && point.X <= box.Right + tolerance
             && point.Y >= box.Y - tolerance

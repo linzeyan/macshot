@@ -576,7 +576,7 @@ public sealed partial class CaptureOverlayWindow : Window
         // something other than what clicking does.
         if (_regionIsAdjustable && _selection is { } region)
         {
-            var grip = SelectionHandles.HitTest(region, point);
+            var grip = SelectionHandles.HitTest(region, point, _monitor.Scale);
             if (grip != SelectionHandle.None)
             {
                 SelectionCanvas.UseCursor(CursorHints.For(grip));
@@ -862,8 +862,9 @@ public sealed partial class CaptureOverlayWindow : Window
                 Visibility = Visibility.Collapsed,
 
                 // Accent-filled circles with no outline, which is what macOS draws.
-                // A radius of half the grip is a circle, and XAML holds a radius to half
-                // the extent it is given, so it stays one at every display scale.
+                // PlaceChrome divides the grip's frame size by the display's scale, which
+                // brings it back to Size in layout units — so half of Size is a circle on
+                // every display.
                 Fill = ToolbarPalette.AccentBrush,
                 RadiusX = SelectionHandles.Size / 2,
                 RadiusY = SelectionHandles.Size / 2,
@@ -882,12 +883,12 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         if (_regionIsAdjustable && selection is { } region)
         {
-            var offered = SelectionHandles.For(region);
+            var offered = SelectionHandles.For(region, _monitor.Scale);
             foreach (var (handle, grip) in _grips)
             {
                 if (offered.Contains(handle))
                 {
-                    PlaceChrome(grip, SelectionHandles.RectangleOf(region, handle));
+                    PlaceChrome(grip, SelectionHandles.RectangleOf(region, handle, _monitor.Scale));
                 }
                 else
                 {
@@ -915,7 +916,7 @@ public sealed partial class CaptureOverlayWindow : Window
             return false;
         }
 
-        _resizing = SelectionHandles.HitTest(region, point);
+        _resizing = SelectionHandles.HitTest(region, point, _monitor.Scale);
         _resizeFrom = region;
         return _resizing != SelectionHandle.None;
     }
