@@ -115,6 +115,7 @@ public sealed partial class AnnotationToolbarView : UserControl
 
         _tools.ItemInvoked += Strip_ItemInvoked;
         _actions.ItemInvoked += Strip_ItemInvoked;
+        _tools.ItemAlternate += Tool_Alternate;
     }
 
     /// <summary>Raised when what is on the canvas no longer matches the document.</summary>
@@ -159,6 +160,12 @@ public sealed partial class AnnotationToolbarView : UserControl
 
         _editor = editor;
         _settings = settings;
+
+        // Before anything is drawn from the palette: the toolbar sits over a screenshot
+        // rather than in a window, so its colours are the user's to choose and everything
+        // below reads them.
+        ToolbarPalette.Apply(settings.Current.ToToolbarColors());
+        RepaintChrome();
 
         LoadStyle();
 
@@ -339,6 +346,84 @@ public sealed partial class AnnotationToolbarView : UserControl
         }
     }
 
+    /// <summary>
+    /// The menu behind a tool button: what to do with a tool other than use it.
+    /// </summary>
+    /// <remarks>
+    /// Sixteen tools is a long strip, and most people use four of them. Taking one off is
+    /// offered where the tool is rather than only in the preferences, because the moment
+    /// someone knows they never want the loupe is the moment they are looking at it.
+    /// </remarks>
+    private void Tool_Alternate(object? sender, ToolbarItem item)
+    {
+        if (item.Tool is not { } tool || sender is not FrameworkElement anchor || _settings is not { } settings)
+        {
+            return;
+        }
+
+        var menu = new MenuFlyout();
+
+        var hide = new MenuFlyoutItem { Text = $"Hide {item.Tooltip}" };
+        hide.Click += (_, _) => HideTool(tool);
+
+        // Not offered when it would empty the strip: a toolbar with no tools on it is not
+        // a preference, it is a broken window.
+        hide.IsEnabled = settings.Current.EnabledTools().Count > 1;
+        menu.Items.Add(hide);
+
+        if (settings.Current.HiddenTools.Count > 0)
+        {
+            var restore = new MenuFlyoutItem { Text = "Show every tool" };
+            restore.Click += (_, _) => SetHiddenTools([]);
+            menu.Items.Add(restore);
+        }
+
+        menu.ShowAt(anchor);
+    }
+
+    private void HideTool(AnnotationTool tool)
+    {
+        if (_settings is not { } settings)
+        {
+            return;
+        }
+
+        SetHiddenTools([.. settings.Current.HiddenTools, tool.ToString()]);
+
+        // A hidden tool cannot stay in hand, or the strip would show nothing selected
+        // while the next drag drew with the tool that is no longer there.
+        if (_editor is { } editor && editor.Tool == tool)
+        {
+            SelectTool(settings.Current.EnabledTools().First());
+        }
+    }
+
+    /// <summary>
+    /// Writes the strip's contents back to the settings file and rebuilds it.
+    /// </summary>
+    /// <remarks>
+    /// A failure is swallowed for the same reason the style's is: the user is in the
+    /// middle of a capture, there is no window to report into, and the cost is that the
+    /// tool comes back next time.
+    /// </remarks>
+    private void SetHiddenTools(IReadOnlyList<string> hidden)
+    {
+        if (_settings is not { } settings)
+        {
+            return;
+        }
+
+        try
+        {
+            settings.Save((settings.Current with { HiddenTools = hidden }).Normalized());
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+        }
+
+        RefreshStrips();
+    }
+
     private void ShowColorPicker()
     {
         if (_tools.ButtonFor(ToolbarCommand.PickColor) is not { } anchor)
@@ -394,7 +479,7 @@ public sealed partial class AnnotationToolbarView : UserControl
             return;
         }
 
-        _tools.SetItems(ToolbarActions.Tools(editor.Tool));
+        _tools.SetItems(ToolbarActions.Tools(editor.Tool, _settings?.Current.EnabledTools()));
         _actions.SetItems(ToolbarActions.Actions(EditorMode));
         _tools.ShowSwatch(ToUiColor(editor.Style.Color));
         ShowOptionsFor(editor.Tool);
@@ -437,10 +522,20 @@ public sealed partial class AnnotationToolbarView : UserControl
         _optionsRow.Visibility = Show(anyOption);
     }
 
-    private void BuildOptionsRow()
+    /// <summary>
+    /// Repaints what was drawn from a brush of its own rather than from the palette's
+    /// shared ones. Those follow a colour change on their own; these were made on the spot
+    /// and have to be asked.
+    /// </summary>
+    private void RepaintChrome()
     {
         _sizeLabel.Foreground = ToolbarPalette.IconBrush();
         _cornerLabel.Foreground = ToolbarPalette.IconBrush();
+    }
+
+    private void BuildOptionsRow()
+    {
+        RepaintChrome();
         _size.VerticalAlignment = VerticalAlignment.Center;
         _cornerRadius.VerticalAlignment = VerticalAlignment.Center;
 

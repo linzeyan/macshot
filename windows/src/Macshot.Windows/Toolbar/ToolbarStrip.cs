@@ -86,7 +86,9 @@ internal sealed partial class ToolbarStrip : UserControl
 
             var button = new ToolbarButton(items[index]);
             button.Invoked += (_, item) => ItemInvoked?.Invoke(this, item);
-            button.Alternate += (_, item) => ItemAlternate?.Invoke(this, item);
+            // The button itself is the sender, because what answers a right-click is a
+            // menu and a menu has to be anchored to something the user can see.
+            button.Alternate += (source, item) => ItemAlternate?.Invoke(source, item);
 
             _buttons.Add(button);
             _row.Children.Add(button);

@@ -189,6 +189,59 @@ public sealed record CaptureSettings
     /// </remarks>
     public string TranslateApiKey { get; init; } = string.Empty;
 
+    /// <summary>
+    /// The tools taken off the toolbar, by name. Empty means all of them are there.
+    /// </summary>
+    /// <remarks>
+    /// Stored as what is hidden rather than what is shown, so a version that adds a tool
+    /// offers it to everyone instead of hiding it from every existing user — a list of
+    /// what is wanted, written before the tool existed, cannot contain it.
+    /// </remarks>
+    public IReadOnlyList<string> HiddenTools { get; init; } = [];
+
+    /// <summary>The toolbar's own colours, as <c>#AARRGGBB</c>.</summary>
+    /// <remarks>
+    /// The toolbar sits over a screenshot rather than in a window, so it cannot follow the
+    /// system theme without disappearing into half the captures anyone takes. These are
+    /// how someone who wants it to look like something else says so.
+    /// </remarks>
+    public string ToolbarBackgroundColor { get; init; } = ToolbarColors.DefaultBackground.ToHex();
+
+    public string ToolbarAccentColor { get; init; } = ToolbarColors.DefaultAccent.ToHex();
+
+    public string ToolbarIconColor { get; init; } = ToolbarColors.DefaultIcon.ToHex();
+
+    /// <summary>The three toolbar colours, with anything unreadable back at its default.</summary>
+    public ToolbarColors ToToolbarColors() => new(
+        Color(ToolbarBackgroundColor, ToolbarColors.DefaultBackground),
+        Color(ToolbarAccentColor, ToolbarColors.DefaultAccent),
+        Color(ToolbarIconColor, ToolbarColors.DefaultIcon));
+
+    /// <summary>The tools to put on the toolbar, in the order the toolbar keeps them.</summary>
+    public IReadOnlyCollection<AnnotationTool> EnabledTools()
+    {
+        var hidden = HiddenTools
+            .Select(name => Enum.TryParse<AnnotationTool>(name, ignoreCase: true, out var tool) ? tool : (AnnotationTool?)null)
+            .Where(tool => tool is not null)
+            .Select(tool => tool!.Value)
+            .ToHashSet();
+
+        return [.. ToolbarActions.ToolOrder.Where(tool => !hidden.Contains(tool))];
+    }
+
+    private IReadOnlyList<string> SaneHiddenTools()
+    {
+        var known = HiddenTools
+            .Where(name => Enum.TryParse<AnnotationTool>(name, ignoreCase: true, out _))
+            .Distinct(StringComparer.OrdinalIgnoreCase)
+            .ToArray();
+
+        return (this with { HiddenTools = known }).EnabledTools().Count > 0 ? known : [];
+    }
+
+    private static AnnotationColor Color(string hex, AnnotationColor fallback) =>
+        Annotations.AnnotationColor.TryParseHex(hex, out var parsed) ? parsed : fallback;
+
     /// <summary>Which of <see cref="BeautifyRenderer.Styles"/> the Beautify action uses.</summary>
     public int BeautifyStyleIndex { get; init; }
 
@@ -326,6 +379,17 @@ public sealed record CaptureSettings
             LastSelectionDisplay = LastSelection is null || string.IsNullOrWhiteSpace(LastSelectionDisplay)
                 ? null
                 : LastSelectionDisplay.Trim(),
+            // Names the enum does not know are dropped rather than kept: they can only be
+            // a typo or a tool that no longer exists, and either way they hide nothing.
+            // A file that hides every tool is treated as hiding none — a toolbar with no
+            // tools on it is not a preference, it is a broken window.
+            HiddenTools = SaneHiddenTools(),
+
+            // Round-tripped through the parser so an unreadable colour becomes the default
+            // here rather than silently wherever the toolbar is drawn.
+            ToolbarBackgroundColor = Color(ToolbarBackgroundColor, ToolbarColors.DefaultBackground).ToHex(),
+            ToolbarAccentColor = Color(ToolbarAccentColor, ToolbarColors.DefaultAccent).ToHex(),
+            ToolbarIconColor = Color(ToolbarIconColor, ToolbarColors.DefaultIcon).ToHex(),
             BeautifyStyleIndex = Math.Clamp(BeautifyStyleIndex, 0, Math.Max(0, BeautifyRenderer.Styles.Count - 1)),
             BeautifyPadding = Clamp(BeautifyPadding, BeautifyOptions.Default.Padding, 0, 0.5),
             BeautifyCornerRadius = Clamp(BeautifyCornerRadius, BeautifyOptions.Default.CornerRadius, 0, 0.5),

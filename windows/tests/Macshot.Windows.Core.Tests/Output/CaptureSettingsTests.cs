@@ -85,6 +85,69 @@ public sealed class CaptureSettingsTests
     }
 
     [TestMethod]
+    public void HidingAToolTakesItOffTheToolbarAndLeavesTheRest()
+    {
+        var settings = (CaptureSettings.Default with { HiddenTools = ["Loupe", "Measure"] }).Normalized();
+
+        var tools = settings.EnabledTools();
+
+        Assert.IsFalse(tools.Contains(AnnotationTool.Loupe));
+        Assert.IsFalse(tools.Contains(AnnotationTool.Measure));
+        Assert.IsTrue(tools.Contains(AnnotationTool.Arrow));
+    }
+
+    [TestMethod]
+    public void ToolsAreStoredByWhatIsHiddenSoANewOneArrivesSwitchedOn()
+    {
+        // A list of what is wanted, written before a tool existed, cannot contain it —
+        // so every existing user would have the next version's tool hidden from them.
+        Assert.AreEqual(0, CaptureSettings.Default.HiddenTools.Count);
+        Assert.AreEqual(ToolbarActions.ToolOrder.Count, CaptureSettings.Default.EnabledTools().Count);
+    }
+
+    [TestMethod]
+    public void AFileThatHidesEveryToolIsTreatedAsHidingNone()
+    {
+        // A toolbar with no tools on it is not a preference, it is a broken window.
+        var settings = (CaptureSettings.Default with
+        {
+            HiddenTools = [.. ToolbarActions.ToolOrder.Select(tool => tool.ToString())],
+        }).Normalized();
+
+        Assert.AreEqual(0, settings.HiddenTools.Count);
+    }
+
+    [TestMethod]
+    public void AToolNameNothingKnowsIsDropped()
+    {
+        var settings = (CaptureSettings.Default with { HiddenTools = ["Loupe", "Telepathy", "loupe"] }).Normalized();
+
+        CollectionAssert.AreEqual(new[] { "Loupe" }, settings.HiddenTools.ToArray());
+    }
+
+    [TestMethod]
+    public void AnUnreadableToolbarColourComesBackAsTheDefault()
+    {
+        var settings = (CaptureSettings.Default with { ToolbarAccentColor = "rhubarb" }).Normalized();
+
+        Assert.AreEqual(ToolbarColors.DefaultAccent, settings.ToToolbarColors().Accent);
+    }
+
+    [TestMethod]
+    public void HoverAndPressAreWorkedOutFromTheColoursThatWereChosen()
+    {
+        // Three colours, not thirty: a palette where they can disagree is one somebody can
+        // make unreadable, and the toolbar is over a screenshot where that means invisible.
+        var colors = new ToolbarColors(
+            new AnnotationColor(0, 0, 0),
+            new AnnotationColor(10, 20, 30),
+            new AnnotationColor(200, 210, 220));
+
+        Assert.AreEqual(new AnnotationColor(200, 210, 220, 31), colors.Hover);
+        Assert.AreEqual(new AnnotationColor(10, 20, 30, 153), colors.Pressed);
+    }
+
+    [TestMethod]
     public void Default_DeliversToTheClipboardAndDisk()
     {
         Assert.IsTrue(CaptureSettings.Default.CopyToClipboard);

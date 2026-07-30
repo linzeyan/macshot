@@ -1,3 +1,4 @@
+using Macshot.Windows.Core.Annotations;
 using Microsoft.UI.Xaml.Media;
 
 using Windows.UI;
@@ -24,19 +25,19 @@ namespace Macshot.Windows.Toolbar;
 internal static class ToolbarPalette
 {
     /// <summary>The strip itself: near-black, opaque, so icons read over any capture.</summary>
-    public static Color Background { get; } = Color.FromArgb(255, 31, 31, 31);
+    public static Color Background { get; private set; } = ToUiColor(ToolbarColors.DefaultBackground);
 
     /// <summary>The selected button. macshot's purple, and the same one the grips use.</summary>
-    public static Color Accent { get; } = Color.FromArgb(255, 140, 77, 217);
+    public static Color Accent { get; private set; } = ToUiColor(ToolbarColors.DefaultAccent);
 
     /// <summary>Icons, and the text of anything that has no icon.</summary>
-    public static Color Icon { get; } = Color.FromArgb(255, 255, 255, 255);
+    public static Color Icon { get; private set; } = ToUiColor(ToolbarColors.DefaultIcon);
 
     /// <summary>A button under the pointer: the icon colour at a twelfth.</summary>
-    public static Color Hover { get; } = Color.FromArgb(31, 255, 255, 255);
+    public static Color Hover { get; private set; } = ToUiColor(ToolbarColors.Default.Hover);
 
     /// <summary>A button being pressed: the accent, softened.</summary>
-    public static Color Pressed { get; } = Color.FromArgb(153, 140, 77, 217);
+    public static Color Pressed { get; private set; } = ToUiColor(ToolbarColors.Default.Pressed);
 
     public const double ButtonSize = 32;
 
@@ -67,8 +68,38 @@ internal static class ToolbarPalette
     public static SolidColorBrush PressedBrush { get; } = new(Pressed);
 
     /// <summary>The icon colour at a given opacity, for icons drawn from several parts.</summary>
-    public static SolidColorBrush IconBrush(double opacity = 1) =>
-        new(Color.FromArgb((byte)Math.Clamp(Math.Round(255 * opacity), 0, 255), 255, 255, 255));
+    public static SolidColorBrush IconBrush(double opacity = 1) => new(Color.FromArgb(
+        (byte)Math.Clamp(Math.Round(255 * opacity), 0, 255),
+        Icon.R,
+        Icon.G,
+        Icon.B));
+
+    /// <summary>
+    /// Repaints the toolbar in the colours the user chose.
+    /// </summary>
+    /// <remarks>
+    /// The brushes are changed rather than replaced, so everything already drawn from them
+    /// follows without being rebuilt — an overlay open on another display, a toolbar mid
+    /// hover. The icons drawn from <see cref="IconBrush"/> are the exception: those brushes
+    /// were made on the spot, so they belong to whatever asked for them and are refreshed
+    /// when that is rebuilt.
+    /// </remarks>
+    public static void Apply(ToolbarColors colors)
+    {
+        Background = ToUiColor(colors.Background);
+        Accent = ToUiColor(colors.Accent);
+        Icon = ToUiColor(colors.Icon);
+        Hover = ToUiColor(colors.Hover);
+        Pressed = ToUiColor(colors.Pressed);
+
+        BackgroundBrush.Color = Background;
+        AccentBrush.Color = Accent;
+        HoverBrush.Color = Hover;
+        PressedBrush.Color = Pressed;
+    }
+
+    private static Color ToUiColor(AnnotationColor color) =>
+        Color.FromArgb(color.Alpha, color.Red, color.Green, color.Blue);
 
     /// <summary>
     /// How long a strip of <paramref name="count"/> buttons is, along the direction it
