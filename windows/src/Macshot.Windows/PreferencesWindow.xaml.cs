@@ -6,6 +6,7 @@ using Macshot.Windows.Services;
 using Macshot.Windows.Toolbar;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Windows.Graphics;
 using Windows.Storage.Pickers;
 using Windows.UI;
@@ -18,23 +19,49 @@ namespace Macshot.Windows;
 /// <c>PreferencesWindowController</c>.
 /// </summary>
 /// <remarks>
-/// Values are read into the controls once and written back only on Save, so a
-/// half-typed template never reaches the delivery path. The controls are wired by
-/// hand rather than bound, because <see cref="CaptureSettings"/> is an immutable
-/// record with no change notification and adding one purely for this window would
-/// put UI concerns into Core.
+/// <para>
+/// A change takes effect as it is made, which is what the macOS window does — it has no
+/// Save button either. The alternative is a window whose contents mean nothing until a
+/// button is found, and whose button means nothing once it has been pressed.
+/// </para>
+/// <para>
+/// The controls are wired by hand rather than bound, because <see cref="CaptureSettings"/>
+/// is an immutable record with no change notification and adding one purely for this
+/// window would put UI concerns into Core.
+/// </para>
 /// </remarks>
 public sealed partial class PreferencesWindow : Window
 {
-    /// <summary>
-    /// Chosen so the longest tab needs no scrolling on a 1080p display, which is the
-    /// smallest screen worth designing this for.
-    /// </summary>
-    private const double WidthDips = 640;
+    /// <summary>The macOS settings window's content size, which this one is.</summary>
+    private const double WidthDips = 620;
 
-    private const double HeightDips = 700;
+    private const double HeightDips = 520;
+
+    /// <summary>
+    /// How long a change waits before it is written.
+    /// </summary>
+    /// <remarks>
+    /// Dragging the quality slider is one gesture and hundreds of notifications. Each
+    /// write re-reads the file into the running app and hands the global shortcuts back to
+    /// Windows to take again, so writing every notification would spend a drag doing that
+    /// — and a shortcut that momentarily belongs to nobody is one a keypress can miss.
+    /// Short enough that letting go of a control and closing the window keeps the change.
+    /// </remarks>
+    private static readonly TimeSpan WriteDelay = TimeSpan.FromMilliseconds(250);
 
     private readonly SettingsStore _settings;
+
+    /// <summary>Collects a burst of changes into one write. See <see cref="WriteDelay"/>.</summary>
+    private readonly DispatcherTimer _write = new() { Interval = WriteDelay };
+
+    /// <summary>
+    /// True while the controls are being filled in from the stored settings, so the
+    /// notifications that causes are not mistaken for the user changing something.
+    /// </summary>
+    private bool _loading;
+
+    /// <summary>Whether a change has been made that is not on disk yet.</summary>
+    private bool _pending;
 
     /// <summary>One tick box per tool, in the order the toolbar keeps them.</summary>
     private readonly Dictionary<AnnotationTool, CheckBox> _toolToggles = [];
@@ -47,9 +74,24 @@ public sealed partial class PreferencesWindow : Window
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         InitializeComponent();
+
+        // The markup selects the first item, which happens while the pages it switches
+        // between are still being built — so the handler that would have shown it declined
+        // to, and the first page has to be shown from here instead.
+        ShowPage(Sections.SelectedItem as NavigationViewItem);
         BuildToolsPage();
         Load(_settings.Current);
         PlaceOnScreen();
+
+        _write.Tick += (_, _) => Persist();
+
+        CaptureAreaHotkeyBox.BindingChanged += Setting_Changed;
+        CaptureAllScreensHotkeyBox.BindingChanged += Setting_Changed;
+        RecordScreenHotkeyBox.BindingChanged += Setting_Changed;
+
+        // A change still waiting out its delay when the window goes is a change the user
+        // made and watched take effect on screen.
+        Closed += (_, _) => Persist();
     }
 
     /// <summary>
@@ -61,18 +103,109 @@ public sealed partial class PreferencesWindow : Window
         foreach (var tool in ToolbarActions.ToolOrder)
         {
             var toggle = new CheckBox { Content = ToolbarActions.Tooltip(tool) };
+            toggle.Checked += Setting_Changed;
+            toggle.Unchecked += Setting_Changed;
             _toolToggles[tool] = toggle;
             ToolToggles.Children.Add(toggle);
         }
 
-        ToolbarColorRow.Children.Add(_toolbarBackground);
-        ToolbarColorRow.Children.Add(_toolbarAccent);
-        ToolbarColorRow.Children.Add(_toolbarIcon);
+        foreach (var choice in new[] { _toolbarBackground, _toolbarAccent, _toolbarIcon })
+        {
+            choice.Changed += Setting_Changed;
+            ToolbarColorRow.Children.Add(choice);
+        }
+    }
+
+    /// <summary>
+    /// Takes a change the moment it is made, after <see cref="WriteDelay"/>.
+    /// </summary>
+    /// <remarks>
+    /// One handler for every control wired in code, whatever its notification signature:
+    /// this window writes all of its pages at once, so which control changed makes no
+    /// difference to what happens next. Both parameters are the widest and most nullable
+    /// they can be, which is what lets one method stand in for every event's delegate.
+    /// </remarks>
+    private void Setting_Changed(object? sender, object? args) => Apply();
+
+    private void Setting_Toggled(object sender, RoutedEventArgs e) => Apply();
+
+    private void Setting_NumberChanged(NumberBox sender, NumberBoxValueChangedEventArgs args) => Apply();
+
+    private void Setting_SliderChanged(object sender, RangeBaseValueChangedEventArgs e) => Apply();
+
+    private void Setting_SelectionChanged(object sender, SelectionChangedEventArgs e) => Apply();
+
+    /// <summary>
+    /// Takes what a text box holds when the focus leaves it, rather than as it is typed.
+    /// </summary>
+    /// <remarks>
+    /// A filename template is briefly nonsense on the way to being right — <c>{yyy</c> is
+    /// three keystrokes into <c>{yyyy}</c> — and storing each of those would put a capture
+    /// taken mid-edit under a name nobody chose. Leaving the field is the user saying they
+    /// are done with it.
+    /// </remarks>
+    private void Setting_LostFocus(object sender, RoutedEventArgs e) => Apply();
+
+    /// <summary>Notes that something changed, and starts the wait before it is written.</summary>
+    private void Apply()
+    {
+        if (_loading)
+        {
+            return;
+        }
+
+        _pending = true;
+        _write.Stop();
+        _write.Start();
+    }
+
+    /// <summary>Writes every page, if anything is waiting to be written.</summary>
+    private void Persist()
+    {
+        _write.Stop();
+
+        if (!_pending)
+        {
+            return;
+        }
+
+        // The recorder cannot produce an unusable shortcut, but a hand-edited settings
+        // file can, and this window shows what the file held. Refused rather than
+        // repaired: normalizing would quietly put the default back, and a shortcut
+        // silently reverting to Ctrl+Shift+X reads as macshot ignoring what was set.
+        var unreadable = new[]
+        {
+            CaptureAreaHotkeyBox.Binding,
+            CaptureAllScreensHotkeyBox.Binding,
+            RecordScreenHotkeyBox.Binding,
+        }.Where(text => !HotkeyBinding.TryParse(text, out _)).ToArray();
+
+        if (unreadable.Length > 0)
+        {
+            StatusText.Text = $"Not a shortcut: {string.Join(", ", unreadable)}. Click it and press the keys — nothing is being kept until then.";
+            return;
+        }
+
+        try
+        {
+            _settings.Save(Collect());
+        }
+        // Everything, not only the file system failures. This runs from a timer tick with
+        // nobody above it to catch anything that escapes, and a preference that cannot be
+        // stored is never a reason to take the app down.
+        catch (Exception exception)
+        {
+            StatusText.Text = $"Could not save preferences: {exception.Message}";
+            return;
+        }
+
+        _pending = false;
+        StatusText.Text = string.Empty;
     }
 
     /// <summary>
     /// Shows the chosen page. All six exist at once and one is visible: a Frame would
-    /// rebuild the page on every click, and Save reads every control on every page.
+    /// rebuild the page on every click, and a change on any page writes every page.
     /// </summary>
     private void Sections_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
     {
@@ -83,12 +216,24 @@ public sealed partial class PreferencesWindow : Window
             return;
         }
 
-        var chosen = (args.SelectedItem as NavigationViewItem)?.Tag as string;
+        ShowPage(args.SelectedItem as NavigationViewItem);
+    }
+
+    private void ShowPage(NavigationViewItem? item)
+    {
+        var chosen = item?.Tag as string;
 
         foreach (var (tag, page) in Pages())
         {
             page.Visibility = tag == chosen ? Visibility.Visible : Visibility.Collapsed;
         }
+
+        // The title says which page, as the macOS window's does. Six pages of settings
+        // named only "Settings" is a window whose title bar stops meaning anything the
+        // moment the user is looking for one of them in a screenshot or a taskbar.
+        Title = item?.Content is string label
+            ? $"{BuildVariant.DisplayName} Settings — {label}"
+            : $"{BuildVariant.DisplayName} Settings";
     }
 
     private IEnumerable<(string Tag, FrameworkElement Page)> Pages() =>
@@ -126,6 +271,21 @@ public sealed partial class PreferencesWindow : Window
     }
 
     private void Load(CaptureSettings settings)
+    {
+        // Filling a control notifies exactly as a user changing it does, and every one of
+        // these would otherwise write back what was just read.
+        _loading = true;
+        try
+        {
+            Fill(settings);
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private void Fill(CaptureSettings settings)
     {
         FormatBox.ItemsSource = Enum.GetValues<CaptureImageFormat>().Select(format => format.ToString()).ToList();
         FormatBox.SelectedIndex = (int)settings.Format;
@@ -177,8 +337,11 @@ public sealed partial class PreferencesWindow : Window
         _toolbarIcon.Color = ToUiColor(colors.Icon);
     }
 
-    private void ResetToolbarColors_Click(object sender, RoutedEventArgs e) =>
+    private void ResetToolbarColors_Click(object sender, RoutedEventArgs e)
+    {
         ShowToolbarColors(ToolbarColors.Default);
+        Apply();
+    }
 
     private static Color ToUiColor(AnnotationColor color) =>
         Color.FromArgb(color.Alpha, color.Red, color.Green, color.Blue);
@@ -245,8 +408,13 @@ public sealed partial class PreferencesWindow : Window
     {
         UpdateQualityVisibility();
         UpdateTemplatePreview();
+        Apply();
     }
 
+    /// <summary>
+    /// Keeps the preview in step as the template is typed. What is typed is not stored
+    /// until the focus leaves the box — see <see cref="Setting_LostFocus"/>.
+    /// </summary>
     private void Template_TextChanged(object sender, TextChangedEventArgs e) => UpdateTemplatePreview();
 
     /// <summary>Quality has no meaning for a lossless format, so it is not offered for one.</summary>
@@ -291,10 +459,15 @@ public sealed partial class PreferencesWindow : Window
         if (folder is not null)
         {
             DirectoryBox.Text = folder.Path;
+            Apply();
         }
     }
 
-    private void ResetDirectory_Click(object sender, RoutedEventArgs e) => DirectoryBox.Text = string.Empty;
+    private void ResetDirectory_Click(object sender, RoutedEventArgs e)
+    {
+        DirectoryBox.Text = string.Empty;
+        Apply();
+    }
 
     /// <summary>
     /// Opens the folder holding the log and this settings file.
@@ -327,57 +500,16 @@ public sealed partial class PreferencesWindow : Window
     }
 
     /// <summary>
-    /// Deletes the kept copies immediately, without waiting for Save.
+    /// Deletes the kept copies now.
     /// </summary>
     /// <remarks>
-    /// Immediate because it is an action rather than a setting: someone clearing
-    /// history has just captured something they want gone, and leaving it on disk
-    /// until an unrelated Save button is pressed would be the wrong answer to that.
+    /// An action rather than a setting, so it says what it did: someone clearing history
+    /// has just captured something they want gone, and every other control on this page
+    /// reports nothing because taking effect is all there is to report.
     /// </remarks>
     private void ClearHistory_Click(object sender, RoutedEventArgs e)
     {
         ScreenshotHistory.Clear();
         StatusText.Text = "History cleared.";
     }
-
-    private void Save_Click(object sender, RoutedEventArgs e)
-    {
-        // The recorder cannot produce an unusable shortcut, but a hand-edited settings
-        // file can, and this window shows what the file held. Refused rather than
-        // repaired: normalizing would quietly put the default back, and a shortcut
-        // silently reverting to Ctrl+Shift+X reads as macshot ignoring what was set.
-        var unreadable = new[]
-        {
-            CaptureAreaHotkeyBox.Binding,
-            CaptureAllScreensHotkeyBox.Binding,
-            RecordScreenHotkeyBox.Binding,
-        }.Where(text => !HotkeyBinding.TryParse(text, out _)).ToArray();
-
-        if (unreadable.Length > 0)
-        {
-            StatusText.Text = $"Not a shortcut: {string.Join(", ", unreadable)}. Click it and press the keys.";
-            return;
-        }
-
-        var settings = Collect();
-        try
-        {
-            _settings.Save(settings);
-        }
-        // Everything, not only the file system failures. This runs from a click
-        // handler, so anything that escapes has nobody above it to catch it, and a
-        // preference that cannot be stored is never a reason to take the app down.
-        catch (Exception exception)
-        {
-            StatusText.Text = $"Could not save preferences: {exception.Message}";
-            return;
-        }
-
-        // Normalization may have changed what was typed, so the controls are reloaded
-        // from what was actually stored rather than from what was entered.
-        Load(_settings.Current);
-        StatusText.Text = $"Saved to {_settings.Path}";
-    }
-
-    private void Close_Click(object sender, RoutedEventArgs e) => Close();
 }

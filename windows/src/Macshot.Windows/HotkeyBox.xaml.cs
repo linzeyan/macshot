@@ -38,6 +38,12 @@ public sealed partial class HotkeyBox : UserControl
         InitializeComponent();
     }
 
+    /// <summary>
+    /// Raised when a gesture completes, and not when <see cref="Binding"/> is assigned:
+    /// what the settings file already held is not a change to it.
+    /// </summary>
+    public event EventHandler? BindingChanged;
+
     /// <summary>What this shortcut does, shown above the button.</summary>
     public string Header
     {
@@ -110,6 +116,7 @@ public sealed partial class HotkeyBox : UserControl
         _recording = false;
         _binding = candidate.ToString();
         ShowBinding();
+        BindingChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>

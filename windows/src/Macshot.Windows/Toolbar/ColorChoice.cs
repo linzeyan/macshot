@@ -47,6 +47,16 @@ internal sealed partial class ColorChoice : UserControl
         };
     }
 
+    /// <summary>
+    /// Raised whenever the swatch's colour changes, including when it is assigned.
+    /// </summary>
+    /// <remarks>
+    /// Assignment included because separating the two would mean tracking which of the
+    /// picker's own notifications came from the user — and the one place that listens is
+    /// loading these controls when it assigns, so it already knows to ignore them.
+    /// </remarks>
+    public event EventHandler? Changed;
+
     /// <summary>The colour chosen, opaque.</summary>
     public Color Color
     {
@@ -58,5 +68,9 @@ internal sealed partial class ColorChoice : UserControl
         }
     }
 
-    private void Show(Color color) => _swatch.Background = new SolidColorBrush(color);
+    private void Show(Color color)
+    {
+        _swatch.Background = new SolidColorBrush(color);
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
 }
