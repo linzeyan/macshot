@@ -5,47 +5,59 @@
     xmlns:local="using:Macshot.Windows"
     Title="Macshot Capture">
     <Grid x:Name="OverlayRoot" Background="#FF000000" KeyDown="OverlayRoot_KeyDown">
-        <Image x:Name="PreviewImage" Stretch="Fill" />
-        <local:PointerCanvas
-            x:Name="SelectionCanvas"
-            Background="Transparent"
-            PointerPressed="SelectionCanvas_PointerPressed"
-            PointerMoved="SelectionCanvas_PointerMoved"
-            PointerReleased="SelectionCanvas_PointerReleased">
-            <!-- Declared before the marquee so a selection being dragged out draws
-                 over the window highlight it is replacing, not under it. -->
-            <Rectangle
-                x:Name="SnapHighlight"
-                Visibility="Collapsed"
-                Stroke="#4CC2FF"
-                StrokeThickness="2"
-                RadiusX="4"
-                RadiusY="4"
-                Fill="#144CC2FF" />
+        <!-- Everything that is the capture, under one transform: the screenshot, the
+             marks on it, the marquee and its grips. Zooming and panning move all of it
+             together, and taking pointer positions relative to anything inside here gives
+             them back in the capture's own coordinates however far in it is zoomed.
 
-            <Rectangle
-                x:Name="SelectionRectangle"
-                Visibility="Collapsed"
-                Stroke="#4CC2FF"
-                StrokeThickness="2"
-                Fill="#334CC2FF" />
-        </local:PointerCanvas>
+             The hint, the size box, the toolbar and the colour ring stay outside. They
+             describe the capture rather than belong to it, and a toolbar that grew to
+             three times its size at 3x would be unusable at exactly the magnification
+             that needs it most. -->
+        <Grid x:Name="ZoomHost">
+            <Image x:Name="PreviewImage" Stretch="Fill" />
+            <local:PointerCanvas
+                x:Name="SelectionCanvas"
+                Background="Transparent"
+                PointerPressed="SelectionCanvas_PointerPressed"
+                PointerMoved="SelectionCanvas_PointerMoved"
+                PointerReleased="SelectionCanvas_PointerReleased"
+                PointerWheelChanged="SelectionCanvas_PointerWheelChanged">
+                <!-- Declared before the marquee so a selection being dragged out draws
+                     over the window highlight it is replacing, not under it. -->
+                <Rectangle
+                    x:Name="SnapHighlight"
+                    Visibility="Collapsed"
+                    Stroke="#4CC2FF"
+                    StrokeThickness="2"
+                    RadiusX="4"
+                    RadiusY="4"
+                    Fill="#144CC2FF" />
 
-        <!-- Above SelectionCanvas so marks are not tinted by the selection fill. The
-             same surface the editor window draws on; its own layers are not hit
-             testable, so pointer input keeps reaching the selection canvas below. -->
-        <local:AnnotationCanvasView x:Name="AnnotationCanvas" />
+                <Rectangle
+                    x:Name="SelectionRectangle"
+                    Visibility="Collapsed"
+                    Stroke="#4CC2FF"
+                    StrokeThickness="2"
+                    Fill="#334CC2FF" />
+            </local:PointerCanvas>
 
-        <!-- The selection's grips, above the preview because they straddle its edge:
-             declared any lower, the preview would cover their inner half and leave
-             eight half-squares. Not hit testable either — which grip a point grabs is
-             arithmetic SelectionHandles answers, so these only have to be visible. -->
-        <Canvas x:Name="SelectionGrips" IsHitTestVisible="False" />
+            <!-- Above SelectionCanvas so marks are not tinted by the selection fill. The
+                 same surface the editor window draws on; its own layers are not hit
+                 testable, so pointer input keeps reaching the selection canvas below. -->
+            <local:AnnotationCanvasView x:Name="AnnotationCanvas" />
 
-        <!-- The colour sampler's magnified circle. Above the grips because it is
-             shown while the pointer is over the image and must not be cut in half by
-             anything the overlay draws. -->
-        <Canvas x:Name="LoupeLayer" IsHitTestVisible="False" />
+            <!-- The selection's grips, above the preview because they straddle its edge:
+                 declared any lower, the preview would cover their inner half and leave
+                 eight half-squares. Not hit testable either — which grip a point grabs is
+                 arithmetic SelectionHandles answers, so these only have to be visible. -->
+            <Canvas x:Name="SelectionGrips" IsHitTestVisible="False" />
+
+            <!-- The colour sampler's magnified circle. Above the grips because it is
+                 shown while the pointer is over the image and must not be cut in half by
+                 anything the overlay draws. -->
+            <Canvas x:Name="LoupeLayer" IsHitTestVisible="False" />
+        </Grid>
 
         <Border
             HorizontalAlignment="Center"

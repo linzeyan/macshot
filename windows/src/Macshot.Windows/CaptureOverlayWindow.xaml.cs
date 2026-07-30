@@ -69,6 +69,12 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private const double ClickSlop = 4;
 
+    /// <summary>
+    /// How much one notch of the wheel magnifies. Small enough that the zoom is steered
+    /// rather than jumped through: the point of it is landing on one pixel.
+    /// </summary>
+    private const double ZoomStep = 1.1;
+
     private readonly CapturedFrame _desktopFrame;
     private readonly MonitorLayout _layout;
     private readonly CaptureMonitor _monitor;
@@ -169,6 +175,19 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private double? _lockedAspect;
 
+    /// <summary>How far into the capture the overlay is, and where.</summary>
+    private Viewport _viewport = Viewport.Identity;
+
+    /// <summary>The transform that carries out <see cref="_viewport"/>.</summary>
+    private readonly ScaleTransform _zoom = new();
+    private readonly TranslateTransform _pan = new();
+
+    /// <summary>
+    /// Where the pointer was when a pan drag last moved, in the overlay's own units.
+    /// Non-null for as long as the middle button is held.
+    /// </summary>
+    private Point? _panningFrom;
+
     public CaptureOverlayWindow(
         CapturedFrame desktopFrame,
         MonitorLayout layout,
@@ -230,6 +249,7 @@ public sealed partial class CaptureOverlayWindow : Window
         await source.SetBitmapAsync(_monitorFrame.ToSoftwareBitmap());
         PreviewImage.Source = source;
         BuildGrips();
+        WireZoom();
         WireToolbar();
         WireSizeBox();
         WireColorWheel();
@@ -342,6 +362,15 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         SelectionCanvas.CapturePointer(e.Pointer);
 
+        // The middle button drags the magnified capture around under the overlay. It is
+        // the one button no tool wants, which is what makes it the one that can mean this
+        // everywhere without taking anything away.
+        if (e.GetCurrentPoint(SelectionCanvas).Properties.IsMiddleButtonPressed)
+        {
+            _panningFrom = e.GetCurrentPoint(OverlayRoot).Position;
+            return;
+        }
+
         // The right button opens the ring of colours where the pointer already is. The
         // colour button is wherever the toolbar happens to be, which is a trip across the
         // screen for every mark that wants a different colour from the last one.
@@ -413,6 +442,14 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private void SelectionCanvas_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
+        if (_panningFrom is { } panFrom && e.Pointer.IsInContact)
+        {
+            var now = e.GetCurrentPoint(OverlayRoot).Position;
+            _panningFrom = now;
+            ApplyViewport(_viewport.PannedBy(now.X - panFrom.X, now.Y - panFrom.Y, LayoutBounds));
+            return;
+        }
+
         if (_colorWheel.IsShown)
         {
             _colorWheel.Hover(ToLayoutPoint(e));
@@ -589,6 +626,12 @@ public sealed partial class CaptureOverlayWindow : Window
     private void SelectionCanvas_PointerReleased(object sender, PointerRoutedEventArgs e)
     {
         SelectionCanvas.ReleasePointerCaptures();
+
+        if (_panningFrom is not null)
+        {
+            _panningFrom = null;
+            return;
+        }
 
         // Letting go over a colour takes it. Letting go having pointed at nothing leaves
         // the ring open to be clicked at instead — a right-click that opens it and does
@@ -896,7 +939,9 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </remarks>
     private void RepositionChrome(CaptureRegion region)
     {
-        var selection = ToLayout(region);
+        // Through the viewport: the chrome is outside the transform, so where it has to go
+        // is where the region appears on screen, not where it is on the capture.
+        var selection = _viewport.ToView(ToLayout(region));
         var screen = LayoutBounds;
 
         _sizeBox.Show(region.Width, region.Height);
@@ -1196,6 +1241,13 @@ public sealed partial class CaptureOverlayWindow : Window
                 RenderAnnotations();
                 return;
 
+            case VirtualKey.Number0 when control:
+                // What every other program means by it: back to actual size. Zooming out
+                // a notch at a time to find 100% again is the part of a zoom nobody wants.
+                e.Handled = true;
+                ApplyViewport(Viewport.Identity);
+                return;
+
             case VirtualKey.Y when control:
                 e.Handled = true;
                 _editor.Redo();
@@ -1218,6 +1270,68 @@ public sealed partial class CaptureOverlayWindow : Window
         AnnotationToolbar.Changed += (_, _) => RenderAnnotations();
         AnnotationToolbar.ColorSamplingToggled += (_, armed) => SetColorSampling(armed);
         AnnotationToolbar.CommandInvoked += (_, command) => RunToolbarCommand(command);
+    }
+
+    /// <summary>
+    /// Hangs the zoom and the pan off the capture, so both are one assignment away.
+    /// </summary>
+    private void WireZoom()
+    {
+        var transform = new TransformGroup();
+        transform.Children.Add(_zoom);
+        transform.Children.Add(_pan);
+        ZoomHost.RenderTransform = transform;
+    }
+
+    /// <summary>
+    /// Zooms about the pointer. The overlay is 1:1 with the display, which is the wrong
+    /// magnification for choosing a region a few pixels across — a button's border, a line
+    /// of small text — and it is exactly those the user is peering at when they reach for
+    /// the wheel.
+    /// </summary>
+    private void SelectionCanvas_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
+    {
+        // Taken against the window rather than the capture: the anchor has to be where the
+        // pointer is on screen, which is what stays still while everything under it grows.
+        var anchor = e.GetCurrentPoint(OverlayRoot).Position;
+        var wheel = e.GetCurrentPoint(SelectionCanvas).Properties.MouseWheelDelta;
+        if (wheel == 0)
+        {
+            return;
+        }
+
+        e.Handled = true;
+        ApplyViewport(_viewport.ZoomedAt(
+            wheel > 0 ? ZoomStep : 1 / ZoomStep,
+            new CapturePoint(anchor.X, anchor.Y),
+            LayoutBounds));
+    }
+
+    /// <summary>
+    /// Carries out a new viewport: the transform, the chrome around the selection, and the
+    /// line that says how far in it is.
+    /// </summary>
+    private void ApplyViewport(Viewport viewport)
+    {
+        if (viewport == _viewport)
+        {
+            return;
+        }
+
+        _viewport = viewport;
+        _zoom.ScaleX = viewport.Scale;
+        _zoom.ScaleY = viewport.Scale;
+        _pan.X = viewport.OffsetX;
+        _pan.Y = viewport.OffsetY;
+
+        if (_selection is { } region)
+        {
+            RepositionChrome(region);
+        }
+
+        HintText.Text = viewport.IsIdentity
+            ? (IsAnnotating ? AnnotatingHint : SelectionHint)
+            : $"{viewport.Scale * 100:0}% • Scroll to zoom • Middle-drag to pan";
     }
 
     /// <summary>
@@ -1577,7 +1691,7 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private CapturePoint ToLayoutPoint(PointerRoutedEventArgs e)
     {
-        var position = e.GetCurrentPoint(SelectionCanvas).Position;
+        var position = e.GetCurrentPoint(OverlayRoot).Position;
         return new CapturePoint(position.X, position.Y);
     }
 
