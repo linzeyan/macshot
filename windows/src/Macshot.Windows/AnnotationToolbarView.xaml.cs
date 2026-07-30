@@ -138,6 +138,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         StrokeWidthSlider.ValueChanged += StrokeWidth_Changed;
         LineStyleBox.SelectionChanged += LineStyle_Changed;
         ArrowStyleBox.SelectionChanged += ArrowStyle_Changed;
+        CornerRadiusSlider.ValueChanged += CornerRadius_Changed;
         StampChoices.SelectionChanged += StampChoice_Changed;
     }
 
@@ -236,6 +237,10 @@ public sealed partial class AnnotationToolbarView : UserControl
 
         LineStyleBox.Visibility = Show(AnnotationToolOptions.UsesLineStyle(tool));
         ArrowStyleBox.Visibility = Show(AnnotationToolOptions.UsesArrowStyle(tool));
+
+        var rounds = Show(AnnotationToolOptions.UsesCornerRadius(tool));
+        CornerLabel.Visibility = rounds;
+        CornerRadiusSlider.Visibility = rounds;
         StampButton.Visibility = Show(AnnotationToolOptions.UsesStamp(tool));
     }
 
@@ -304,6 +309,7 @@ public sealed partial class AnnotationToolbarView : UserControl
             LineStyleBox.SelectedIndex = (int)_loadedStyle.LineStyle;
             ArrowStyleBox.ItemsSource = Enum.GetValues<ArrowStyle>().Select(style => style.ToString()).ToList();
             ArrowStyleBox.SelectedIndex = (int)_loadedStyle.ArrowStyle;
+            CornerRadiusSlider.Value = _loadedStyle.CornerRadius;
             StrokeWidthSlider.Value = _loadedStyle.StrokeWidth;
             StyleColorPicker.Color = ToUiColor(_loadedStyle.Color);
         }
@@ -375,6 +381,8 @@ public sealed partial class AnnotationToolbarView : UserControl
 
     private void ArrowStyle_Changed(object sender, SelectionChangedEventArgs e) => ApplyStyle();
 
+    private void CornerRadius_Changed(object sender, RangeBaseValueChangedEventArgs e) => ApplyStyle();
+
     /// <summary>
     /// The style applies to marks drawn from now on. Restyling what is already on the
     /// canvas would need a selection, which is a separate feature.
@@ -390,7 +398,8 @@ public sealed partial class AnnotationToolbarView : UserControl
             || StyleColorPicker is null
             || StrokeWidthSlider is null
             || LineStyleBox is null
-            || ArrowStyleBox is null)
+            || ArrowStyleBox is null
+            || CornerRadiusSlider is null)
         {
             return;
         }
@@ -402,7 +411,8 @@ public sealed partial class AnnotationToolbarView : UserControl
             LineStyleBox.SelectedIndex >= 0 ? (LineStyle)LineStyleBox.SelectedIndex : LineStyle.Solid,
             ArrowStyle: ArrowStyleBox.SelectedIndex >= 0
                 ? (ArrowStyle)ArrowStyleBox.SelectedIndex
-                : ArrowStyle.Filled);
+                : ArrowStyle.Filled,
+            CornerRadius: Math.Max(0, CornerRadiusSlider.Value));
         UpdateColorSwatch();
     }
 

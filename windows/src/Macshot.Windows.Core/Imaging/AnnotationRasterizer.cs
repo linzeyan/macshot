@@ -18,6 +18,9 @@ public static class AnnotationRasterizer
 {
     private const int EllipseMinimumSegments = 32;
 
+    /// <summary>Samples per rounded corner, whatever the radius.</summary>
+    private const int CornerMinimumSegments = 6;
+
     /// <summary>Extra margin around a stroke so its antialiased edge is not clipped.</summary>
     private const double AntialiasMargin = 2;
 
@@ -150,7 +153,12 @@ public static class AnnotationRasterizer
                 annotation);
             break;
         case AnnotationTool.Rectangle:
-            CompositeStrokes(pixels, width, height, [BuildRectanglePath(annotation.BoundingRect)], annotation);
+            CompositeStrokes(
+                pixels,
+                width,
+                height,
+                [BuildRectanglePath(annotation.BoundingRect, annotation.Style.CornerRadius)],
+                annotation);
             break;
         case AnnotationTool.Ellipse:
             CompositeStrokes(pixels, width, height, [BuildEllipsePath(annotation.BoundingRect)], annotation);
@@ -314,20 +322,62 @@ public static class AnnotationRasterizer
             : [annotation.Start, annotation.End];
     }
 
-    private static CapturePoint[] BuildRectanglePath(CaptureRegion bounds)
+    private static CapturePoint[] BuildRectanglePath(CaptureRegion bounds, double cornerRadius = 0)
     {
         var left = bounds.X;
         var top = bounds.Y;
         var right = bounds.X + bounds.Width;
         var bottom = bounds.Y + bounds.Height;
-        return
-        [
-            new CapturePoint(left, top),
-            new CapturePoint(right, top),
-            new CapturePoint(right, bottom),
-            new CapturePoint(left, bottom),
-            new CapturePoint(left, top),
-        ];
+
+        // Never more than half the shorter side: a larger radius has no corner left to
+        // round, and letting it grow past that would make the arcs cross and the shape
+        // fold in on itself.
+        var radius = Math.Min(cornerRadius, Math.Min(bounds.Width, bounds.Height) / 2);
+        if (radius <= 0)
+        {
+            return
+            [
+                new CapturePoint(left, top),
+                new CapturePoint(right, top),
+                new CapturePoint(right, bottom),
+                new CapturePoint(left, bottom),
+                new CapturePoint(left, top),
+            ];
+        }
+
+        // Sampled at roughly a point per pixel of arc, the way the ellipse is, so a
+        // large corner does not come out as a visible chamfer.
+        var perCorner = Math.Max(CornerMinimumSegments, (int)Math.Ceiling(radius));
+        var path = new List<CapturePoint>((perCorner + 1) * 4 + 1);
+
+        AddCorner(path, right - radius, bottom - radius, radius, 0, perCorner);
+        AddCorner(path, left + radius, bottom - radius, radius, Math.PI / 2, perCorner);
+        AddCorner(path, left + radius, top + radius, radius, Math.PI, perCorner);
+        AddCorner(path, right - radius, top + radius, radius, 3 * Math.PI / 2, perCorner);
+        path.Add(path[0]);
+
+        return [.. path];
+    }
+
+    /// <summary>
+    /// Adds a quarter circle about a corner's centre, starting at
+    /// <paramref name="startAngle"/> and turning a quarter clockwise in frame space.
+    /// </summary>
+    private static void AddCorner(
+        List<CapturePoint> path,
+        double centerX,
+        double centerY,
+        double radius,
+        double startAngle,
+        int segments)
+    {
+        for (var segment = 0; segment <= segments; segment++)
+        {
+            var angle = startAngle + (Math.PI / 2 * segment / segments);
+            path.Add(new CapturePoint(
+                centerX + radius * Math.Cos(angle),
+                centerY + radius * Math.Sin(angle)));
+        }
     }
 
     private static CapturePoint[] BuildEllipsePath(CaptureRegion bounds)

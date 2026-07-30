@@ -24,6 +24,13 @@ public sealed record CaptureSettings
     public const int MaxThumbnailSeconds = 60;
     public const double MinStrokeWidth = 1;
     public const double MaxStrokeWidth = 64;
+
+    /// <summary>
+    /// The most a rectangle's corners can be rounded. Past this the shape reads as a
+    /// pill rather than a box, and the rasterizer clamps it to half the shorter side
+    /// anyway, so a larger number would only look like it did nothing.
+    /// </summary>
+    public const double MaxCornerRadius = 64;
     public const int MinDelaySeconds = 1;
     public const int MaxDelaySeconds = 60;
     public const int MaxHistorySize = 200;
@@ -80,6 +87,9 @@ public sealed record CaptureSettings
 
     /// <summary>Which ends the arrow tool draws.</summary>
     public ArrowStyle AnnotationArrowStyle { get; init; } = ArrowStyle.Filled;
+
+    /// <summary>How far the rectangle tool rounds its corners, in frame pixels.</summary>
+    public double AnnotationCornerRadius { get; init; }
 
     /// <summary>
     /// Rounds off a freehand stroke once it is finished. On by default: a path sampled
@@ -245,7 +255,8 @@ public sealed record CaptureSettings
             color,
             Math.Clamp(AnnotationStrokeWidth, MinStrokeWidth, MaxStrokeWidth),
             AnnotationLineStyle,
-            ArrowStyle: AnnotationArrowStyle);
+            ArrowStyle: AnnotationArrowStyle,
+            CornerRadius: Math.Clamp(AnnotationCornerRadius, 0, MaxCornerRadius));
     }
 
     public CaptureSettings WithAnnotationStyle(AnnotationStyle style)
@@ -258,6 +269,7 @@ public sealed record CaptureSettings
             AnnotationStrokeWidth = style.StrokeWidth,
             AnnotationLineStyle = style.LineStyle,
             AnnotationArrowStyle = style.ArrowStyle,
+            AnnotationCornerRadius = style.CornerRadius,
         };
     }
 
@@ -289,6 +301,9 @@ public sealed record CaptureSettings
                 : AnnotationStyle.Default.StrokeWidth,
             AnnotationLineStyle = Enum.IsDefined(AnnotationLineStyle) ? AnnotationLineStyle : LineStyle.Solid,
             AnnotationArrowStyle = Enum.IsDefined(AnnotationArrowStyle) ? AnnotationArrowStyle : ArrowStyle.Filled,
+            AnnotationCornerRadius = double.IsFinite(AnnotationCornerRadius)
+                ? Math.Clamp(AnnotationCornerRadius, 0, MaxCornerRadius)
+                : 0,
             DelaySeconds = Math.Clamp(DelaySeconds, MinDelaySeconds, MaxDelaySeconds),
             HistorySize = Math.Clamp(HistorySize, 0, MaxHistorySize),
 

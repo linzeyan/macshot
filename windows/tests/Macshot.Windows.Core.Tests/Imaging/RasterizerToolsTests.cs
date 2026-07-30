@@ -149,6 +149,47 @@ public sealed class RasterizerToolsTests
     }
 
     [TestMethod]
+    public void CornerRadius_CutsTheCornerOffARectangle()
+    {
+        var sharp = Shape(AnnotationTool.Rectangle, 20, 20, 44, 44);
+        var rounded = sharp with { Style = sharp.Style with { CornerRadius = 8 } };
+
+        // The very corner of the bounds: on the box when it is square, and cut away
+        // when it is rounded.
+        Assert.IsTrue(IsInked(Render(Blank(), sharp), 20, 20));
+        Assert.IsFalse(IsInked(Render(Blank(), rounded), 20, 20));
+
+        // The sides are untouched by rounding — only the corners move.
+        Assert.IsTrue(IsInked(Render(Blank(), rounded), 32, 20));
+    }
+
+    [TestMethod]
+    public void CornerRadius_CannotRoundMoreThanTheShapeHasToGive()
+    {
+        // Half the shorter side is a full half-circle at each end; asking for more has
+        // no corner left to cut, and arcs that crossed would fold the shape in on
+        // itself. The clamp is what keeps a slider dragged to its top honest.
+        var small = Shape(AnnotationTool.Rectangle, 24, 28, 40, 36);
+        var asked = small with { Style = small.Style with { CornerRadius = 400 } };
+
+        var rendered = Render(Blank(), asked);
+
+        Assert.IsTrue(IsInked(rendered, 32, 28), "the middle of the top edge is still drawn");
+        Assert.IsTrue(IsInked(rendered, 24, 32), "and the middle of the left one");
+    }
+
+    [TestMethod]
+    public void CornerRadius_LeavesTheRedactionToolAlone()
+    {
+        // A filled rectangle is what covers something up. Rounding its corners would
+        // leave the pixels it was placed over showing at each one.
+        var covered = Shape(AnnotationTool.FilledRectangle, 20, 20, 44, 44);
+        var asked = covered with { Style = covered.Style with { CornerRadius = 12 } };
+
+        CollectionAssert.AreEqual(Render(Blank(), covered), Render(Blank(), asked));
+    }
+
+    [TestMethod]
     public void Rotation_OfZeroIsTheShapeItAlwaysWas()
     {
         var upright = Render(Blank(), Shape(AnnotationTool.Rectangle, 20, 20, 44, 44));

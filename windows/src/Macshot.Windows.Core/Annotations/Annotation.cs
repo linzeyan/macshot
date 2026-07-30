@@ -42,13 +42,15 @@ public sealed record AnnotationStyle(
     double StrokeWidth,
     LineStyle LineStyle = LineStyle.Solid,
     double Opacity = 1,
-    ArrowStyle ArrowStyle = ArrowStyle.Filled)
+    ArrowStyle ArrowStyle = ArrowStyle.Filled,
+    double CornerRadius = 0)
 {
     public static AnnotationStyle Default { get; } = new(new AnnotationColor(76, 194, 255), 3);
 
     public void Validate()
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(StrokeWidth);
+        ArgumentOutOfRangeException.ThrowIfNegative(CornerRadius);
         if (Opacity is < 0 or > 1)
         {
             throw new ArgumentOutOfRangeException(nameof(Opacity));

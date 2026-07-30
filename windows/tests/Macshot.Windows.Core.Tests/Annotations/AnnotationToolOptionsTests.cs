@@ -63,6 +63,15 @@ public sealed class AnnotationToolOptionsTests
     }
 
     [TestMethod]
+    public void OnlyTheOutlinedRectangle_TakesTheCornerControl()
+    {
+        Assert.IsTrue(AnnotationToolOptions.UsesCornerRadius(AnnotationTool.Rectangle));
+        Assert.IsFalse(
+            AnnotationToolOptions.UsesCornerRadius(AnnotationTool.FilledRectangle),
+            "rounding the corners of a redaction uncovers what it was placed over");
+    }
+
+    [TestMethod]
     public void OnlyTheStampTool_TakesTheEmojiPicker()
     {
         Assert.IsTrue(AnnotationToolOptions.UsesStamp(AnnotationTool.Stamp));

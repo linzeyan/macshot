@@ -48,6 +48,13 @@ public static class AnnotationToolOptions
         or AnnotationTool.Rectangle
         or AnnotationTool.Ellipse;
 
+    /// <summary>
+    /// Whether the corner-rounding control applies. The outlined rectangle only: the
+    /// filled one is the redaction tool, and a redaction with rounded corners leaves the
+    /// pixels it was meant to cover showing at each one.
+    /// </summary>
+    public static bool UsesCornerRadius(AnnotationTool tool) => tool == AnnotationTool.Rectangle;
+
     /// <summary>Whether the arrow-ends picker applies.</summary>
     public static bool UsesArrowStyle(AnnotationTool tool) => tool == AnnotationTool.Arrow;
 

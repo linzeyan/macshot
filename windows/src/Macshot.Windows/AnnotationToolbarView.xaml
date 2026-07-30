@@ -79,6 +79,18 @@
 
                 <ComboBox x:Name="LineStyleBox" VerticalAlignment="Center" />
 
+                <!-- How far the rectangle tool rounds its corners. A slider rather
+                     than a set of presets, because the radius that suits a mark
+                     depends on how big the mark is. -->
+                <TextBlock x:Name="CornerLabel" Text="Corners" VerticalAlignment="Center" />
+                <Slider
+                    x:Name="CornerRadiusSlider"
+                    Width="90"
+                    Minimum="0"
+                    Maximum="64"
+                    StepFrequency="1"
+                    VerticalAlignment="Center" />
+
                 <!-- Which ends the arrow tool draws. Shown only for that tool, since
                      nothing else has ends to choose. -->
                 <ComboBox
