@@ -342,6 +342,8 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private void SelectionCanvas_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
+        UpdateCursor(ToFrame(e));
+
         if (AnnotationToolbar.IsSamplingColor)
         {
             // Reading it out as it moves is what makes the tool usable at all: on a
@@ -383,6 +385,71 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         TrackHoveredWindow(ToFrame(e));
+    }
+
+    /// <summary>
+    /// Says what a press here would do, by way of the cursor.
+    /// </summary>
+    /// <remarks>
+    /// The overlay is one canvas covering the display and a press on it means five
+    /// different things depending on where it lands. Nothing is a control, so there is no
+    /// hover state to read and the pointer is the only thing that can say which.
+    /// </remarks>
+    private void UpdateCursor(CapturePoint point)
+    {
+        // Mid-drag the cursor is left alone: what was grabbed is what is still happening,
+        // and a shape changing under the user's hand reads as the grab having slipped.
+        if (_resizing != SelectionHandle.None || _selectionStart is not null)
+        {
+            return;
+        }
+
+        if (AnnotationToolbar.IsSamplingColor)
+        {
+            SelectionCanvas.UseCursor(InputSystemCursorShape.Cross);
+            return;
+        }
+
+        if (!IsAnnotating)
+        {
+            SelectionCanvas.UseCursor(InputSystemCursorShape.Cross);
+            return;
+        }
+
+        // Same order the press handler tries things in, or the cursor would promise
+        // something other than what clicking does.
+        if (_regionIsAdjustable && _selection is { } region)
+        {
+            var grip = SelectionHandles.HitTest(region, point);
+            if (grip != SelectionHandle.None)
+            {
+                SelectionCanvas.UseCursor(CursorHints.For(grip));
+                return;
+            }
+        }
+
+        SelectionCanvas.UseCursor(AnnotationCursor(point));
+    }
+
+    /// <summary>
+    /// The cursor for the active tool: what it will do to the mark under the pointer with
+    /// the select tool, and the crosshair a mark is drawn with otherwise.
+    /// </summary>
+    private InputSystemCursorShape AnnotationCursor(CapturePoint point)
+    {
+        if (_editor.Tool != AnnotationTool.Select)
+        {
+            return InputSystemCursorShape.Cross;
+        }
+
+        if (_editor.SelectionShown is { } shown && AnnotationHandles.At(shown, point) is { } handle)
+        {
+            return CursorHints.For(handle.Kind);
+        }
+
+        return _editor.Document.HitTest(point) is null
+            ? InputSystemCursorShape.Arrow
+            : InputSystemCursorShape.SizeAll;
     }
 
     /// <summary>

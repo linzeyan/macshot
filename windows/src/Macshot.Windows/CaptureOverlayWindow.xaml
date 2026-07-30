@@ -6,7 +6,7 @@
     Title="Macshot Capture">
     <Grid x:Name="OverlayRoot" Background="#FF000000" KeyDown="OverlayRoot_KeyDown">
         <Image x:Name="PreviewImage" Stretch="Fill" />
-        <Canvas
+        <local:PointerCanvas
             x:Name="SelectionCanvas"
             Background="Transparent"
             PointerPressed="SelectionCanvas_PointerPressed"
@@ -29,7 +29,7 @@
                 Stroke="#4CC2FF"
                 StrokeThickness="2"
                 Fill="#334CC2FF" />
-        </Canvas>
+        </local:PointerCanvas>
 
         <!-- Above SelectionCanvas so marks are not tinted by the selection fill. The
              same surface the editor window draws on; its own layers are not hit

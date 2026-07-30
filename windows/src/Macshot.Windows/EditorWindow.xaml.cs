@@ -276,6 +276,8 @@ public sealed partial class EditorWindow : Window
 
     private void InputCanvas_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
+        UpdateCursor(ToFrame(e));
+
         if (_cropping)
         {
             if (_cropStart is { } start && e.Pointer.IsInContact)
@@ -326,6 +328,42 @@ public sealed partial class EditorWindow : Window
         // After the release, because a ruler's reading is only knowable once the drag
         // that measures it has stopped.
         AnnotationCanvas.LabelRulers();
+    }
+
+    /// <summary>
+    /// Says what a press here would do, by way of the cursor: crop, pick, reshape, move,
+    /// or draw. The image is one canvas, and none of those is a control with a hover state
+    /// of its own.
+    /// </summary>
+    private void UpdateCursor(CapturePoint point)
+    {
+        if (_cropping)
+        {
+            InputCanvas.UseCursor(InputSystemCursorShape.Cross);
+            return;
+        }
+
+        if (AnnotationToolbar.IsSamplingColor)
+        {
+            InputCanvas.UseCursor(InputSystemCursorShape.Cross);
+            return;
+        }
+
+        if (_editor.Tool != AnnotationTool.Select)
+        {
+            InputCanvas.UseCursor(InputSystemCursorShape.Cross);
+            return;
+        }
+
+        if (_editor.SelectionShown is { } shown && AnnotationHandles.At(shown, point) is { } handle)
+        {
+            InputCanvas.UseCursor(CursorHints.For(handle.Kind));
+            return;
+        }
+
+        InputCanvas.UseCursor(_editor.Document.HitTest(point) is null
+            ? InputSystemCursorShape.Arrow
+            : InputSystemCursorShape.SizeAll);
     }
 
     private void EditorRoot_KeyDown(object sender, KeyRoutedEventArgs e)

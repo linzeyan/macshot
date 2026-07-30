@@ -29,12 +29,13 @@
                 <!-- Below the drawing surface, the way the overlay's selection canvas is:
                      the surface's own layers are not hit testable, so pointer input falls
                      through to here, and the text tool's box above it still gets clicks. -->
-                <Canvas
+                <local:PointerCanvas
                     x:Name="InputCanvas"
                     Background="Transparent"
                     PointerPressed="InputCanvas_PointerPressed"
                     PointerMoved="InputCanvas_PointerMoved"
                     PointerReleased="InputCanvas_PointerReleased" />
+
 
                 <local:AnnotationCanvasView x:Name="AnnotationCanvas" />
 
