@@ -106,6 +106,31 @@ public sealed class AnnotationDocument
         return true;
     }
 
+    /// <summary>
+    /// Replaces the contents and forgets the history.
+    /// </summary>
+    /// <remarks>
+    /// For when the pixels underneath have been replaced rather than drawn on — cropped,
+    /// flipped, framed. Every state in the history describes marks on an image that no
+    /// longer exists, and undoing into one would put them back at coordinates that have
+    /// moved. Whatever it takes to undo the operation itself is the caller's to keep,
+    /// which is why this does not try to be an undo step of its own.
+    /// </remarks>
+    public void Reset(IEnumerable<Annotation>? annotations = null)
+    {
+        var restored = annotations?.ToArray() ?? [];
+        if (Array.Exists(restored, annotation => annotation is null))
+        {
+            throw new ArgumentException("The batch contains a null annotation.", nameof(annotations));
+        }
+
+        _undo.Clear();
+        _redo.Clear();
+        _annotations.Clear();
+        _annotations.AddRange(restored);
+        Changed?.Invoke(this, EventArgs.Empty);
+    }
+
     /// <summary>Returns the topmost annotation under a frame-space point, or null.</summary>
     public Annotation? HitTest(CapturePoint point, double threshold = 6)
     {

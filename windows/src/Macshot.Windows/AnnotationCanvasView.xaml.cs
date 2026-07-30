@@ -63,9 +63,6 @@ public sealed partial class AnnotationCanvasView : UserControl
     /// <summary>True while the text tool's entry box is open and owns the keyboard.</summary>
     public bool IsTyping => _textEntry is not null;
 
-    /// <summary>The region the preview covers, in frame space.</summary>
-    public CaptureRegion Region => _region;
-
     public void Bind(AnnotationEditor editor, Func<double> rasterizationScale, Action<string> reportHint)
     {
         ArgumentNullException.ThrowIfNull(editor);
@@ -152,18 +149,6 @@ public sealed partial class AnnotationCanvasView : UserControl
         {
             Render();
         }
-    }
-
-    /// <summary>Discards what is being typed, which is what the first Escape means.</summary>
-    public bool CancelTyping()
-    {
-        if (_textEntry is null)
-        {
-            return false;
-        }
-
-        RemoveTextEntry();
-        return true;
     }
 
     /// <summary>

@@ -39,13 +39,17 @@
                 <local:AnnotationCanvasView x:Name="AnnotationCanvas" />
 
                 <!-- The crop rectangle being dragged out. Above the image, never hit
-                     testable: the drag is tracked on the input canvas below. -->
-                <Rectangle
-                    x:Name="CropRectangle"
-                    Visibility="Collapsed"
-                    Stroke="#4CC2FF"
-                    StrokeThickness="2"
-                    Fill="#334CC2FF" />
+                     testable: the drag is tracked on the input canvas below. A Canvas
+                     rather than a bare Rectangle because Canvas.Left and Canvas.Top are
+                     what position it, and they mean nothing to a Grid. -->
+                <Canvas IsHitTestVisible="False">
+                    <Rectangle
+                        x:Name="CropRectangle"
+                        Visibility="Collapsed"
+                        Stroke="#4CC2FF"
+                        StrokeThickness="2"
+                        Fill="#334CC2FF" />
+                </Canvas>
             </Grid>
         </ScrollViewer>
 

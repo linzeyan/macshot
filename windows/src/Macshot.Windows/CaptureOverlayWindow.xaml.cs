@@ -99,12 +99,6 @@ public sealed partial class CaptureOverlayWindow : Window
     private CaptureRegion? _remembered;
 
     /// <summary>
-    /// True while the colour sampler is armed, which makes the next click a pick
-    /// rather than a mark.
-    /// </summary>
-    private bool _samplingColor;
-
-    /// <summary>
     /// Whether the chosen region can still be changed, which it can when its pixels
     /// were cropped out of the screenshot and cannot when they are a window's own.
     /// </summary>
@@ -165,6 +159,13 @@ public sealed partial class CaptureOverlayWindow : Window
     public event EventHandler? SelectionCommitted;
 
     public event EventHandler? Cancelled;
+
+    /// <summary>
+    /// Raised with the finished image when the user asks for it in the editor window
+    /// rather than delivered. The capture ends either way; what differs is where the
+    /// pixels go, which is why this carries them the way completing does.
+    /// </summary>
+    public event EventHandler<CapturedFrame>? EditorRequested;
 
     /// <summary>
     /// Raised when the user asks for a window to be scroll-captured. The overlay
@@ -297,7 +298,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         // Ahead of everything else: while the sampler is armed the click is the pick,
         // and must not also start a mark or a selection under it.
-        if (_samplingColor)
+        if (AnnotationToolbar.IsSamplingColor)
         {
             TakeSampledColor(ToFrame(e));
             return;
@@ -341,7 +342,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private void SelectionCanvas_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
-        if (_samplingColor)
+        if (AnnotationToolbar.IsSamplingColor)
         {
             // Reading it out as it moves is what makes the tool usable at all: on a
             // gradient or a photograph, the pixel under the pointer is not the colour
@@ -791,7 +792,7 @@ public sealed partial class CaptureOverlayWindow : Window
                 // An armed sampler is the first thing Escape gives up. It takes over
                 // the click, so leaving it armed while Escape did something else would
                 // leave the pointer doing nothing the user asked for.
-                if (_samplingColor)
+                if (AnnotationToolbar.IsSamplingColor)
                 {
                     SetColorSampling(false);
                     return;
@@ -863,10 +864,51 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         AnnotationToolbar.Bind(_editor, _settings);
         AnnotationToolbar.Changed += (_, _) => RenderAnnotations();
+        AnnotationToolbar.UndoRequested += (_, _) =>
+        {
+            _editor.Undo();
+            RenderAnnotations();
+        };
+        AnnotationToolbar.RedoRequested += (_, _) =>
+        {
+            _editor.Redo();
+            RenderAnnotations();
+        };
         AnnotationToolbar.ColorSamplingToggled += (_, armed) => SetColorSampling(armed);
         AnnotationToolbar.ReadTextRequested += (_, _) => _ = ReadTextAsync();
         AnnotationToolbar.RedactRequested += (_, _) => _ = RedactPiiAsync();
         AnnotationToolbar.DoneRequested += (_, _) => _ = CompleteAsync();
+
+        // The one action this toolbar has that the editor's does not, for the obvious
+        // reason. Crop, flip and frame live in the editor because they need a window that
+        // can zoom and a title bar to close; this is the way there.
+        var openEditor = new Button { Content = "Editor" };
+        ToolTipService.SetToolTip(openEditor, "Open in the editor window");
+        openEditor.Click += (_, _) => _ = OpenInEditorAsync();
+        AnnotationToolbar.Actions = openEditor;
+    }
+
+    /// <summary>
+    /// Hands the marked-up pixels to the editor window instead of to delivery.
+    /// </summary>
+    /// <remarks>
+    /// The marks go across as pixels rather than as annotations. They were drawn against
+    /// the whole virtual desktop and the editor's image starts at its own origin, so
+    /// carrying them as objects would need every one shifted — and the user asked for the
+    /// image they are looking at, not for a second chance at the arrow.
+    /// </remarks>
+    private async Task OpenInEditorAsync()
+    {
+        if (!IsAnnotating)
+        {
+            return;
+        }
+
+        await AnnotationCanvas.FlushAsync();
+        if (AnnotationCanvas.ToFrame() is { } finished)
+        {
+            EditorRequested?.Invoke(this, finished);
+        }
     }
 
     /// <summary>
@@ -989,7 +1031,6 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </remarks>
     private void SetColorSampling(bool armed)
     {
-        _samplingColor = armed;
         AnnotationToolbar.SetColorSampling(armed);
         HintText.Text = armed ? SamplingHint : AnnotatingHint;
     }

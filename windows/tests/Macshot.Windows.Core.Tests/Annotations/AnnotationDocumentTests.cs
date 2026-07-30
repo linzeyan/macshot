@@ -113,6 +113,41 @@ public sealed class AnnotationDocumentTests
         Assert.AreEqual(AnnotationDocument.MaxHistoryDepth, undone);
     }
 
+    [TestMethod]
+    public void Reset_LeavesNothingToUndoInto()
+    {
+        var document = new AnnotationDocument();
+        document.Add(NewLine());
+        document.Add(NewFilledRectangle());
+
+        document.Reset();
+
+        // The point of Reset over Clear: the marks have become part of a new image, so
+        // every earlier state describes pixels that no longer exist. Offering to undo
+        // into one would put marks back at coordinates that have moved.
+        Assert.AreEqual(0, document.Annotations.Count);
+        Assert.IsFalse(document.CanUndo);
+        Assert.IsFalse(document.CanRedo);
+    }
+
+    [TestMethod]
+    public void Reset_TakesTheAnnotationsThatBelongToTheNewImage()
+    {
+        var document = new AnnotationDocument();
+        document.Add(NewLine());
+        document.Undo();
+
+        var restored = NewFilledRectangle();
+        document.Reset([restored]);
+
+        // Restoring a state on an image operation's behalf must not itself become a step,
+        // or undoing the operation would need a second press to keep the marks.
+        Assert.AreEqual(1, document.Annotations.Count);
+        Assert.AreEqual(restored.Id, document.Annotations[0].Id);
+        Assert.IsFalse(document.CanUndo);
+        Assert.IsFalse(document.CanRedo);
+    }
+
     private static Annotation NewLine()
     {
         return Annotation.Create(AnnotationTool.Line, new CapturePoint(0, 0), new CapturePoint(10, 10));

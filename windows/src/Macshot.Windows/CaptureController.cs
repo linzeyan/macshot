@@ -15,8 +15,8 @@ namespace Macshot.Windows;
 /// hotkeys, the capture overlays, and the preview window.
 /// </summary>
 /// <remarks>
-/// This orchestration used to live in <see cref="MainWindow"/>, which made the
-/// app a normal windowed program: closing the window took the hotkeys with it.
+/// This orchestration used to live in a preview window, which made the app a normal
+/// windowed program: closing the window took the hotkeys with it.
 /// macshot is a background tool, so the controller outlives every window and no
 /// window is shown at startup. It is the counterpart of the macOS
 /// <c>AppDelegate</c>.
@@ -79,7 +79,7 @@ public sealed class CaptureController : IDisposable
     private readonly TrayIconService _trayIcon;
     private readonly List<CaptureOverlayWindow> _overlays = [];
     private readonly List<PinWindow> _pins = [];
-    private MainWindow? _preview;
+    private EditorWindow? _editor;
     private ThumbnailWindow? _thumbnail;
     private PreferencesWindow? _preferences;
 
@@ -250,6 +250,7 @@ public sealed class CaptureController : IDisposable
             overlay.SelectionCommitted += OnSelectionCommitted;
             overlay.Cancelled += OnCaptureCancelled;
             overlay.ScrollCaptureRequested += OnScrollCaptureRequested;
+            overlay.EditorRequested += OnEditorRequested;
             _overlays.Add(overlay);
         }
 
@@ -366,9 +367,6 @@ public sealed class CaptureController : IDisposable
         return frame;
     }
 
-    /// <summary>The preferences the delivery path is currently using.</summary>
-    public CaptureSettings Settings => _settings.Current;
-
     public void Dispose()
     {
         if (_disposed)
@@ -388,6 +386,7 @@ public sealed class CaptureController : IDisposable
         _countdown?.Close();
 
         _thumbnail?.Close();
+        _editor?.Close();
         _preferences?.Close();
         foreach (var pin in _pins.ToArray())
         {
@@ -510,12 +509,12 @@ public sealed class CaptureController : IDisposable
             return;
         }
 
-        // With every delivery turned off the capture would otherwise vanish, which
-        // is indistinguishable from macshot being broken. The preview window is the
-        // fallback that keeps the pixels reachable.
+        // With every delivery turned off the capture would otherwise vanish, which is
+        // indistinguishable from macshot being broken. The editor is the fallback that
+        // keeps the pixels reachable, and it can copy and save them.
         if (!settings.CopyToClipboard && !settings.AutoSave)
         {
-            await ShowPreviewAsync(frame, null);
+            await ShowEditorAsync(frame);
         }
     }
 
@@ -527,7 +526,7 @@ public sealed class CaptureController : IDisposable
 
         var thumbnail = new ThumbnailWindow(frame, _settings);
         thumbnail.PinRequested += (_, pinned) => Post(() => PinAsync(pinned));
-        thumbnail.EditRequested += (_, captured) => Post(() => ShowPreviewAsync(captured, null));
+        thumbnail.EditRequested += (_, captured) => Post(() => ShowEditorAsync(captured));
         thumbnail.Closed += (_, _) =>
         {
             if (ReferenceEquals(_thumbnail, thumbnail))
@@ -561,12 +560,14 @@ public sealed class CaptureController : IDisposable
     }
 
     /// <summary>
-    /// Opens a past capture in whatever the machine shows PNGs with.
+    /// Reopens a past capture in the editor, so it can be marked up further rather than
+    /// only looked at.
     /// </summary>
     /// <remarks>
-    /// Handed to the shell rather than reopened inside macshot, because there is no
-    /// standalone editor window to reopen it into yet. When there is one, this is
-    /// where it goes.
+    /// It falls back to the shell when the file will not decode — pruned between the menu
+    /// being built and the click arriving, or written by something else into macshot's
+    /// folder. Whatever can open it is a better answer than a message box about a
+    /// screenshot the user only wanted to see.
     /// </remarks>
     private void OpenRecent(int index)
     {
@@ -576,19 +577,30 @@ public sealed class CaptureController : IDisposable
         }
 
         var path = _recent[index].Path;
-        _dispatcher.TryEnqueue(() =>
+        Post(async () =>
         {
             try
             {
-                using var opened = Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+                await ShowEditorAsync(await ImageLoader.LoadAsync(path));
             }
             catch (Exception exception)
             {
-                // A capture pruned or deleted between the menu being built and the
-                // click arriving is the ordinary case, and not worth a message box.
-                DiagnosticLog.Write($"Could not open the past capture '{path}': {exception.Message}");
+                DiagnosticLog.Write($"Could not reopen '{path}': {exception.Message}");
+                OpenWithShell(path);
             }
         });
+    }
+
+    private static void OpenWithShell(string path)
+    {
+        try
+        {
+            using var opened = Process.Start(new ProcessStartInfo(path) { UseShellExecute = true });
+        }
+        catch (Exception exception)
+        {
+            DiagnosticLog.Write($"Could not open the past capture '{path}': {exception.Message}");
+        }
     }
 
     private void ShowPreferences()
@@ -623,7 +635,18 @@ public sealed class CaptureController : IDisposable
         overlay.SelectionCommitted -= OnSelectionCommitted;
         overlay.Cancelled -= OnCaptureCancelled;
         overlay.ScrollCaptureRequested -= OnScrollCaptureRequested;
+        overlay.EditorRequested -= OnEditorRequested;
     }
+
+    /// <summary>
+    /// The overlay is handing its capture to the editor rather than to delivery. The
+    /// overlays go first: they are always on top, so the editor would open behind them.
+    /// </summary>
+    private void OnEditorRequested(object? sender, CapturedFrame frame) => Post(() =>
+    {
+        DismissOverlays();
+        return ShowEditorAsync(frame);
+    });
 
     private void OnScrollCaptureRequested(object? sender, CaptureWindow window) =>
         Post(() => ScrollCaptureAsync(window));
@@ -813,17 +836,35 @@ public sealed class CaptureController : IDisposable
             : new CapturePoint(0, 0);
     }
 
-    private async Task ShowPreviewAsync(CapturedFrame frame, CaptureRegion? selection)
+    /// <summary>
+    /// Opens an image in the editor.
+    /// </summary>
+    /// <remarks>
+    /// One at a time. Two editors would be two windows called macshot holding two
+    /// versions of nearly the same screenshot, and the one thing worse than losing an
+    /// annotation is saving the wrong copy of it.
+    /// </remarks>
+    private async Task ShowEditorAsync(CapturedFrame frame)
     {
-        if (_preview is null)
-        {
-            var preview = new MainWindow(this);
-            preview.Closed += (_, _) => _preview = null;
-            _preview = preview;
-        }
+        _editor?.Close();
 
-        await _preview.PresentAsync(frame, selection);
-        _preview.Activate();
+        var editor = new EditorWindow(frame, _settings);
+        editor.PinRequested += (_, pinned) => Post(() => PinAsync(pinned));
+
+        // Delivered exactly as a capture is, so the editor needs no opinion about
+        // clipboards, folders or history, and what Done means cannot drift between the
+        // two paths.
+        editor.Finished += (_, finished) => Post(() => DeliverAsync(finished));
+        editor.Closed += (_, _) =>
+        {
+            if (ReferenceEquals(_editor, editor))
+            {
+                _editor = null;
+            }
+        };
+
+        _editor = editor;
+        await editor.ShowAsync();
     }
 
     private void Post(Func<Task> action)

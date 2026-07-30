@@ -67,6 +67,19 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// </summary>
     public event EventHandler<bool>? ColorSamplingToggled;
 
+    /// <summary>
+    /// Raised by Undo and Redo, which the host performs rather than this control.
+    /// </summary>
+    /// <remarks>
+    /// The document is not the only thing a host can undo. The editor window can crop,
+    /// flip and frame the image itself, and those steps belong on the same timeline as
+    /// the marks — so what one press means is the host's to decide, or the button and
+    /// Ctrl+Z would do different things.
+    /// </remarks>
+    public event EventHandler? UndoRequested;
+
+    public event EventHandler? RedoRequested;
+
     public event EventHandler? ReadTextRequested;
 
     public event EventHandler? RedactRequested;
@@ -78,6 +91,13 @@ public sealed partial class AnnotationToolbarView : UserControl
     public string StampEmoji { get; private set; } = StampGlyph.Default;
 
     /// <summary>
+    /// Whether the sampler is armed, which makes the next click on the host a pick rather
+    /// than a mark. The button's own state is the answer, so there is no second copy of it
+    /// to disagree.
+    /// </summary>
+    public bool IsSamplingColor => PickColorButton.IsChecked == true;
+
+    /// <summary>
     /// The host's own buttons, shown between the shared actions and Done. Set from code
     /// rather than markup so a host that adds none pays nothing.
     /// </summary>
@@ -85,13 +105,6 @@ public sealed partial class AnnotationToolbarView : UserControl
     {
         get => ActionsSlot.Content as UIElement;
         set => ActionsSlot.Content = value;
-    }
-
-    /// <summary>What Done is called here. Defaults to Done.</summary>
-    public string DoneLabel
-    {
-        get => (string)DoneButton.Content;
-        set => DoneButton.Content = value;
     }
 
     /// <summary>
@@ -166,7 +179,7 @@ public sealed partial class AnnotationToolbarView : UserControl
     }
 
     /// <summary>Makes <paramref name="tool"/> the active one, as clicking its button would.</summary>
-    public void SelectTool(AnnotationTool tool)
+    private void SelectTool(AnnotationTool tool)
     {
         if (_editor is not { } editor)
         {
@@ -252,17 +265,9 @@ public sealed partial class AnnotationToolbarView : UserControl
         UpdateColorSwatch();
     }
 
-    private void Undo_Click(object sender, RoutedEventArgs e)
-    {
-        _editor?.Undo();
-        Changed?.Invoke(this, EventArgs.Empty);
-    }
+    private void Undo_Click(object sender, RoutedEventArgs e) => UndoRequested?.Invoke(this, EventArgs.Empty);
 
-    private void Redo_Click(object sender, RoutedEventArgs e)
-    {
-        _editor?.Redo();
-        Changed?.Invoke(this, EventArgs.Empty);
-    }
+    private void Redo_Click(object sender, RoutedEventArgs e) => RedoRequested?.Invoke(this, EventArgs.Empty);
 
     private void ReadText_Click(object sender, RoutedEventArgs e) =>
         ReadTextRequested?.Invoke(this, EventArgs.Empty);
