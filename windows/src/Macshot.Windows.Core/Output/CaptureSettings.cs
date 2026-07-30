@@ -107,6 +107,29 @@ public sealed record CaptureSettings
     public bool RememberLastSelection { get; init; }
 
     /// <summary>
+    /// Whether the overlay offers the window under the pointer as a region to take.
+    /// </summary>
+    /// <remarks>
+    /// On by default, and toggled with Tab from the overlay rather than from the settings
+    /// window — it is a thing you turn off in the middle of a capture, when the window
+    /// being offered is not the region you want and the highlight is in the way. Kept here
+    /// so that the answer survives the capture it was given during. With it off, a click
+    /// that never became a drag takes the whole screen instead of a window.
+    /// </remarks>
+    public bool WindowSnapEnabled { get; init; } = true;
+
+    /// <summary>
+    /// Takes the instruction pill off the overlay, leaving what the overlay has to
+    /// <em>report</em> — a sampled colour, a ruler's reading, a failure.
+    /// </summary>
+    /// <remarks>
+    /// For someone who has read the instructions once and is now recording their screen
+    /// or taking a picture of it, where a standing sentence in the middle of the display
+    /// is in every capture they make.
+    /// </remarks>
+    public bool HideCaptureInstructions { get; init; }
+
+    /// <summary>
     /// The region the last capture was taken from, in the frame space of
     /// <see cref="LastSelectionDisplay"/>. Null until one has been taken.
     /// </summary>

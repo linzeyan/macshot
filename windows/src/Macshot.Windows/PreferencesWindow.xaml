@@ -174,6 +174,15 @@
                             Text="The next capture draws the previous region on the display it was taken from, and Enter takes it again. Off by default, because a selection that reappears on its own is a surprise until you know the setting exists."
                             Style="{StaticResource Caption}" />
                         <CheckBox
+                            x:Name="HideInstructionsCheck"
+                            Content="Hide the capture instructions"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <TextBlock
+                            Text="Takes the standing instruction off the overlay for someone who has read it. What the overlay has to report — a sampled colour, a ruler's reading, a failure — still appears. Window snap keeps its Tab toggle; only the line that names it goes."
+                            Style="{StaticResource Caption}" />
+                        <CheckBox
                             x:Name="ThumbnailCheck"
                             Content="Show the floating thumbnail after a capture"
                             Style="{StaticResource Unlabelled}"
@@ -322,7 +331,7 @@
                     <StackPanel Style="{StaticResource Section}">
                         <TextBlock Text="OVERLAY SHORTCUTS" Style="{StaticResource SectionHeading}" />
                         <TextBlock
-                            Text="Enter takes the capture • Esc gives it up • Ctrl+Z and Ctrl+Y undo and redo • Delete removes the selected mark • the arrow keys nudge the region, ten pixels at a time with Shift • right-click opens the colour ring."
+                            Text="Enter takes the capture • Esc gives it up • Tab turns window snap on and off • F takes the whole display • Ctrl+Z and Ctrl+Y undo and redo • Delete removes the selected mark • the arrow keys nudge the region, ten pixels at a time with Shift • right-click opens the colour ring."
                             Style="{StaticResource Caption}" />
                     </StackPanel>
                 </StackPanel>

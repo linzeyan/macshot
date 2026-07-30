@@ -6,9 +6,11 @@ using Macshot.Windows.Rendering;
 using Macshot.Windows.Services;
 using Macshot.Windows.Toolbar;
 using Microsoft.UI.Input;
+using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -20,6 +22,7 @@ using Microsoft.UI.Xaml.Shapes;
 using Windows.Foundation;
 using Windows.Graphics;
 using Windows.System;
+using Windows.UI;
 using Windows.UI.Core;
 
 namespace Macshot.Windows;
@@ -32,9 +35,31 @@ namespace Macshot.Windows;
 /// </summary>
 public sealed partial class CaptureOverlayWindow : Window
 {
-    /// <summary>The standing instruction before anything is chosen. Matches the XAML default.</summary>
+    /// <summary>
+    /// The standing instruction before anything is chosen, with window snap on. Matches
+    /// the XAML default.
+    /// </summary>
+    /// <remarks>
+    /// What a click does is the whole difference between the two, which is why there are
+    /// two of them rather than one sentence covering both: with snap on a click takes the
+    /// window under the pointer and F is the way to the whole screen, with snap off the
+    /// click is the way to the whole screen and there is no window to take.
+    /// </remarks>
     private const string SelectionHint =
-        "Drag to capture • Hold Space to move it • Click a window to take it • Esc to cancel";
+        "Drag to capture • Click a window to take it • F for the whole screen • Esc to cancel";
+
+    /// <summary>The same instruction with window snap off.</summary>
+    private const string SelectionHintNoSnap =
+        "Drag to capture • Click for the whole screen • Esc to cancel";
+
+    /// <summary>
+    /// Line two of the idle pill: whether a click will take a window, and the key that
+    /// changes the answer. Split where the state goes, which is the one part of it that
+    /// is coloured.
+    /// </summary>
+    private const string SnapLinePrefix = "Window snap: ";
+
+    private const string SnapLineSuffix = "  (Tab to toggle)";
 
     /// <summary>
     /// Shown above the region while it is being dragged out, which is the one moment the
@@ -97,6 +122,21 @@ public sealed partial class CaptureOverlayWindow : Window
     /// everything else, because it is drawn over whatever the pointer happens to be on.
     /// </summary>
     private readonly ColorWheelView _colorWheel = new();
+
+    /// <summary>
+    /// The word ON or OFF in the idle pill's second line, kept as a field so that the
+    /// line can be refreshed without rebuilding its runs: the pill is re-hinted on every
+    /// pointer move that changes which window is under the pointer.
+    /// </summary>
+    private readonly Run _snapState = new() { FontWeight = FontWeights.SemiBold };
+
+    /// <summary>
+    /// macOS's system green and orange, in their dark-appearance values. The pill is
+    /// black whatever the system theme is, so the dark values are the right ones.
+    /// </summary>
+    private static readonly SolidColorBrush SnapOnBrush = new(Color.FromArgb(255, 48, 209, 88));
+
+    private static readonly SolidColorBrush SnapOffBrush = new(Color.FromArgb(255, 255, 159, 10));
 
     /// <summary>
     /// This display's mapping between frame pixels and the layout units the overlay's
@@ -240,6 +280,12 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     public event EventHandler<CaptureWindow>? ScrollCaptureRequested;
 
+    /// <summary>
+    /// Raised when Tab turns window snap on or off, so that the overlays on the other
+    /// displays stop showing the state this one has just changed.
+    /// </summary>
+    public event EventHandler? WindowSnapToggled;
+
     public CaptureMonitor Monitor => _monitor;
 
     /// <summary>True once a region is chosen and the window is accepting annotations.</summary>
@@ -283,7 +329,8 @@ public sealed partial class CaptureOverlayWindow : Window
 
         // Placed rather than merely shown: the pill is laid out in a canvas, so until it is
         // told where to go it sits in the display's top-left corner.
-        Hint(SelectionHint);
+        BuildSnapLine();
+        ShowIdleInstruction();
         OfferRememberedSelection();
     }
 
@@ -328,7 +375,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         PlaceChrome(SelectionRectangle, _remembered.Value);
         UpdateDim(ToLayout(_remembered.Value));
-        Hint(RememberedHint);
+        ShowIdleInstruction();
 
         DiagnosticLog.Verbose(
             $"offering last selection on {_monitor.DeviceName}: stored {local.X},{local.Y} "
@@ -449,7 +496,7 @@ public sealed partial class CaptureOverlayWindow : Window
         // The highlight has done its job the moment a drag begins: what the pointer
         // is over stops mattering once the user is drawing their own edges.
         SnapHighlight.Visibility = Visibility.Collapsed;
-        Hint(SelectingHint);
+        Instruct(SelectingHint);
         DrawMarquee(_selectionStart.Value, _selectionStart.Value);
     }
 
@@ -477,7 +524,7 @@ public sealed partial class CaptureOverlayWindow : Window
             // gradient or a photograph, the pixel under the pointer is not the colour
             // the eye reports, and there is no way to tell before committing to it.
             var sampling = ToFrame(e);
-            Hint($"{SamplingHint} • {SampleAt(sampling).ToHex()}");
+            Report(SamplingHint, SampleAt(sampling).ToHex());
             Loupe().Track(sampling);
             return;
         }
@@ -615,19 +662,19 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private void TrackHoveredWindow(CapturePoint point)
     {
-        _hoveredWindow = WindowSnapper.Snap(_snapCandidates, point, FrameBounds);
+        _hoveredWindow = SnapEnabled ? WindowSnapper.Snap(_snapCandidates, point, FrameBounds) : null;
         if (_hoveredWindow is not { } window)
         {
             SnapHighlight.Visibility = Visibility.Collapsed;
 
             // Back to whichever hint this overlay started with: an offered selection
             // is still on offer after the pointer has passed over a window.
-            Hint(_remembered is null ? SelectionHint : RememberedHint);
+            ShowIdleInstruction();
             return;
         }
 
         PlaceChrome(SnapHighlight, window.Bounds);
-        Hint(WindowHint);
+        Instruct(WindowHint);
     }
 
     /// <summary>
@@ -704,7 +751,7 @@ public sealed partial class CaptureOverlayWindow : Window
         DrawMarquee(start, end);
         _selectionStart = null;
         _marqueeAt = null;
-        Hint(SelectionHint);
+        ShowIdleInstruction();
 
         var dragged = CaptureRegion.FromPoints(start.X, start.Y, end.X, end.Y);
 
@@ -729,8 +776,13 @@ public sealed partial class CaptureOverlayWindow : Window
                 // cannot be, and the capture it waits on is the only asynchronous
                 // step between the click and the annotation phase.
                 _ = EnterSnappedWindowPhaseAsync(window);
+                return;
             }
 
+            // No window to take — because snap is off, or because the pointer is over
+            // the desktop. Either way the click meant the whole display: a click that
+            // did nothing would read as the overlay having missed it.
+            EnterAnnotationPhase(_layout.FrameRegionOf(_monitor));
             return;
         }
 
@@ -1052,7 +1104,7 @@ public sealed partial class CaptureOverlayWindow : Window
         _movingFrom = region;
         _movePending = region;
         _moveGrip = null;
-        Hint(MovingHint);
+        Instruct(MovingHint);
         SelectionCanvas.UseCursor(InputSystemCursorShape.SizeAll);
         PlaceGrips(region);
     }
@@ -1276,6 +1328,22 @@ public sealed partial class CaptureOverlayWindow : Window
                 RenderAnnotations();
                 return;
 
+            case VirtualKey.Tab when !IsAnnotating && _selectionStart is null:
+                // Handled, or Tab would move focus off the overlay's root and the next
+                // key would go somewhere else. Only before a region is chosen: once the
+                // toolbar is up, Tab is how it is walked with the keyboard.
+                e.Handled = true;
+                ToggleWindowSnap();
+                return;
+
+            case VirtualKey.F when !IsAnnotating && _selectionStart is null && SnapEnabled:
+                // The way to the whole display when a click means the window under the
+                // pointer. With snap off the click already means this, so F would be a
+                // second way to do the same thing.
+                e.Handled = true;
+                EnterAnnotationPhase(_layout.FrameRegionOf(_monitor));
+                return;
+
             case VirtualKey.Number0 when control:
                 // What every other program means by it: back to actual size. Zooming out
                 // a notch at a time to find 100% again is the part of a zoom nobody wants.
@@ -1376,9 +1444,20 @@ public sealed partial class CaptureOverlayWindow : Window
             RepositionChrome(region);
         }
 
-        Hint(viewport.IsIdentity
-            ? (IsAnnotating ? string.Empty : SelectionHint)
-            : $"{viewport.Scale * 100:0}% • Scroll to zoom • Middle-drag to pan");
+        // Back to actual size puts the standing instruction back, because the zoom reading
+        // it replaced was the only thing the pill was saying.
+        if (!viewport.IsIdentity)
+        {
+            Hint($"{viewport.Scale * 100:0}% • Scroll to zoom • Middle-drag to pan");
+        }
+        else if (IsAnnotating)
+        {
+            Hint(string.Empty);
+        }
+        else
+        {
+            ShowIdleInstruction();
+        }
     }
 
     /// <summary>
@@ -1677,7 +1756,7 @@ public sealed partial class CaptureOverlayWindow : Window
     private void SetColorSampling(bool armed)
     {
         AnnotationToolbar.SetColorSampling(armed);
-        Hint(armed ? SamplingHint : string.Empty);
+        Instruct(armed ? SamplingHint : string.Empty);
 
         if (!armed)
         {
@@ -1823,6 +1902,11 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         HintText.Text = text;
 
+        // Line two belongs to the idle instruction alone. Collapsed here rather than at
+        // each other call site, so that anything the overlay reports replaces the whole
+        // pill instead of leaving a stale line about window snap under it.
+        HintSnapLine.Visibility = Visibility.Collapsed;
+
         if (text.Length == 0)
         {
             HintPill.Visibility = Visibility.Collapsed;
@@ -1831,6 +1915,111 @@ public sealed partial class CaptureOverlayWindow : Window
 
         HintPill.Visibility = Visibility.Visible;
         PlaceHint();
+    }
+
+    /// <summary>Whether a click will take the window under the pointer.</summary>
+    private bool SnapEnabled => _settings.Current.WindowSnapEnabled;
+
+    /// <summary>Whether the user has asked for the instructions to stay off the overlay.</summary>
+    private bool HideInstructions => _settings.Current.HideCaptureInstructions;
+
+    /// <summary>
+    /// Says something the user could have worked out for themselves, which is what the
+    /// hide-instructions setting is about: this is the call that setting silences.
+    /// </summary>
+    private void Instruct(string text) => Hint(HideInstructions ? string.Empty : text);
+
+    /// <summary>
+    /// An instruction and a reading in one line. The reading survives on its own when
+    /// instructions are hidden — a sampled colour is not an instruction, and hiding it
+    /// would leave the tool with nothing to say.
+    /// </summary>
+    private void Report(string instruction, string reading) =>
+        Hint(HideInstructions ? reading : $"{instruction} • {reading}");
+
+    /// <summary>
+    /// The standing instruction, and under it the state of window snap.
+    /// </summary>
+    /// <remarks>
+    /// Both lines depend on the same answer, which is why they are set together: with snap
+    /// off, line one must stop telling the user to click a window and line two must stop
+    /// saying ON, and the two saying different things is worse than neither being there.
+    /// </remarks>
+    private void ShowIdleInstruction()
+    {
+        var snapOn = SnapEnabled;
+        Instruct(_remembered is not null
+            ? RememberedHint
+            : snapOn ? SelectionHint : SelectionHintNoSnap);
+
+        if (HintPill.Visibility != Visibility.Visible)
+        {
+            return;
+        }
+
+        _snapState.Text = snapOn ? "ON" : "OFF";
+        _snapState.Foreground = snapOn ? SnapOnBrush : SnapOffBrush;
+        HintSnapLine.Visibility = Visibility.Visible;
+        PlaceHint();
+    }
+
+    /// <summary>
+    /// Builds the idle pill's second line, once. Three runs: the label, the state and the
+    /// key, of which only the middle one ever changes.
+    /// </summary>
+    private void BuildSnapLine()
+    {
+        HintSnapLine.Inlines.Add(new Run { Text = SnapLinePrefix });
+        HintSnapLine.Inlines.Add(_snapState);
+        HintSnapLine.Inlines.Add(new Run { Text = SnapLineSuffix });
+    }
+
+    /// <summary>
+    /// Turns window snap on or off, for this capture and the ones after it.
+    /// </summary>
+    /// <remarks>
+    /// Written to the settings file rather than kept in the window, because the answer is
+    /// about how the user wants to capture and not about this capture: someone who turns
+    /// it off has decided they do not want windows offered, and being asked again on the
+    /// next hotkey press would be the toggle not working.
+    /// </remarks>
+    private void ToggleWindowSnap()
+    {
+        try
+        {
+            _settings.Save(_settings.Current with { WindowSnapEnabled = !SnapEnabled });
+        }
+        catch (Exception exception)
+        {
+            // Nothing changed: the store takes the new settings only once they are on
+            // disk, so a failed write leaves window snap exactly as it was. Said out loud
+            // rather than swallowed — the user pressed a key and is owed an answer, and
+            // the alternative is a pill that goes on claiming the state they just changed.
+            DiagnosticLog.Write($"Could not change the window snap state: {exception.Message}");
+            Hint(exception.Message);
+            return;
+        }
+
+        RefreshWindowSnapState();
+
+        // Every display's overlay shows the state, so every display's overlay is wrong
+        // until it is told. macOS notifies through its delegate for the same reason.
+        WindowSnapToggled?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Redraws what window snap being on or off changes: the highlight and the pill.
+    /// </summary>
+    internal void RefreshWindowSnapState()
+    {
+        if (IsAnnotating)
+        {
+            return;
+        }
+
+        _hoveredWindow = null;
+        SnapHighlight.Visibility = Visibility.Collapsed;
+        ShowIdleInstruction();
     }
 
     /// <summary>
@@ -1876,13 +2065,20 @@ public sealed partial class CaptureOverlayWindow : Window
 
         Canvas.SetLeft(HintPill, Math.Clamp(
             region.X + ((region.Width - size.Width) / 2),
-            screen.X + HintGap,
-            Math.Max(screen.X + HintGap, screen.Right - size.Width - HintGap)));
+            screen.X + HintEdge,
+            Math.Max(screen.X + HintEdge, screen.Right - size.Width - HintEdge)));
         Canvas.SetTop(HintPill, Math.Min(top, Math.Max(screen.Y, screen.Bottom - size.Height - HintGap)));
     }
 
-    /// <summary>How far the pill keeps off the region it describes and off the screen edge.</summary>
+    /// <summary>How far the pill keeps off the region it describes.</summary>
     private const double HintGap = 8;
+
+    /// <summary>
+    /// How far the pill keeps off the side of the screen. Less than the gap it keeps from
+    /// the region: this one is only there to stop a wide sentence about a region against
+    /// the screen's edge being cut off, so it gives up as little of the middle as it can.
+    /// </summary>
+    private const double HintEdge = 4;
 
     /// <summary>
     /// What the pill is about, in the units it is placed in, or null when that is the

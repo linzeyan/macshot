@@ -304,6 +304,7 @@ public sealed partial class PreferencesWindow : Window
         DelaySecondsBox.Value = settings.DelaySeconds;
         HistorySizeBox.Value = settings.HistorySize;
         RememberSelectionCheck.IsChecked = settings.RememberLastSelection;
+        HideInstructionsCheck.IsChecked = settings.HideCaptureInstructions;
         SmoothPencilCheck.IsChecked = settings.SmoothPencilStrokes;
         VerboseLoggingCheck.IsChecked = settings.VerboseLogging;
 
@@ -383,6 +384,7 @@ public sealed partial class PreferencesWindow : Window
                 ? CaptureSettings.Default.HistorySize
                 : (int)HistorySizeBox.Value,
             RememberLastSelection = RememberSelectionCheck.IsChecked == true,
+            HideCaptureInstructions = HideInstructionsCheck.IsChecked == true,
             SmoothPencilStrokes = SmoothPencilCheck.IsChecked == true,
             VerboseLogging = VerboseLoggingCheck.IsChecked == true,
 #if !OFFLINE

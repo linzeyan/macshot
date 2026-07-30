@@ -97,12 +97,28 @@
                 Padding="14"
                 Background="#A6000000"
                 CornerRadius="8">
-                <TextBlock
-                    x:Name="HintText"
-                    Text="Drag to capture • Hold Space to move it • Click a window to take it • Esc to cancel"
-                    FontSize="13"
-                    FontWeight="Medium"
-                    Foreground="White" />
+                <!-- 6 between the lines, macOS's line spacing for this pill. -->
+                <StackPanel Spacing="6">
+                    <TextBlock
+                        x:Name="HintText"
+                        Text="Drag to capture • Click a window to take it • F for the whole screen • Esc to cancel"
+                        FontSize="13"
+                        FontWeight="Medium"
+                        HorizontalAlignment="Center"
+                        Foreground="White" />
+
+                    <!-- Line two, and only while nothing is chosen: whether a click will
+                         take the window under the pointer, and the key that changes the
+                         answer. Filled in code from three runs built once, because the
+                         line is refreshed on every pointer move that changes which window
+                         is under it. -->
+                    <TextBlock
+                        x:Name="HintSnapLine"
+                        Visibility="Collapsed"
+                        FontSize="12"
+                        HorizontalAlignment="Center"
+                        Foreground="#B3FFFFFF" />
+                </StackPanel>
             </Border>
         </Canvas>
 

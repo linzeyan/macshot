@@ -262,6 +262,7 @@ public sealed class CaptureController : IDisposable
             overlay.Cancelled += OnCaptureCancelled;
             overlay.ScrollCaptureRequested += OnScrollCaptureRequested;
             overlay.EditorRequested += OnEditorRequested;
+            overlay.WindowSnapToggled += OnWindowSnapToggled;
             _overlays.Add(overlay);
         }
 
@@ -765,6 +766,25 @@ public sealed class CaptureController : IDisposable
 
     private void OnScrollCaptureRequested(object? sender, CaptureWindow window) =>
         Post(() => ScrollCaptureAsync(window));
+
+    /// <summary>
+    /// Tells the other displays' overlays that window snap has been turned on or off.
+    /// </summary>
+    /// <remarks>
+    /// Each overlay shows the state in its own instruction pill, so one of them being
+    /// told is the state being reported two different ways on a two-monitor desk. The
+    /// overlay that raised it has already refreshed itself.
+    /// </remarks>
+    private void OnWindowSnapToggled(object? sender, EventArgs e)
+    {
+        foreach (var overlay in _overlays)
+        {
+            if (!ReferenceEquals(overlay, sender))
+            {
+                overlay.RefreshWindowSnapState();
+            }
+        }
+    }
 
     /// <summary>
     /// Runs a scroll capture of one window and delivers the tall image it produces.

@@ -24,6 +24,21 @@ public sealed class CaptureSettingsTests
         Assert.AreEqual(CaptureSettings.MinThumbnailSeconds, settings.ThumbnailSeconds);
     }
 
+    /// <summary>
+    /// Both of these decide what the overlay does before the user has touched anything,
+    /// and both are read from a settings file that predates them — a file written by an
+    /// older build has neither key, so the defaults here are what those users get.
+    /// Window snap off would change what a click means, and instructions hidden would
+    /// leave a first-time user looking at a dimmed screen with nothing telling them what
+    /// to do with it.
+    /// </summary>
+    [TestMethod]
+    public void ByDefaultWindowsAreOfferedAndTheInstructionsAreShown()
+    {
+        Assert.IsTrue(CaptureSettings.Default.WindowSnapEnabled);
+        Assert.IsFalse(CaptureSettings.Default.HideCaptureInstructions);
+    }
+
     [TestMethod]
     public void Normalized_RejectsAFormatThatIsNoLongerDefined()
     {
