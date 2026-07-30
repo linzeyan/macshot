@@ -1,3 +1,4 @@
+using System.Diagnostics;
 using Macshot.Windows.Core.Input;
 using Macshot.Windows.Core.Output;
 using Macshot.Windows.Services;
@@ -46,6 +47,7 @@ public sealed partial class PreferencesWindow : Window
         DelaySecondsBox.Value = settings.DelaySeconds;
         HistorySizeBox.Value = settings.HistorySize;
         RememberSelectionSwitch.IsOn = settings.RememberLastSelection;
+        VerboseLoggingSwitch.IsOn = settings.VerboseLogging;
 
 #if OFFLINE
         // No translator in this build, so nothing to give a key to.
@@ -92,6 +94,7 @@ public sealed partial class PreferencesWindow : Window
                 ? CaptureSettings.Default.HistorySize
                 : (int)HistorySizeBox.Value,
             RememberLastSelection = RememberSelectionSwitch.IsOn,
+            VerboseLogging = VerboseLoggingSwitch.IsOn,
 #if !OFFLINE
             TranslateApiKey = TranslateKeyBox.Password,
 #endif
@@ -158,6 +161,36 @@ public sealed partial class PreferencesWindow : Window
     }
 
     private void ResetDirectory_Click(object sender, RoutedEventArgs e) => DirectoryBox.Text = string.Empty;
+
+    /// <summary>
+    /// Opens the folder holding the log and this settings file.
+    /// </summary>
+    /// <remarks>
+    /// The folder rather than the log itself, because the two things worth collecting
+    /// live side by side and because <c>%LOCALAPPDATA%</c> is not a path anyone types
+    /// from memory. Selecting the log inside it saves the second step.
+    /// </remarks>
+    private void OpenLogFolder_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            Directory.CreateDirectory(DiagnosticLog.Directory);
+
+            using var opened = Process.Start(new ProcessStartInfo("explorer.exe")
+            {
+                // Quoted: the path runs through the user's profile name, which can
+                // contain a space.
+                Arguments = File.Exists(DiagnosticLog.Path)
+                    ? $"/select,\"{DiagnosticLog.Path}\""
+                    : $"\"{DiagnosticLog.Directory}\"",
+                UseShellExecute = true,
+            });
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text = $"Could not open the folder: {exception.Message}";
+        }
+    }
 
     /// <summary>
     /// Deletes the kept copies immediately, without waiting for Save.

@@ -35,6 +35,15 @@
                         Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                 </StackPanel>
 
+                <TextBlock Text="Diagnostics" Style="{StaticResource SubtitleTextBlockStyle}" />
+
+                <ToggleSwitch x:Name="VerboseLoggingSwitch" Header="Write a detailed log" />
+                <TextBlock
+                    Text="Records each step — which display, which capture backend, what size, which branch — next to this settings file. Turn it on before reproducing a fault, then attach the log. It never contains your API key or the text that was recognized."
+                    TextWrapping="Wrap"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                <Button Content="Open the log folder" Click="OpenLogFolder_Click" HorizontalAlignment="Left" />
+
                 <!-- Collapsed in the offline build, which contains no translator to
                      give a key to. See TranslationService. -->
                 <StackPanel x:Name="TranslationSection" Spacing="4">

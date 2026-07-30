@@ -111,6 +111,15 @@ public sealed class CaptureController : IDisposable
         _dispatcher = DispatcherQueue.GetForCurrentThread()
             ?? throw new InvalidOperationException("The capture controller must be created on the UI thread.");
 
+        // Before anything else that could be worth tracing, and re-read on every save
+        // so turning it on does not need a restart — the fault being chased is often
+        // one the user has just reproduced and does not want to lose.
+        DiagnosticLog.IsVerbose = _settings.Current.VerboseLogging;
+        _settings.Changed += (_, settings) => DiagnosticLog.IsVerbose = settings.VerboseLogging;
+
+        DiagnosticLog.Verbose(
+            $"macshot starting: {BuildVariant.DisplayName}, settings at {_settings.Path}");
+
         _messageWindow = new MessageWindow();
 
         _hotkeys = new GlobalHotkeyService(_messageWindow);
@@ -179,12 +188,14 @@ public sealed class CaptureController : IDisposable
             if (_hotkeys.TryRegister(hotkey, binding, () => Post(action)))
             {
                 _trayIcon.SetMenuItemText(command, $"{label}\t{binding}");
+                DiagnosticLog.Verbose($"hotkey {binding} registered for {label}");
             }
             else
             {
                 // Named without a shortcut rather than with one that does nothing.
                 _trayIcon.SetMenuItemText(command, label);
                 refused.Add(binding);
+                DiagnosticLog.Verbose($"hotkey {binding} refused for {label}");
             }
         }
     }
@@ -209,6 +220,20 @@ public sealed class CaptureController : IDisposable
         var snapCandidates = WindowEnumerator.EnumerateFrontToBack()
             .Select(window => window with { Bounds = layout.VirtualToFrame(window.Bounds) })
             .ToArray();
+
+        // The facts a misplaced overlay is diagnosed from. Which display, at what scale,
+        // in what part of the virtual desktop — all three have to be right for the
+        // pointer to land where the user is pointing, and none is visible from a
+        // screenshot of the result.
+        foreach (var monitor in layout.Monitors)
+        {
+            DiagnosticLog.Verbose(
+                $"overlay for {monitor.DeviceName} at {monitor.Bounds.X},{monitor.Bounds.Y} "
+                    + $"{monitor.Bounds.Width}x{monitor.Bounds.Height} scale {monitor.Scale}"
+                    + (monitor.IsPrimary ? " (primary)" : string.Empty));
+        }
+
+        DiagnosticLog.Verbose($"{snapCandidates.Length} window(s) offered for snapping");
 
         foreach (var monitor in layout.Monitors)
         {
@@ -280,7 +305,10 @@ public sealed class CaptureController : IDisposable
         bool elapsed;
         try
         {
-            elapsed = await countdown.RunAsync(_settings.Current.DelaySeconds, cancellation.Token);
+            var seconds = _settings.Current.DelaySeconds;
+            DiagnosticLog.Verbose($"countdown starting: {seconds}s, escape held: {holdsEscape}");
+            elapsed = await countdown.RunAsync(seconds, cancellation.Token);
+            DiagnosticLog.Verbose(elapsed ? "countdown elapsed" : "countdown cancelled");
         }
         finally
         {
@@ -318,6 +346,13 @@ public sealed class CaptureController : IDisposable
     private async Task<CapturedFrame> CaptureDesktopAsync(DisplaySet displays)
     {
         var frame = await _screenCapture.CaptureVirtualDesktopAsync(displays);
+
+        // Which backend actually ran is otherwise only knowable from the absence of a
+        // message box, which is the weakest kind of evidence there is.
+        DiagnosticLog.Verbose(
+            $"desktop captured {frame.Width}x{frame.Height} at {frame.VirtualX},{frame.VirtualY} "
+                + $"via {_screenCapture.Backend}");
+
         if (_screenCapture.FellBackUnexpectedly && !_reportedCaptureFallback)
         {
             _reportedCaptureFallback = true;
@@ -443,6 +478,14 @@ public sealed class CaptureController : IDisposable
     private async Task DeliverAsync(CapturedFrame frame)
     {
         var settings = _settings.Current;
+
+        // A capture that appears to vanish is the hardest failure to place: it could be
+        // the crop, the encoder, the clipboard, or a preference nobody remembers
+        // setting. This line says which of those was even attempted.
+        DiagnosticLog.Verbose(
+            $"delivering {frame.Width}x{frame.Height} as {settings.Format}: "
+                + $"clipboard {settings.CopyToClipboard}, save {settings.AutoSave}, "
+                + $"thumbnail {settings.ShowThumbnail}, history {settings.HistorySize}");
 
         if (settings.CopyToClipboard)
         {
@@ -634,6 +677,9 @@ public sealed class CaptureController : IDisposable
             hud.Close();
         }
 
+        DiagnosticLog.Verbose(
+            $"scroll capture ended as {result.Stop}: {result.Frame.Width}x{result.Frame.Height}");
+
         if (result.Stop == ScrollCaptureStop.HeightLimit)
         {
             FailureReport.Notice(
@@ -697,11 +743,18 @@ public sealed class CaptureController : IDisposable
 
         try
         {
+            var path = ResolveRecordingPath(format);
+            DiagnosticLog.Verbose(
+                $"recording {monitor.DeviceName} ({monitor.Bounds.Width}x{monitor.Bounds.Height}) "
+                    + $"as {format} to {path}");
+
             var result = await _recorder.RecordDisplayAsync(
                 handle,
-                ResolveRecordingPath(format),
+                path,
                 format,
                 cancellation.Token);
+
+            DiagnosticLog.Verbose($"recording finished: {result.Path}");
 
             // The panel outlives the recording by a few seconds to say where the file
             // went. Video has no thumbnail and no clipboard to land in, so this is

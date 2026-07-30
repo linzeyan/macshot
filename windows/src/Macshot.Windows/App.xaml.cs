@@ -46,6 +46,10 @@ public partial class App : Application
         // the user to look for a conflict that is macshot itself.
         if (!TryClaimTheOnlyInstance())
         {
+            // Written unconditionally rather than traced: a launch that ends in nothing
+            // happening is exactly the report that arrives with no other evidence, and
+            // by definition the user had no chance to turn tracing on first.
+            DiagnosticLog.Write("A second macshot was started and refused.");
             FailureReport.Notice(
                 IntPtr.Zero,
                 "macshot is already running. Its icon is in the notification area, "

@@ -143,6 +143,16 @@ public sealed record CaptureSettings
     public HotkeyBinding RecordScreenBinding =>
         HotkeyBinding.ParseOrDefault(RecordScreenHotkey, HotkeyBinding.RecordScreen);
 
+    /// <summary>
+    /// Writes a step-by-step trace next to this file, for diagnosing a fault that
+    /// cannot be reproduced on the machine the code was written on.
+    /// </summary>
+    /// <remarks>
+    /// Off by default. Everything worth tracing sits on a path that runs at
+    /// pointer-move rates, and a log nobody asked for is a file growing on their disk.
+    /// </remarks>
+    public bool VerboseLogging { get; init; }
+
     /// <summary>What recognized text is translated into, as an ISO-639-1 code.</summary>
     public string TranslateTargetLanguage { get; init; } = TranslationLanguages.DefaultCode;
 

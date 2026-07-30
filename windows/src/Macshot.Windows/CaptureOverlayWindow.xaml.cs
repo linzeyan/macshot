@@ -230,6 +230,10 @@ public sealed partial class CaptureOverlayWindow : Window
 
         PlaceChrome(SelectionRectangle, _remembered.Value);
         HintText.Text = RememberedHint;
+
+        DiagnosticLog.Verbose(
+            $"offering last selection on {_monitor.DeviceName}: stored {local.X},{local.Y} "
+                + $"{local.Width}x{local.Height} placed at {_remembered.Value.X},{_remembered.Value.Y}");
     }
 
     /// <summary>
@@ -489,6 +493,15 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private void EnterAnnotationPhase(CaptureRegion region, CapturedFrame? capturedWindow = null)
     {
+        // Where the annotation phase's pixels came from, which is the difference between
+        // "the window itself" and "the screenshot with whatever was over it". The two
+        // look identical unless something was covering the window.
+        DiagnosticLog.Verbose(
+            $"annotating {region.Width}x{region.Height} at {region.X},{region.Y} on {_monitor.DeviceName}, "
+                + (capturedWindow is { } window
+                    ? $"from the window's own pixels ({window.Width}x{window.Height})"
+                    : "cropped from the screenshot"));
+
         _selection = region;
         _hoveredWindow = null;
         SnapHighlight.Visibility = Visibility.Collapsed;
@@ -993,6 +1006,10 @@ public sealed partial class CaptureOverlayWindow : Window
 
         SetColorSampling(false);
         HintText.Text = $"Took {sampled.ToHex()} • {AnnotationHint}";
+
+        // The point as well as the colour: a sampler reading the wrong pixel is a
+        // coordinate fault, and the colour alone cannot tell one from a channel swap.
+        DiagnosticLog.Verbose($"sampled {sampled.ToHex()} at frame {point.X},{point.Y}");
     }
 
     /// <summary>
