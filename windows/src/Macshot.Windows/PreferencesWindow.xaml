@@ -20,22 +20,22 @@
             SelectionChanged="Sections_SelectionChanged">
             <NavigationView.MenuItems>
                 <NavigationViewItem Content="General" Tag="general" IsSelected="True">
-                    <NavigationViewItem.Icon><SymbolIcon Symbol="Setting" /></NavigationViewItem.Icon>
+                    <NavigationViewItem.Icon><FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE713;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>
                 <NavigationViewItem Content="Capture" Tag="capture">
-                    <NavigationViewItem.Icon><SymbolIcon Symbol="Camera" /></NavigationViewItem.Icon>
+                    <NavigationViewItem.Icon><FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE722;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>
                 <NavigationViewItem Content="Shortcuts" Tag="shortcuts">
-                    <NavigationViewItem.Icon><SymbolIcon Symbol="Keyboard" /></NavigationViewItem.Icon>
+                    <NavigationViewItem.Icon><FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE144;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>
                 <NavigationViewItem Content="Tools" Tag="tools">
-                    <NavigationViewItem.Icon><SymbolIcon Symbol="Edit" /></NavigationViewItem.Icon>
+                    <NavigationViewItem.Icon><FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE70F;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>
                 <NavigationViewItem Content="Recording" Tag="recording">
-                    <NavigationViewItem.Icon><SymbolIcon Symbol="Video" /></NavigationViewItem.Icon>
+                    <NavigationViewItem.Icon><FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE714;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>
                 <NavigationViewItem Content="About" Tag="about">
-                    <NavigationViewItem.Icon><SymbolIcon Symbol="Help" /></NavigationViewItem.Icon>
+                    <NavigationViewItem.Icon><FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE946;" /></NavigationViewItem.Icon>
                 </NavigationViewItem>
             </NavigationView.MenuItems>
 
