@@ -88,6 +88,9 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private readonly IFramePlacement _placement;
 
+    /// <summary>The sampler's magnified circle, once one has been asked for.</summary>
+    private SamplerLoupe? _loupe;
+
     private Point? _selectionStart;
     private CaptureRegion? _selection;
 
@@ -349,7 +352,9 @@ public sealed partial class CaptureOverlayWindow : Window
             // Reading it out as it moves is what makes the tool usable at all: on a
             // gradient or a photograph, the pixel under the pointer is not the colour
             // the eye reports, and there is no way to tell before committing to it.
-            HintText.Text = $"{SamplingHint} • {SampleAt(ToFrame(e)).ToHex()}";
+            var sampling = ToFrame(e);
+            HintText.Text = $"{SamplingHint} • {SampleAt(sampling).ToHex()}";
+            Loupe().Track(sampling);
             return;
         }
 
@@ -1104,7 +1109,21 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         AnnotationToolbar.SetColorSampling(armed);
         HintText.Text = armed ? SamplingHint : AnnotatingHint;
+
+        if (!armed)
+        {
+            _loupe?.Hide();
+        }
     }
+
+    /// <summary>
+    /// The sampler's magnified circle, built the first time a colour is picked.
+    /// </summary>
+    /// <remarks>
+    /// Lazily, because most captures never arm the sampler and it holds a bitmap of its
+    /// own; kept afterwards, because it is rebuilt on every pointer move otherwise.
+    /// </remarks>
+    private SamplerLoupe Loupe() => _loupe ??= new SamplerLoupe(LoupeLayer, _placement, _desktopFrame);
 
     /// <summary>
     /// Takes the colour under the pointer and puts it on the toolbar.

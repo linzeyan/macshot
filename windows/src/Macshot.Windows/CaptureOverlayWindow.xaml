@@ -42,6 +42,11 @@
              arithmetic SelectionHandles answers, so these only have to be visible. -->
         <Canvas x:Name="SelectionGrips" IsHitTestVisible="False" />
 
+        <!-- The colour sampler's magnified circle. Above the grips because it is
+             shown while the pointer is over the image and must not be cut in half by
+             anything the overlay draws. -->
+        <Canvas x:Name="LoupeLayer" IsHitTestVisible="False" />
+
         <Border
             HorizontalAlignment="Center"
             VerticalAlignment="Top"

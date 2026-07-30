@@ -208,6 +208,73 @@ public static class PixelEffects
     }
 
     /// <summary>
+    /// A round, magnified view of what sits under one point, as its own small BGRA
+    /// buffer <paramref name="diameter"/> pixels square.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// For the colour sampler, which has to be aimed at one pixel: at screen scale that
+    /// pixel is a fifth of a millimetre, and picking a colour off a gradient or a
+    /// photograph by eye is guesswork without magnification.
+    /// </para>
+    /// <para>
+    /// Its own buffer rather than a region of the frame, unlike <see cref="Magnify"/>:
+    /// this one follows the pointer and must not write on the image. Pixels outside the
+    /// circle come back fully transparent, so the caller can lay it over whatever is
+    /// there and ring it.
+    /// </para>
+    /// <para>
+    /// Sampling past the edge of the frame repeats the edge pixel rather than leaving a
+    /// hole, because a sampler aimed at the very corner of the screen still has to show
+    /// what it is pointing at.
+    /// </para>
+    /// </remarks>
+    public static byte[] MagnifiedPatch(
+        byte[] bgraPixels,
+        int width,
+        int height,
+        int centerX,
+        int centerY,
+        int diameter,
+        double zoom)
+    {
+        ValidateFrame(bgraPixels, width, height);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(diameter);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(zoom);
+
+        var patch = new byte[diameter * diameter * 4];
+        var radius = diameter / 2d;
+
+        for (var y = 0; y < diameter; y++)
+        {
+            for (var x = 0; x < diameter; x++)
+            {
+                var offsetX = x + 0.5 - radius;
+                var offsetY = y + 0.5 - radius;
+                if ((offsetX * offsetX) + (offsetY * offsetY) > radius * radius)
+                {
+                    continue;
+                }
+
+                var sampleX = Math.Clamp((int)Math.Floor(centerX + 0.5 + (offsetX / zoom)), 0, width - 1);
+                var sampleY = Math.Clamp((int)Math.Floor(centerY + 0.5 + (offsetY / zoom)), 0, height - 1);
+
+                var from = ((sampleY * width) + sampleX) * 4;
+                var to = ((y * diameter) + x) * 4;
+                patch[to] = bgraPixels[from];
+                patch[to + 1] = bgraPixels[from + 1];
+                patch[to + 2] = bgraPixels[from + 2];
+
+                // Opaque whatever the screenshot's own alpha byte holds: BitBlt leaves
+                // it undefined, and a transparent patch would show nothing at all.
+                patch[to + 3] = byte.MaxValue;
+            }
+        }
+
+        return patch;
+    }
+
+    /// <summary>
     /// Redraws a circle inside <paramref name="region"/> as a magnified view of what
     /// sits under its centre.
     /// </summary>
