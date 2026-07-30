@@ -4,14 +4,17 @@
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml">
 
     <StackPanel Spacing="4">
-        <TextBlock x:Name="HeaderText" />
+        <!-- Collapsed until something is put in it: the settings page labels its own
+             rows, in a column shared with every other row on the page, and an empty
+             header here would push the button out of line with them. -->
+        <TextBlock x:Name="HeaderText" Visibility="Collapsed" />
 
         <!-- A button rather than a text box: the shortcut is pressed, not spelled. It
              stays a button while recording so the keyboard has somewhere to be, and the
              text on it is the same form the settings file holds. -->
         <Button
             x:Name="RecordButton"
-            HorizontalAlignment="Stretch"
+            MinWidth="200"
             HorizontalContentAlignment="Left"
             Click="Record_Click"
             KeyDown="Record_KeyDown"

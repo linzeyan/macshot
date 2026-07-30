@@ -78,7 +78,7 @@ public sealed partial class PreferencesWindow : Window
         // The markup selects the first item, which happens while the pages it switches
         // between are still being built — so the handler that would have shown it declined
         // to, and the first page has to be shown from here instead.
-        ShowPage(Sections.SelectedItem as NavigationViewItem);
+        ShowPage(Tabs.SelectedItem as ListViewItem);
         BuildToolsPage();
         Load(_settings.Current);
         PlaceOnScreen();
@@ -102,7 +102,7 @@ public sealed partial class PreferencesWindow : Window
     {
         foreach (var tool in ToolbarActions.ToolOrder)
         {
-            var toggle = new CheckBox { Content = ToolbarActions.Tooltip(tool) };
+            var toggle = new CheckBox { Content = ToolbarActions.Tooltip(tool), MinWidth = 0 };
             toggle.Checked += Setting_Changed;
             toggle.Unchecked += Setting_Changed;
             _toolToggles[tool] = toggle;
@@ -207,7 +207,7 @@ public sealed partial class PreferencesWindow : Window
     /// Shows the chosen page. All six exist at once and one is visible: a Frame would
     /// rebuild the page on every click, and a change on any page writes every page.
     /// </summary>
-    private void Sections_SelectionChanged(NavigationView sender, NavigationViewSelectionChangedEventArgs args)
+    private void Tabs_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {
         // The first item is selected in the markup, so this can fire while the tree is
         // still being built and before the pages it switches between exist.
@@ -216,10 +216,10 @@ public sealed partial class PreferencesWindow : Window
             return;
         }
 
-        ShowPage(args.SelectedItem as NavigationViewItem);
+        ShowPage(Tabs.SelectedItem as ListViewItem);
     }
 
-    private void ShowPage(NavigationViewItem? item)
+    private void ShowPage(ListViewItem? item)
     {
         var chosen = item?.Tag as string;
 
@@ -230,10 +230,11 @@ public sealed partial class PreferencesWindow : Window
 
         // The title says which page, as the macOS window's does. Six pages of settings
         // named only "Settings" is a window whose title bar stops meaning anything the
-        // moment the user is looking for one of them in a screenshot or a taskbar.
-        Title = item?.Content is string label
-            ? $"{BuildVariant.DisplayName} Settings — {label}"
-            : $"{BuildVariant.DisplayName} Settings";
+        // moment the user is looking for one of them in a screenshot or a taskbar. Taken
+        // from the tag rather than from the tab, whose content is an icon and a caption.
+        Title = chosen is null
+            ? $"{BuildVariant.DisplayName} Settings"
+            : $"{BuildVariant.DisplayName} Settings — {char.ToUpperInvariant(chosen[0])}{chosen[1..]}";
     }
 
     private IEnumerable<(string Tag, FrameworkElement Page)> Pages() =>
@@ -294,15 +295,15 @@ public sealed partial class PreferencesWindow : Window
         RecordingFormatBox.SelectedIndex = (int)settings.RecordingFormat;
         DirectoryBox.Text = settings.SaveDirectory ?? string.Empty;
         TemplateBox.Text = settings.FilenameTemplate;
-        ClipboardSwitch.IsOn = settings.CopyToClipboard;
-        AutoSaveSwitch.IsOn = settings.AutoSave;
-        ThumbnailSwitch.IsOn = settings.ShowThumbnail;
+        ClipboardCheck.IsChecked = settings.CopyToClipboard;
+        AutoSaveCheck.IsChecked = settings.AutoSave;
+        ThumbnailCheck.IsChecked = settings.ShowThumbnail;
         ThumbnailSecondsBox.Value = settings.ThumbnailSeconds;
         DelaySecondsBox.Value = settings.DelaySeconds;
         HistorySizeBox.Value = settings.HistorySize;
-        RememberSelectionSwitch.IsOn = settings.RememberLastSelection;
-        SmoothPencilSwitch.IsOn = settings.SmoothPencilStrokes;
-        VerboseLoggingSwitch.IsOn = settings.VerboseLogging;
+        RememberSelectionCheck.IsChecked = settings.RememberLastSelection;
+        SmoothPencilCheck.IsChecked = settings.SmoothPencilStrokes;
+        VerboseLoggingCheck.IsChecked = settings.VerboseLogging;
 
 #if OFFLINE
         // No translator in this build, so nothing to give a key to.
@@ -364,9 +365,9 @@ public sealed partial class PreferencesWindow : Window
                 : RecordingFormat.Mp4,
             SaveDirectory = DirectoryBox.Text,
             FilenameTemplate = TemplateBox.Text,
-            CopyToClipboard = ClipboardSwitch.IsOn,
-            AutoSave = AutoSaveSwitch.IsOn,
-            ShowThumbnail = ThumbnailSwitch.IsOn,
+            CopyToClipboard = ClipboardCheck.IsChecked == true,
+            AutoSave = AutoSaveCheck.IsChecked == true,
+            ShowThumbnail = ThumbnailCheck.IsChecked == true,
 
             // NaN is what an emptied NumberBox reports, and casting that would give a
             // nonsense interval rather than an obviously wrong one.
@@ -379,9 +380,9 @@ public sealed partial class PreferencesWindow : Window
             HistorySize = double.IsNaN(HistorySizeBox.Value)
                 ? CaptureSettings.Default.HistorySize
                 : (int)HistorySizeBox.Value,
-            RememberLastSelection = RememberSelectionSwitch.IsOn,
-            SmoothPencilStrokes = SmoothPencilSwitch.IsOn,
-            VerboseLogging = VerboseLoggingSwitch.IsOn,
+            RememberLastSelection = RememberSelectionCheck.IsChecked == true,
+            SmoothPencilStrokes = SmoothPencilCheck.IsChecked == true,
+            VerboseLogging = VerboseLoggingCheck.IsChecked == true,
 #if !OFFLINE
             TranslateApiKey = TranslateKeyBox.Password,
 #endif

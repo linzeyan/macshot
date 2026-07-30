@@ -48,7 +48,13 @@ public sealed partial class HotkeyBox : UserControl
     public string Header
     {
         get => HeaderText.Text;
-        set => HeaderText.Text = value;
+        set
+        {
+            HeaderText.Text = value;
+            HeaderText.Visibility = string.IsNullOrEmpty(value)
+                ? Visibility.Collapsed
+                : Visibility.Visible;
+        }
     }
 
     /// <summary>
