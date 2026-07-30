@@ -43,7 +43,7 @@ internal sealed partial class ToolbarButton : UserControl
             // Transparent rather than unset: a Border with no background is not hit
             // testable, so the gaps between the icon's strokes would swallow the click.
             Background = ToolbarPalette.TransparentBrush,
-            Child = Content(item),
+            Child = FaceOf(item),
         };
 
         Width = ToolbarPalette.ButtonSize;
@@ -81,7 +81,7 @@ internal sealed partial class ToolbarButton : UserControl
 
         if (iconChanged)
         {
-            _surface.Child = Content(item);
+            _surface.Child = FaceOf(item);
             ToolTipService.SetToolTip(this, item.Tooltip);
         }
 
@@ -133,7 +133,12 @@ internal sealed partial class ToolbarButton : UserControl
                     : ToolbarPalette.TransparentBrush;
     }
 
-    private static UIElement Content(ToolbarItem item) =>
+    /// <summary>
+    /// What the button shows: its icon, or the colour itself for the one button that is a
+    /// colour. Not called Content — that is the property this control inherits, and a
+    /// method of the same name hides it.
+    /// </summary>
+    private static UIElement FaceOf(ToolbarItem item) =>
         ToolbarIcons.For(item) ?? Swatch(ToolbarPalette.Icon);
 
     /// <summary>
