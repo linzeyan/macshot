@@ -3,6 +3,7 @@ using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Recognition;
 using Macshot.Windows.Rendering;
 using Macshot.Windows.Services;
+using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -15,6 +16,7 @@ using Microsoft.UI.Xaml.Shapes;
 using Windows.Foundation;
 using Windows.System;
 using Windows.UI;
+using Windows.UI.Core;
 
 namespace Macshot.Windows;
 
@@ -432,7 +434,9 @@ public sealed partial class AnnotationCanvasView : UserControl
             Padding = new Thickness(0),
             FontSize = TextGlyphs.FontSizeFor(editor.Style, SpriteScale),
             Foreground = new SolidColorBrush(GlyphSpriteFactory.ToBrushColor(editor.Style)),
-            AcceptsReturn = false,
+            // Return has to be accepted for Shift+Enter to be able to insert one; plain
+            // Enter is taken below before the box ever sees it.
+            AcceptsReturn = true,
             TextWrapping = TextWrapping.NoWrap,
         };
 
@@ -444,13 +448,19 @@ public sealed partial class AnnotationCanvasView : UserControl
         _textEntry = entry;
         _textEntryOrigin = point;
         entry.Focus(FocusState.Programmatic);
-        _reportHint("Type the label • Enter to place • Esc to discard it");
+        _reportHint("Type the label • Enter to place • Shift+Enter for a new line • Esc to discard it");
     }
 
     private void TextEntry_KeyDown(object sender, KeyRoutedEventArgs e)
     {
         switch (e.Key)
         {
+            case VirtualKey.Enter when IsShiftDown():
+                // Left for the box to insert. A label that has to say two things needs
+                // two lines, and the alternative — placing a second label underneath —
+                // means lining them up by hand.
+                return;
+
             case VirtualKey.Enter:
                 // Handled here, or it would bubble up and finish the whole capture.
                 e.Handled = true;
@@ -474,6 +484,15 @@ public sealed partial class AnnotationCanvasView : UserControl
     /// finished, so it is committed rather than lost.
     /// </summary>
     private void TextEntry_LostFocus(object sender, RoutedEventArgs e) => QueueSprite(CommitTextEntryAsync);
+
+    /// <summary>
+    /// Read from the keyboard rather than from the event, because a
+    /// <see cref="KeyRoutedEventArgs"/> carries the key that was pressed and not the
+    /// modifiers held with it.
+    /// </summary>
+    private static bool IsShiftDown() =>
+        InputKeyboardSource.GetKeyStateForCurrentThread(VirtualKey.Shift)
+            .HasFlag(CoreVirtualKeyStates.Down);
 
     private async Task CommitTextEntryAsync()
     {

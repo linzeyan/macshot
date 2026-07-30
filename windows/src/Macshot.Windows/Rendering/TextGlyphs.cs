@@ -45,12 +45,17 @@ internal static class TextGlyphs
 
         return new TextBlock
         {
-            Text = text,
+            // A TextBox hands back carriage returns; a TextBlock breaks on line feeds.
+            // Left alone, a label typed on two lines would be rasterized as one long
+            // line with a box glyph in the middle of it.
+            Text = text.Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Replace('\r', '\n'),
             FontSize = FontSizeFor(style, rasterizationScale),
             Foreground = new SolidColorBrush(GlyphSpriteFactory.ToBrushColor(style)),
 
             // The entry box does not wrap either, so a long line stays one long line
-            // and the sprite is as wide as what was typed.
+            // and the sprite is as wide as what was typed. Explicit breaks still break:
+            // NoWrap only means nothing is broken that the user did not break.
             TextWrapping = TextWrapping.NoWrap,
         };
     }
