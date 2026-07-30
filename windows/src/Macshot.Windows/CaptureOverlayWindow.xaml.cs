@@ -1298,7 +1298,19 @@ public sealed partial class CaptureOverlayWindow : Window
     private void WireToolbar()
     {
         AnnotationToolbar.Bind(_editor, _settings);
-        AnnotationToolbar.Changed += (_, _) => RenderAnnotations();
+        AnnotationToolbar.Changed += (_, _) =>
+        {
+            RenderAnnotations();
+
+            // Changing tool changes what the options row holds and so how wide it is, and
+            // the size box is placed around the strips: both have to settle together, or
+            // the row grows under the box that was placed to avoid it.
+            if (_selection is { } region)
+            {
+                RepositionChrome(region);
+            }
+        };
+
         AnnotationToolbar.ColorSamplingToggled += (_, armed) => SetColorSampling(armed);
         AnnotationToolbar.CommandInvoked += (_, command) => RunToolbarCommand(command);
     }
