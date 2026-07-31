@@ -5,13 +5,21 @@ on:
     branches:
       - windows
     paths:
+      # Negations are applied in order, so the excludes sit between the tree and
+      # the workflow itself: prose under windows/ cannot start a build, and a
+      # change to this file always can.
       - windows/**
+      - '!windows/**.md'
       - .github/workflows/windows-build.yml
   pull_request:
     branches:
       - windows
     paths:
+      # Negations are applied in order, so the excludes sit between the tree and
+      # the workflow itself: prose under windows/ cannot start a build, and a
+      # change to this file always can.
       - windows/**
+      - '!windows/**.md'
       - .github/workflows/windows-build.yml
 
 jobs:
