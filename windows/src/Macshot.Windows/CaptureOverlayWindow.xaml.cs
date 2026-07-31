@@ -710,7 +710,13 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
 
-        PlaceChrome(SnapHighlight, window.Bounds);
+        // Half a unit in on every side, the way macshot insets this one border —
+        // OverlayView+WindowSnapping.swift:146. Without it the stroke straddles the
+        // window's edge and the highlight reads as a window a pixel larger than it is.
+        // macshot fills the uninset rect and strokes the inset one; here it is a single
+        // Rectangle, so the fill comes in with the stroke — by half a unit, which is
+        // under the fill's own alpha and cannot be seen.
+        PlaceChrome(SnapHighlight, window.Bounds, inset: 0.5);
         Instruct(WindowHint);
     }
 
@@ -719,13 +725,21 @@ public sealed partial class CaptureOverlayWindow : Window
     /// in this display's layout units while the region is in desktop pixels, so it
     /// has to come back through the same per-display scale input went out through.
     /// </summary>
-    private void PlaceChrome(Rectangle target, CaptureRegion region)
+    /// <param name="inset">
+    /// How far inside the region the chrome sits, in layout units. Only the window
+    /// highlight uses it: the selection's own outline is drawn on the edge, because the
+    /// edge is what the user placed.
+    /// </param>
+    private void PlaceChrome(Rectangle target, CaptureRegion region, double inset = 0)
     {
         var origin = _layout.FrameToPointer(_monitor, new CapturePoint(region.X, region.Y));
-        Canvas.SetLeft(target, origin.X);
-        Canvas.SetTop(target, origin.Y);
-        target.Width = region.Width / _monitor.Scale;
-        target.Height = region.Height / _monitor.Scale;
+        Canvas.SetLeft(target, origin.X + inset);
+        Canvas.SetTop(target, origin.Y + inset);
+
+        // Never below zero: a window narrower than the inset would otherwise ask WinUI
+        // for a negative width, which throws rather than drawing nothing.
+        target.Width = Math.Max(0, (region.Width / _monitor.Scale) - (inset * 2));
+        target.Height = Math.Max(0, (region.Height / _monitor.Scale) - (inset * 2));
         target.Visibility = Visibility.Visible;
     }
 
@@ -1670,6 +1684,10 @@ public sealed partial class CaptureOverlayWindow : Window
                 _ = CompleteAsync(CaptureOutcome.Pin);
                 return;
 
+            case ToolbarCommand.SaveAs:
+                _ = SaveAsAsync();
+                return;
+
             case ToolbarCommand.Share:
                 _ = ShareAsync();
                 return;
@@ -1927,6 +1945,41 @@ public sealed partial class CaptureOverlayWindow : Window
             RenderAnnotations();
             Hint($"Redacted {annotations.Count} • Ctrl+Z to undo • Enter to finish");
         });
+    }
+
+    /// <summary>
+    /// Asks where to put the capture, writes it there, and ends the capture.
+    /// </summary>
+    /// <remarks>
+    /// The dialog is run from here rather than from the owner because it needs a window
+    /// to belong to, and by the time the owner has the pixels every overlay is gone. A
+    /// dismissed dialog leaves the capture where it was: cancelling a save is not
+    /// cancelling the capture.
+    /// </remarks>
+    private async Task SaveAsAsync()
+    {
+        if (!IsAnnotating)
+        {
+            return;
+        }
+
+        await AnnotationCanvas.FlushAsync();
+        if (Finished() is not { } finished)
+        {
+            return;
+        }
+
+        try
+        {
+            if (await SavePrompt.WriteAsync(this, finished, _settings.Current) is not null)
+            {
+                CaptureCompleted?.Invoke(this, new CaptureCompletion(finished, CaptureOutcome.SaveAs));
+            }
+        }
+        catch (Exception exception)
+        {
+            Hint(exception.Message);
+        }
     }
 
     /// <summary>

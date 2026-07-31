@@ -154,11 +154,13 @@ internal sealed partial class ToolbarButton : UserControl
 
     private void Repaint()
     {
-        // Only the tools have a menu behind them: right-clicking one offers to take it off
-        // the strip, and right-clicking anything else does nothing. Without the mark there
-        // is nothing at all to say which is which — macOS draws the same triangle for the
-        // same reason.
-        _menuMark.Visibility = Item.Tool is null ? Visibility.Collapsed : Visibility.Visible;
+        // The tools have a menu behind them — right-clicking one offers to take it off the
+        // strip — and so does Save, which offers the way of saving that is not the default.
+        // Right-clicking anything else does nothing, and without the mark there is nothing
+        // at all to say which is which; macOS draws the same triangle for the same reason.
+        _menuMark.Visibility = Item.Tool is null && Item.Command != ToolbarCommand.Save
+            ? Visibility.Collapsed
+            : Visibility.Visible;
 
         _surface.Background = _isPressed
             ? ToolbarPalette.PressedBrush

@@ -122,6 +122,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         _tools.ItemInvoked += Strip_ItemInvoked;
         _actions.ItemInvoked += Strip_ItemInvoked;
         _tools.ItemAlternate += Tool_Alternate;
+        _actions.ItemAlternate += Action_Alternate;
     }
 
     /// <summary>Raised when what is on the canvas no longer matches the document.</summary>
@@ -497,6 +498,25 @@ public sealed partial class AnnotationToolbarView : UserControl
         // Detached from any previous anchor first: a Flyout can only be shown from one
         // place at a time, and the strip rebuilds its buttons.
         flyout.ShowAt(anchor);
+    }
+
+    /// <summary>
+    /// The menu behind an action button. Only Save has one, and it holds the way of
+    /// saving that is not the default — macshot's own arrangement: one press for the
+    /// usual answer, the menu for the other one.
+    /// </summary>
+    private void Action_Alternate(object? sender, ToolbarItem item)
+    {
+        if (item.Command != ToolbarCommand.Save || _actions.ButtonFor(ToolbarCommand.Save) is not { } anchor)
+        {
+            return;
+        }
+
+        var menu = new MenuFlyout();
+        var saveAs = new MenuFlyoutItem { Text = "Save as..." };
+        saveAs.Click += (_, _) => CommandInvoked?.Invoke(this, ToolbarCommand.SaveAs);
+        menu.Items.Add(saveAs);
+        menu.ShowAt(anchor);
     }
 
     private void ShowEffectsPicker()

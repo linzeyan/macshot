@@ -210,6 +210,10 @@ public sealed partial class EditorWindow : Window
                 _ = CopyAsync();
                 return;
 
+            case ToolbarCommand.SaveAs:
+                _ = SaveAsAsync();
+                return;
+
             case ToolbarCommand.Share:
                 _ = ShareAsync();
                 return;
@@ -808,6 +812,27 @@ public sealed partial class EditorWindow : Window
             {
                 await ImageDelivery.CopyToClipboardAsync(finished);
                 HintText.Text = "Copied to the clipboard";
+            }
+        }
+        catch (Exception exception)
+        {
+            HintText.Text = exception.Message;
+        }
+    }
+
+    /// <summary>
+    /// Asks where to put the image and writes it there, leaving the window open the way
+    /// every other delivery here does.
+    /// </summary>
+    private async Task SaveAsAsync()
+    {
+        try
+        {
+            await AnnotationCanvas.FlushAsync();
+            if (AnnotationCanvas.ToFrame() is { } finished
+                && await SavePrompt.WriteAsync(this, finished, _settings.Current) is { } path)
+            {
+                HintText.Text = $"Saved to {path}";
             }
         }
         catch (Exception exception)

@@ -26,6 +26,12 @@ public enum ToolbarCommand
     Copy,
     Save,
 
+    /// <summary>
+    /// Ask where to put it instead of using the folder the preferences name. Never on a
+    /// strip: it is what the right-click on Save offers, the way macshot offers it.
+    /// </summary>
+    SaveAs,
+
     /// <summary>Hand it to another program through the system's share pane.</summary>
     Share,
 

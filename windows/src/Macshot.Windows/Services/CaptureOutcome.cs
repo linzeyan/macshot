@@ -22,6 +22,12 @@ public enum CaptureOutcome
     /// <summary>The save folder, and nothing else.</summary>
     Save,
 
+    /// <summary>
+    /// Already written, where the user chose, by the window that asked. Nothing left to
+    /// do with the pixels — but it is still a capture, so it still goes in the history.
+    /// </summary>
+    SaveAs,
+
     /// <summary>A floating window on top of everything.</summary>
     Pin,
 }
