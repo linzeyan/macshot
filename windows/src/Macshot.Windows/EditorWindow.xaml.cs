@@ -66,6 +66,14 @@ public sealed partial class EditorWindow : Window
     private readonly Stack<(CapturedFrame Frame, Annotation[] Annotations)> _imageUndo = new();
 
     private CapturedFrame _frame;
+
+    /// <summary>
+    /// What the Adjust popover is asking for. A layer over the image rather than
+    /// something burnt into it, because the sliders are dragged: an adjustment applied on
+    /// every tick would leave an undo stack thirty entries deep for one decision. The
+    /// delivered pixels come from the preview, so what is on show is what is handed over.
+    /// </summary>
+    private ImageEffectsOptions _effects = ImageEffectsOptions.Default;
     private ToggleButton? _cropButton;
     private bool _cropping;
     private Point? _cropStart;
@@ -117,7 +125,16 @@ public sealed partial class EditorWindow : Window
         ImageHost.Width = _frame.Width;
         ImageHost.Height = _frame.Height;
         Title = $"macshot — {_frame.Width} × {_frame.Height}";
-        AnnotationCanvas.Present(_frame, new CaptureRegion(0, 0, _frame.Width, _frame.Height), _placement);
+        var shown = _effects.IsIdentity
+            ? _frame
+            : new CapturedFrame(
+                _frame.VirtualX,
+                _frame.VirtualY,
+                _frame.Width,
+                _frame.Height,
+                ImageEffects.Apply(_frame.Width, _frame.Height, _frame.BgraPixels, _effects));
+
+        AnnotationCanvas.Present(shown, new CaptureRegion(0, 0, shown.Width, shown.Height), _placement);
     }
 
     private void WireToolbar()
@@ -129,6 +146,11 @@ public sealed partial class EditorWindow : Window
         AnnotationToolbar.Bind(_editor, _settings);
         AnnotationToolbar.Changed += (_, _) => AnnotationCanvas.Render();
         AnnotationToolbar.ColorSamplingToggled += (_, armed) => SetColorSampling(armed);
+        AnnotationToolbar.EffectsChanged += (_, options) =>
+        {
+            _effects = options;
+            Present();
+        };
         AnnotationToolbar.CommandInvoked += (_, command) => RunToolbarCommand(command);
         AnnotationToolbar.ShowToolbar(true);
 

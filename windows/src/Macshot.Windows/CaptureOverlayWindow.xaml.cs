@@ -172,6 +172,13 @@ public sealed partial class CaptureOverlayWindow : Window
     private bool _inverted;
 
     /// <summary>
+    /// What the Adjust popover is asking for. Live state rather than something done to
+    /// the pixels once, because the sliders are dragged: an adjustment burnt in on every
+    /// tick would be an undo stack thirty entries deep for one decision.
+    /// </summary>
+    private ImageEffectsOptions _effects = ImageEffectsOptions.Default;
+
+    /// <summary>
     /// The window's own pixels, when the region came from clicking a window rather than
     /// from a drag. Held because the preview is rebuilt whenever the region or an image
     /// switch changes, and re-cropping the screenshot would quietly swap the window's
@@ -1412,6 +1419,14 @@ public sealed partial class CaptureOverlayWindow : Window
         };
 
         AnnotationToolbar.ColorSamplingToggled += (_, armed) => SetColorSampling(armed);
+        AnnotationToolbar.EffectsChanged += (_, options) =>
+        {
+            _effects = options;
+            if (_selection is { } region)
+            {
+                AnnotationCanvas.Present(PixelsFor(region), region, _placement);
+            }
+        };
         AnnotationToolbar.CommandInvoked += (_, command) => RunToolbarCommand(command);
     }
 
@@ -1668,17 +1683,28 @@ public sealed partial class CaptureOverlayWindow : Window
 
     /// <summary>
     /// The pixels the preview shows for a region: the window's own capture or the
-    /// screenshot under it, with the colours turned if that switch is on.
+    /// screenshot under it, adjusted and turned if those switches are on.
     /// </summary>
     /// <remarks>
-    /// One place, because the preview is rebuilt from three different events — the
-    /// region being chosen, a grip being dragged, and the invert switch — and each of
+    /// One place, because the preview is rebuilt from four different events — the region
+    /// being chosen, a grip being dragged, the Adjust sliders and the invert switch — and each of
     /// them getting its own answer about where the pixels come from is how a snapped
     /// window quietly turns back into a screenshot of the desktop.
     /// </remarks>
     private CapturedFrame PixelsFor(CaptureRegion region)
     {
         var source = _capturedWindow ?? NativeScreenCaptureService.Crop(_desktopFrame, region);
+
+        if (!_effects.IsIdentity)
+        {
+            source = new CapturedFrame(
+                source.VirtualX,
+                source.VirtualY,
+                source.Width,
+                source.Height,
+                ImageEffects.Apply(source.Width, source.Height, source.BgraPixels, _effects));
+        }
+
         if (!_inverted)
         {
             return source;

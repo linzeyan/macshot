@@ -1,5 +1,6 @@
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
+using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Rendering;
 using Macshot.Windows.Services;
 using Macshot.Windows.Toolbar;
@@ -50,6 +51,7 @@ public sealed partial class AnnotationToolbarView : UserControl
     private readonly StackPanel _optionsContent;
 
     private readonly ColorPicker _colorPicker = new() { IsAlphaEnabled = true, RequestedTheme = ElementTheme.Dark };
+    private readonly EffectsPickerView _effectsPicker = new();
     private readonly TextBlock _sizeLabel = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly Slider _size = new() { Width = 120, Minimum = 1, Maximum = 32, StepFrequency = 1 };
     private readonly ComboBox _lineStyle = new() { VerticalAlignment = VerticalAlignment.Center };
@@ -139,6 +141,9 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// </summary>
     public event EventHandler<ToolbarCommand>? CommandInvoked;
 
+    /// <summary>Raised on every move of the Adjust popover, with what it now asks for.</summary>
+    public event EventHandler<ImageEffectsOptions>? EffectsChanged;
+
     /// <summary>
     /// True in the editor window, which has no region to cancel or move and places its
     /// strips at fixed corners rather than around a selection.
@@ -221,6 +226,13 @@ public sealed partial class AnnotationToolbarView : UserControl
         RefreshStrips();
 
         _colorPicker.ColorChanged += (_, _) => ApplyStyle();
+        _effectsPicker.Changed += (_, options) =>
+        {
+            // The strip first, so the button lights on the same frame the picture
+            // changes rather than one after it.
+            RefreshStrips();
+            EffectsChanged?.Invoke(this, options);
+        };
         _size.ValueChanged += (_, _) => ApplyStyle();
         _lineStyle.SelectionChanged += (_, _) => ApplyStyle();
         _arrowStyle.SelectionChanged += (_, _) => ApplyStyle();
@@ -385,6 +397,10 @@ public sealed partial class AnnotationToolbarView : UserControl
             ShowColorPicker();
             return;
 
+        case ToolbarCommand.Adjust:
+            ShowEffectsPicker();
+            return;
+
         default:
             CommandInvoked?.Invoke(this, item.Command);
             return;
@@ -483,6 +499,19 @@ public sealed partial class AnnotationToolbarView : UserControl
         flyout.ShowAt(anchor);
     }
 
+    private void ShowEffectsPicker()
+    {
+        if (_tools.ButtonFor(ToolbarCommand.Adjust) is not { } anchor)
+        {
+            return;
+        }
+
+        // Detached from any previous anchor first, for the same reason the colour picker
+        // is: a Flyout can be shown from one place at a time, and the strip rebuilds its
+        // buttons whenever anything on it lights up.
+        new Flyout { Content = _effectsPicker }.ShowAt(anchor);
+    }
+
     /// <summary>Makes <paramref name="tool"/> the active one, as clicking its button would.</summary>
     private void SelectTool(AnnotationTool tool)
     {
@@ -524,7 +553,12 @@ public sealed partial class AnnotationToolbarView : UserControl
             return;
         }
 
-        _tools.SetItems(ToolbarActions.Tools(editor.Tool, _settings?.Current.EnabledTools(), _beautified, _inverted));
+        _tools.SetItems(ToolbarActions.Tools(
+            editor.Tool,
+            _settings?.Current.EnabledTools(),
+            _beautified,
+            _inverted,
+            !_effectsPicker.Options.IsIdentity));
         // The offline build has no translator compiled into it, so it is not offered a
         // button for one.
         _actions.SetItems(ToolbarActions.Actions(EditorMode, translation: !BuildVariant.IsOffline));

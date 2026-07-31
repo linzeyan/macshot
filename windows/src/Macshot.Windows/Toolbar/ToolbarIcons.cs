@@ -124,6 +124,17 @@ internal static class ToolbarIcons
             canvas.Children.Add(Stroke(4.5, 11, 8.5, 11));
             break;
 
+        case ToolbarCommand.Adjust:
+            // Three sliders at different settings, which is macshot's
+            // slider.horizontal.3 and is what the popover behind the button holds.
+            canvas.Children.Add(Stroke(2, 4, 14, 4, opacity: 0.5));
+            canvas.Children.Add(Stroke(2, 8, 14, 8, opacity: 0.5));
+            canvas.Children.Add(Stroke(2, 12, 14, 12, opacity: 0.5));
+            canvas.Children.Add(Block(9.5, 2.5, 2, 3));
+            canvas.Children.Add(Block(4, 6.5, 2, 3));
+            canvas.Children.Add(Block(10.5, 10.5, 2, 3));
+            break;
+
         case ToolbarCommand.Share:
             // A box with something leaving it upwards, which is the share glyph on both
             // systems: macshot's square.and.arrow.up is the same drawing.

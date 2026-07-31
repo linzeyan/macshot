@@ -44,6 +44,9 @@ public enum ToolbarCommand
     /// <summary>Turn every colour in it to its opposite.</summary>
     InvertColors,
 
+    /// <summary>Open the brightness, contrast, saturation and sharpness controls.</summary>
+    Adjust,
+
     /// <summary>Put it on a gradient background.</summary>
     Beautify,
 
@@ -131,11 +134,17 @@ public static class ToolbarActions
     /// the same reason: both are switches, and a switch that does not show its state is
     /// a button that appears to do nothing the second time it is pressed.
     /// </param>
+    /// <param name="adjusted">
+    /// Whether the Adjust controls are asking for anything. Lit for the same reason
+    /// again: the popover is closed most of the time, and this is the only sign that
+    /// what is on show has been altered.
+    /// </param>
     public static IReadOnlyList<ToolbarItem> Tools(
         AnnotationTool selected,
         IReadOnlyCollection<AnnotationTool>? enabled = null,
         bool beautified = false,
-        bool inverted = false)
+        bool inverted = false,
+        bool adjusted = false)
     {
         var items = new List<ToolbarItem>(ToolOrder.Count + 3);
 
@@ -159,11 +168,12 @@ public static class ToolbarActions
         items.Add(new ToolbarItem(ToolbarCommand.Redo, "Redo"));
 
         // Then the actions that change the picture rather than draw on it, in macshot's
-        // order: invert, adjust, beautify, remove background. Adjust and remove
-        // background are not here yet; the two that are keep the places they hold there,
-        // so filling the gaps later moves nothing. The port's own redact button follows
-        // the block rather than sitting inside it.
+        // order: invert, adjust, beautify, remove background. Remove background is not
+        // here yet; the three that are keep the places they hold there, so filling the
+        // gap later moves nothing. The port's own redact button follows the block rather
+        // than sitting inside it.
         items.Add(new ToolbarItem(ToolbarCommand.InvertColors, "Invert the colours", IsSelected: inverted));
+        items.Add(new ToolbarItem(ToolbarCommand.Adjust, "Adjust", IsSelected: adjusted));
         items.Add(new ToolbarItem(ToolbarCommand.Beautify, "Beautify", IsSelected: beautified));
         items.Add(new ToolbarItem(ToolbarCommand.Redact, "Cover personal details"));
 

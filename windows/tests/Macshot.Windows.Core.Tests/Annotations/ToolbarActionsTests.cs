@@ -77,17 +77,20 @@ public sealed class ToolbarActionsTests
     public void WhatChangesThePicture_ComesAfterWhatDrawsOnIt()
     {
         // macshot ends the bottom strip with the actions that rewrite the pixels rather
-        // than mark them — invert, adjust, beautify, remove background. Beautify is the
-        // only one the port has, so it has to land after undo and redo, where macshot's
-        // block begins, and not among the tools.
+        // than mark them — invert, adjust, beautify, remove background. Remove background
+        // is the only one the port lacks, so the other three have to land after undo and
+        // redo, where macshot's block begins, and not among the tools.
         var commands = ToolbarActions.Tools(AnnotationTool.Arrow).Select(item => item.Command).ToArray();
 
         Assert.IsTrue(
             Array.IndexOf(commands, ToolbarCommand.InvertColors) > Array.IndexOf(commands, ToolbarCommand.Redo),
             "the block that rewrites the pixels comes after the undo pair, not among the tools");
         Assert.IsTrue(
-            Array.IndexOf(commands, ToolbarCommand.Beautify) > Array.IndexOf(commands, ToolbarCommand.InvertColors),
-            "macshot lists invert before beautify, and the gaps between them are for the two the port lacks");
+            Array.IndexOf(commands, ToolbarCommand.Adjust) > Array.IndexOf(commands, ToolbarCommand.InvertColors),
+            "macshot lists invert before adjust");
+        Assert.IsTrue(
+            Array.IndexOf(commands, ToolbarCommand.Beautify) > Array.IndexOf(commands, ToolbarCommand.Adjust),
+            "and adjust before beautify, with the gap after it for the one the port lacks");
         Assert.IsTrue(
             Array.IndexOf(commands, ToolbarCommand.Redact) > Array.IndexOf(commands, ToolbarCommand.Beautify),
             "the port's own redact button follows macshot's block rather than sitting inside it");
@@ -102,10 +105,13 @@ public sealed class ToolbarActionsTests
         // both ways reads as a button that did nothing the second time.
         Assert.IsFalse(Item(ToolbarActions.Tools(AnnotationTool.Arrow), ToolbarCommand.Beautify).IsSelected);
         Assert.IsFalse(Item(ToolbarActions.Tools(AnnotationTool.Arrow), ToolbarCommand.InvertColors).IsSelected);
+        Assert.IsFalse(Item(ToolbarActions.Tools(AnnotationTool.Arrow), ToolbarCommand.Adjust).IsSelected);
 
-        var on = ToolbarActions.Tools(AnnotationTool.Arrow, null, beautified: true, inverted: true);
+        var on = ToolbarActions.Tools(
+            AnnotationTool.Arrow, null, beautified: true, inverted: true, adjusted: true);
         Assert.IsTrue(Item(on, ToolbarCommand.Beautify).IsSelected);
         Assert.IsTrue(Item(on, ToolbarCommand.InvertColors).IsSelected);
+        Assert.IsTrue(Item(on, ToolbarCommand.Adjust).IsSelected);
 
         static ToolbarItem Item(IReadOnlyList<ToolbarItem> items, ToolbarCommand command) =>
             items.Single(item => item.Command == command);
