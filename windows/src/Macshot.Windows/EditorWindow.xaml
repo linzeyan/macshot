@@ -21,7 +21,8 @@
             VerticalScrollBarVisibility="Auto"
             HorizontalContentAlignment="Center"
             VerticalContentAlignment="Center"
-            SizeChanged="Scroller_SizeChanged">
+            SizeChanged="Scroller_SizeChanged"
+            ViewChanged="Scroller_ViewChanged">
 
             <!-- Sized to the image in pixels, so one layout unit is one pixel and the
                  placement between marks and pixels is the identity. -->

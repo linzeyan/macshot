@@ -49,6 +49,46 @@ public static class FrameTransforms
     }
 
     /// <summary>
+    /// One frame with another laid under it, left-aligned, on a canvas as wide as the
+    /// wider of the two. This is what "add capture" does: the editor grows downwards and
+    /// the new capture lands in the space that appeared.
+    /// </summary>
+    /// <remarks>
+    /// Left-aligned rather than centred, as macshot's is, so a column of captures added
+    /// one after another lines up down its left edge instead of drifting about the middle.
+    /// The gap beside the narrower of the two is left at zero — transparent black — which
+    /// the encoders keep and a viewer shows as the background it is.
+    /// </remarks>
+    public static byte[] StackBelow(
+        int width,
+        int height,
+        ReadOnlySpan<byte> bgraPixels,
+        int addedWidth,
+        int addedHeight,
+        ReadOnlySpan<byte> addedBgraPixels)
+    {
+        Validate(width, height, bgraPixels);
+        Validate(addedWidth, addedHeight, addedBgraPixels);
+
+        var stride = Math.Max(width, addedWidth) * 4;
+        var output = new byte[stride * (height + addedHeight)];
+
+        for (var row = 0; row < height; row++)
+        {
+            bgraPixels.Slice(row * width * 4, width * 4).CopyTo(output.AsSpan(row * stride, width * 4));
+        }
+
+        for (var row = 0; row < addedHeight; row++)
+        {
+            addedBgraPixels
+                .Slice(row * addedWidth * 4, addedWidth * 4)
+                .CopyTo(output.AsSpan(((height + row) * stride), addedWidth * 4));
+        }
+
+        return output;
+    }
+
+    /// <summary>
     /// The frame with every colour turned to its opposite.
     /// </summary>
     /// <remarks>

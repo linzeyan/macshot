@@ -101,6 +101,12 @@ public sealed class CaptureController : IDisposable
     private CountdownWindow? _countdown;
 
     /// <summary>
+    /// The editor waiting for the next capture to be added to it, rather than delivered
+    /// the usual way. Cleared as soon as that capture arrives or is given up on.
+    /// </summary>
+    private EditorWindow? _addingTo;
+
+    /// <summary>
     /// The captures the menu was last built from. Kept because the menu hands back a
     /// number and nothing else, and the file that number meant has to survive until
     /// the click arrives.
@@ -483,7 +489,19 @@ public sealed class CaptureController : IDisposable
         // exception escaping an async void method has nobody above it to catch it.
         try
         {
+            // Read before the overlays go, because dismissing them is what puts a
+            // waiting editor back on screen and forgets it.
+            var pending = _addingTo;
             DismissOverlays();
+
+            // An editor that asked for this one takes it instead: it is a piece of a
+            // picture being assembled, not a capture to copy, save and archive.
+            if (pending is not null)
+            {
+                pending.AddCapture(result.Frame);
+                return;
+            }
+
             await DeliverAsync(result.Frame, result.Outcome);
         }
         catch (Exception exception)
@@ -763,6 +781,9 @@ public sealed class CaptureController : IDisposable
             Unsubscribe(overlay);
             overlay.Close();
         }
+
+        // The overlays going away ends any add-capture, whichever way it ended.
+        RestorePendingEditor();
     }
 
     private void Unsubscribe(CaptureOverlayWindow overlay)
@@ -1059,6 +1080,7 @@ public sealed class CaptureController : IDisposable
 
         var editor = new EditorWindow(frame, _settings);
         editor.PinRequested += (_, pinned) => Post(() => PinAsync(pinned));
+        editor.AddCaptureRequested += (_, _) => Post(() => AddCaptureAsync(editor));
 
         // Delivered exactly as a capture is, so the editor needs no opinion about
         // clipboards, folders or history, and what Done means cannot drift between the
@@ -1070,10 +1092,71 @@ public sealed class CaptureController : IDisposable
             {
                 _editor = null;
             }
+
+            // An editor closed from under an add-capture must not still be waiting for
+            // one: the next capture would be handed to a window that no longer exists.
+            if (ReferenceEquals(_addingTo, editor))
+            {
+                _addingTo = null;
+            }
         };
 
         _editor = editor;
         await editor.ShowAsync();
+    }
+
+    /// <summary>
+    /// Takes a capture for an editor to add under the image it already has.
+    /// </summary>
+    /// <remarks>
+    /// The editor is hidden first, as macshot's is: the overlay is a still of the desktop
+    /// taken a moment earlier, and an editor left on screen would be in the pixels the
+    /// user is about to select from — so the obvious gesture, dragging a box over
+    /// something next to the editor, would come back with a picture of the editor.
+    /// </remarks>
+    private async Task AddCaptureAsync(EditorWindow editor)
+    {
+        if (_overlays.Count > 0)
+        {
+            return;
+        }
+
+        _addingTo = editor;
+        editor.GetAppWindow().Hide();
+
+        try
+        {
+            await BeginAreaCaptureAsync();
+        }
+        catch (Exception)
+        {
+            // Whatever went wrong, the editor must not be left hidden with no way back.
+            RestorePendingEditor();
+            throw;
+        }
+    }
+
+    /// <summary>
+    /// Puts back the editor hidden for an add-capture, and answers which one it was so
+    /// the caller can hand it the capture. Null when no editor was waiting.
+    /// </summary>
+    /// <remarks>
+    /// Called from <see cref="DismissOverlays"/> rather than from the one path that
+    /// succeeds, because every way out of the overlay ends the add — cancelling, opening
+    /// the editor, starting a recording — and an editor left hidden by any of them looks
+    /// like a window that closed itself.
+    /// </remarks>
+    private EditorWindow? RestorePendingEditor()
+    {
+        if (_addingTo is not { } editor)
+        {
+            return null;
+        }
+
+        _addingTo = null;
+        editor.GetAppWindow().Show();
+        editor.Activate();
+        return editor;
     }
 
     private void Post(Func<Task> action)

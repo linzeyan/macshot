@@ -5,9 +5,11 @@ using Macshot.Windows.Core.Recognition;
 using Macshot.Windows.Rendering;
 using Macshot.Windows.Services;
 using Microsoft.UI.Input;
+using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Input;
 
 // Imported rather than written out at each use site: inside namespace Macshot.Windows
@@ -75,9 +77,22 @@ public sealed partial class EditorWindow : Window
     /// </summary>
     private ImageEffectsOptions _effects = ImageEffectsOptions.Default;
     private ToggleButton? _cropButton;
+
+    /// <summary>
+    /// Built in <see cref="BuildActions"/>, which runs before anything can read them.
+    /// Null-forgiving rather than nullable so every use site is not a question about
+    /// whether the bar exists yet.
+    /// </summary>
+    private TextBlock _sizeLabel = null!;
+
+    private Button _zoomButton = null!;
+
     private bool _cropping;
     private Point? _cropStart;
     private bool _zoomFitted;
+
+    /// <summary>What one step of the zoom menu multiplies by, as macshot's does.</summary>
+    private const double ZoomStep = 1.25;
 
     public EditorWindow(CapturedFrame frame, SettingsStore settings)
     {
@@ -89,6 +104,13 @@ public sealed partial class EditorWindow : Window
 
     /// <summary>Raised with the image the user wants kept on top of everything else.</summary>
     public event EventHandler<CapturedFrame>? PinRequested;
+
+    /// <summary>
+    /// Raised when the user wants another capture added under this one. The owner takes
+    /// it, because taking a capture is its job and not this window's, and hands it back
+    /// through <see cref="AddCapture"/>.
+    /// </summary>
+    public event EventHandler? AddCaptureRequested;
 
     /// <summary>
     /// Raised with the finished image when Done is pressed. The owner decides what
@@ -254,6 +276,19 @@ public sealed partial class EditorWindow : Window
     /// </summary>
     private void BuildActions()
     {
+        // The reading macshot keeps at the leading edge of its top bar, in the same
+        // tabular figures: it changes under crop, frame and add capture, and a size that
+        // shifts its own label about as the digits change is hard to read at a glance.
+        _sizeLabel = new TextBlock
+        {
+            FontSize = 11,
+            FontWeight = FontWeights.Medium,
+            Opacity = 0.45,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(6, 0, 10, 0),
+        };
+        Typography.SetNumeralAlignment(_sizeLabel, FontNumeralAlignment.Tabular);
+
         _cropButton = new ToggleButton { Content = "Crop" };
         _cropButton.Click += Crop_Click;
 
@@ -275,10 +310,97 @@ public sealed partial class EditorWindow : Window
 
         frame.Flyout = frameMenu;
 
-        foreach (var button in new FrameworkElement[] { _cropButton, flip, frame })
+        // macshot's Add Capture: another capture, taken now, landing under this one. It
+        // is what turns the editor from somewhere a screenshot is marked up into
+        // somewhere several are put together.
+        var add = new Button { Content = "Add capture" };
+        add.Click += (_, _) => AddCaptureRequested?.Invoke(this, EventArgs.Empty);
+
+        _zoomButton = new Button { Content = "100% ▾" };
+        _zoomButton.Flyout = ZoomMenu();
+
+        foreach (var button in new FrameworkElement[] { _sizeLabel, _cropButton, flip, frame, add, _zoomButton })
         {
             ImageOperations.Children.Add(button);
         }
+
+        ShowSize();
+    }
+
+    /// <summary>
+    /// macshot's zoom dropdown, with its entries in its order. The scroll view zooms by
+    /// itself, but only a wheel can reach it: without this there is no way to say "100%"
+    /// and no reading anywhere of what the current zoom even is.
+    /// </summary>
+    private MenuFlyout ZoomMenu()
+    {
+        var menu = new MenuFlyout { Placement = FlyoutPlacementMode.Bottom };
+        menu.Items.Add(MenuItem("Zoom in", () => ZoomBy(ZoomStep)));
+        menu.Items.Add(MenuItem("Zoom out", () => ZoomBy(1 / ZoomStep)));
+        menu.Items.Add(new MenuFlyoutSeparator());
+        menu.Items.Add(MenuItem("Fit canvas", ZoomToFit));
+        menu.Items.Add(new MenuFlyoutSeparator());
+
+        foreach (var preset in new[] { 0.5, 1.0, 2.0 })
+        {
+            menu.Items.Add(MenuItem($"{preset * 100:0}%", () => ZoomTo(preset)));
+        }
+
+        return menu;
+    }
+
+    private void ZoomBy(double factor) => ZoomTo(Scroller.ZoomFactor * factor);
+
+    private void ZoomTo(double zoom) =>
+        Scroller.ChangeView(
+            null,
+            null,
+            (float)Math.Clamp(zoom, Scroller.MinZoomFactor, Scroller.MaxZoomFactor));
+
+    private void ZoomToFit()
+    {
+        if (Scroller.ViewportWidth <= 0 || Scroller.ViewportHeight <= 0)
+        {
+            return;
+        }
+
+        ZoomTo(Math.Min(Scroller.ViewportWidth / _frame.Width, Scroller.ViewportHeight / _frame.Height));
+    }
+
+    /// <summary>Keeps the reading honest however the zoom was changed — menu or wheel.</summary>
+    private void Scroller_ViewChanged(object sender, ScrollViewerViewChangedEventArgs e) => ShowZoom();
+
+    private void ShowZoom() => _zoomButton.Content = $"{Scroller.ZoomFactor * 100:0}% ▾";
+
+    private void ShowSize() => _sizeLabel.Text = $"{_frame.Width} × {_frame.Height}";
+
+    /// <summary>
+    /// Adds a capture below this one, growing the canvas to fit it.
+    /// </summary>
+    /// <remarks>
+    /// Burned in rather than left as a movable mark, which is where this parts company
+    /// with macshot: growing the canvas goes through the same flatten-and-replace that
+    /// crop and frame do, and that mechanism has no way to keep a live annotation across
+    /// the operation. It undoes in one step like every other image operation.
+    /// </remarks>
+    public void AddCapture(CapturedFrame added)
+    {
+        ArgumentNullException.ThrowIfNull(added);
+
+        ApplyImageOperation(
+            existing => new CapturedFrame(
+                existing.VirtualX,
+                existing.VirtualY,
+                Math.Max(existing.Width, added.Width),
+                existing.Height + added.Height,
+                FrameTransforms.StackBelow(
+                    existing.Width,
+                    existing.Height,
+                    existing.BgraPixels,
+                    added.Width,
+                    added.Height,
+                    added.BgraPixels)),
+            "Capture added • Ctrl+Z to undo");
     }
 
     private static MenuFlyoutItem MenuItem(string text, Action invoke)
@@ -568,6 +690,7 @@ public sealed partial class EditorWindow : Window
         _frame = previous.Frame;
         _editor.Document.Reset(previous.Annotations);
         Present();
+        ShowSize();
         HintText.Text = StandingHint;
     }
 
@@ -731,6 +854,7 @@ public sealed partial class EditorWindow : Window
             _frame = result;
             _editor.Document.Reset();
             Present();
+            ShowSize();
             HintText.Text = done;
 
             DiagnosticLog.Verbose($"editor image now {_frame.Width}x{_frame.Height}: {done}");

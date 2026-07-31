@@ -143,4 +143,43 @@ public sealed class FrameTransformsTests
     {
         Assert.ThrowsException<ArgumentException>(() => FrameTransforms.FlipHorizontal(4, 4, new byte[10]));
     }
+
+    [TestMethod]
+    public void StackingPutsTheAddedCaptureUnderTheFirst()
+    {
+        var first = Numbered(3, 2);
+        var added = Numbered(3, 1);
+
+        var stacked = FrameTransforms.StackBelow(3, 2, first, 3, 1, added);
+
+        Assert.AreEqual(3 * 3 * 4, stacked.Length, "three rows of three");
+        Assert.AreEqual(1, stacked[((2 * 3) + 1) * 4], "the added row's second column, in the third row");
+        Assert.AreEqual(0, stacked[((2 * 3) + 1) * 4 + 1], "and it is that capture's own first row");
+    }
+
+    [TestMethod]
+    public void TheCanvasTakesTheWidthOfTheWiderCapture()
+    {
+        var narrow = Numbered(2, 1);
+        var wide = Numbered(5, 1);
+
+        var stacked = FrameTransforms.StackBelow(2, 1, narrow, 5, 1, wide);
+
+        Assert.AreEqual(5 * 2 * 4, stacked.Length);
+    }
+
+    [TestMethod]
+    public void BothCapturesKeepTheirLeftEdge()
+    {
+        // Left-aligned rather than centred: a column of captures added one after another
+        // must line up rather than drift about the middle.
+        var narrow = Numbered(2, 1);
+        var wide = Numbered(5, 1);
+
+        var stacked = FrameTransforms.StackBelow(5, 1, wide, 2, 1, narrow);
+
+        Assert.AreEqual(byte.MaxValue, stacked[3], "the wide capture's first pixel is opaque");
+        Assert.AreEqual(byte.MaxValue, stacked[(5 * 4) + 3], "and so is the narrow one's, a row below");
+        Assert.AreEqual(0, stacked[(5 * 4) + (4 * 4) + 3], "the gap beside it is left transparent");
+    }
 }
