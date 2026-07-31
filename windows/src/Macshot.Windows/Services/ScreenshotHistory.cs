@@ -55,14 +55,18 @@ public static class ScreenshotHistory
     /// and keeping the lossy copy of something the user may not have saved anywhere
     /// else would make the archive worse than the thing it archives.
     /// </remarks>
-    public static async Task RecordAsync(CapturedFrame frame, CaptureSettings settings)
+    /// <returns>
+    /// Where the copy was written, or null when history is off or the write failed. The
+    /// thumbnail carries it so that its Delete can take the capture back out again.
+    /// </returns>
+    public static async Task<string?> RecordAsync(CapturedFrame frame, CaptureSettings settings)
     {
         ArgumentNullException.ThrowIfNull(frame);
         ArgumentNullException.ThrowIfNull(settings);
 
         if (settings.HistorySize <= 0)
         {
-            return;
+            return null;
         }
 
         try
@@ -70,10 +74,12 @@ public static class ScreenshotHistory
             System.IO.Directory.CreateDirectory(Directory);
 
             var name = DateTimeOffset.Now.ToString(NameFormat, CultureInfo.InvariantCulture) + Extension;
+            var path = Path.Combine(Directory, name);
             var bytes = await ImageDelivery.EncodeAsync(frame, CaptureImageFormat.Png, CaptureSettings.MaxQuality);
-            await File.WriteAllBytesAsync(Path.Combine(Directory, name), bytes);
+            await File.WriteAllBytesAsync(path, bytes);
 
             Prune(settings.HistorySize);
+            return path;
         }
         catch (Exception exception)
         {
@@ -81,6 +87,27 @@ public static class ScreenshotHistory
             // by the time this runs, so interrupting the user to say the copy of it
             // failed would report a problem they do not have.
             DiagnosticLog.Write($"Could not add the capture to history: {exception.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Takes one capture back out of the history, for the thumbnail's Delete.
+    /// </summary>
+    /// <remarks>
+    /// Silent on failure, as recording is: the file may already have been pruned off the
+    /// end, and a capture the user asked to be rid of that is gone anyway is not an error
+    /// worth a dialog.
+    /// </remarks>
+    public static void Forget(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception exception)
+        {
+            DiagnosticLog.Write($"Could not remove the capture from history: {exception.Message}");
         }
     }
 

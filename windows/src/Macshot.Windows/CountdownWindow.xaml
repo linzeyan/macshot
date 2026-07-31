@@ -3,33 +3,25 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="Macshot Countdown">
-    <Grid Background="#EE202020" Padding="12" ColumnDefinitions="Auto,*,Auto" ColumnSpacing="12">
-        <!-- The number is the whole panel. It is read at a glance from across the
-             desk while both hands are busy arranging whatever is being captured. -->
+    <!-- macshot's dial, in its numbers: a 140 window, a disc inset 10, a 3-wide ring
+         inset another 3 inside that, and the count at 52 across the middle. It is read
+         at a glance from across the desk while both hands are busy arranging whatever is
+         about to be captured, which is why it is a dial and not a sentence.
+
+         The disc is opaque where macshot's is black at 70%. A WinUI window has no
+         per-pixel transparency, so the desktop cannot show through it; the corners of
+         the square window are cut away with an elliptical region instead, and this tone
+         is what macshot's translucent disc averages to. -->
+    <Grid x:Name="DialRoot" Background="#262626">
+        <Ellipse Margin="13" Stroke="#99FFFFFF" StrokeThickness="3" />
+
         <TextBlock
             x:Name="SecondsText"
-            FontSize="34"
-            FontWeight="SemiBold"
+            Text="5"
+            FontSize="52"
+            FontWeight="Bold"
             Foreground="#FFFFFF"
-            MinWidth="44"
-            TextAlignment="Center"
-            VerticalAlignment="Center"
-            Text="5" />
-
-        <StackPanel Grid.Column="1" VerticalAlignment="Center" Spacing="2">
-            <!-- Foreground is set rather than inherited, for the same reason as the
-                 recording panel: this is dark whatever the system theme is. -->
-            <TextBlock Foreground="#FFFFFF" Text="Capturing when this reaches zero" />
-            <TextBlock
-                Foreground="#B0B0B0"
-                FontSize="12"
-                Text="Esc or Cancel stops it" />
-        </StackPanel>
-
-        <Button
-            Grid.Column="2"
-            Content="Cancel"
-            VerticalAlignment="Center"
-            Click="Cancel_Click" />
+            HorizontalAlignment="Center"
+            VerticalAlignment="Center" />
     </Grid>
 </Window>

@@ -3,24 +3,103 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="Macshot Capture">
+    <Window.Resources>
+        <!-- macshot's hover chrome: a 28 disc at white 18% behind a white-50% hairline. -->
+        <Style x:Key="CornerDisc" TargetType="Border">
+            <Setter Property="Width" Value="28" />
+            <Setter Property="Height" Value="28" />
+            <Setter Property="CornerRadius" Value="14" />
+            <Setter Property="Background" Value="#2EFFFFFF" />
+            <Setter Property="BorderBrush" Value="#80FFFFFF" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Margin" Value="10" />
+        </Style>
+
+        <!-- The two actions worth a word rather than a picture, at macshot's 110 x 32 on
+             white 85% — which is why their labels are dark. -->
+        <Style x:Key="CentreAction" TargetType="Border">
+            <Setter Property="Width" Value="110" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="CornerRadius" Value="16" />
+            <Setter Property="Background" Value="#D9FFFFFF" />
+        </Style>
+    </Window.Resources>
+
     <Grid
         x:Name="ThumbnailRoot"
-        Background="#EE202020"
-        Padding="8"
-        RowDefinitions="*,Auto"
-        RowSpacing="8"
+        Background="#1F1F1F"
         PointerEntered="ThumbnailRoot_PointerEntered"
         PointerExited="ThumbnailRoot_PointerExited">
-        <Border CornerRadius="4" Background="#101010">
-            <Image x:Name="ThumbnailImage" Stretch="Uniform" />
-        </Border>
+        <Grid.ContextFlyout>
+            <!-- Everything the panel has no room to show, which is where macshot keeps
+                 the same list. -->
+            <MenuFlyout>
+                <MenuFlyoutItem Text="Copy" Click="Copy_Click" />
+                <MenuFlyoutItem Text="Save" Click="Save_Click" />
+                <MenuFlyoutItem Text="Save as..." Click="SaveAs_Click" />
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="Pin on top" Click="Pin_Click" />
+                <MenuFlyoutItem Text="Open in the editor" Click="Edit_Click" />
+                <MenuFlyoutItem Text="Read the text in it" Click="ReadText_Click" />
+                <MenuFlyoutSeparator />
+                <MenuFlyoutItem Text="Delete" Click="Delete_Click" />
+                <MenuFlyoutItem Text="Close" Click="Close_Click" />
+                <MenuFlyoutItem Text="Close all" Click="CloseAll_Click" />
+            </MenuFlyout>
+        </Grid.ContextFlyout>
 
-        <StackPanel Grid.Row="1" Orientation="Horizontal" Spacing="4">
-            <Button Content="Copy" Click="Copy_Click" />
-            <Button Content="Save" Click="Save_Click" />
-            <Button Content="Pin" Click="Pin_Click" />
-            <Button Content="Edit" Click="Edit_Click" />
-            <Button Content="Close" Click="Close_Click" />
-        </StackPanel>
+        <!-- Aspect fill, cropped, as macshot's is: a letterboxed thumbnail of a wide
+             capture is mostly background, and the panel is there to be recognised at a
+             glance rather than read. -->
+        <Image x:Name="ThumbnailImage" Stretch="UniformToFill" />
+
+        <Grid x:Name="HoverLayer" Background="#73000000" Visibility="Collapsed">
+            <Border
+                x:Name="CloseDisc"
+                Style="{StaticResource CornerDisc}"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Top"
+                PointerPressed="Close_PointerPressed" />
+
+            <Border
+                x:Name="PinDisc"
+                Style="{StaticResource CornerDisc}"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Top"
+                PointerPressed="Pin_PointerPressed" />
+
+            <Border
+                x:Name="EditDisc"
+                Style="{StaticResource CornerDisc}"
+                HorizontalAlignment="Left"
+                VerticalAlignment="Bottom"
+                PointerPressed="Edit_PointerPressed" />
+
+            <!-- The fourth corner is macshot's upload button. It stays empty rather than
+                 being filled with something else: someone who knows where upload is on
+                 macOS must not find a different action in its place. -->
+
+            <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
+                <Border Style="{StaticResource CentreAction}" PointerPressed="Copy_PointerPressed">
+                    <TextBlock
+                        Text="Copy"
+                        FontSize="13"
+                        FontWeight="Medium"
+                        Foreground="#1F1F1F"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center" />
+                </Border>
+
+                <Border Style="{StaticResource CentreAction}" PointerPressed="Save_PointerPressed">
+                    <TextBlock
+                        Text="Save"
+                        FontSize="13"
+                        FontWeight="Medium"
+                        Foreground="#1F1F1F"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center" />
+                </Border>
+            </StackPanel>
+        </Grid>
     </Grid>
 </Window>

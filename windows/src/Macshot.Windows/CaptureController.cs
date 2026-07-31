@@ -525,7 +525,7 @@ public sealed class CaptureController : IDisposable
                 break;
         }
 
-        await ScreenshotHistory.RecordAsync(frame, settings);
+        _ = await ScreenshotHistory.RecordAsync(frame, settings);
 
         if (outcome is CaptureOutcome.Pin)
         {
@@ -563,11 +563,13 @@ public sealed class CaptureController : IDisposable
         // After the actions the user asked for, so the extra encode is never in front
         // of the clipboard. History is the safety net under delivery, not part of it,
         // and it is written whether or not the capture was saved anywhere else.
-        await ScreenshotHistory.RecordAsync(frame, settings);
+        var archived = await ScreenshotHistory.RecordAsync(frame, settings);
 
         if (settings.ShowThumbnail)
         {
-            await ShowThumbnailAsync(frame);
+            // The archive copy travels with the panel, so its Delete can take this
+            // capture back out of the history rather than only closing the panel.
+            await ShowThumbnailAsync(frame, archived);
             return;
         }
 
@@ -590,7 +592,7 @@ public sealed class CaptureController : IDisposable
     /// the panel is that a capture does not interrupt the work, and a column of them
     /// climbing the screen would.
     /// </remarks>
-    private async Task ShowThumbnailAsync(CapturedFrame frame)
+    private async Task ShowThumbnailAsync(CapturedFrame frame, string? archived = null)
     {
         // The oldest go, so the one just taken is always the one on show. Counted up
         // front rather than looped until short enough: how promptly a closed window is
@@ -600,9 +602,10 @@ public sealed class CaptureController : IDisposable
             oldest.Close();
         }
 
-        var thumbnail = new ThumbnailWindow(frame, _settings);
+        var thumbnail = new ThumbnailWindow(frame, _settings) { HistoryPath = archived };
         thumbnail.PinRequested += (_, pinned) => Post(() => PinAsync(pinned));
         thumbnail.EditRequested += (_, captured) => Post(() => ShowEditorAsync(captured));
+        thumbnail.CloseAllRequested += (_, _) => CloseThumbnails();
         thumbnail.Closed += (_, _) =>
         {
             _thumbnails.Remove(thumbnail);
@@ -611,6 +614,21 @@ public sealed class CaptureController : IDisposable
 
         _thumbnails.Add(thumbnail);
         await thumbnail.ShowAsync(_thumbnails.Count - 1);
+    }
+
+    /// <summary>
+    /// Dismisses the whole column at once, which is what someone who took six captures
+    /// in a row and is done with all of them wants.
+    /// </summary>
+    /// <remarks>
+    /// Copied first: closing a panel takes it out of the list from inside this loop.
+    /// </remarks>
+    private void CloseThumbnails()
+    {
+        foreach (var panel in _thumbnails.ToArray())
+        {
+            panel.Close();
+        }
     }
 
     /// <summary>

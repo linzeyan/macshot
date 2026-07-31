@@ -25,9 +25,14 @@ namespace Macshot.Windows;
 /// </remarks>
 public sealed partial class CountdownWindow : Window
 {
-    private const double WidthDips = 320;
-    private const double HeightDips = 84;
-    private const double MarginDips = 24;
+    /// <summary>macshot's dial is square, and this is its side.</summary>
+    private const double SideDips = 140;
+
+    /// <summary>
+    /// How far the disc sits inside the window, which is also how much of each corner is
+    /// cut away.
+    /// </summary>
+    private const double DiscInsetDips = 10;
 
     /// <summary>
     /// WDA_EXCLUDEFROMCAPTURE, as the recording panel uses. The screenshot is taken
@@ -87,7 +92,8 @@ public sealed partial class CountdownWindow : Window
 
         var appWindow = this.GetAppWindow();
         appWindow.MakeChromeless().IsAlwaysOnTop = true;
-        appWindow.MoveAndResize(PlaceBottomCentre());
+        appWindow.MoveAndResize(PlaceCentred(out var scale));
+        CutToTheDisc(handle, scale);
 
         // Activate rather than AppWindow.Show, because a WinUI window does not render
         // its content until it has been activated once. WS_EX_NOACTIVATE is what makes
@@ -120,30 +126,57 @@ public sealed partial class CountdownWindow : Window
         SecondsText.Text = _remaining.ToString(CultureInfo.CurrentCulture);
     }
 
-    private void Cancel_Click(object sender, RoutedEventArgs e) => _finished.TrySetResult(false);
-
     /// <summary>
-    /// Bottom centre of the primary display's work area, where the recording and
-    /// scroll capture panels also sit: away from the corner a finished capture's
-    /// thumbnail uses, and out of the middle of whatever is being arranged.
+    /// The middle of the primary display, which is where macshot puts it: the count is
+    /// the only thing on screen that matters for the next few seconds, and the corner is
+    /// where a finished capture's thumbnail will appear.
     /// </summary>
-    private static RectInt32 PlaceBottomCentre()
+    /// <remarks>
+    /// The display's whole bounds rather than its work area, as macshot uses the screen
+    /// frame: a dial centred on the work area sits visibly above centre.
+    /// </remarks>
+    private static RectInt32 PlaceCentred(out double scale)
     {
         var monitor = MonitorEnumerator.Enumerate().Layout.Primary;
-        var width = (int)(WidthDips * monitor.Scale);
-        var height = (int)(HeightDips * monitor.Scale);
-        var margin = (int)(MarginDips * monitor.Scale);
+        scale = monitor.Scale;
+
+        var side = (int)(SideDips * monitor.Scale);
 
         return new RectInt32(
-            (int)(monitor.WorkArea.X + ((monitor.WorkArea.Width - width) / 2)),
-            (int)monitor.WorkArea.Bottom - height - margin,
-            width,
-            height);
+            (int)(monitor.Bounds.X + ((monitor.Bounds.Width - side) / 2)),
+            (int)(monitor.Bounds.Y + ((monitor.Bounds.Height - side) / 2)),
+            side,
+            side);
+    }
+
+    /// <summary>
+    /// Cuts the window down to the disc, so the dial is a circle on the desktop rather
+    /// than a circle in a dark square.
+    /// </summary>
+    /// <remarks>
+    /// A window region rather than a transparent background: a WinUI window has no
+    /// per-pixel transparency, so the corners have to be taken off the window itself.
+    /// The cost is the edge, which a region clips without antialiasing where macshot's
+    /// circle is drawn with it.
+    /// </remarks>
+    private static void CutToTheDisc(IntPtr handle, double scale)
+    {
+        var inset = (int)(DiscInsetDips * scale);
+        var side = (int)(SideDips * scale);
+
+        // Not deleted: SetWindowRgn takes ownership of the region it is given.
+        SetWindowRgn(handle, CreateEllipticRgn(inset, inset, side - inset, side - inset), true);
     }
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetWindowDisplayAffinity(IntPtr window, uint affinity);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    private static extern int SetWindowRgn(IntPtr window, IntPtr region, [MarshalAs(UnmanagedType.Bool)] bool redraw);
+
+    [DllImport("gdi32.dll")]
+    private static extern IntPtr CreateEllipticRgn(int left, int top, int right, int bottom);
 
     [DllImport("user32.dll", EntryPoint = "GetWindowLongPtrW", SetLastError = true)]
     private static extern IntPtr GetWindowLongPtr(IntPtr window, int index);

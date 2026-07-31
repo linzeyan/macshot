@@ -1,4 +1,6 @@
+using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Services;
+using Macshot.Windows.Toolbar;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -9,20 +11,33 @@ using Windows.Graphics;
 namespace Macshot.Windows;
 
 /// <summary>
-/// The panel that appears after a capture, offering the actions that would
-/// otherwise need the preview window. It is the counterpart of the macOS
-/// <c>FloatingThumbnailController</c>.
+/// The panel that appears after a capture, offering the actions that would otherwise
+/// need the preview window. It is the counterpart of the macOS
+/// <c>FloatingThumbnailController</c>, in its 240 × 160.
 /// </summary>
 /// <remarks>
-/// It dismisses itself, because the whole point is that a capture does not
-/// interrupt what the user was doing. Hovering it stops the countdown: a panel
-/// that vanished while being aimed at would be worse than no panel at all.
+/// It dismisses itself, because the whole point is that a capture does not interrupt what
+/// the user was doing. Hovering it stops the countdown — a panel that vanished while
+/// being aimed at would be worse than no panel at all — and hovering is also what brings
+/// the buttons up. They are over the capture rather than under it: the panel is small,
+/// and a row of buttons beneath the picture would take a third of it.
 /// </remarks>
 public sealed partial class ThumbnailWindow : Window
 {
-    private const int WidthDips = 260;
-    private const int HeightDips = 210;
+    private const int WidthDips = 240;
+    private const int HeightDips = 160;
+
+    /// <summary>How far the column sits from the corner of the work area.</summary>
     private const int MarginDips = 16;
+
+    /// <summary>And how far apart two panels in it are.</summary>
+    private const int StackGapDips = 8;
+
+    /// <summary>
+    /// The hairline as a COLORREF: macshot draws white at 40% round the thumbnail, and
+    /// the attribute that carries it here takes no alpha.
+    /// </summary>
+    private const int HairlineColour = 0x00999999;
 
     private readonly CapturedFrame _frame;
     private readonly SettingsStore _settings;
@@ -34,6 +49,10 @@ public sealed partial class ThumbnailWindow : Window
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         InitializeComponent();
 
+        CloseDisc.Child = Glyph(ToolbarCommand.Cancel);
+        PinDisc.Child = Glyph(ToolbarCommand.Pin);
+        EditDisc.Child = Glyph(ToolbarCommand.OpenEditor);
+
         _dismissTimer.Interval = TimeSpan.FromSeconds(_settings.Current.ThumbnailSeconds);
         _dismissTimer.Tick += (_, _) => Close();
     }
@@ -43,6 +62,15 @@ public sealed partial class ThumbnailWindow : Window
 
     /// <summary>Raised with the capture the user wants opened in the preview window.</summary>
     public event EventHandler<CapturedFrame>? EditRequested;
+
+    /// <summary>Raised when the user wants the whole column gone, not just this one.</summary>
+    public event EventHandler? CloseAllRequested;
+
+    /// <summary>
+    /// Where history put its copy of this capture, so Delete can take it back out. Null
+    /// when history is off, which is what makes Delete a plain close.
+    /// </summary>
+    public string? HistoryPath { get; init; }
 
     /// <summary>
     /// Shows the panel <paramref name="stackIndex"/> places up the corner, so a second
@@ -58,6 +86,7 @@ public sealed partial class ThumbnailWindow : Window
         var presenter = appWindow.MakeChromeless();
         presenter.IsAlwaysOnTop = true;
         presenter.IsResizable = false;
+        this.RoundCorners(HairlineColour);
 
         appWindow.MoveAndResize(PlaceBottomRight(stackIndex));
         Activate();
@@ -84,10 +113,24 @@ public sealed partial class ThumbnailWindow : Window
         }
     }
 
+    private static FrameworkElement? Glyph(ToolbarCommand command)
+    {
+        // The toolbar's own icons rather than a second set drawn for these three: the
+        // panel's edit opens the editor the strip's does, and its close is the same X.
+        var glyph = ToolbarIcons.For(new ToolbarItem(command, string.Empty));
+        if (glyph is not null)
+        {
+            glyph.HorizontalAlignment = HorizontalAlignment.Center;
+            glyph.VerticalAlignment = VerticalAlignment.Center;
+        }
+
+        return glyph;
+    }
+
     /// <summary>
     /// Bottom-right of the primary display's work area, which is where Windows puts
-    /// transient notifications, and inside the work area so the taskbar does not
-    /// cover the buttons. Each place in the stack is one panel higher.
+    /// transient notifications, and inside the work area so the taskbar does not cover
+    /// the buttons. Each place in the stack is one panel higher, macshot's 8 apart.
     /// </summary>
     private static RectInt32 PlaceBottomRight(int stackIndex)
     {
@@ -95,45 +138,111 @@ public sealed partial class ThumbnailWindow : Window
         var width = (int)(WidthDips * monitor.Scale);
         var height = (int)(HeightDips * monitor.Scale);
         var margin = (int)(MarginDips * monitor.Scale);
+        var gap = (int)(StackGapDips * monitor.Scale);
 
         return new RectInt32(
             (int)monitor.WorkArea.Right - width - margin,
-            (int)monitor.WorkArea.Bottom - height - margin - (stackIndex * (height + margin)),
+            (int)monitor.WorkArea.Bottom - height - margin - (stackIndex * (height + gap)),
             width,
             height);
     }
 
-    private void ThumbnailRoot_PointerEntered(object sender, PointerRoutedEventArgs e) => _dismissTimer.Stop();
-
-    private void ThumbnailRoot_PointerExited(object sender, PointerRoutedEventArgs e) => _dismissTimer.Start();
-
-    private async void Copy_Click(object sender, RoutedEventArgs e)
+    private static void Handle(PointerRoutedEventArgs e, Action action)
     {
-        await RunAsync("Copy failed", () => ImageDelivery.CopyToClipboardAsync(_frame));
+        // Handled, or the panel underneath sees the same press as the start of
+        // something else.
+        e.Handled = true;
+        action();
     }
 
-    private async void Save_Click(object sender, RoutedEventArgs e)
+    private void ThumbnailRoot_PointerEntered(object sender, PointerRoutedEventArgs e)
     {
-        await RunAsync("Save failed", async () =>
+        _dismissTimer.Stop();
+        HoverLayer.Visibility = Visibility.Visible;
+    }
+
+    private void ThumbnailRoot_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        HoverLayer.Visibility = Visibility.Collapsed;
+        _dismissTimer.Start();
+    }
+
+    private void Close_PointerPressed(object sender, PointerRoutedEventArgs e) => Handle(e, Close);
+
+    private void Pin_PointerPressed(object sender, PointerRoutedEventArgs e) => Handle(e, Pin);
+
+    private void Edit_PointerPressed(object sender, PointerRoutedEventArgs e) => Handle(e, Edit);
+
+    private void Copy_PointerPressed(object sender, PointerRoutedEventArgs e) =>
+        Handle(e, () => _ = CopyAsync());
+
+    private void Save_PointerPressed(object sender, PointerRoutedEventArgs e) =>
+        Handle(e, () => _ = SaveAsync());
+
+    private void Copy_Click(object sender, RoutedEventArgs e) => _ = CopyAsync();
+
+    private void Save_Click(object sender, RoutedEventArgs e) => _ = SaveAsync();
+
+    private void SaveAs_Click(object sender, RoutedEventArgs e) => _ = SaveAsAsync();
+
+    private void ReadText_Click(object sender, RoutedEventArgs e) => _ = ReadTextAsync();
+
+    private void Pin_Click(object sender, RoutedEventArgs e) => Pin();
+
+    private void Edit_Click(object sender, RoutedEventArgs e) => Edit();
+
+    private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void CloseAll_Click(object sender, RoutedEventArgs e) =>
+        CloseAllRequested?.Invoke(this, EventArgs.Empty);
+
+    /// <summary>
+    /// Takes the capture back out of the history and closes the panel — which for a
+    /// capture that was never written there is simply a close.
+    /// </summary>
+    private void Delete_Click(object sender, RoutedEventArgs e)
+    {
+        if (HistoryPath is { } path)
         {
-            var path = await ImageDelivery.SaveAsync(_frame, _settings.Current);
-            await ShowMessageAsync("Saved", path);
-        });
+            ScreenshotHistory.Forget(path);
+        }
+
+        Close();
     }
 
-    private void Pin_Click(object sender, RoutedEventArgs e)
+    private void Pin()
     {
         PinRequested?.Invoke(this, _frame);
         Close();
     }
 
-    private void Edit_Click(object sender, RoutedEventArgs e)
+    private void Edit()
     {
         EditRequested?.Invoke(this, _frame);
         Close();
     }
 
-    private void Close_Click(object sender, RoutedEventArgs e) => Close();
+    private Task CopyAsync() =>
+        RunAsync("Copy failed", () => ImageDelivery.CopyToClipboardAsync(_frame));
+
+    private Task SaveAsync() => RunAsync("Save failed", async () =>
+    {
+        var path = await ImageDelivery.SaveAsync(_frame, _settings.Current);
+        await ShowMessageAsync("Saved", path);
+    });
+
+    private Task SaveAsAsync() => RunAsync("Save failed", async () =>
+    {
+        // Nothing is reported afterwards: the user chose the name and the place, so they
+        // already know where it went.
+        await SavePrompt.WriteAsync(this, _frame, _settings.Current);
+    });
+
+    private Task ReadTextAsync() => RunAsync("Could not read the text", async () =>
+    {
+        var lines = await TextRecognizer.RecognizeAsync(_frame, 0, 0);
+        new TextRecognitionWindow(TextRecognizer.ToText(lines), _settings).Activate();
+    });
 
     private async Task RunAsync(string failureTitle, Func<Task> action)
     {
