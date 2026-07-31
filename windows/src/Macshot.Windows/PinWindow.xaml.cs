@@ -1,5 +1,8 @@
 using System.Runtime.InteropServices;
+using Macshot.Windows.Core.Annotations;
+using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Services;
+using Macshot.Windows.Toolbar;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -7,6 +10,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Graphics;
 using Windows.System;
+using WinRT.Interop;
 
 namespace Macshot.Windows;
 
@@ -15,15 +19,28 @@ namespace Macshot.Windows;
 /// <c>PinWindowController</c>.
 /// </summary>
 /// <remarks>
-/// It opens over the pixels it was taken from, because a pin is used to keep a
-/// piece of screen visible while working somewhere else, and appearing where it
-/// was cut from makes that relationship obvious. It has no title bar, so dragging
+/// It opens in the middle of the display it came from rather than over the pixels it was
+/// cut from, where it would sit invisibly on top of the thing it is a copy of, and it is
+/// scaled by the wheel — see <see cref="PinPlacement"/>. It has no title bar, so dragging
 /// is handled here.
 /// </remarks>
 public sealed partial class PinWindow : Window
 {
+    /// <summary>
+    /// How much one wheel notch changes the scale. macshot's own step for a mouse, which
+    /// is small on purpose: the pin is being sized to fit beside something, not paged
+    /// through.
+    /// </summary>
+    private const double WheelStep = 0.03;
+
+    /// <summary>What Windows reports for one notch. A precision touchpad sends less.</summary>
+    private const double WheelNotch = 120;
+
     private readonly CapturedFrame _frame;
     private readonly SettingsStore _settings;
+
+    /// <summary>The window at scale 1, which every later size is a multiple of.</summary>
+    private CaptureRegion _opening;
 
     private CursorPoint? _dragCursorOrigin;
     private PointInt32 _dragWindowOrigin;
@@ -33,7 +50,13 @@ public sealed partial class PinWindow : Window
         _frame = frame ?? throw new ArgumentNullException(nameof(frame));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         InitializeComponent();
+
+        EditButton.Child = Glyph(ToolbarCommand.OpenEditor);
+        CloseButton.Child = Glyph(ToolbarCommand.Cancel);
     }
+
+    /// <summary>Raised with the capture the user wants opened in the editor.</summary>
+    public event EventHandler<CapturedFrame>? EditRequested;
 
     public async Task ShowPinnedAsync()
     {
@@ -45,16 +68,62 @@ public sealed partial class PinWindow : Window
         var presenter = appWindow.MakeChromeless();
         presenter.IsAlwaysOnTop = true;
         presenter.IsResizable = false;
+        RoundTheCorners();
 
-        // Physical pixels, so the pin is the same size as what it captured whatever
-        // the display scale is.
-        appWindow.MoveAndResize(new RectInt32(
-            _frame.VirtualX,
-            _frame.VirtualY,
-            _frame.Width,
-            _frame.Height));
+        var layout = MonitorEnumerator.Enumerate().Layout;
+        var centre = new CapturePoint(
+            _frame.VirtualX + (_frame.Width / 2d),
+            _frame.VirtualY + (_frame.Height / 2d));
+        var display = layout.MonitorAt(centre) ?? layout.Primary;
+
+        _opening = PinPlacement.Opening(_frame.Width, _frame.Height, display.WorkArea);
+        appWindow.MoveAndResize(Bounds(_opening));
+
         Activate();
         PinRoot.Focus(FocusState.Programmatic);
+    }
+
+    private static FrameworkElement? Glyph(ToolbarCommand command)
+    {
+        // The strip's own icons rather than a second set drawn for these two buttons:
+        // the pin's Edit opens the same editor the overlay's does, and its close is the
+        // overlay's cancel.
+        var glyph = ToolbarIcons.For(new ToolbarItem(command, string.Empty));
+        if (glyph is not null)
+        {
+            glyph.HorizontalAlignment = HorizontalAlignment.Center;
+            glyph.VerticalAlignment = VerticalAlignment.Center;
+        }
+
+        return glyph;
+    }
+
+    private static RectInt32 Bounds(CaptureRegion region) => new(
+        (int)region.X,
+        (int)region.Y,
+        (int)region.Width,
+        (int)region.Height);
+
+    /// <summary>
+    /// Rounds the window and puts a hairline round it, which is what tells a floating
+    /// copy of the screen apart from the screen underneath it.
+    /// </summary>
+    /// <remarks>
+    /// DWM's, not drawn in the content: a WinUI window has no per-pixel transparency, so
+    /// a rounded border inside it would leave the four corners of the window showing
+    /// through behind the curve. The radius is therefore Windows' own rather than
+    /// macshot's 6, and the hairline is opaque where macshot's is white at 30%. Windows
+    /// 10 has neither attribute and fails harmlessly, leaving the square window it draws
+    /// today.
+    /// </remarks>
+    private void RoundTheCorners()
+    {
+        var handle = WindowNative.GetWindowHandle(this);
+        var rounded = CornerPreferenceRound;
+        DwmSetWindowAttribute(handle, CornerPreference, ref rounded, sizeof(int));
+
+        var border = HairlineColour;
+        DwmSetWindowAttribute(handle, BorderColour, ref border, sizeof(int));
     }
 
     private void PinRoot_PointerPressed(object sender, PointerRoutedEventArgs e)
@@ -104,6 +173,78 @@ public sealed partial class PinWindow : Window
         }
     }
 
+    private void PinRoot_PointerEntered(object sender, PointerRoutedEventArgs e) =>
+        PinChrome.Visibility = Visibility.Visible;
+
+    private void PinRoot_PointerExited(object sender, PointerRoutedEventArgs e) =>
+        PinChrome.Visibility = Visibility.Collapsed;
+
+    /// <summary>
+    /// Scales the pin about the pixel under the pointer, the way macshot's scroll wheel
+    /// and pinch both do.
+    /// </summary>
+    /// <remarks>
+    /// The pointer is read from the system rather than from the event, for the same
+    /// reason the drag is: this is arithmetic in screen pixels, and the event's point is
+    /// in the layout units of whichever display the window is mostly on.
+    /// </remarks>
+    private void PinRoot_PointerWheelChanged(object sender, PointerRoutedEventArgs e)
+    {
+        var delta = e.GetCurrentPoint(PinRoot).Properties.MouseWheelDelta;
+        if (delta == 0 || !GetCursorPos(out var cursor))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        Resize(PinPlacement.Zoomed(
+            CurrentBounds(),
+            _opening,
+            1 + (WheelStep * delta / WheelNotch),
+            new CapturePoint(cursor.X, cursor.Y)));
+    }
+
+    /// <summary>
+    /// Back to 100%. The reading doubles as the button for it, as macshot's does — there
+    /// is no other way back to 1:1 once the wheel has been over it, and a pin that no
+    /// longer matches the pixels it was cut from is hard to compare against them.
+    /// </summary>
+    private void Zoom_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        // Handled, or the press underneath it starts dragging the window.
+        e.Handled = true;
+        Resize(PinPlacement.Restored(CurrentBounds(), _opening));
+    }
+
+    private void Edit_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        e.Handled = true;
+        EditRequested?.Invoke(this, _frame);
+        Close();
+    }
+
+    private void Close_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        e.Handled = true;
+        Close();
+    }
+
+    private CaptureRegion CurrentBounds()
+    {
+        var appWindow = this.GetAppWindow();
+        return new CaptureRegion(
+            appWindow.Position.X,
+            appWindow.Position.Y,
+            appWindow.Size.Width,
+            appWindow.Size.Height);
+    }
+
+    private void Resize(CaptureRegion bounds)
+    {
+        this.GetAppWindow().MoveAndResize(Bounds(bounds));
+        ZoomText.Text = $"{PinPlacement.Percent(bounds, _opening)}%";
+    }
+
     private async void Copy_Click(object sender, RoutedEventArgs e)
     {
         await RunAsync("Copy failed", () => ImageDelivery.CopyToClipboardAsync(_frame));
@@ -148,6 +289,24 @@ public sealed partial class PinWindow : Window
         };
         await dialog.ShowAsync();
     }
+
+    /// <summary>DWMWA_WINDOW_CORNER_PREFERENCE, Windows 11 and later.</summary>
+    private const int CornerPreference = 33;
+
+    /// <summary>DWMWCP_ROUND: the radius Windows rounds an ordinary window with.</summary>
+    private const int CornerPreferenceRound = 2;
+
+    /// <summary>DWMWA_BORDER_COLOR, Windows 11 and later.</summary>
+    private const int BorderColour = 34;
+
+    /// <summary>
+    /// The hairline, as a COLORREF (0x00BBGGRR). Grey rather than macshot's white at 30%,
+    /// which cannot be asked for: the attribute takes no alpha.
+    /// </summary>
+    private const int HairlineColour = 0x005A5A5A;
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

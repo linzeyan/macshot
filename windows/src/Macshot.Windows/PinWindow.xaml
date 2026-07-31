@@ -10,6 +10,9 @@
         PointerPressed="PinRoot_PointerPressed"
         PointerMoved="PinRoot_PointerMoved"
         PointerReleased="PinRoot_PointerReleased"
+        PointerEntered="PinRoot_PointerEntered"
+        PointerExited="PinRoot_PointerExited"
+        PointerWheelChanged="PinRoot_PointerWheelChanged"
         KeyDown="PinRoot_KeyDown">
         <Grid.ContextFlyout>
             <MenuFlyout>
@@ -20,13 +23,59 @@
             </MenuFlyout>
         </Grid.ContextFlyout>
 
-        <!-- Fill, not None: the window is sized to the capture in physical pixels,
-             so filling the client area reproduces it 1:1 on any display scale. -->
+        <!-- Fill, not None: the window is sized to the capture in physical pixels, so it
+             is reproduced 1:1 until the wheel says otherwise, and follows the window
+             through every scale after that. -->
         <Image x:Name="PinImage" Stretch="Fill" />
 
-        <Border
-            BorderBrush="#66FFFFFF"
-            BorderThickness="1"
-            IsHitTestVisible="False" />
+        <!-- Hidden until the pointer is over the pin, as macshot's is: a pin is looked
+             at far more often than it is operated, and buttons left in the corner would
+             become part of the picture it is holding up. Six from the top and right
+             corner, which is macshot's 30 in from an edge with a 24 button on it. -->
+        <StackPanel
+            x:Name="PinChrome"
+            Orientation="Horizontal"
+            HorizontalAlignment="Right"
+            VerticalAlignment="Top"
+            Margin="0,6,6,0"
+            Visibility="Collapsed">
+            <!-- Tabular figures so the reading does not shuffle sideways as the wheel
+                 turns. The width floor is what stops "9%" from being a dot. -->
+            <Border
+                x:Name="ZoomPill"
+                Height="24"
+                MinWidth="42"
+                Padding="7,0"
+                Margin="0,0,6,0"
+                CornerRadius="12"
+                Background="#99000000"
+                PointerPressed="Zoom_PointerPressed">
+                <TextBlock
+                    x:Name="ZoomText"
+                    Text="100%"
+                    FontSize="11"
+                    FontWeight="Medium"
+                    Foreground="#FFFFFF"
+                    TextAlignment="Center"
+                    VerticalAlignment="Center" />
+            </Border>
+
+            <Border
+                x:Name="EditButton"
+                Width="24"
+                Height="24"
+                Margin="0,0,4,0"
+                CornerRadius="12"
+                Background="#99000000"
+                PointerPressed="Edit_PointerPressed" />
+
+            <Border
+                x:Name="CloseButton"
+                Width="24"
+                Height="24"
+                CornerRadius="12"
+                Background="#99000000"
+                PointerPressed="Close_PointerPressed" />
+        </StackPanel>
     </Grid>
 </Window>

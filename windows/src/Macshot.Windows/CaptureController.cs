@@ -628,6 +628,7 @@ public sealed class CaptureController : IDisposable
     private async Task PinAsync(CapturedFrame frame)
     {
         var pin = new PinWindow(frame, _settings);
+        pin.EditRequested += (_, captured) => Post(() => ShowEditorAsync(captured));
 
         // Tracked so quitting takes the always-on-top windows with it instead of
         // leaving them stranded over everything else.
