@@ -68,7 +68,7 @@ public sealed partial class PinWindow : Window
         var presenter = appWindow.MakeChromeless();
         presenter.IsAlwaysOnTop = true;
         presenter.IsResizable = false;
-        RoundTheCorners();
+        this.RoundCorners(HairlineColour);
 
         var layout = MonitorEnumerator.Enumerate().Layout;
         var centre = new CapturePoint(
@@ -103,28 +103,6 @@ public sealed partial class PinWindow : Window
         (int)region.Y,
         (int)region.Width,
         (int)region.Height);
-
-    /// <summary>
-    /// Rounds the window and puts a hairline round it, which is what tells a floating
-    /// copy of the screen apart from the screen underneath it.
-    /// </summary>
-    /// <remarks>
-    /// DWM's, not drawn in the content: a WinUI window has no per-pixel transparency, so
-    /// a rounded border inside it would leave the four corners of the window showing
-    /// through behind the curve. The radius is therefore Windows' own rather than
-    /// macshot's 6, and the hairline is opaque where macshot's is white at 30%. Windows
-    /// 10 has neither attribute and fails harmlessly, leaving the square window it draws
-    /// today.
-    /// </remarks>
-    private void RoundTheCorners()
-    {
-        var handle = WindowNative.GetWindowHandle(this);
-        var rounded = CornerPreferenceRound;
-        DwmSetWindowAttribute(handle, CornerPreference, ref rounded, sizeof(int));
-
-        var border = HairlineColour;
-        DwmSetWindowAttribute(handle, BorderColour, ref border, sizeof(int));
-    }
 
     private void PinRoot_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
@@ -290,23 +268,11 @@ public sealed partial class PinWindow : Window
         await dialog.ShowAsync();
     }
 
-    /// <summary>DWMWA_WINDOW_CORNER_PREFERENCE, Windows 11 and later.</summary>
-    private const int CornerPreference = 33;
-
-    /// <summary>DWMWCP_ROUND: the radius Windows rounds an ordinary window with.</summary>
-    private const int CornerPreferenceRound = 2;
-
-    /// <summary>DWMWA_BORDER_COLOR, Windows 11 and later.</summary>
-    private const int BorderColour = 34;
-
     /// <summary>
     /// The hairline, as a COLORREF (0x00BBGGRR). Grey rather than macshot's white at 30%,
-    /// which cannot be asked for: the attribute takes no alpha.
+    /// which cannot be asked for: the attribute it goes to takes no alpha.
     /// </summary>
     private const int HairlineColour = 0x005A5A5A;
-
-    [DllImport("dwmapi.dll")]
-    private static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

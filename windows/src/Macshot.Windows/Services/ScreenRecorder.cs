@@ -65,11 +65,37 @@ public sealed class ScreenRecorder : IDisposable
 
     private const double Dpi = 96;
 
+    /// <summary>
+    /// Guards <see cref="_running"/>, which the UI thread writes through
+    /// <see cref="SetPaused"/> while the recording task replaces it.
+    /// </summary>
+    private readonly object _pauseGate = new();
+
     private IDirect3DDevice? _device;
     private bool _disposed;
 
+    /// <summary>The stream being recorded, or null between recordings.</summary>
+    private FrameStream? _running;
+
     /// <summary>Whether this build of Windows can record at all.</summary>
     public static bool IsSupported => GraphicsCaptureService.IsSupported;
+
+    /// <summary>
+    /// Holds or resumes the recording. A held recording keeps its file and its clock:
+    /// the pause is absent from the result rather than present as a still.
+    /// </summary>
+    /// <remarks>
+    /// Doing nothing when no recording is running is deliberate. The panel that calls
+    /// this outlives the recording by a few seconds to say where the file went, and a
+    /// pause pressed in that window is a no-op, not a failure.
+    /// </remarks>
+    public void SetPaused(bool paused)
+    {
+        lock (_pauseGate)
+        {
+            _running?.SetPaused(paused);
+        }
+    }
 
     /// <summary>
     /// Records one display until <paramref name="cancellation"/> asks it to stop, and
@@ -124,6 +150,7 @@ public sealed class ScreenRecorder : IDisposable
         var kept = 0;
 
         using var frames = new FrameStream(Device(), item, plan.FrameInterval, cancellation);
+        using var held = Holding(frames);
 
         var source = BuildSource(crop?.Width ?? size.Width, crop?.Height ?? size.Height);
         source.Starting += (_, args) =>
@@ -218,6 +245,7 @@ public sealed class ScreenRecorder : IDisposable
         var timing = new GifFrameTiming();
 
         using var frames = new FrameStream(Device(), item, plan.FrameInterval, cancellation);
+        using var held = Holding(frames);
         using var output = await OpenForWritingAsync(path);
 
         var encoder = await BitmapEncoder.CreateAsync(BitmapEncoder.GifEncoderId, output);
@@ -499,6 +527,36 @@ public sealed class ScreenRecorder : IDisposable
         public CaptureRegion AsRegion => new(Left, Top, Width, Height);
     }
 
+    /// <summary>
+    /// Makes <paramref name="stream"/> the one <see cref="SetPaused"/> talks to, until
+    /// the returned scope is disposed. Both recording paths take one.
+    /// </summary>
+    private IDisposable Holding(FrameStream stream)
+    {
+        lock (_pauseGate)
+        {
+            _running = stream;
+        }
+
+        return new HeldStream(this, stream);
+    }
+
+    private sealed class HeldStream(ScreenRecorder owner, FrameStream stream) : IDisposable
+    {
+        public void Dispose()
+        {
+            lock (owner._pauseGate)
+            {
+                // Only if it is still ours. A recording started before this one finished
+                // tidying up would otherwise have its stream cleared out from under it.
+                if (ReferenceEquals(owner._running, stream))
+                {
+                    owner._running = null;
+                }
+            }
+        }
+    }
+
     private sealed record TimedFrame(Direct3D11CaptureFrame Frame, TimeSpan Timestamp);
 
     private sealed record GifFrame(byte[] Pixels, TimeSpan Timestamp);
@@ -519,6 +577,9 @@ public sealed class ScreenRecorder : IDisposable
         private readonly FrameCadence _cadence;
         private readonly Stopwatch _clock = new();
         private readonly CancellationTokenRegistration _stopping;
+
+        /// <summary>Written from the UI thread, read on the compositor's.</summary>
+        private volatile bool _paused;
 
         public FrameStream(
             IDirect3DDevice device,
@@ -571,6 +632,34 @@ public sealed class ScreenRecorder : IDisposable
         }
 
         /// <summary>
+        /// Holds or resumes the recording.
+        /// </summary>
+        /// <remarks>
+        /// The clock stops with it, which is what makes a pause a pause rather than a
+        /// still: timestamps carry on from where they left off, so the held stretch is
+        /// simply not in the file. Frames that arrive meanwhile are disposed rather than
+        /// queued — each one holds a texture, and a recording paused for a minute would
+        /// otherwise resume by playing that minute back.
+        /// </remarks>
+        public void SetPaused(bool paused)
+        {
+            if (paused == _paused)
+            {
+                return;
+            }
+
+            _paused = paused;
+            if (paused)
+            {
+                _clock.Stop();
+            }
+            else
+            {
+                _clock.Start();
+            }
+        }
+
+        /// <summary>
         /// The next frame, or null once the recording has stopped and the queue has
         /// been emptied. The caller owns the frame it is given.
         /// </summary>
@@ -612,7 +701,7 @@ public sealed class ScreenRecorder : IDisposable
             }
 
             var elapsed = _clock.Elapsed;
-            if (!_cadence.ShouldKeep(elapsed) || !_frames.Writer.TryWrite(new TimedFrame(frame, elapsed)))
+            if (_paused || !_cadence.ShouldKeep(elapsed) || !_frames.Writer.TryWrite(new TimedFrame(frame, elapsed)))
             {
                 frame.Dispose();
             }

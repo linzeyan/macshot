@@ -75,6 +75,45 @@ internal static class WindowExtensions
         SetForegroundWindow(WindowNative.GetWindowHandle(window));
     }
 
+    /// <summary>
+    /// Rounds a chromeless window's corners, and optionally puts a hairline round it —
+    /// the two things that tell a floating panel apart from the screen behind it.
+    /// </summary>
+    /// <param name="hairline">
+    /// A COLORREF (0x00BBGGRR) for the border, or null to leave the window unbordered.
+    /// </param>
+    /// <remarks>
+    /// DWM's, not drawn in the content: a WinUI window has no per-pixel transparency, so
+    /// a rounded border inside it would leave the window's own square corners showing
+    /// through behind the curve. That costs the exact radius — Windows' rather than
+    /// macshot's — and any alpha in the hairline, since the attribute takes none.
+    /// Windows 10 has neither attribute and fails harmlessly, leaving a square window.
+    /// </remarks>
+    public static void RoundCorners(this Window window, int? hairline = null)
+    {
+        var handle = WindowNative.GetWindowHandle(window);
+
+        var rounded = CornerPreferenceRound;
+        DwmSetWindowAttribute(handle, CornerPreference, ref rounded, sizeof(int));
+
+        if (hairline is { } colour)
+        {
+            DwmSetWindowAttribute(handle, BorderColour, ref colour, sizeof(int));
+        }
+    }
+
+    /// <summary>DWMWA_WINDOW_CORNER_PREFERENCE, Windows 11 and later.</summary>
+    private const int CornerPreference = 33;
+
+    /// <summary>DWMWCP_ROUND: the radius Windows rounds an ordinary window with.</summary>
+    private const int CornerPreferenceRound = 2;
+
+    /// <summary>DWMWA_BORDER_COLOR, Windows 11 and later.</summary>
+    private const int BorderColour = 34;
+
+    [DllImport("dwmapi.dll")]
+    private static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);
+
     [DllImport("user32.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool SetForegroundWindow(IntPtr window);

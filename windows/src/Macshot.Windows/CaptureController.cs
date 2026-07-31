@@ -938,7 +938,11 @@ public sealed class CaptureController : IDisposable
         using var cancellation = new CancellationTokenSource();
         var hud = new RecordingHudWindow();
         hud.StopRequested += (_, _) => cancellation.Cancel();
-        hud.ShowHud();
+        hud.PauseToggled += (_, held) => _recorder.SetPaused(held);
+
+        // The panel belongs to what is being recorded, so it is placed against the
+        // region — or against the whole display, when that is what is being recorded.
+        hud.ShowHud(request.Region ?? monitor.Bounds, monitor);
 
         var holdsEscape = _hotkeys.TryRegisterBareKey(
             HotkeyStopRecording,
