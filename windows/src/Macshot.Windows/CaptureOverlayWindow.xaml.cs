@@ -1916,7 +1916,12 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         await RunRecognitionAsync(lines =>
         {
-            var window = new TextRecognitionWindow(TextRecognizer.ToText(lines), _settings);
+            // With the capture, so the results window shows what the words were read
+            // out of — the overlay it came from is about to be dismissed.
+            var window = new TextRecognitionWindow(
+                TextRecognizer.ToText(lines),
+                _settings,
+                AnnotationCanvas.ToFrame());
 
             // The overlay is always on top, so the results window would open behind
             // it. Reading the text ends the capture, the same way it does on macOS.

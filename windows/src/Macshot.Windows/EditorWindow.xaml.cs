@@ -745,7 +745,10 @@ public sealed partial class EditorWindow : Window
     {
         await RunRecognitionAsync(lines =>
         {
-            var window = new TextRecognitionWindow(TextRecognizer.ToText(lines), _settings);
+            var window = new TextRecognitionWindow(
+                TextRecognizer.ToText(lines),
+                _settings,
+                AnnotationCanvas.ToFrame() ?? _frame);
             window.Activate();
         });
     }

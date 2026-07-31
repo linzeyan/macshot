@@ -1,8 +1,11 @@
 using Macshot.Windows.Core.Recognition;
 using Macshot.Windows.Services;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.ApplicationModel.DataTransfer;
+using Windows.Graphics;
 
 namespace Macshot.Windows;
 
@@ -31,7 +34,24 @@ public sealed partial class TextRecognitionWindow : Window
     /// </summary>
     private readonly CancellationTokenSource _closing = new();
 
-    public TextRecognitionWindow(string text, SettingsStore settings)
+    /// <summary>macshot's window, in its size.</summary>
+    private const double WidthDips = 720;
+
+    private const double HeightDips = 460;
+
+    /// <summary>
+    /// Below this the preview and the words are both too narrow to read, so the window
+    /// will not go there.
+    /// </summary>
+    private const double MinimumWidthDips = 480;
+
+    private const double MinimumHeightDips = 300;
+
+    /// <param name="source">
+    /// The capture the text was read out of, shown down the left. Null leaves the pane
+    /// out, as macshot does when it has no image to put there.
+    /// </param>
+    public TextRecognitionWindow(string text, SettingsStore settings, CapturedFrame? source = null)
     {
         // Checked in both builds even though only one keeps it: the caller passing null
         // is a defect either way, and it should not be a defect that only shows up in
@@ -44,20 +64,82 @@ public sealed partial class TextRecognitionWindow : Window
         InitializeComponent();
         RecognizedTextBox.Text = text ?? string.Empty;
         StatusText.Text = string.IsNullOrWhiteSpace(text) ? "No text was recognized." : string.Empty;
+        ShowCount(text ?? string.Empty);
 
-        this.GetAppWindow().UseAppIcon();
+        var appWindow = this.GetAppWindow();
+        appWindow.UseAppIcon();
+        Resize(appWindow);
         Closed += (_, _) => _closing.Cancel();
+
+        if (source is null)
+        {
+            // Collapsed rather than left empty: a 240-wide black column with nothing in
+            // it reads as a preview that failed to load.
+            PreviewPane.Visibility = Visibility.Collapsed;
+            PreviewSeparator.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            // Not awaited: the words are the point of the window and are already in it,
+            // and a picture that arrives a frame later is not worth delaying them for.
+            _ = ShowPreviewAsync(source);
+        }
 
 #if OFFLINE
         // Nothing to show it with: the request is not in this build. Collapsed rather
         // than disabled, because a greyed-out Translate button reads as a feature that
         // is temporarily unavailable rather than one this build does not have.
-        TranslateRow.Visibility = Visibility.Collapsed;
+        TranslateLabel.Visibility = Visibility.Collapsed;
+        TargetLanguageBox.Visibility = Visibility.Collapsed;
+        TranslateButton.Visibility = Visibility.Collapsed;
 #else
         TargetLanguageBox.ItemsSource = TranslationLanguages.All;
         TargetLanguageBox.SelectedIndex =
             TranslationLanguages.IndexOf(_settings.Current.TranslateTargetLanguage);
 #endif
+    }
+
+    /// <summary>
+    /// How much was read, which is the quickest way to tell "OCR found nothing" from
+    /// "OCR found a page and it scrolled off the top".
+    /// </summary>
+    private void ShowCount(string text)
+    {
+        var words = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
+        CountText.Text = $"{text.Length} chars · {words} words";
+    }
+
+    private async Task ShowPreviewAsync(CapturedFrame source)
+    {
+        try
+        {
+            var bitmap = new SoftwareBitmapSource();
+            await bitmap.SetBitmapAsync(source.ToSoftwareBitmap());
+            PreviewImage.Source = bitmap;
+        }
+        catch (Exception exception)
+        {
+            // The text is the window's job; the picture beside it is context. Losing it
+            // is worth a line in the log and nothing else.
+            DiagnosticLog.Write($"Could not show the recognized capture: {exception.Message}");
+            PreviewPane.Visibility = Visibility.Collapsed;
+            PreviewSeparator.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private static void Resize(AppWindow appWindow)
+    {
+        var monitor = MonitorEnumerator.Enumerate().Layout.Primary;
+
+        if (appWindow.Presenter is OverlappedPresenter presenter)
+        {
+            presenter.PreferredMinimumWidth = (int)MinimumWidthDips;
+            presenter.PreferredMinimumHeight = (int)MinimumHeightDips;
+        }
+
+        appWindow.Resize(new SizeInt32(
+            (int)(WidthDips * monitor.Scale),
+            (int)(HeightDips * monitor.Scale)));
     }
 
     private void Copy_Click(object sender, RoutedEventArgs e)
@@ -134,6 +216,7 @@ public sealed partial class TextRecognitionWindow : Window
             if (outcome.Text is { } translated)
             {
                 RecognizedTextBox.Text = translated;
+                ShowCount(translated);
                 StatusText.Text = $"Translated into {TranslationLanguages.All[TranslationLanguages.IndexOf(target)].Name}.";
             }
             else
