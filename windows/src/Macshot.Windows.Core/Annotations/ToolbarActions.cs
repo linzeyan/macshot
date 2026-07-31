@@ -26,6 +26,9 @@ public enum ToolbarCommand
     Copy,
     Save,
 
+    /// <summary>Hand it to another program through the system's share pane.</summary>
+    Share,
+
     /// <summary>Leave it on top of everything as a floating window.</summary>
     Pin,
 
@@ -191,6 +194,7 @@ public static class ToolbarActions
 
         items.Add(new ToolbarItem(ToolbarCommand.Copy, "Copy"));
         items.Add(new ToolbarItem(ToolbarCommand.Save, "Save"));
+        items.Add(new ToolbarItem(ToolbarCommand.Share, "Share"));
         items.Add(new ToolbarItem(ToolbarCommand.Pin, "Pin on top"));
         items.Add(new ToolbarItem(ToolbarCommand.ReadText, "Read the text in it"));
         if (translation)

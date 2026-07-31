@@ -124,6 +124,17 @@ internal static class ToolbarIcons
             canvas.Children.Add(Stroke(4.5, 11, 8.5, 11));
             break;
 
+        case ToolbarCommand.Share:
+            // A box with something leaving it upwards, which is the share glyph on both
+            // systems: macshot's square.and.arrow.up is the same drawing.
+            canvas.Children.Add(Stroke(3, 8, 3, 14));
+            canvas.Children.Add(Stroke(3, 14, 13, 14));
+            canvas.Children.Add(Stroke(13, 8, 13, 14));
+            canvas.Children.Add(Stroke(8, 2, 8, 10));
+            canvas.Children.Add(Stroke(8, 2, 5.5, 4.5));
+            canvas.Children.Add(Stroke(8, 2, 10.5, 4.5));
+            break;
+
         case ToolbarCommand.Translate:
             // Two scripts side by side — a Latin A and a mark built the way a CJK
             // character is — which is what the button turns one into. An arrow between

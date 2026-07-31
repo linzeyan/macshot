@@ -1655,6 +1655,10 @@ public sealed partial class CaptureOverlayWindow : Window
                 _ = CompleteAsync(CaptureOutcome.Pin);
                 return;
 
+            case ToolbarCommand.Share:
+                _ = ShareAsync();
+                return;
+
             default:
                 // Choosing a tool and choosing a colour are the toolbar's own business
                 // and never reach the host.
@@ -1897,6 +1901,42 @@ public sealed partial class CaptureOverlayWindow : Window
             RenderAnnotations();
             Hint($"Redacted {annotations.Count} • Ctrl+Z to undo • Enter to finish");
         });
+    }
+
+    /// <summary>
+    /// Opens the system share pane over the capture.
+    /// </summary>
+    /// <remarks>
+    /// The overlay stays up until a target is picked, and only then ends the capture.
+    /// The pane belongs to this window, so dismissing the overlay first would take the
+    /// pane down with it — which is also why this is not one of the outcomes
+    /// <see cref="CompleteAsync"/> delivers.
+    /// </remarks>
+    private async Task ShareAsync()
+    {
+        if (!IsAnnotating)
+        {
+            return;
+        }
+
+        await AnnotationCanvas.FlushAsync();
+        if (Finished() is not { } finished)
+        {
+            return;
+        }
+
+        try
+        {
+            await ShareSheet.ShowAsync(
+                this,
+                finished,
+                _settings.Current,
+                () => Cancelled?.Invoke(this, EventArgs.Empty));
+        }
+        catch (Exception exception)
+        {
+            Hint(exception.Message);
+        }
     }
 
 #if !OFFLINE

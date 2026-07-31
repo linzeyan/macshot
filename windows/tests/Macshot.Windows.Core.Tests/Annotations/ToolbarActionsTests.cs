@@ -130,6 +130,22 @@ public sealed class ToolbarActionsTests
     }
 
     [TestMethod]
+    public void Share_FollowsSaving_InBothHosts()
+    {
+        // macshot puts it between saving and pinning, and it is offered wherever there
+        // are finished pixels — the editor has those too.
+        foreach (var editorMode in new[] { false, true })
+        {
+            var items = ToolbarActions.Actions(editorMode).Select(item => item.Command).ToArray();
+
+            Assert.AreEqual(
+                Array.IndexOf(items, ToolbarCommand.Save) + 1,
+                Array.IndexOf(items, ToolbarCommand.Share),
+                $"editorMode {editorMode}");
+        }
+    }
+
+    [TestMethod]
     public void Translate_FollowsReadingTheText_AndIsAbsentWithoutATranslator()
     {
         // macshot's own order: pin, read, translate, then the two that aim at a live

@@ -188,6 +188,10 @@ public sealed partial class EditorWindow : Window
                 _ = CopyAsync();
                 return;
 
+            case ToolbarCommand.Share:
+                _ = ShareAsync();
+                return;
+
             case ToolbarCommand.Save:
                 _ = SaveAsync();
                 return;
@@ -782,6 +786,27 @@ public sealed partial class EditorWindow : Window
             {
                 await ImageDelivery.CopyToClipboardAsync(finished);
                 HintText.Text = "Copied to the clipboard";
+            }
+        }
+        catch (Exception exception)
+        {
+            HintText.Text = exception.Message;
+        }
+    }
+
+    /// <summary>
+    /// Opens the system share pane over the editor. The window stays open afterwards:
+    /// unlike the overlay there is nothing here to dismiss, and the image is still
+    /// being worked on.
+    /// </summary>
+    private async Task ShareAsync()
+    {
+        try
+        {
+            await AnnotationCanvas.FlushAsync();
+            if (AnnotationCanvas.ToFrame() is { } finished)
+            {
+                await ShareSheet.ShowAsync(this, finished, _settings.Current);
             }
         }
         catch (Exception exception)
