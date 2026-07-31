@@ -1,7 +1,9 @@
 using Macshot.Windows.Core.Capture;
+using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Input;
 
 using Windows.System;
@@ -29,11 +31,21 @@ public readonly record struct SizeRequest(double Width, double Height, SizedDime
 internal sealed partial class ResolutionBox : UserControl
 {
     private const double FieldWidth = 56;
-    private const double FieldHeight = 24;
+    private const double FieldHeight = 22;
     private const double Gap = 4;
     private const double Pad = 6;
     private const double TimesWidth = 12;
     private const double PresetsWidth = 30;
+
+    /// <summary>
+    /// The numbers, at macshot's size and weight — ResolutionBoxView.swift:67. Tabular
+    /// figures with it, which is what monospacedDigitSystemFont means there: a width that
+    /// changes as the digits change makes the reading jitter under a drag.
+    /// </summary>
+    private const double FieldFontSize = 12;
+
+    /// <summary>The multiplication sign, a point larger than the numbers — `:46`.</summary>
+    private const double TimesFontSize = 13;
 
     private readonly TextBox _width = Field();
     private readonly TextBox _height = Field();
@@ -64,6 +76,7 @@ internal sealed partial class ResolutionBox : UserControl
         {
             Text = "×",
             Width = TimesWidth,
+            FontSize = TimesFontSize,
             TextAlignment = TextAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             Foreground = ToolbarPalette.IconBrush(0.55),
@@ -146,16 +159,27 @@ internal sealed partial class ResolutionBox : UserControl
         _height.Text = _shownHeight.ToString("0", System.Globalization.CultureInfo.CurrentCulture);
     }
 
-    private static TextBox Field() => new()
+    private static TextBox Field()
     {
-        Width = FieldWidth,
-        Height = FieldHeight,
-        MinHeight = FieldHeight,
-        Padding = new Thickness(4, 0, 4, 0),
-        TextAlignment = TextAlignment.Center,
-        VerticalAlignment = VerticalAlignment.Center,
-        VerticalContentAlignment = VerticalAlignment.Center,
-    };
+        var field = new TextBox
+        {
+            Width = FieldWidth,
+            Height = FieldHeight,
+            MinHeight = FieldHeight,
+            Padding = new Thickness(4, 0, 4, 0),
+            FontSize = FieldFontSize,
+            FontWeight = FontWeights.Medium,
+            TextAlignment = TextAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            VerticalContentAlignment = VerticalAlignment.Center,
+        };
+
+        // The whole reason macshot sets a monospaced-digit font here: the numbers are
+        // rewritten on every pointer move during a drag, and figures of different widths
+        // make the reading dance.
+        Typography.SetNumeralAlignment(field, FontNumeralAlignment.Tabular);
+        return field;
+    }
 
     private MenuFlyout BuildPresets()
     {

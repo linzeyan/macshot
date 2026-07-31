@@ -38,11 +38,13 @@ namespace Macshot.Windows;
 public sealed partial class AnnotationToolbarView : UserControl
 {
     /// <summary>
-    /// How tall the options row is. Fixed rather than measured, because the strips are
-    /// placed before WinUI has laid anything out and a row that reported its height one
-    /// frame late would leave the tools jumping.
+    /// How tall the options row is. macshot's 34 — ToolOptionsRowView.swift:13 — which
+    /// with <see cref="ToolbarPlacement.RowGap"/> makes the 38 it reserves for the pair.
+    /// Fixed rather than measured, because the strips are placed before WinUI has laid
+    /// anything out and a row that reported its height one frame late would leave the
+    /// tools jumping.
     /// </summary>
-    private const double OptionsRowHeight = 40;
+    private const double OptionsRowHeight = 34;
 
     private readonly Canvas _surface = new();
     private readonly ToolbarStrip _tools = new(Orientation.Horizontal);

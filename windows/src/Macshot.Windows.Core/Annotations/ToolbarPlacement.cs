@@ -49,8 +49,11 @@ public static class ToolbarPlacement
     /// <summary>How close to the screen edge a strip may be placed.</summary>
     public const double ScreenMargin = 4;
 
-    /// <summary>The gap between the tool strip and the options row under it.</summary>
-    public const double RowGap = 2;
+    /// <summary>
+    /// The gap between the tool strip and the options row under it. macshot reserves 38
+    /// for the pair — a 34 row and 4 of gap — so this is that 4.
+    /// </summary>
+    public const double RowGap = 4;
 
     /// <summary>
     /// How much room the actions strip needs beside the selection before it is put
