@@ -94,3 +94,11 @@ and test Core:
 ```bash
 dotnet test windows/tests/Macshot.Windows.Core.Tests/Macshot.Windows.Core.Tests.csproj -c Release
 ```
+
+Anything you change under `src/Macshot.Windows` is unverified until CI is green.
+Some of it is valid-looking C# and XAML that only the Windows markup compiler
+rejects — a `Window` has no `Resources`, a member must not share a name with one
+`Window` already has, and a public property of a type XAML instantiates cannot be
+`init`. Those and the rest are in
+[`docs/windows-port/build.md`](../docs/windows-port/build.md), under "Traps that
+only a Windows build finds"; each one there cost a CI round trip to learn.
