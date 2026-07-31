@@ -63,6 +63,52 @@ public sealed class PiiDetectorTests
     }
 
     [TestMethod]
+    public void Detect_FindsASocialSecurityNumberOcrReadWithSpaces()
+    {
+        // The pattern insisted on hyphens. OCR reads a hyphen as a space often
+        // enough that this was a number left in the clear on a real screenshot.
+        AssertFinds(PiiKind.SocialSecurityNumber, "SSN 123 45 6789");
+    }
+
+    /// <summary>
+    /// The pattern the feature exists for. A developer screenshots a terminal, a
+    /// <c>.env</c>, or a config page; none of the other patterns here match a line of
+    /// one, so before this the redactor covered nothing on the capture most worth
+    /// covering.
+    /// </summary>
+    [TestMethod]
+    public void Detect_FindsASecretWrittenAsAnAssignment()
+    {
+        AssertFinds(PiiKind.SecretAssignment, "api_key = sk_live_9f2b7c1d");
+        AssertFinds(PiiKind.SecretAssignment, "PASSWORD: hunter2please");
+        AssertFinds(PiiKind.SecretAssignment, "private-key=MIIEvQIBADANBg");
+    }
+
+    [TestMethod]
+    public void Detect_FindsALongRunOfHex()
+    {
+        AssertFinds(PiiKind.HexKey, "token 9f2b7c1d4e6a8b0c2d4e6f8a0b2c4d6e");
+    }
+
+    [TestMethod]
+    public void Detect_LeavesShortHexAlone()
+    {
+        // A colour, a short id, a git prefix. Thirty-two is where a run stops
+        // being something a person typed and starts being something a machine issued.
+        Assert.IsFalse(PiiDetector.Detect("colour #1f1f1f and build ab12cd34")
+            .Any(match => match.Kind == PiiKind.HexKey));
+    }
+
+    [TestMethod]
+    public void Detect_FindsTheRestOfACard()
+    {
+        // A redacted card number with its security code and expiry still showing
+        // gives back most of what covering the number was for.
+        AssertFinds(PiiKind.CardVerificationValue, "CVV: 4821");
+        AssertFinds(PiiKind.CardExpiry, "expires 09/2028");
+    }
+
+    [TestMethod]
     public void Detect_ReturnsNothingForTextWithoutSecrets()
     {
         Assert.AreEqual(0, PiiDetector.Detect("the quick brown fox").Count);

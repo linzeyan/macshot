@@ -57,6 +57,14 @@ public sealed record CaptureSettings
 
     public string FilenameTemplate { get; init; } = Output.FilenameTemplate.Default;
 
+    /// <summary>
+    /// What a recording is named. Separate from <see cref="FilenameTemplate"/> because
+    /// macshot keeps it separate — one template for both leaves a folder where the
+    /// videos and the screenshots cannot be told apart by name, which is what this
+    /// port did until it had a second template to use.
+    /// </summary>
+    public string RecordingFilenameTemplate { get; init; } = Output.FilenameTemplate.DefaultRecording;
+
     public bool CopyToClipboard { get; init; } = true;
 
     /// <summary>Writes the capture to <see cref="SaveDirectory"/> without asking.</summary>
@@ -365,6 +373,9 @@ public sealed record CaptureSettings
             FilenameTemplate = string.IsNullOrWhiteSpace(FilenameTemplate)
                 ? Output.FilenameTemplate.Default
                 : FilenameTemplate.Trim(),
+            RecordingFilenameTemplate = string.IsNullOrWhiteSpace(RecordingFilenameTemplate)
+                ? Output.FilenameTemplate.DefaultRecording
+                : RecordingFilenameTemplate.Trim(),
             ThumbnailSeconds = Math.Clamp(ThumbnailSeconds, MinThumbnailSeconds, MaxThumbnailSeconds),
 
             // Round-tripped through the parser so an unreadable colour becomes the

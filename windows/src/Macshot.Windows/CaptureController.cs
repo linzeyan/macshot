@@ -1047,7 +1047,7 @@ public sealed class CaptureController : IDisposable
         Directory.CreateDirectory(directory);
 
         var name = FilenameTemplate.ResolveUnique(
-            settings.FilenameTemplate,
+            settings.RecordingFilenameTemplate,
             DateTimeOffset.Now,
             format.FileExtension(),
             candidate => File.Exists(Path.Combine(directory, candidate)));

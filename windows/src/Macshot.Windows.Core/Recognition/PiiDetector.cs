@@ -8,9 +8,17 @@ public enum PiiKind
     Phone,
     SocialSecurityNumber,
     CreditCard,
+    CardVerificationValue,
+    CardExpiry,
     IpAddress,
     AwsAccessKey,
     BearerToken,
+
+    /// <summary>A secret written as <c>name = value</c>: the developer's screenshot.</summary>
+    SecretAssignment,
+
+    /// <summary>A long run of hex — an API key, a token, a hash.</summary>
+    HexKey,
 }
 
 public readonly record struct PiiMatch(PiiKind Kind, int Start, int Length, string Value);
@@ -44,9 +52,13 @@ public static partial class PiiDetector
     private static readonly (PiiKind Kind, Regex Pattern)[] Patterns =
     [
         (PiiKind.Email, EmailPattern()),
+        (PiiKind.SecretAssignment, SecretAssignmentPattern()),
         (PiiKind.AwsAccessKey, AwsAccessKeyPattern()),
         (PiiKind.BearerToken, BearerTokenPattern()),
+        (PiiKind.HexKey, HexKeyPattern()),
         (PiiKind.SocialSecurityNumber, SocialSecurityPattern()),
+        (PiiKind.CardVerificationValue, CardVerificationValuePattern()),
+        (PiiKind.CardExpiry, CardExpiryPattern()),
         (PiiKind.IpAddress, IpAddressPattern()),
         (PiiKind.CreditCard, CreditCardPattern()),
         (PiiKind.Phone, PhonePattern()),
@@ -126,8 +138,45 @@ public static partial class PiiDetector
     [GeneratedRegex(@"(?<![\w.])\+?\d[\d ().\-]{7,16}\d(?![\w.])", RegexOptions.None, MatchTimeoutMilliseconds)]
     private static partial Regex PhonePattern();
 
-    [GeneratedRegex(@"\b\d{3}-\d{2}-\d{4}\b", RegexOptions.None, MatchTimeoutMilliseconds)]
+    // Spaces as well as hyphens: OCR reads a hyphen as a space often enough that
+    // insisting on one is how a social security number gets left in the clear.
+    [GeneratedRegex(@"\b\d{3}[- ]\d{2}[- ]\d{4}\b", RegexOptions.None, MatchTimeoutMilliseconds)]
     private static partial Regex SocialSecurityPattern();
+
+    /// <summary>
+    /// A secret written out as an assignment. The pattern macshot has that this did
+    /// not, and the one the feature exists for: the screenshot a developer takes is
+    /// of a terminal, a <c>.env</c>, or a config file, and none of the other patterns
+    /// here match a line of one.
+    /// </summary>
+    [GeneratedRegex(
+        @"(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|private[_-]?key)\s*[:=]\s*\S+",
+        RegexOptions.IgnoreCase,
+        MatchTimeoutMilliseconds)]
+    private static partial Regex SecretAssignmentPattern();
+
+    /// <summary>
+    /// Thirty-two hex characters or more: an API key, a session token, a hash. Long
+    /// enough that ordinary prose and ordinary identifiers do not reach it.
+    /// </summary>
+    [GeneratedRegex(@"\b[0-9a-fA-F]{32,}\b", RegexOptions.None, MatchTimeoutMilliseconds)]
+    private static partial Regex HexKeyPattern();
+
+    /// <summary>
+    /// A card's security code, which is only ever a secret when it is labelled — three
+    /// digits on their own are a page number. The label is the pattern.
+    /// </summary>
+    [GeneratedRegex(@"(?:CVV|CVC|CSC|CCV)\s*:?\s*\d{3,4}", RegexOptions.IgnoreCase, MatchTimeoutMilliseconds)]
+    private static partial Regex CardVerificationValuePattern();
+
+    /// <summary>
+    /// A card's expiry date. Over-matches by design — it cannot tell 09/28 from any
+    /// other pair of numbers with a slash — and macshot accepts the same trade, because
+    /// an expiry left showing beside a redacted card number gives back part of what
+    /// was covered.
+    /// </summary>
+    [GeneratedRegex(@"\b(?:\d{2}[/\-]\d{2,4}|\d{4}[/\-]\d{2})\b", RegexOptions.None, MatchTimeoutMilliseconds)]
+    private static partial Regex CardExpiryPattern();
 
     [GeneratedRegex(@"\b\d(?:[ \-]?\d){12,18}\b", RegexOptions.None, MatchTimeoutMilliseconds)]
     private static partial Regex CreditCardPattern();

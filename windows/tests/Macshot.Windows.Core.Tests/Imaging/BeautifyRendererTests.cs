@@ -99,6 +99,36 @@ public sealed class BeautifyRendererTests
         Assert.IsTrue(under.Blue < clear.Blue, "The shadow should darken the background beneath the card.");
     }
 
+    /// <summary>
+    /// One soft shadow reads as a card hovering some way above the background. What
+    /// puts it down on the background is a second, tighter shadow right under the
+    /// edge — macshot casts both, and this cast only the ambient one. The two
+    /// compositing is the whole effect, so the test is that the darkness immediately
+    /// below the edge exceeds what the ambient shadow's own opacity could produce.
+    /// </summary>
+    [TestMethod]
+    public void Render_DeepensTheShadowWhereTheCardMeetsTheBackground()
+    {
+        const double opacity = 0.5;
+        var lit = new BeautifyOptions(Padding: 0.25, CornerRadius: 0, ShadowRadius: 0, ShadowOpacity: 0);
+        var shaded = lit with { ShadowRadius = 0.1, ShadowOpacity = opacity };
+
+        var (width, _, withoutShadow) = BeautifyRenderer.Render(80, 80, Solid(80, 80, 255, 255, 255), lit);
+        var (_, _, withShadow) = BeautifyRenderer.Render(80, 80, Solid(80, 80, 255, 255, 255), shaded);
+
+        // The padding is a quarter of 80, so the card runs to row 99 and row 100 is the
+        // first background row under its bottom edge.
+        var clear = At(withoutShadow, width, width / 2, 100);
+        var under = At(withShadow, width, width / 2, 100);
+
+        Assert.IsTrue(clear.Blue > 0, "The reference pixel has to be lit for the ratio to mean anything.");
+
+        var darkness = 1 - ((double)under.Blue / clear.Blue);
+        Assert.IsTrue(
+            darkness > opacity + 0.05,
+            $"Only the ambient shadow appears to be cast: darkness {darkness:F3} is no more than its opacity {opacity}.");
+    }
+
     [TestMethod]
     public void Sample_RunsFromTheFirstStopToTheLast()
     {

@@ -161,7 +161,16 @@ public static class BeautifyRenderer
 
         // The shadow falls downwards, the way a card lifted off the page would cast
         // one. Tied to its own radius, so softening it also moves it.
-        var shadowOffset = shadow * 0.4;
+        var shadowOffset = shadow * AmbientOffsetRatio;
+
+        // And a second, tighter one right under the edge. One soft shadow alone reads
+        // as a card floating some distance above the background; the contact shadow is
+        // what puts it down on it. macshot casts both — BeautifyRenderer.swift:538–555 —
+        // and the ratios here are its own at its default radius, carried over as
+        // fractions so they survive this port measuring everything against the capture's
+        // shorter side rather than in points.
+        var contactBlur = shadow * ContactBlurRatio;
+        var contactOffset = shadowOffset * ContactOffsetRatio;
 
         for (var row = 0; row < outputHeight; row++)
         {
@@ -180,11 +189,23 @@ public static class BeautifyRenderer
 
                 if (shadow > 0 && resolved.ShadowOpacity > 0)
                 {
-                    var shadowDistance = RoundedBoxDistance(pixelX, pixelY - shadowOffset, width, height, radius);
-                    var cast = 1 - Smoothstep(0, shadow, shadowDistance);
-                    if (cast > 0)
+                    // Cast in the order they sit: the wide ambient one first, the tight
+                    // contact one over it, so the darkest part of the result is the few
+                    // pixels directly under the edge.
+                    var ambient = 1 - Smoothstep(
+                        0,
+                        shadow,
+                        RoundedBoxDistance(pixelX, pixelY - shadowOffset, width, height, radius));
+                    var contact = 1 - Smoothstep(
+                        0,
+                        contactBlur,
+                        RoundedBoxDistance(pixelX, pixelY - contactOffset, width, height, radius));
+
+                    var strength = Over(
+                        ambient * resolved.ShadowOpacity,
+                        contact * resolved.ShadowOpacity * ContactOpacityRatio);
+                    if (strength > 0)
                     {
-                        var strength = cast * resolved.ShadowOpacity;
                         blue = Blend(blue, 0, strength);
                         green = Blend(green, 0, strength);
                         red = Blend(red, 0, strength);
@@ -216,7 +237,31 @@ public static class BeautifyRenderer
         return (outputWidth, outputHeight, output);
     }
 
+    /// <summary>How far the ambient shadow falls, as a fraction of how soft it is.</summary>
+    private const double AmbientOffsetRatio = 0.4;
+
+    /// <summary>
+    /// The contact shadow against the ambient one. macshot's blur is
+    /// <c>min(4 + 0.18r, 16)</c> against an ambient blur of <c>r</c>, its offset
+    /// <c>min(2 + 0.12r, 10)</c> against <c>min(4 + 0.35r, 18)</c>, and its alpha
+    /// <c>0.20 + 0.30t</c> against <c>0.42 + 0.38t</c> — <c>BeautifyRenderer.swift:493–518</c>.
+    /// Taken at its default radius of 20, which is the shape those three curves hold
+    /// across the range that matters.
+    /// </summary>
+    private const double ContactBlurRatio = 0.38;
+
+    private const double ContactOffsetRatio = 0.4;
+
+    private const double ContactOpacityRatio = 0.52;
+
     private static AnnotationColor Rgb(byte red, byte green, byte blue) => new(red, green, blue);
+
+    /// <summary>
+    /// Two coverages stacked. Added rather than composited would let the pair reach
+    /// full black where each alone is faint, which is a dark ring rather than a shadow.
+    /// </summary>
+    private static double Over(double under, double over) =>
+        Math.Clamp(under + (over * (1 - under)), 0, 1);
 
     /// <summary>
     /// How far along the gradient a pixel sits, as a fraction, by projecting it onto

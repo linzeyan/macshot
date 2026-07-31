@@ -26,18 +26,46 @@ public sealed record RecordingPlan
     public const int DefaultFrameRate = 30;
 
     public const int MinFrameRate = 5;
-    public const int MaxFrameRate = 60;
-
-    public const uint MinBitrate = 1_000_000;
-    public const uint MaxBitrate = 40_000_000;
 
     /// <summary>
-    /// Bits spent per pixel per frame. Screen content is flat colour and sharp edges
-    /// rather than film grain, so it compresses far better than camera video of the
-    /// same size; this is the rate at which text stays readable without the file
-    /// growing faster than anyone wants to keep it.
+    /// macshot offers 15, 24, 30, 60 and 120 — <c>SettingsWindowController.swift:1551</c>.
+    /// 120 is for recording a UI animation, which is the case the setting exists for.
     /// </summary>
-    private const double BitsPerPixel = 0.1;
+    public const int MaxFrameRate = 120;
+
+    public const uint MinBitrate = 10_000_000;
+    public const uint MaxBitrate = 80_000_000;
+
+    /// <summary>
+    /// Bits spent per pixel per frame, and the number this file used to get wrong.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// It was 0.1 here on the reasoning that screen content is flat colour and sharp
+    /// edges rather than film grain, so it compresses better than camera video. The
+    /// first half of that is true and the conclusion does not follow: H.264's
+    /// psy-tuned DCT softens exactly those high-contrast edges below roughly 0.30, so
+    /// "low entropy UI" stops being true the moment anything scrolls. macshot says so
+    /// in as many words — <c>VideoEncodingSettings.swift:8–15</c> — and records at
+    /// 0.40, which is what this is now.
+    /// </para>
+    /// <para>
+    /// macshot has three tiers and uses <c>.high</c> for every screen recording
+    /// (<c>RecordingEngine.swift:461</c>); the other two are for exporting from its
+    /// video editor, which this port does not have. So there is one tier here rather
+    /// than a setting nobody would find, and it is the one macshot actually records at.
+    /// </para>
+    /// </remarks>
+    private const double BitsPerPixelPerFrame = 0.40;
+
+    /// <summary>
+    /// Where the taper starts, and what it costs. A 4K capture at 0.40 asks for more
+    /// than anyone wants to keep, and the extra bits buy least where there are most
+    /// pixels to hide them in — macshot's own bands, <c>VideoEncodingSettings.swift:122–129</c>.
+    /// </summary>
+    private const long FullHdPixels = 1920L * 1080;
+
+    private const long UltraHdPixels = 3840L * 2160;
 
     private RecordingPlan(int width, int height, int frameRate, uint bitrate)
     {
@@ -77,7 +105,9 @@ public sealed record RecordingPlan
         var width = ToEven(sourceWidth);
         var height = ToEven(sourceHeight);
         var rate = Math.Clamp(frameRate, MinFrameRate, MaxFrameRate);
-        var bitrate = (double)width * height * rate * BitsPerPixel;
+
+        var pixels = (long)width * height;
+        var bitrate = pixels * rate * BitsPerPixelPerFrame * Taper(pixels);
 
         return new RecordingPlan(
             width,
@@ -85,6 +115,18 @@ public sealed record RecordingPlan
             rate,
             (uint)Math.Clamp(bitrate, MinBitrate, MaxBitrate));
     }
+
+    /// <summary>
+    /// What the bitrate is multiplied by at this many pixels. Stepped rather than
+    /// continuous because macshot's is, and a recording made on one machine should
+    /// not be a different size from the same recording made on the other.
+    /// </summary>
+    private static double Taper(long pixels) => pixels switch
+    {
+        > UltraHdPixels => 0.80,
+        > FullHdPixels => 0.92,
+        _ => 1.0,
+    };
 
     /// <summary>
     /// The next even number at or below <paramref name="value"/>, but never zero: a

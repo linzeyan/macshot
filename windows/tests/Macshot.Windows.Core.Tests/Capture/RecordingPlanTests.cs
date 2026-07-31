@@ -44,6 +44,48 @@ public sealed class RecordingPlanTests
     }
 
     [TestMethod]
+    public void Resolve_SpendsWhatMacshotSpendsOnAnOrdinaryRecording()
+    {
+        // 1080p30 is the common case and the one worth pinning to a number rather
+        // than to an inequality. macshot records screen content at 0.40 bits per
+        // pixel per frame because H.264 softens high-contrast edges below roughly
+        // 0.30 — this was 0.1 here, a quarter of it, and text came out mushy.
+        // 1920 * 1080 * 30 * 0.40, with no taper: 1080p is the band boundary, not
+        // past it.
+        Assert.AreEqual(24_883_200u, RecordingPlan.Resolve(1920, 1080, 30).Bitrate);
+    }
+
+    [TestMethod]
+    public void Resolve_AsksForFewerBitsPerPixelTheMorePixelsThereAre()
+    {
+        // Above 1080p and again above 4K the rate is tapered: the extra bits buy
+        // least where there are most pixels to hide them in, and an untapered 4K
+        // capture asks for a file nobody keeps. Compared per pixel per frame,
+        // because in absolute terms a bigger frame always costs more.
+        static double PerPixel(int width, int height)
+        {
+            var plan = RecordingPlan.Resolve(width, height, 30);
+            return (double)plan.Bitrate / ((long)plan.Width * plan.Height * plan.FrameRate);
+        }
+
+        var fullHd = PerPixel(1920, 1080);
+        var between = PerPixel(2560, 1440);
+        var ultraHd = PerPixel(3840, 2162);
+
+        Assert.IsTrue(between < fullHd, "Past 1080p the rate should taper.");
+        Assert.IsTrue(ultraHd < between, "Past 4K it should taper again.");
+    }
+
+    [TestMethod]
+    public void Resolve_TakesTheFrameRateMacshotOffersForAnimation()
+    {
+        // 120 is on macshot's frame-rate menu and the reason the setting exists:
+        // recording a UI animation. The ceiling here was 60, so asking for 120 got
+        // half of it.
+        Assert.AreEqual(120, RecordingPlan.Resolve(1280, 720, 120).FrameRate);
+    }
+
+    [TestMethod]
     public void Resolve_StaysInsideWhatIsWorthEncoding()
     {
         // A tiny window would otherwise ask for a bitrate no encoder takes
