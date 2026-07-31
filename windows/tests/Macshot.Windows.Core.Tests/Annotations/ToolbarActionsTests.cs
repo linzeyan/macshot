@@ -74,6 +74,53 @@ public sealed class ToolbarActionsTests
     }
 
     [TestMethod]
+    public void WhatChangesThePicture_ComesAfterWhatDrawsOnIt()
+    {
+        // macshot ends the bottom strip with the actions that rewrite the pixels rather
+        // than mark them — invert, adjust, beautify, remove background. Beautify is the
+        // only one the port has, so it has to land after undo and redo, where macshot's
+        // block begins, and not among the tools.
+        var commands = ToolbarActions.Tools(AnnotationTool.Arrow).Select(item => item.Command).ToArray();
+
+        Assert.IsTrue(
+            Array.IndexOf(commands, ToolbarCommand.Beautify) > Array.IndexOf(commands, ToolbarCommand.Redo),
+            "beautify belongs to the block after the undo pair, not among the tools");
+        Assert.IsTrue(
+            Array.IndexOf(commands, ToolbarCommand.Redact) > Array.IndexOf(commands, ToolbarCommand.Beautify),
+            "the port's own redact button follows macshot's block rather than sitting inside it");
+    }
+
+    [TestMethod]
+    public void TheBeautifyButton_SaysWhetherTheCaptureIsAlreadyFramed()
+    {
+        // Nothing in the overlay can show the frame — it is bigger than the region — so
+        // the lit button is the only thing that says the switch is on.
+        Assert.IsFalse(Beautify(ToolbarActions.Tools(AnnotationTool.Arrow)).IsSelected);
+        Assert.IsTrue(Beautify(ToolbarActions.Tools(AnnotationTool.Arrow, null, beautified: true)).IsSelected);
+
+        static ToolbarItem Beautify(IReadOnlyList<ToolbarItem> items) =>
+            items.Single(item => item.Command == ToolbarCommand.Beautify);
+    }
+
+    [TestMethod]
+    public void ScrollCaptureAndRecording_ComeLastAndOnlyOverALiveScreen()
+    {
+        var overlay = ToolbarActions.Actions(editorMode: false).Select(item => item.Command).ToArray();
+
+        Assert.AreEqual(ToolbarCommand.Record, overlay[^1], "macshot ends the strip with it");
+        Assert.AreEqual(ToolbarCommand.ScrollCapture, overlay[^2]);
+        Assert.IsTrue(
+            Array.IndexOf(overlay, ToolbarCommand.ScrollCapture) > Array.IndexOf(overlay, ToolbarCommand.ReadText),
+            "both follow the output actions, the way macshot orders them");
+
+        // There is no window behind an image in the editor to scroll, and nothing there
+        // to record: both aim at a screen that is still moving.
+        var editor = ToolbarActions.Actions(editorMode: true).Select(item => item.Command).ToArray();
+        CollectionAssert.DoesNotContain(editor, ToolbarCommand.ScrollCapture);
+        CollectionAssert.DoesNotContain(editor, ToolbarCommand.Record);
+    }
+
+    [TestMethod]
     public void ATurnedOffTool_IsNotOnTheStripAtAll()
     {
         var kept = new[] { AnnotationTool.Arrow, AnnotationTool.Text };

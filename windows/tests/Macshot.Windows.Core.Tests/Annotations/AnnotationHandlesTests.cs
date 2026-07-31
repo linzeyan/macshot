@@ -354,6 +354,37 @@ public sealed class AnnotationHandlesTests
         Assert.AreEqual(90, dragged.Span, 1e-9);
     }
 
+    [TestMethod]
+    public void RotationHandle_KeepsItsDistanceFromTheShapeAsTheDisplayScales()
+    {
+        // The reach is a distance the user's hand covers, so on a 200% display it has to
+        // be twice as many capture pixels to look the same and be as easy to grab. Left
+        // in frame pixels it would sit half as far off the shape, and the tether drawn to
+        // it would halve with it.
+        var rectangle = Shape(AnnotationTool.Rectangle, 10, 10, 60, 40);
+
+        var reach = 10 - AnnotationHandles.For(rectangle, 2)
+            .Single(handle => handle.Kind == AnnotationHandleKind.Rotate).Position.Y;
+
+        Assert.AreEqual(AnnotationHandles.RotateReach * 2, reach, 1e-9);
+    }
+
+    [TestMethod]
+    public void GrabbingAHandle_IsNoHarderOnAScaledDisplay()
+    {
+        // Ten layout units of slack, which on a 200% display is twenty capture pixels.
+        // Unscaled, the same-looking handle would take twice the accuracy to hit.
+        var rectangle = Shape(AnnotationTool.Rectangle, 100, 100, 300, 200);
+        var nearTheCorner = new CapturePoint(115, 100);
+
+        Assert.IsNull(
+            AnnotationHandles.At(rectangle, nearTheCorner),
+            "fifteen pixels out is beyond the ten a 100% display allows");
+        Assert.AreEqual(
+            AnnotationHandleKind.TopLeft,
+            AnnotationHandles.At(rectangle, nearTheCorner, 2)?.Kind);
+    }
+
     private static Annotation Shape(AnnotationTool tool, double startX, double startY, double endX, double endY) =>
         Annotation.Create(tool, new CapturePoint(startX, startY), new CapturePoint(endX, endY));
 

@@ -167,6 +167,13 @@ public sealed partial class EditorWindow : Window
                 _ = RedactPiiAsync();
                 return;
 
+            case ToolbarCommand.Beautify:
+                // The style last chosen from the Frame menu, which is where a different
+                // one is picked. One press for the usual answer, the menu for the rest —
+                // and the pixels change here and then, so Ctrl+Z is the way back.
+                FrameImage(_settings.Current.ToBeautifyOptions().StyleIndex);
+                return;
+
             case ToolbarCommand.Copy:
                 _ = CopyAsync();
                 return;
@@ -397,7 +404,8 @@ public sealed partial class EditorWindow : Window
             return;
         }
 
-        if (_editor.SelectionShown is { } shown && AnnotationHandles.At(shown, point) is { } handle)
+        if (_editor.SelectionShown is { } shown
+            && AnnotationHandles.At(shown, point, _editor.Scale) is { } handle)
         {
             InputCanvas.UseCursor(CursorHints.For(handle.Kind));
             return;

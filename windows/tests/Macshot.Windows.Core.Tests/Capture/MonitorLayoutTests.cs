@@ -138,6 +138,53 @@ public sealed class MonitorLayoutTests
         Assert.AreEqual(1080, monitor.DipHeight, 1e-9);
     }
 
+    [TestMethod]
+    public void ARegionRoundTripsBackToTheDesktopItWasChosenOn()
+    {
+        // What a recording and a scroll capture both need: the overlay chose the region
+        // in frame space, and a display or a window only knows where it is on the
+        // desktop. A layout with a display left of the primary is the case that catches
+        // a missing offset, because frame space starts there and virtual space does not.
+        var layout = new MonitorLayout(
+        [
+            new CaptureMonitor("left", new CaptureRegion(-1920, 0, 1920, 1080), 1),
+            new CaptureMonitor("primary", new CaptureRegion(0, 0, 1920, 1080), 1, IsPrimary: true),
+        ]);
+        var chosen = new CaptureRegion(-1600, 200, 400, 300);
+
+        var roundTripped = layout.FrameToVirtual(layout.VirtualToFrame(chosen));
+
+        Assert.AreEqual(chosen, roundTripped);
+    }
+
+    [TestMethod]
+    public void ARegionOnADisplay_IsOffsetToThatDisplaysOwnPixels()
+    {
+        // A capture item is one display, so a crop of it starts at the display's corner
+        // rather than at the virtual desktop's — which for a display right of the
+        // primary is 1920 pixels away.
+        var monitor = new CaptureMonitor("right", new CaptureRegion(1920, 0, 1920, 1080), 1);
+
+        var local = monitor.VirtualToLocal(new CaptureRegion(2020, 100, 400, 300));
+
+        Assert.AreEqual(new CaptureRegion(100, 100, 400, 300), local);
+    }
+
+    [TestMethod]
+    public void ARegionHangingOffTheDisplay_IsClippedToIt()
+    {
+        // The caller is about to index a buffer with it. A rectangle that overhangs the
+        // display would read past the end of the frame.
+        var monitor = new CaptureMonitor("only", new CaptureRegion(0, 0, 1920, 1080), 1);
+
+        Assert.AreEqual(
+            new CaptureRegion(1820, 980, 100, 100),
+            monitor.VirtualToLocal(new CaptureRegion(1820, 980, 400, 300)));
+        Assert.IsTrue(
+            monitor.VirtualToLocal(new CaptureRegion(4000, 0, 100, 100)).IsEmpty,
+            "a region on another display is not on this one at all");
+    }
+
     /// <summary>A 1920x1080 display at 100% with a 4K display at 200% to its right.</summary>
     private static MonitorLayout MixedDpiLayout()
     {

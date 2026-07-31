@@ -34,6 +34,15 @@ public enum ToolbarCommand
 
     /// <summary>Cover the personal details in it.</summary>
     Redact,
+
+    /// <summary>Put it on a gradient background.</summary>
+    Beautify,
+
+    /// <summary>Scroll what is behind the region and stitch the whole of it.</summary>
+    ScrollCapture,
+
+    /// <summary>Record the region as video rather than taking a still of it.</summary>
+    Record,
 }
 
 /// <summary>One button on a toolbar strip.</summary>
@@ -104,9 +113,14 @@ public static class ToolbarActions
     /// <param name="enabled">
     /// Which tools the user has kept, or null for all of them.
     /// </param>
+    /// <param name="beautified">
+    /// Whether the capture is already set to be framed, which lights the Beautify button
+    /// the way macshot tints its own.
+    /// </param>
     public static IReadOnlyList<ToolbarItem> Tools(
         AnnotationTool selected,
-        IReadOnlyCollection<AnnotationTool>? enabled = null)
+        IReadOnlyCollection<AnnotationTool>? enabled = null,
+        bool beautified = false)
     {
         var items = new List<ToolbarItem>(ToolOrder.Count + 3);
 
@@ -128,6 +142,12 @@ public static class ToolbarActions
         items.Add(new ToolbarItem(ToolbarCommand.PickColor, "Colour"));
         items.Add(new ToolbarItem(ToolbarCommand.Undo, "Undo"));
         items.Add(new ToolbarItem(ToolbarCommand.Redo, "Redo"));
+
+        // Then the actions that change the picture rather than draw on it. macshot lists
+        // four here — invert, adjust, beautify, remove background — of which Beautify is
+        // the only one the port has, so it keeps macshot's place among them and the
+        // port's own redact button follows the block rather than sitting inside it.
+        items.Add(new ToolbarItem(ToolbarCommand.Beautify, "Beautify", IsSelected: beautified));
         items.Add(new ToolbarItem(ToolbarCommand.Redact, "Cover personal details"));
 
         return items;
@@ -155,6 +175,14 @@ public static class ToolbarActions
         items.Add(new ToolbarItem(ToolbarCommand.Save, "Save"));
         items.Add(new ToolbarItem(ToolbarCommand.Pin, "Pin on top"));
         items.Add(new ToolbarItem(ToolbarCommand.ReadText, "Read the text in it"));
+
+        if (!editorMode)
+        {
+            // Last, in macshot's order. Both aim at a live screen: there is no window
+            // behind an image in the editor to scroll, and nothing there to record.
+            items.Add(new ToolbarItem(ToolbarCommand.ScrollCapture, "Scroll the window behind it"));
+            items.Add(new ToolbarItem(ToolbarCommand.Record, "Record the region"));
+        }
 
         return items;
     }

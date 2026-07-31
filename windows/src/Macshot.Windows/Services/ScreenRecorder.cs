@@ -80,18 +80,24 @@ public sealed class ScreenRecorder : IDisposable
     /// rather than throwing. The only failures raised are the ones that mean there is
     /// no file: no encoder, no capture item, nowhere to write.
     /// </remarks>
+    /// <param name="region">
+    /// The part of the display to keep, in that display's own pixels, or null for all
+    /// of it. There is no crop in the capture API, so a region costs the frames a trip
+    /// through main memory — see <see cref="CropperOrNull"/>.
+    /// </param>
     public Task<RecordingResult> RecordDisplayAsync(
         nint monitorHandle,
         string path,
         RecordingFormat format,
-        CancellationToken cancellation)
+        CancellationToken cancellation,
+        CaptureRegion? region = null)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         var item = GraphicsCaptureService.OpenDisplay(monitorHandle);
         return format == RecordingFormat.Gif
-            ? RecordGifAsync(item, path, cancellation)
-            : RecordMp4Async(item, path, cancellation);
+            ? RecordGifAsync(item, path, region, cancellation)
+            : RecordMp4Async(item, path, region, cancellation);
     }
 
     public void Dispose()
@@ -109,15 +115,17 @@ public sealed class ScreenRecorder : IDisposable
     private async Task<RecordingResult> RecordMp4Async(
         GraphicsCaptureItem item,
         string path,
+        CaptureRegion? region,
         CancellationToken cancellation)
     {
         var size = item.Size;
-        var plan = RecordingPlan.Resolve(size.Width, size.Height);
+        var crop = CropperOrNull(size, region);
+        var plan = RecordingPlan.Resolve(crop?.Width ?? size.Width, crop?.Height ?? size.Height);
         var kept = 0;
 
         using var frames = new FrameStream(Device(), item, plan.FrameInterval, cancellation);
 
-        var source = BuildSource(size);
+        var source = BuildSource(crop?.Width ?? size.Width, crop?.Height ?? size.Height);
         source.Starting += (_, args) =>
         {
             // Capture starts here rather than earlier, because here is when the
@@ -142,6 +150,18 @@ public sealed class ScreenRecorder : IDisposable
                 }
 
                 kept++;
+
+                if (crop is { } cropper)
+                {
+                    // A copy rather than the texture: the encoder is being handed a
+                    // rectangle that does not exist on the GPU. The frame is finished
+                    // with the moment the pixels are in memory.
+                    request.Sample = MediaStreamSample.CreateFromBuffer(
+                        await CropToBufferAsync(timed.Frame, cropper),
+                        timed.Timestamp);
+                    return;
+                }
+
                 var sample = MediaStreamSample.CreateFromDirect3D11Surface(timed.Frame.Surface, timed.Timestamp);
 
                 // The frame owns the texture the sample points at, so it stays alive
@@ -189,10 +209,12 @@ public sealed class ScreenRecorder : IDisposable
     private async Task<RecordingResult> RecordGifAsync(
         GraphicsCaptureItem item,
         string path,
+        CaptureRegion? region,
         CancellationToken cancellation)
     {
         var size = item.Size;
-        var plan = GifRecordingPlan.Resolve(size.Width, size.Height);
+        var crop = CropperOrNull(size, region);
+        var plan = GifRecordingPlan.Resolve(crop?.Width ?? size.Width, crop?.Height ?? size.Height);
         var timing = new GifFrameTiming();
 
         using var frames = new FrameStream(Device(), item, plan.FrameInterval, cancellation);
@@ -208,7 +230,7 @@ public sealed class ScreenRecorder : IDisposable
 
         while (written < GifRecordingPlan.MaximumFrames && await frames.NextAsync() is { } timed)
         {
-            var current = await ToGifFrameAsync(timed, plan);
+            var current = await ToGifFrameAsync(timed, plan, crop);
             if (previous is not null)
             {
                 await WriteGifFrameAsync(encoder, previous, timing.Next(current.Timestamp - previous.Timestamp), written, plan);
@@ -238,16 +260,17 @@ public sealed class ScreenRecorder : IDisposable
     private IDirect3DDevice Device() => _device ??= GraphicsCaptureService.CreateDirect3DDevice();
 
     /// <summary>
-    /// Describes the frames as they are captured: uncompressed BGRA, the size the item
-    /// actually is. Scaling to the encoded size is the transcoder's job, and claiming
-    /// a size the surfaces do not have would corrupt every frame.
+    /// Describes the frames as they are handed over: uncompressed BGRA, the size of
+    /// what is actually put in each sample — the whole item, or the crop of it. Scaling
+    /// to the encoded size is the transcoder's job, and claiming a size the samples do
+    /// not have would corrupt every frame.
     /// </summary>
-    private static MediaStreamSource BuildSource(SizeInt32 size)
+    private static MediaStreamSource BuildSource(int width, int height)
     {
         var properties = VideoEncodingProperties.CreateUncompressed(
             MediaEncodingSubtypes.Bgra8,
-            (uint)size.Width,
-            (uint)size.Height);
+            (uint)width,
+            (uint)height);
 
         return new MediaStreamSource(new VideoStreamDescriptor(properties))
         {
@@ -281,10 +304,97 @@ public sealed class ScreenRecorder : IDisposable
     }
 
     /// <summary>
-    /// Copies one captured frame down to the CPU and shrinks it to the size the GIF
-    /// is being written at.
+    /// The rectangle of the item a recording keeps, or null when it keeps all of it.
     /// </summary>
-    private static async Task<GifFrame> ToGifFrameAsync(TimedFrame timed, GifRecordingPlan plan)
+    /// <remarks>
+    /// <para>
+    /// Null rather than the whole item, because the difference is not cosmetic: with no
+    /// crop the MP4 path hands the compositor's texture straight to the encoder and the
+    /// pixels never touch the CPU, while a crop has to copy every frame down, cut the
+    /// rectangle out and hand back a buffer. That is what recording part of a display
+    /// costs, and it is only paid when part of one was asked for.
+    /// </para>
+    /// <para>
+    /// The rectangle comes back even-sided and inside the item, for the reason
+    /// <see cref="RecordingPlan"/> gives: H.264 stores colour at half resolution in each
+    /// direction, and the encoder refuses a profile with an odd dimension. Rounding the
+    /// source rather than only the profile keeps the two agreeing, which is what stops
+    /// the transcoder scaling a 401-pixel crop into a 400-pixel video.
+    /// </para>
+    /// </remarks>
+    private static RecordedArea? CropperOrNull(SizeInt32 size, CaptureRegion? region)
+    {
+        if (region is not { } wanted)
+        {
+            return null;
+        }
+
+        var inside = wanted.Intersect(new CaptureRegion(0, 0, size.Width, size.Height));
+        if (inside.IsEmpty)
+        {
+            throw new InvalidOperationException("That region is not on the display being recorded.");
+        }
+
+        var left = (int)Math.Floor(inside.X);
+        var top = (int)Math.Floor(inside.Y);
+        var width = Math.Max(2, (int)Math.Floor(inside.Right) - left);
+        var height = Math.Max(2, (int)Math.Floor(inside.Bottom) - top);
+        width -= width % 2;
+        height -= height % 2;
+
+        // Rounding a one-pixel sliver up to the two the encoder needs can push it off the
+        // edge it was clamped to, so the corner gives way rather than the size: the size
+        // is what the stream was told, and a sample short of it is a corrupt frame.
+        left = Math.Max(0, Math.Min(left, size.Width - width));
+        top = Math.Max(0, Math.Min(top, size.Height - height));
+
+        return left == 0 && top == 0 && width == size.Width && height == size.Height
+            ? null
+            : new RecordedArea(left, top, width, height);
+    }
+
+    /// <summary>
+    /// Copies one captured frame down to the CPU, cuts the recorded rectangle out of it,
+    /// and hands back a buffer the encoder can take a sample from.
+    /// </summary>
+    /// <remarks>
+    /// A frame the rectangle no longer fits in — the display's resolution changed under
+    /// the recording — is refused rather than cropped short. The stream declared a size
+    /// once and cannot take a smaller sample; the caller turns the refusal into the end
+    /// of the file, which keeps what was recorded up to that point.
+    /// </remarks>
+    private static async Task<IBuffer> CropToBufferAsync(Direct3D11CaptureFrame frame, RecordedArea crop)
+    {
+        using (frame)
+        {
+            using var bitmap = await SoftwareBitmap.CreateCopyFromSurfaceAsync(frame.Surface);
+
+            if (bitmap.PixelWidth < crop.Left + crop.Width || bitmap.PixelHeight < crop.Top + crop.Height)
+            {
+                throw new InvalidOperationException("The display changed size under the recording.");
+            }
+
+            var pixels = new byte[checked(bitmap.PixelWidth * bitmap.PixelHeight * 4)];
+            bitmap.CopyToBuffer(pixels.AsBuffer());
+
+            var (_, _, cropped) = FrameTransforms.Crop(
+                bitmap.PixelWidth,
+                bitmap.PixelHeight,
+                pixels,
+                crop.AsRegion);
+
+            return cropped.AsBuffer();
+        }
+    }
+
+    /// <summary>
+    /// Copies one captured frame down to the CPU, cuts the recorded rectangle out of it
+    /// if there is one, and shrinks it to the size the GIF is being written at.
+    /// </summary>
+    private static async Task<GifFrame> ToGifFrameAsync(
+        TimedFrame timed,
+        GifRecordingPlan plan,
+        RecordedArea? crop)
     {
         using (timed.Frame)
         {
@@ -293,8 +403,15 @@ public sealed class ScreenRecorder : IDisposable
             var pixels = new byte[checked(bitmap.PixelWidth * bitmap.PixelHeight * 4)];
             bitmap.CopyToBuffer(pixels.AsBuffer());
 
+            var width = bitmap.PixelWidth;
+            var height = bitmap.PixelHeight;
+            if (crop is { } cropper)
+            {
+                (width, height, pixels) = FrameTransforms.Crop(width, height, pixels, cropper.AsRegion);
+            }
+
             return new GifFrame(
-                FrameScaler.Downscale(pixels, bitmap.PixelWidth, bitmap.PixelHeight, plan.Width, plan.Height),
+                FrameScaler.Downscale(pixels, width, height, plan.Width, plan.Height),
                 timed.Timestamp);
         }
     }
@@ -366,6 +483,20 @@ public sealed class ScreenRecorder : IDisposable
         var folder = await StorageFolder.GetFolderFromPathAsync(directory);
         var file = await folder.CreateFileAsync(Path.GetFileName(path), CreationCollisionOption.ReplaceExisting);
         return await file.OpenAsync(FileAccessMode.ReadWrite);
+    }
+
+    /// <summary>
+    /// The part of a display a recording keeps, in that display's own pixels.
+    /// </summary>
+    /// <remarks>
+    /// Whole pixels rather than a <see cref="CaptureRegion"/>, because everything
+    /// downstream of it is counted in them: the encoder is told a width and a height,
+    /// the buffer is that many bytes, and a rectangle that could be half a pixel wide
+    /// would only be rounded again at each of those.
+    /// </remarks>
+    private readonly record struct RecordedArea(int Left, int Top, int Width, int Height)
+    {
+        public CaptureRegion AsRegion => new(Left, Top, Width, Height);
     }
 
     private sealed record TimedFrame(Direct3D11CaptureFrame Frame, TimeSpan Timestamp);

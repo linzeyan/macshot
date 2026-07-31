@@ -83,6 +83,8 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// </summary>
     private AnnotationTool _toolBeforeSampling = AnnotationTool.Arrow;
 
+    private bool _beautified;
+
     public AnnotationToolbarView()
     {
         _optionsContent = new StackPanel
@@ -140,6 +142,29 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// strips at fixed corners rather than around a selection.
     /// </summary>
     public bool EditorMode { get; set; }
+
+    /// <summary>
+    /// Whether the capture is set to be framed, which lights the Beautify button.
+    /// </summary>
+    /// <remarks>
+    /// The toolbar shows it rather than decides it: what beautifying means differs
+    /// between a live capture, where it is a thing the delivered image will have done to
+    /// it, and the editor, where it is done to the pixels the moment it is asked for.
+    /// </remarks>
+    public bool Beautified
+    {
+        get => _beautified;
+        set
+        {
+            if (_beautified == value)
+            {
+                return;
+            }
+
+            _beautified = value;
+            RefreshStrips();
+        }
+    }
 
     /// <summary>The emoji the stamp tool places.</summary>
     public string StampEmoji { get; private set; } = StampGlyph.Default;
@@ -479,7 +504,7 @@ public sealed partial class AnnotationToolbarView : UserControl
             return;
         }
 
-        _tools.SetItems(ToolbarActions.Tools(editor.Tool, _settings?.Current.EnabledTools()));
+        _tools.SetItems(ToolbarActions.Tools(editor.Tool, _settings?.Current.EnabledTools(), _beautified));
         _actions.SetItems(ToolbarActions.Actions(EditorMode));
         _tools.ShowSwatch(ToUiColor(editor.Style.Color));
         ShowOptionsFor(editor.Tool);

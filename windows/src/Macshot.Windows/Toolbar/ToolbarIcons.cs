@@ -126,6 +126,34 @@ internal static class ToolbarIcons
             canvas.Children.Add(Block(3, 7.5, 10, 3));
             break;
 
+        case ToolbarCommand.Beautify:
+            // A picture standing off its background, with the sparkle macshot's own
+            // button uses: the frame is what the action adds, the sparkle is why.
+            canvas.Children.Add(Frame(2, 5, 9, 9));
+            canvas.Children.Add(Stroke(13, 2, 13, 6));
+            canvas.Children.Add(Stroke(11, 4, 15, 4));
+            break;
+
+        case ToolbarCommand.ScrollCapture:
+            // A page longer than the view, with an arrow going on down it.
+            canvas.Children.Add(Frame(3, 2, 10, 7, opacity: 0.5));
+            canvas.Children.Add(Stroke(8, 8, 8, 14));
+            canvas.Children.Add(Stroke(8, 14, 5.5, 11.5));
+            canvas.Children.Add(Stroke(8, 14, 10.5, 11.5));
+            break;
+
+        case ToolbarCommand.Record:
+            // A filled circle, which is what every recorder anyone has used shows.
+            canvas.Children.Add(new Ellipse
+            {
+                Width = 9,
+                Height = 9,
+                Fill = ToolbarPalette.IconBrush(),
+                Margin = new Thickness(3.5, 3.5, 0, 0),
+            });
+            canvas.Children.Add(Ring(0.5, 15, 0.55));
+            break;
+
         default:
             return new TextBlock
             {

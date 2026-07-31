@@ -38,6 +38,7 @@ public sealed class AnnotationEditor
     private Annotation? _dragTarget;
     private AnnotationHandleKind? _handle;
     private bool _isPressed;
+    private double _scale = 1;
 
     public AnnotationEditor(AnnotationDocument document)
     {
@@ -67,6 +68,26 @@ public sealed class AnnotationEditor
     public AnnotationStyle Style { get; set; } = AnnotationStyle.Default;
 
     /// <summary>
+    /// Frame pixels to the layout unit on the surface being drawn on: one display's DPI
+    /// scaling over an overlay, and one over an image laid out at its own pixel size.
+    /// </summary>
+    /// <remarks>
+    /// Only the grab points read it, and only because they are sizes a hand aims at
+    /// rather than distances in the capture. Everything else here is in frame pixels
+    /// throughout, which is why this is a property of the editor and not a parameter on
+    /// every call.
+    /// </remarks>
+    public double Scale
+    {
+        get => _scale;
+        set
+        {
+            ArgumentOutOfRangeException.ThrowIfNegativeOrZero(value);
+            _scale = value;
+        }
+    }
+
+    /// <summary>
     /// Whether a finished freehand stroke has its corners rounded off. On by default,
     /// because a path sampled from a mouse is a staircase and nobody draws one on purpose.
     /// </summary>
@@ -89,7 +110,7 @@ public sealed class AnnotationEditor
     /// they are only grabbable then and chrome that cannot be used is chrome in the way.
     /// </summary>
     public IReadOnlyList<AnnotationHandle> Handles =>
-        _tool == AnnotationTool.Select && SelectionShown is { } shown ? AnnotationHandles.For(shown) : [];
+        _tool == AnnotationTool.Select && SelectionShown is { } shown ? AnnotationHandles.For(shown, _scale) : [];
 
     public bool IsDragging => _isPressed && Draft is not null;
 
@@ -313,7 +334,7 @@ public sealed class AnnotationEditor
         // The selected annotation's handles are tried before anything else, so a handle
         // can be grabbed even where a later mark covers it — otherwise reshaping the
         // rectangle under a stamp would be impossible without moving the stamp first.
-        if (Selected is { } selected && AnnotationHandles.At(selected, point) is { } handle)
+        if (Selected is { } selected && AnnotationHandles.At(selected, point, _scale) is { } handle)
         {
             _handle = handle.Kind;
             _dragTarget = selected;

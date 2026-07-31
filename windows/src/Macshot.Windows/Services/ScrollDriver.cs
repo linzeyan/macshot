@@ -56,7 +56,14 @@ public sealed class ScrollDriver
     /// has to run while macshot is the foreground app — from the click that starts
     /// the capture, not from a timer later on.
     /// </remarks>
-    public bool TryTakeOver(CaptureWindow window, out CapturePoint restoreCursorTo)
+    /// <param name="over">
+    /// Where to park the pointer, in virtual space, or null for the middle of the
+    /// window. A capture aimed at part of the window passes the middle of that part:
+    /// the wheel turns whatever pane is under the pointer, and the pane the user framed
+    /// is the one they meant to scroll — the middle of the window may be a different one
+    /// entirely.
+    /// </param>
+    public bool TryTakeOver(CaptureWindow window, out CapturePoint restoreCursorTo, CapturePoint? over = null)
     {
         restoreCursorTo = GetCursorPos(out var cursor)
             ? new CapturePoint(cursor.X, cursor.Y)
@@ -72,9 +79,8 @@ public sealed class ScrollDriver
         // The middle of the window, because that is where the scrollable content is
         // on almost anything: a corner is as likely to be a sidebar or a ruler, and
         // wheel input lands wherever the pointer actually is.
-        return SetCursorPos(
-            (int)(bounds.X + (bounds.Width / 2)),
-            (int)(bounds.Y + (bounds.Height / 2)));
+        var at = over ?? new CapturePoint(bounds.X + (bounds.Width / 2), bounds.Y + (bounds.Height / 2));
+        return SetCursorPos((int)at.X, (int)at.Y);
     }
 
     /// <summary>Sends one step's worth of wheel-down.</summary>

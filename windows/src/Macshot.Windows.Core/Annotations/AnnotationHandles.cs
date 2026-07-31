@@ -47,21 +47,33 @@ public readonly record struct AnnotationHandle(AnnotationHandleKind Kind, Captur
 public static class AnnotationHandles
 {
     /// <summary>
-    /// How near a press has to be to count as grabbing a handle, in frame pixels.
+    /// How near a press has to be to count as grabbing a handle, in layout units.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Larger than the drawn square, because the handle is a target rather than a
     /// decoration, and a mark thin enough to need reshaping is one whose handles are hard
     /// to hit exactly.
+    /// </para>
+    /// <para>
+    /// Layout units rather than frame pixels, for the reason
+    /// <see cref="Capture.SelectionHandles.Size"/> gives: it is a distance a hand aims
+    /// over, so ten frame pixels would be half the slack on a 200% display that it is on
+    /// a 100% one. Everything here works in frame pixels, so each method takes the
+    /// surface's scale and multiplies this by it.
+    /// </para>
     /// </remarks>
     public const double GrabRadius = 10;
 
     /// <summary>
-    /// How far outside the top edge the rotation handle floats, in frame pixels.
+    /// How far outside the top edge the rotation handle floats, in layout units.
     /// </summary>
     /// <remarks>
     /// Off the shape rather than on it, so it cannot be confused with the corner beside
     /// it, and far enough that the first pixel of the drag already describes an angle.
+    /// Scaled for the same reason <see cref="GrabRadius"/> is: unscaled it would sit
+    /// half as far from the shape at 200% as at 100%, and the tether drawn to it would
+    /// shorten with it.
     /// </remarks>
     public const double RotateReach = 24;
 
@@ -84,16 +96,18 @@ public static class AnnotationHandles
     /// is drawn. Both move and nothing more. A ruler carries a sprite too, but only as its
     /// reading: the mark itself is the line, and the line is reshapable.
     /// </remarks>
-    public static IReadOnlyList<AnnotationHandle> For(Annotation annotation)
+    /// <param name="scale">Frame pixels to the layout unit on the surface it is drawn on.</param>
+    public static IReadOnlyList<AnnotationHandle> For(Annotation annotation, double scale = 1)
     {
         ArgumentNullException.ThrowIfNull(annotation);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(scale);
 
         if (!annotation.IsMovable || annotation.Points.Count > 0 || Annotation.RequiresSprite(annotation.Tool))
         {
             return [];
         }
 
-        return IsLinear(annotation.Tool) ? LinearHandles(annotation) : AreaHandles(annotation);
+        return IsLinear(annotation.Tool) ? LinearHandles(annotation) : AreaHandles(annotation, scale);
     }
 
     /// <summary>
@@ -101,17 +115,29 @@ public static class AnnotationHandles
     /// one wins, so handles that overlap on a mark too small to separate them still each
     /// have a side of the shape that reaches them.
     /// </summary>
-    public static AnnotationHandle? At(Annotation annotation, CapturePoint point, double radius = GrabRadius)
+    /// <param name="scale">Frame pixels to the layout unit on the surface it is drawn on.</param>
+    /// <param name="radius">
+    /// How near counts as grabbing, in layout units. Scaled along with the handle
+    /// positions, or the same-looking handle would be easier to hit on a 100% display
+    /// than on a 200% one.
+    /// </param>
+    public static AnnotationHandle? At(
+        Annotation annotation,
+        CapturePoint point,
+        double scale = 1,
+        double radius = GrabRadius)
     {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(scale);
         ArgumentOutOfRangeException.ThrowIfNegative(radius);
 
         AnnotationHandle? nearest = null;
         var nearestDistance = double.MaxValue;
+        var reach = radius * scale;
 
-        foreach (var handle in For(annotation))
+        foreach (var handle in For(annotation, scale))
         {
             var distance = Distance(handle.Position, point);
-            if (distance <= radius && distance < nearestDistance)
+            if (distance <= reach && distance < nearestDistance)
             {
                 nearest = handle;
                 nearestDistance = distance;
@@ -262,7 +288,7 @@ public static class AnnotationHandles
         return handles;
     }
 
-    private static IReadOnlyList<AnnotationHandle> AreaHandles(Annotation annotation)
+    private static IReadOnlyList<AnnotationHandle> AreaHandles(Annotation annotation, double scale)
     {
         var bounds = annotation.BoundingRect;
         var centre = Centre(annotation);
@@ -274,7 +300,7 @@ public static class AnnotationHandles
             new(AnnotationHandleKind.BottomLeft, Turn(new CapturePoint(bounds.X, bounds.Bottom), centre, annotation.Rotation)),
             new(AnnotationHandleKind.BottomRight, Turn(new CapturePoint(bounds.Right, bounds.Bottom), centre, annotation.Rotation)),
             new(AnnotationHandleKind.Rotate, Turn(
-                new CapturePoint(centre.X, bounds.Y - RotateReach),
+                new CapturePoint(centre.X, bounds.Y - (RotateReach * scale)),
                 centre,
                 annotation.Rotation)),
         ];

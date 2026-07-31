@@ -261,6 +261,7 @@ public sealed class CaptureController : IDisposable
             overlay.SelectionCommitted += OnSelectionCommitted;
             overlay.Cancelled += OnCaptureCancelled;
             overlay.ScrollCaptureRequested += OnScrollCaptureRequested;
+            overlay.RecordingRequested += OnRecordingRequested;
             overlay.EditorRequested += OnEditorRequested;
             overlay.WindowSnapToggled += OnWindowSnapToggled;
             _overlays.Add(overlay);
@@ -751,6 +752,7 @@ public sealed class CaptureController : IDisposable
         overlay.SelectionCommitted -= OnSelectionCommitted;
         overlay.Cancelled -= OnCaptureCancelled;
         overlay.ScrollCaptureRequested -= OnScrollCaptureRequested;
+        overlay.RecordingRequested -= OnRecordingRequested;
         overlay.EditorRequested -= OnEditorRequested;
     }
 
@@ -764,8 +766,11 @@ public sealed class CaptureController : IDisposable
         return ShowEditorAsync(frame);
     });
 
-    private void OnScrollCaptureRequested(object? sender, CaptureWindow window) =>
-        Post(() => ScrollCaptureAsync(window));
+    private void OnScrollCaptureRequested(object? sender, ScrollCaptureRequest request) =>
+        Post(() => ScrollCaptureAsync(request));
+
+    private void OnRecordingRequested(object? sender, RecordingRequest request) =>
+        Post(() => RecordAsync(request));
 
     /// <summary>
     /// Tells the other displays' overlays that window snap has been turned on or off.
@@ -803,7 +808,7 @@ public sealed class CaptureController : IDisposable
     /// the same way a whole page would be.
     /// </para>
     /// </remarks>
-    private async Task ScrollCaptureAsync(CaptureWindow window)
+    private async Task ScrollCaptureAsync(ScrollCaptureRequest request)
     {
         DismissOverlays();
 
@@ -823,7 +828,7 @@ public sealed class CaptureController : IDisposable
         ScrollCaptureResult result;
         try
         {
-            result = await session.RunAsync(window, cancellation.Token);
+            result = await session.RunAsync(request.Window, request.Region, cancellation.Token);
         }
         finally
         {
@@ -863,14 +868,43 @@ public sealed class CaptureController : IDisposable
     /// <para>
     /// The display is taken from the pointer rather than asked for. Putting a
     /// selection overlay up first would record the moment of choosing which display
-    /// to record, and macshot already knows which one is being worked on.
+    /// to record, and macshot already knows which one is being worked on. Someone who
+    /// does want to aim it has the toolbar's Record button, which arrives at
+    /// <see cref="RecordAsync"/> with the region already chosen.
     /// </para>
     /// </remarks>
-    public async Task ToggleRecordingAsync()
+    public Task ToggleRecordingAsync()
     {
         if (_recording is { } running)
         {
             running.Cancel();
+            return Task.CompletedTask;
+        }
+
+        var displays = MonitorEnumerator.Enumerate();
+        var monitor = displays.Layout.MonitorAt(PointerPosition()) ?? displays.Layout.Primary;
+        return RecordAsync(new RecordingRequest(monitor));
+    }
+
+    /// <summary>
+    /// Records one display, or one region of it, until something asks it to stop.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The overlays go first. They are always on top and they cover the display being
+    /// recorded, so a recording started from the toolbar would otherwise open with a
+    /// dimmed screen and macshot's own chrome across it.
+    /// </para>
+    /// <para>
+    /// The display is looked up again by name rather than taken from the request. The
+    /// request may have been made against an enumeration from before the overlays went
+    /// up, and a capture item is opened from a handle Windows has to still recognize.
+    /// </para>
+    /// </remarks>
+    private async Task RecordAsync(RecordingRequest request)
+    {
+        if (_recording is not null)
+        {
             return;
         }
 
@@ -880,11 +914,24 @@ public sealed class CaptureController : IDisposable
                 "This build of Windows does not offer the screen recording API.");
         }
 
+        DismissOverlays();
+
         var displays = MonitorEnumerator.Enumerate();
-        var monitor = displays.Layout.MonitorAt(PointerPosition()) ?? displays.Layout.Primary;
+        var monitor = displays.Layout.Monitors.FirstOrDefault(
+            candidate => candidate.DeviceName == request.Monitor.DeviceName)
+            ?? request.Monitor;
+
         if (!displays.Handles.TryGetValue(monitor.DeviceName, out var handle))
         {
             throw new InvalidOperationException($"No display handle for '{monitor.DeviceName}'.");
+        }
+
+        // Virtual space out of the overlay, the display's own pixels into the recorder:
+        // a capture item is one display, and it starts at its own top-left corner.
+        var region = request.Region is { } aimed ? monitor.VirtualToLocal(aimed) : (CaptureRegion?)null;
+        if (region is { IsEmpty: true })
+        {
+            throw new InvalidOperationException("That region is not on the display being recorded.");
         }
 
         using var cancellation = new CancellationTokenSource();
@@ -906,13 +953,17 @@ public sealed class CaptureController : IDisposable
             var path = ResolveRecordingPath(format);
             DiagnosticLog.Verbose(
                 $"recording {monitor.DeviceName} ({monitor.Bounds.Width}x{monitor.Bounds.Height}) "
-                    + $"as {format} to {path}");
+                    + $"as {format} to {path}"
+                    + (region is { } cropped
+                        ? $", cropped to {cropped.Width}x{cropped.Height} at {cropped.X},{cropped.Y}"
+                        : string.Empty));
 
             var result = await _recorder.RecordDisplayAsync(
                 handle,
                 path,
                 format,
-                cancellation.Token);
+                cancellation.Token,
+                region);
 
             DiagnosticLog.Verbose($"recording finished: {result.Path}");
 

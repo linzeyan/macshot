@@ -158,6 +158,13 @@ public sealed partial class CaptureOverlayWindow : Window
     private CaptureRegion? _selection;
 
     /// <summary>
+    /// Whether the delivered capture is mounted on a gradient background. Held here
+    /// rather than applied when the button is pressed, because the frame is bigger than
+    /// the region and there is nowhere in the overlay to show it.
+    /// </summary>
+    private bool _beautify;
+
+    /// <summary>
     /// The region the last capture was taken from, offered on the display it was
     /// drawn on. Null on every other overlay, and once the offer has been taken or
     /// drawn over.
@@ -278,7 +285,14 @@ public sealed partial class CaptureOverlayWindow : Window
     /// overlay and drives the desktop, which is the owner's business, not one
     /// display's.
     /// </summary>
-    public event EventHandler<CaptureWindow>? ScrollCaptureRequested;
+    public event EventHandler<ScrollCaptureRequest>? ScrollCaptureRequested;
+
+    /// <summary>
+    /// Raised when the user asks for the region to be recorded rather than captured.
+    /// Handed over for the same reason a scroll capture is: a recording outlives every
+    /// overlay, and the display it names may not be this one's.
+    /// </summary>
+    public event EventHandler<RecordingRequest>? RecordingRequested;
 
     /// <summary>
     /// Raised when Tab turns window snap on or off, so that the overlays on the other
@@ -645,7 +659,8 @@ public sealed partial class CaptureOverlayWindow : Window
             return InputSystemCursorShape.Cross;
         }
 
-        if (_editor.SelectionShown is { } shown && AnnotationHandles.At(shown, point) is { } handle)
+        if (_editor.SelectionShown is { } shown
+            && AnnotationHandles.At(shown, point, _editor.Scale) is { } handle)
         {
             return CursorHints.For(handle.Kind);
         }
@@ -768,7 +783,7 @@ public sealed partial class CaptureOverlayWindow : Window
                 // gesture hangs off the same click rather than off a mode.
                 if (e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift))
                 {
-                    ScrollCaptureRequested?.Invoke(this, window);
+                    ScrollCaptureRequested?.Invoke(this, new ScrollCaptureRequest(window));
                     return;
                 }
 
@@ -1593,6 +1608,18 @@ public sealed partial class CaptureOverlayWindow : Window
                 _ = RedactPiiAsync();
                 return;
 
+            case ToolbarCommand.Beautify:
+                ToggleBeautify();
+                return;
+
+            case ToolbarCommand.ScrollCapture:
+                RequestScrollCapture();
+                return;
+
+            case ToolbarCommand.Record:
+                RequestRecording();
+                return;
+
             case ToolbarCommand.Copy:
                 _ = CompleteAsync(CaptureOutcome.Copy);
                 return;
@@ -1613,6 +1640,121 @@ public sealed partial class CaptureOverlayWindow : Window
     }
 
     /// <summary>
+    /// Turns the gradient frame on or off for this capture.
+    /// </summary>
+    /// <remarks>
+    /// A switch rather than something done to the pixels there and then, which is what
+    /// macshot's own button is. The frame is larger than the region it surrounds, so
+    /// there is nowhere inside the selection to show it — the button lighting up and the
+    /// hint line are what say it is armed, and pressing it again takes it back off.
+    /// </remarks>
+    private void ToggleBeautify()
+    {
+        if (!IsAnnotating)
+        {
+            return;
+        }
+
+        _beautify = !_beautify;
+        AnnotationToolbar.Beautified = _beautify;
+
+        Hint(_beautify
+            ? $"Framed in {BeautifyRenderer.Styles[_settings.Current.ToBeautifyOptions().StyleIndex].Name}"
+            : "Frame removed");
+    }
+
+    /// <summary>
+    /// The capture as it is delivered: what was drawn, framed if the user asked for it.
+    /// </summary>
+    /// <remarks>
+    /// The frame goes on last, after the marks are burned in, so an arrow drawn to the
+    /// edge of the region stays on the screenshot rather than crossing the background it
+    /// is mounted on.
+    /// </remarks>
+    private CapturedFrame? Finished()
+    {
+        if (AnnotationCanvas.ToFrame() is not { } finished)
+        {
+            return null;
+        }
+
+        if (!_beautify)
+        {
+            return finished;
+        }
+
+        var (width, height, pixels) = BeautifyRenderer.Render(
+            finished.Width,
+            finished.Height,
+            finished.BgraPixels,
+            _settings.Current.ToBeautifyOptions());
+
+        return new CapturedFrame(finished.VirtualX, finished.VirtualY, width, height, pixels);
+    }
+
+    /// <summary>
+    /// Asks for the window behind the region to be scrolled and the region stitched.
+    /// </summary>
+    /// <remarks>
+    /// The window is resolved here rather than by the owner because this is where the
+    /// windows are known: they were listed next to the screenshot, before any overlay
+    /// existed, so the list holds what the user is actually looking at and not macshot's
+    /// own always-on-top windows.
+    /// </remarks>
+    private void RequestScrollCapture()
+    {
+        if (_selection is not { } region)
+        {
+            return;
+        }
+
+        if (WindowBehind(region) is not { } window)
+        {
+            Hint("There is no window behind that region to scroll");
+            return;
+        }
+
+        ScrollCaptureRequested?.Invoke(
+            this,
+            new ScrollCaptureRequest(window, _layout.FrameToVirtual(region)));
+    }
+
+    /// <summary>
+    /// The frontmost window the region's middle sits on, or null when it sits on the
+    /// desktop.
+    /// </summary>
+    /// <remarks>
+    /// The middle rather than any overlap, and the frontmost rather than the largest:
+    /// windows overlap, and the one under the point the user centred the region on is
+    /// the one they were looking at.
+    /// </remarks>
+    private CaptureWindow? WindowBehind(CaptureRegion region)
+    {
+        var centre = new CapturePoint(region.X + (region.Width / 2), region.Y + (region.Height / 2));
+
+        foreach (var window in _snapCandidates)
+        {
+            if (!window.Bounds.IsEmpty && window.Bounds.Contains(centre.X, centre.Y))
+            {
+                return window;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Asks for the region to be recorded rather than captured.</summary>
+    private void RequestRecording()
+    {
+        if (_selection is not { } region)
+        {
+            return;
+        }
+
+        RecordingRequested?.Invoke(this, new RecordingRequest(_monitor, _layout.FrameToVirtual(region)));
+    }
+
+    /// <summary>
     /// Hands the marked-up pixels to the editor window instead of to delivery.
     /// </summary>
     /// <remarks>
@@ -1629,7 +1771,7 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         await AnnotationCanvas.FlushAsync();
-        if (AnnotationCanvas.ToFrame() is { } finished)
+        if (Finished() is { } finished)
         {
             EditorRequested?.Invoke(this, finished);
         }
@@ -1739,7 +1881,7 @@ public sealed partial class CaptureOverlayWindow : Window
             RememberSelection(taken);
         }
 
-        if (AnnotationCanvas.ToFrame() is { } finished)
+        if (Finished() is { } finished)
         {
             CaptureCompleted?.Invoke(this, new CaptureCompletion(finished, outcome));
         }

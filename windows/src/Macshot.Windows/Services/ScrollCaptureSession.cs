@@ -64,16 +64,30 @@ public sealed class ScrollCaptureSession
     /// <paramref name="cancellation"/> asks it to stop, and returns everything seen
     /// on the way as one tall image.
     /// </summary>
-    public async Task<ScrollCaptureResult> RunAsync(CaptureWindow window, CancellationToken cancellation = default)
+    /// <param name="region">
+    /// The part of the desktop to keep, in virtual space, or null for the whole window.
+    /// A region is what the toolbar's button asks for: the window is still what gets
+    /// scrolled, because a rectangle has no wheel, but only the pixels inside the
+    /// rectangle are stitched — which is what lets a page be captured without the
+    /// browser's chrome repeated down the side of it.
+    /// </param>
+    public async Task<ScrollCaptureResult> RunAsync(
+        CaptureWindow window,
+        CaptureRegion? region = null,
+        CancellationToken cancellation = default)
     {
-        if (!_driver.TryTakeOver(window, out var cursor))
+        var over = region is { } aimed
+            ? new CapturePoint(aimed.X + (aimed.Width / 2), aimed.Y + (aimed.Height / 2))
+            : (CapturePoint?)null;
+
+        if (!_driver.TryTakeOver(window, out var cursor, over))
         {
             throw new InvalidOperationException("macshot could not bring that window forward to scroll it.");
         }
 
         try
         {
-            return await CaptureAsync(window, cancellation);
+            return await CaptureAsync(window, region, cancellation);
         }
         finally
         {
@@ -84,48 +98,55 @@ public sealed class ScrollCaptureSession
         }
     }
 
-    private async Task<ScrollCaptureResult> CaptureAsync(CaptureWindow window, CancellationToken cancellation)
+    private async Task<ScrollCaptureResult> CaptureAsync(
+        CaptureWindow window,
+        CaptureRegion? region,
+        CancellationToken cancellation)
     {
         var first = await _captureWindow(window.Id)
             ?? throw new InvalidOperationException("Windows would not capture that window.");
 
-        if (first.Height < ScrollStitcher.BandHeight)
+        // Resolved once, against the first frame, and then held. Every later frame is
+        // the same window after scrolling, so a crop that followed each frame's own
+        // reported position would wander with a window the user nudged mid-capture and
+        // silently stitch two different parts of it together.
+        var crop = Resolve(first, region);
+        var band = Cut(first, crop);
+
+        if (band.Height < ScrollStitcher.BandHeight)
         {
-            throw new InvalidOperationException("That window is too short to scroll-capture.");
+            throw new InvalidOperationException(region is null
+                ? "That window is too short to scroll-capture."
+                : "That region is too short to scroll-capture.");
         }
 
-        var stitcher = new ScrollStitcher(first.Width, first.Height);
+        var stitcher = new ScrollStitcher(band.Width, band.Height);
         var policy = new ScrollCapturePolicy(MaximumHeight);
 
-        CapturedFrame? frame = first;
+        byte[]? pixels = band.Pixels;
         var frames = 0;
 
         while (true)
         {
             frames++;
 
-            // A frame of the wrong size is a window that resized under the capture.
-            // Fed to the stitcher it would throw; treated as content that does not
-            // match, it costs one frame and ends the run only if it keeps happening.
-            var outcome = frame is not null
-                && frame.Width == stitcher.Width
-                && frame.Height == stitcher.FrameHeight
-                    ? stitcher.Add(frame.BgraPixels)
-                    : ScrollStitchOutcome.Rejected;
+            var outcome = pixels is not null
+                ? stitcher.Add(pixels)
+                : ScrollStitchOutcome.Rejected;
 
             Progressed?.Invoke(this, new ScrollCaptureProgress(frames, stitcher.Height));
 
             var stop = policy.Observe(outcome, stitcher.Height);
             if (stop != ScrollCaptureStop.None)
             {
-                return Finish(first, stitcher, stop, frames);
+                return Finish(first, crop, stitcher, stop, frames);
             }
 
             if (cancellation.IsCancellationRequested)
             {
                 // Stopping early is a complete capture of what was scrolled through,
                 // not a failure: the user asked for it to end here.
-                return Finish(first, stitcher, ScrollCaptureStop.Complete, frames);
+                return Finish(first, crop, stitcher, ScrollCaptureStop.Complete, frames);
             }
 
             _driver.StepDown();
@@ -136,27 +157,75 @@ public sealed class ScrollCaptureSession
             }
             catch (TaskCanceledException)
             {
-                return Finish(first, stitcher, ScrollCaptureStop.Complete, frames);
+                return Finish(first, crop, stitcher, ScrollCaptureStop.Complete, frames);
             }
 
-            frame = await _captureWindow(window.Id);
+            // A frame of the wrong size is a window that resized under the capture.
+            // Fed to the stitcher it would throw; treated as content that does not
+            // match, it costs one frame and ends the run only if it keeps happening.
+            var next = await _captureWindow(window.Id);
+            pixels = next is not null && next.Width == first.Width && next.Height == first.Height
+                ? Cut(next, crop).Pixels
+                : null;
         }
     }
 
+    /// <summary>
+    /// Where <paramref name="region"/> falls inside a captured window frame, or the
+    /// whole frame when nothing was aimed at.
+    /// </summary>
     /// <remarks>
-    /// Positioned where the first frame was. Every later frame is the same window
-    /// after scrolling, so the stitched image starts where the window started and
-    /// grows downwards from there.
+    /// A region that misses the window entirely falls back to the whole frame rather
+    /// than throwing. It cannot happen from the toolbar — the window was chosen by
+    /// looking under the region — and a scroll capture of the wrong size is a better
+    /// answer than none at all.
+    /// </remarks>
+    private static CaptureRegion Resolve(CapturedFrame first, CaptureRegion? region)
+    {
+        var whole = new CaptureRegion(0, 0, first.Width, first.Height);
+        if (region is not { } aimed)
+        {
+            return whole;
+        }
+
+        var local = new CaptureRegion(
+            aimed.X - first.VirtualX,
+            aimed.Y - first.VirtualY,
+            aimed.Width,
+            aimed.Height).Intersect(whole);
+
+        return local.IsEmpty ? whole : local;
+    }
+
+    /// <summary>
+    /// One frame's pixels as the stitcher wants them: the whole buffer when the crop is
+    /// the whole frame, so an uncropped capture still costs nothing per frame.
+    /// </summary>
+    private static (int Width, int Height, byte[] Pixels) Cut(CapturedFrame frame, CaptureRegion crop)
+    {
+        if (crop.X == 0 && crop.Y == 0 && crop.Width == frame.Width && crop.Height == frame.Height)
+        {
+            return (frame.Width, frame.Height, frame.BgraPixels);
+        }
+
+        return FrameTransforms.Crop(frame.Width, frame.Height, frame.BgraPixels, crop);
+    }
+
+    /// <remarks>
+    /// Positioned where the first frame's crop was. Every later frame is the same
+    /// window after scrolling, so the stitched image starts where the capture started
+    /// and grows downwards from there.
     /// </remarks>
     private static ScrollCaptureResult Finish(
         CapturedFrame first,
+        CaptureRegion crop,
         ScrollStitcher stitcher,
         ScrollCaptureStop stop,
         int frames)
     {
         var stitched = new CapturedFrame(
-            first.VirtualX,
-            first.VirtualY,
+            first.VirtualX + (int)crop.X,
+            first.VirtualY + (int)crop.Y,
             stitcher.Width,
             stitcher.Height,
             stitcher.ToImage());

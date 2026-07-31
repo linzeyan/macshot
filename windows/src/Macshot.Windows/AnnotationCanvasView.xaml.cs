@@ -106,6 +106,15 @@ public sealed partial class AnnotationCanvasView : UserControl
         _region = region;
         _placement = placement;
 
+        // The grab handles are the one part of the editor measured in what a hand can
+        // aim at rather than in capture pixels, and only the placement knows the two
+        // apart. Set here rather than in Bind, because an overlay binds once and is then
+        // presented onto whichever display's region was chosen.
+        if (_editor is { } editor)
+        {
+            editor.Scale = placement.Scale;
+        }
+
         _preview?.Detach();
         _preview = new RasterAnnotationPreview(AnnotationLayer, placement, pixels, region);
         Render();

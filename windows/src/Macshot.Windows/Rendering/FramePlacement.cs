@@ -26,6 +26,13 @@ public interface IFramePlacement
 
     /// <summary>Which frame pixel a point on the canvas is over.</summary>
     CapturePoint ToFrame(Point layoutPoint);
+
+    /// <summary>
+    /// Frame pixels to the layout unit here, which is what a target sized for a hand —
+    /// a grab handle, its catchment — has to be multiplied by before it can be measured
+    /// against positions in the capture.
+    /// </summary>
+    double Scale { get; }
 }
 
 /// <summary>
@@ -45,6 +52,8 @@ public sealed class MonitorFramePlacement(MonitorLayout layout, CaptureMonitor m
 
     public CapturePoint ToFrame(Point layoutPoint) =>
         _layout.PointerToFrame(_monitor, layoutPoint.X, layoutPoint.Y);
+
+    public double Scale => _monitor.Scale;
 }
 
 /// <summary>
@@ -63,4 +72,11 @@ public sealed class ImageFramePlacement : IFramePlacement
     public Point ToLayout(CapturePoint framePoint) => new(framePoint.X, framePoint.Y);
 
     public CapturePoint ToFrame(Point layoutPoint) => new(layoutPoint.X, layoutPoint.Y);
+
+    /// <summary>
+    /// One, and not the window's DPI scaling. The image is laid out a pixel to a layout
+    /// unit whatever the display is at, so a handle twenty-four pixels off the shape is
+    /// already twenty-four layout units off it.
+    /// </summary>
+    public double Scale => 1;
 }

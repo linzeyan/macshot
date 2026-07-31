@@ -66,6 +66,24 @@ public sealed record CaptureMonitor(string DeviceName, CaptureRegion Bounds, dou
         return new CapturePoint((virtualPoint.X - Bounds.X) / Scale, (virtualPoint.Y - Bounds.Y) / Scale);
     }
 
+    /// <summary>
+    /// A virtual-space region as an offset into this display's own pixels, clipped to it.
+    /// </summary>
+    /// <remarks>
+    /// This is the space a display's capture item is in: the compositor hands over that
+    /// display and nothing else, so a crop of it starts at the display's top-left corner
+    /// rather than at the virtual desktop's. Clipped rather than merely shifted, because
+    /// the caller is cropping a buffer and a rectangle that overhangs the display would
+    /// index past the end of it.
+    /// </remarks>
+    public CaptureRegion VirtualToLocal(CaptureRegion virtualRegion)
+    {
+        var clipped = virtualRegion.Intersect(Bounds);
+        return clipped.IsEmpty
+            ? default
+            : new CaptureRegion(clipped.X - Bounds.X, clipped.Y - Bounds.Y, clipped.Width, clipped.Height);
+    }
+
     public CaptureRegion PointerToVirtual(CaptureRegion dipRegion)
     {
         return new CaptureRegion(

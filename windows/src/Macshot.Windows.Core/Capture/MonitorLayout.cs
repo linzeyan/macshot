@@ -100,6 +100,22 @@ public sealed class MonitorLayout
         new(framePoint.X + VirtualBounds.X, framePoint.Y + VirtualBounds.Y);
 
     /// <summary>
+    /// The inverse of <see cref="VirtualToFrame(CaptureRegion)"/>: where a region an
+    /// overlay chose sits on the desktop itself.
+    /// </summary>
+    /// <remarks>
+    /// Needed by everything that aims something other than a screenshot at the region —
+    /// a recording, a scroll capture — because those talk to a display or a window,
+    /// neither of which knows where the virtual-desktop capture began.
+    /// </remarks>
+    public CaptureRegion FrameToVirtual(CaptureRegion frameRegion) =>
+        new(
+            frameRegion.X + VirtualBounds.X,
+            frameRegion.Y + VirtualBounds.Y,
+            frameRegion.Width,
+            frameRegion.Height);
+
+    /// <summary>
     /// The inverse of <see cref="PointerToFrame(CaptureMonitor, double, double)"/>,
     /// used to place an annotation stored in frame space back onto one display's
     /// overlay. Drawing has to go through the same per-display scale that input
