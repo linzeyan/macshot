@@ -43,10 +43,11 @@ public sealed partial class ThumbnailWindow : Window
     private readonly SettingsStore _settings;
     private readonly DispatcherTimer _dismissTimer = new();
 
-    public ThumbnailWindow(CapturedFrame frame, SettingsStore settings)
+    public ThumbnailWindow(CapturedFrame frame, SettingsStore settings, string? historyPath)
     {
         _frame = frame ?? throw new ArgumentNullException(nameof(frame));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        HistoryPath = historyPath;
         InitializeComponent();
 
         CloseDisc.Child = Glyph(ToolbarCommand.Cancel);
@@ -70,7 +71,15 @@ public sealed partial class ThumbnailWindow : Window
     /// Where history put its copy of this capture, so Delete can take it back out. Null
     /// when history is off, which is what makes Delete a plain close.
     /// </summary>
-    public string? HistoryPath { get; init; }
+    /// <remarks>
+    /// Taken in the constructor and read-only afterwards, rather than set through an
+    /// object initializer. XamlTypeInfo.g.cs writes a setter for every public property
+    /// of a type XAML instantiates, and an assignment it generates is not inside an
+    /// initializer, so <c>init</c> here does not compile at all — CS8852. A property
+    /// with no setter gives it nothing to generate, and the path is known at
+    /// construction anyway.
+    /// </remarks>
+    public string? HistoryPath { get; }
 
     /// <summary>
     /// Shows the panel <paramref name="stackIndex"/> places up the corner, so a second

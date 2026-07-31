@@ -620,7 +620,7 @@ public sealed class CaptureController : IDisposable
             oldest.Close();
         }
 
-        var thumbnail = new ThumbnailWindow(frame, _settings) { HistoryPath = archived };
+        var thumbnail = new ThumbnailWindow(frame, _settings, archived);
         thumbnail.PinRequested += (_, pinned) => Post(() => PinAsync(pinned));
         thumbnail.EditRequested += (_, captured) => Post(() => ShowEditorAsync(captured));
         thumbnail.CloseAllRequested += (_, _) => CloseThumbnails();
