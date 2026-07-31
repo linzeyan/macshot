@@ -206,15 +206,21 @@ public sealed partial class RecordingHudWindow : Window
     {
         e.Handled = true;
 
-        var holding = _heldSince is null;
-        if (holding)
+        // Matched rather than tested against a bool taken first: the compiler cannot
+        // carry "holding is false, so the field is not null" from a local into a field
+        // access, and .Value on a field it has not proved is exactly the shape of a
+        // crash that only happens once.
+        bool holding;
+        if (_heldSince is { } heldSince)
         {
-            _heldSince = DateTimeOffset.UtcNow;
+            _heldFor += DateTimeOffset.UtcNow - heldSince;
+            _heldSince = null;
+            holding = false;
         }
         else
         {
-            _heldFor += DateTimeOffset.UtcNow - _heldSince.Value;
-            _heldSince = null;
+            _heldSince = DateTimeOffset.UtcNow;
+            holding = true;
         }
 
         PauseBars.Visibility = holding ? Visibility.Collapsed : Visibility.Visible;

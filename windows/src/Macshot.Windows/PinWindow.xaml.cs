@@ -77,7 +77,7 @@ public sealed partial class PinWindow : Window
         var display = layout.MonitorAt(centre) ?? layout.Primary;
 
         _opening = PinPlacement.Opening(_frame.Width, _frame.Height, display.WorkArea);
-        appWindow.MoveAndResize(Bounds(_opening));
+        appWindow.MoveAndResize(ToRect(_opening));
 
         Activate();
         PinRoot.Focus(FocusState.Programmatic);
@@ -98,7 +98,15 @@ public sealed partial class PinWindow : Window
         return glyph;
     }
 
-    private static RectInt32 Bounds(CaptureRegion region) => new(
+    /// <summary>
+    /// A region as the rectangle <see cref="Microsoft.UI.Windowing.AppWindow"/> takes.
+    /// </summary>
+    /// <remarks>
+    /// Not called Bounds. A Window has a Bounds of its own, and a private helper that
+    /// hides it reads as an override of something it has nothing to do with — which is
+    /// exactly what the compiler said when this was called that.
+    /// </remarks>
+    private static RectInt32 ToRect(CaptureRegion region) => new(
         (int)region.X,
         (int)region.Y,
         (int)region.Width,
@@ -219,7 +227,7 @@ public sealed partial class PinWindow : Window
 
     private void Resize(CaptureRegion bounds)
     {
-        this.GetAppWindow().MoveAndResize(Bounds(bounds));
+        this.GetAppWindow().MoveAndResize(ToRect(bounds));
         ZoomText.Text = $"{PinPlacement.Percent(bounds, _opening)}%";
     }
 
