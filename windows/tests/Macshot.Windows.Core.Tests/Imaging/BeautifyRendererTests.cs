@@ -207,4 +207,62 @@ public sealed class BeautifyRendererTests
         Assert.IsTrue(BeautifyRenderer.Styles.All(style => !string.IsNullOrWhiteSpace(style.Name)));
         Assert.IsTrue(BeautifyRenderer.Styles.All(style => style.Stops.Length >= 2));
     }
+
+    [TestMethod]
+    public void Styles_MatchTheMacOsCatalogueSoAStyleIndexMeansTheSameBackground()
+    {
+        // The chosen background is persisted as an index and the two products are meant
+        // to agree on what each one names. Dropping or reordering an entry would go
+        // unnoticed otherwise: every style renders something plausible.
+        Assert.AreEqual(48, BeautifyRenderer.Styles.Count);
+        Assert.AreEqual("Ultraviolet", BeautifyRenderer.Styles[0].Name);
+        Assert.AreEqual("Ink", BeautifyRenderer.Styles[^1].Name);
+    }
+
+    [TestMethod]
+    public void Styles_AreDistinctlyNamedSoTheFrameMenuCanBeReadFromTheNamesAlone()
+    {
+        var names = BeautifyRenderer.Styles.Select(style => style.Name).ToList();
+        Assert.AreEqual(names.Count, names.Distinct(StringComparer.OrdinalIgnoreCase).Count());
+    }
+
+    [TestMethod]
+    public void Sample_PlacesAStopWhereItsOffsetSaysRatherThanEvenlyAcross()
+    {
+        // The middle colour of an off-centre three-stop gradient decides which of the
+        // two ends the image sits against — the visible difference the offsets exist for.
+        var style = new BeautifyStyle(
+            "Off centre",
+            0,
+            new AnnotationColor(0, 0, 0),
+            new AnnotationColor(255, 255, 255),
+            new AnnotationColor(0, 0, 0))
+        {
+            Offsets = [0, 0.25, 1],
+        };
+
+        Assert.AreEqual(255, style.Sample(0.25).Red);
+        Assert.AreEqual(128, style.Sample(0.125).Red);
+
+        // Halfway along is already past the peak, so it is on the way back down.
+        Assert.AreEqual(170, style.Sample(0.5).Red);
+    }
+
+    [TestMethod]
+    public void Sample_FallsBackToEvenSpacingWhenTheOffsetsDoNotMatchTheStops()
+    {
+        // A miscounted catalogue entry should render evenly rather than throw the first
+        // time someone frames a capture with it.
+        var style = new BeautifyStyle(
+            "Mismatched",
+            0,
+            new AnnotationColor(0, 0, 0),
+            new AnnotationColor(255, 255, 255),
+            new AnnotationColor(0, 0, 0))
+        {
+            Offsets = [0, 1],
+        };
+
+        Assert.AreEqual(255, style.Sample(0.5).Red);
+    }
 }
