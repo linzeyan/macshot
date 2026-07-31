@@ -525,7 +525,9 @@ public sealed partial class AnnotationToolbarView : UserControl
         }
 
         _tools.SetItems(ToolbarActions.Tools(editor.Tool, _settings?.Current.EnabledTools(), _beautified, _inverted));
-        _actions.SetItems(ToolbarActions.Actions(EditorMode));
+        // The offline build has no translator compiled into it, so it is not offered a
+        // button for one.
+        _actions.SetItems(ToolbarActions.Actions(EditorMode, translation: !BuildVariant.IsOffline));
         _tools.ShowSwatch(ToUiColor(editor.Style.Color));
         ShowOptionsFor(editor.Tool);
 

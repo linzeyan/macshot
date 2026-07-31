@@ -130,6 +130,25 @@ public sealed class ToolbarActionsTests
     }
 
     [TestMethod]
+    public void Translate_FollowsReadingTheText_AndIsAbsentWithoutATranslator()
+    {
+        // macshot's own order: pin, read, translate, then the two that aim at a live
+        // screen. The two that read words sit next to each other because they are
+        // answered from the same recognition pass.
+        var overlay = ToolbarActions.Actions(editorMode: false).Select(item => item.Command).ToArray();
+
+        Assert.AreEqual(
+            Array.IndexOf(overlay, ToolbarCommand.ReadText) + 1,
+            Array.IndexOf(overlay, ToolbarCommand.Translate));
+
+        // The offline build has no translator compiled into it, so a button for one
+        // would be a button that does nothing.
+        CollectionAssert.DoesNotContain(
+            ToolbarActions.Actions(editorMode: false, translation: false).Select(item => item.Command).ToArray(),
+            ToolbarCommand.Translate);
+    }
+
+    [TestMethod]
     public void ATurnedOffTool_IsNotOnTheStripAtAll()
     {
         var kept = new[] { AnnotationTool.Arrow, AnnotationTool.Text };

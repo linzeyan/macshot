@@ -39,6 +39,60 @@ public static class PixelEffects
         return new AnnotationColor(bgraPixels[offset + 2], bgraPixels[offset + 1], bgraPixels[offset]);
     }
 
+    /// <summary>
+    /// The mean colour of a region, for a mark that has to sit on the page rather than
+    /// on top of it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// What it is for is the translation overlay: a box painted the average of what it
+    /// covers disappears into a white page, a dark code listing or a coloured banner
+    /// without anyone choosing a colour per screenshot. It is a mean rather than the
+    /// most common colour — a line of text is mostly background, so the mean lands on
+    /// the background and is tinted very slightly by the ink, which is what makes it
+    /// read as the same surface.
+    /// </para>
+    /// <para>
+    /// Always opaque, for the reason <see cref="Sample"/> gives: a capture's alpha
+    /// channel says nothing about what is on screen.
+    /// </para>
+    /// </remarks>
+    public static AnnotationColor AverageColor(
+        byte[] bgraPixels,
+        int width,
+        int height,
+        CaptureRegion region)
+    {
+        ValidateFrame(bgraPixels, width, height);
+
+        var left = Math.Clamp((int)Math.Floor(region.X), 0, width - 1);
+        var top = Math.Clamp((int)Math.Floor(region.Y), 0, height - 1);
+        var right = Math.Clamp((int)Math.Ceiling(region.Right), left + 1, width);
+        var bottom = Math.Clamp((int)Math.Ceiling(region.Bottom), top + 1, height);
+
+        long red = 0;
+        long green = 0;
+        long blue = 0;
+
+        for (var row = top; row < bottom; row++)
+        {
+            var line = row * width * 4;
+            for (var column = left; column < right; column++)
+            {
+                var offset = line + (column * 4);
+                blue += bgraPixels[offset];
+                green += bgraPixels[offset + 1];
+                red += bgraPixels[offset + 2];
+            }
+        }
+
+        var counted = (long)(right - left) * (bottom - top);
+        return new AnnotationColor(
+            (byte)(red / counted),
+            (byte)(green / counted),
+            (byte)(blue / counted));
+    }
+
     public static void Pixelate(byte[] bgraPixels, int width, int height, CaptureRegion region, double blockSize)
     {
         ValidateFrame(bgraPixels, width, height);

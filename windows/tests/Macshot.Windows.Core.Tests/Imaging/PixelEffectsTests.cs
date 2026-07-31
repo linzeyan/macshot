@@ -99,6 +99,33 @@ public sealed class PixelEffectsTests
             () => PixelEffects.Pixelate(new byte[16], Width, Height, new CaptureRegion(0, 0, 4, 4), blockSize: 4));
     }
 
+    [TestMethod]
+    public void AverageColor_AnswersWhatTheAreaLooksLikeFromAcrossTheRoom()
+    {
+        // Half black and half white averages to grey. This is the colour a translation
+        // box is painted, so that it sits on the page rather than on top of it.
+        var frame = SplitFrame();
+
+        var average = PixelEffects.AverageColor(frame, Width, Height, new CaptureRegion(8, 0, 16, 8));
+
+        Assert.AreEqual(127, average.Red);
+        Assert.AreEqual(127, average.Green);
+        Assert.AreEqual(127, average.Blue);
+    }
+
+    [TestMethod]
+    public void AverageColor_ReadsOnlyPixelsInsideTheFrame()
+    {
+        // The boxes come from OCR, which can hand back one that hangs a pixel over the
+        // edge. Clamped rather than rejected: a line of text at the very bottom is worth
+        // translating.
+        var frame = SplitFrame();
+
+        var average = PixelEffects.AverageColor(frame, Width, Height, new CaptureRegion(-4, -4, 8, 8));
+
+        Assert.AreEqual(0, average.Red, "the top-left corner is the black half");
+    }
+
     /// <summary>A frame whose left half is black and right half is white.</summary>
     private static byte[] SplitFrame()
     {

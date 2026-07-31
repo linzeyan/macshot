@@ -167,6 +167,12 @@ public sealed partial class EditorWindow : Window
                 _ = RedactPiiAsync();
                 return;
 
+            case ToolbarCommand.Translate:
+#if !OFFLINE
+                _ = TranslateAsync();
+#endif
+                return;
+
             case ToolbarCommand.InvertColors:
                 InvertImage();
                 return;
@@ -730,6 +736,26 @@ public sealed partial class EditorWindow : Window
             HintText.Text = $"Redacted {annotations.Count} • Ctrl+Z to undo";
         });
     }
+
+#if !OFFLINE
+    /// <summary>
+    /// Lays a translation over the text in the image, in place, rather than reading it
+    /// out into a window.
+    /// </summary>
+    private async Task TranslateAsync()
+    {
+        HintText.Text = "Translating...";
+        try
+        {
+            HintText.Text =
+                await TranslationPlacement.RunAsync(AnnotationCanvas, _settings.Current, CancellationToken.None);
+        }
+        catch (Exception exception)
+        {
+            HintText.Text = exception.Message;
+        }
+    }
+#endif
 
     private async Task RunRecognitionAsync(Action<IReadOnlyList<RecognizedLine>> handle)
     {

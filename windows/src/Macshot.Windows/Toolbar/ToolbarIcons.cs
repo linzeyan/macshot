@@ -124,6 +124,18 @@ internal static class ToolbarIcons
             canvas.Children.Add(Stroke(4.5, 11, 8.5, 11));
             break;
 
+        case ToolbarCommand.Translate:
+            // Two scripts side by side — a Latin A and a mark built the way a CJK
+            // character is — which is what the button turns one into. An arrow between
+            // them would say the same thing and leave neither legible at this size.
+            canvas.Children.Add(Stroke(2, 13, 4.5, 4));
+            canvas.Children.Add(Stroke(4.5, 4, 7, 13));
+            canvas.Children.Add(Stroke(3.1, 10, 5.9, 10));
+            canvas.Children.Add(Stroke(9, 5.5, 14, 5.5));
+            canvas.Children.Add(Stroke(11.5, 5.5, 11.5, 13));
+            canvas.Children.Add(Stroke(9.5, 9, 13.5, 9));
+            break;
+
         case ToolbarCommand.Redact:
             // A line of text with a block struck through it.
             canvas.Children.Add(Stroke(3, 5, 13, 5, opacity: 0.5));

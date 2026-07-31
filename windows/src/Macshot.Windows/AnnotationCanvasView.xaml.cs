@@ -1,5 +1,6 @@
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
+using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Recognition;
 using Macshot.Windows.Rendering;
 using Macshot.Windows.Services;
@@ -331,6 +332,67 @@ public sealed partial class AnnotationCanvasView : UserControl
         }
 
         return await TextRecognizer.RecognizeAsync(source, _region.X, _region.Y);
+    }
+
+    /// <summary>
+    /// Lays each translation over the words it replaces, and answers how many were
+    /// placed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The boxes are painted the average colour of the pixels underneath, sampled from
+    /// the preview's own source: a translation on a grey panel wants that grey behind it,
+    /// and a white box would announce itself as a patch.
+    /// </para>
+    /// <para>
+    /// One <c>AddRange</c> under one group, so a single Ctrl+Z takes the whole page of
+    /// translations back off. Put in one at a time they would need one undo each, and a
+    /// half-undone page is worse than either state.
+    /// </para>
+    /// </remarks>
+    public async Task<int> LayTranslationsOverAsync(IReadOnlyList<TranslatedLine> lines)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+
+        if (_editor is not { } editor || _source is not { } source)
+        {
+            return 0;
+        }
+
+        var group = Guid.NewGuid();
+        var placed = new List<Annotation>(lines.Count);
+        foreach (var line in lines)
+        {
+            // The line boxes came back in frame space; the pixels are the crop, which
+            // starts at the region's own corner.
+            var underneath = new CaptureRegion(
+                line.Bounds.X - _region.X,
+                line.Bounds.Y - _region.Y,
+                line.Bounds.Width,
+                line.Bounds.Height);
+
+            var average = PixelEffects.AverageColor(source.BgraPixels, source.Width, source.Height, underneath);
+            var background = Color.FromArgb(byte.MaxValue, average.Red, average.Green, average.Blue);
+
+            var box = TranslationGlyphs.Build(line, background, SpriteScale);
+            var sprite = await GlyphSpriteFactory.RenderAsync(SpriteHost, box);
+
+            placed.Add(Annotation.CreateSprite(
+                AnnotationTool.Text,
+                new CapturePoint(line.Bounds.X, line.Bounds.Y),
+                sprite,
+                editor.Style) with
+            {
+                // Kept alongside the pixels so the translation is still readable as
+                // text — by the history, and by whatever reads a capture back.
+                Text = line.Text,
+                GroupId = group,
+            });
+        }
+
+        editor.Document.AddRange(placed);
+        Render();
+        return placed.Count;
     }
 
     /// <summary>

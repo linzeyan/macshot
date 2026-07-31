@@ -35,6 +35,9 @@ public enum ToolbarCommand
     /// <summary>Cover the personal details in it.</summary>
     Redact,
 
+    /// <summary>Lay a translation over the text in it.</summary>
+    Translate,
+
     /// <summary>Turn every colour in it to its opposite.</summary>
     InvertColors,
 
@@ -171,7 +174,11 @@ public static class ToolbarActions
     /// True in the editor window, where there is no region to cancel or move and the
     /// capture is already open.
     /// </param>
-    public static IReadOnlyList<ToolbarItem> Actions(bool editorMode)
+    /// <param name="translation">
+    /// False in the offline build, which contains no translator at all. A button for a
+    /// feature compiled out of the binary would be a button that does nothing.
+    /// </param>
+    public static IReadOnlyList<ToolbarItem> Actions(bool editorMode, bool translation = true)
     {
         var items = new List<ToolbarItem>(8);
 
@@ -186,6 +193,10 @@ public static class ToolbarActions
         items.Add(new ToolbarItem(ToolbarCommand.Save, "Save"));
         items.Add(new ToolbarItem(ToolbarCommand.Pin, "Pin on top"));
         items.Add(new ToolbarItem(ToolbarCommand.ReadText, "Read the text in it"));
+        if (translation)
+        {
+            items.Add(new ToolbarItem(ToolbarCommand.Translate, "Translate the text in it"));
+        }
 
         if (!editorMode)
         {

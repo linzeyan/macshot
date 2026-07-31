@@ -1621,6 +1621,12 @@ public sealed partial class CaptureOverlayWindow : Window
                 _ = RedactPiiAsync();
                 return;
 
+            case ToolbarCommand.Translate:
+#if !OFFLINE
+                _ = TranslateAsync();
+#endif
+                return;
+
             case ToolbarCommand.InvertColors:
                 ToggleInvert();
                 return;
@@ -1892,6 +1898,30 @@ public sealed partial class CaptureOverlayWindow : Window
             Hint($"Redacted {annotations.Count} • Ctrl+Z to undo • Enter to finish");
         });
     }
+
+#if !OFFLINE
+    /// <summary>
+    /// Lays a translation over the text in the selection, in place, the way macshot
+    /// does — as opposed to reading it out into a window.
+    /// </summary>
+    private async Task TranslateAsync()
+    {
+        if (!IsAnnotating)
+        {
+            return;
+        }
+
+        Hint("Translating...");
+        try
+        {
+            Hint(await TranslationPlacement.RunAsync(AnnotationCanvas, _settings.Current, CancellationToken.None));
+        }
+        catch (Exception exception)
+        {
+            Hint(exception.Message);
+        }
+    }
+#endif
 
     /// <summary>
     /// Runs OCR over the selection and hands the result to the caller. Failures land
