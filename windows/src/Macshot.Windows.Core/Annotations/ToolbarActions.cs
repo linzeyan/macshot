@@ -35,6 +35,9 @@ public enum ToolbarCommand
     /// <summary>Cover the personal details in it.</summary>
     Redact,
 
+    /// <summary>Turn every colour in it to its opposite.</summary>
+    InvertColors,
+
     /// <summary>Put it on a gradient background.</summary>
     Beautify,
 
@@ -117,10 +120,16 @@ public static class ToolbarActions
     /// Whether the capture is already set to be framed, which lights the Beautify button
     /// the way macshot tints its own.
     /// </param>
+    /// <param name="inverted">
+    /// Whether the capture's colours are already turned, which lights that button for
+    /// the same reason: both are switches, and a switch that does not show its state is
+    /// a button that appears to do nothing the second time it is pressed.
+    /// </param>
     public static IReadOnlyList<ToolbarItem> Tools(
         AnnotationTool selected,
         IReadOnlyCollection<AnnotationTool>? enabled = null,
-        bool beautified = false)
+        bool beautified = false,
+        bool inverted = false)
     {
         var items = new List<ToolbarItem>(ToolOrder.Count + 3);
 
@@ -143,10 +152,12 @@ public static class ToolbarActions
         items.Add(new ToolbarItem(ToolbarCommand.Undo, "Undo"));
         items.Add(new ToolbarItem(ToolbarCommand.Redo, "Redo"));
 
-        // Then the actions that change the picture rather than draw on it. macshot lists
-        // four here — invert, adjust, beautify, remove background — of which Beautify is
-        // the only one the port has, so it keeps macshot's place among them and the
-        // port's own redact button follows the block rather than sitting inside it.
+        // Then the actions that change the picture rather than draw on it, in macshot's
+        // order: invert, adjust, beautify, remove background. Adjust and remove
+        // background are not here yet; the two that are keep the places they hold there,
+        // so filling the gaps later moves nothing. The port's own redact button follows
+        // the block rather than sitting inside it.
+        items.Add(new ToolbarItem(ToolbarCommand.InvertColors, "Invert the colours", IsSelected: inverted));
         items.Add(new ToolbarItem(ToolbarCommand.Beautify, "Beautify", IsSelected: beautified));
         items.Add(new ToolbarItem(ToolbarCommand.Redact, "Cover personal details"));
 

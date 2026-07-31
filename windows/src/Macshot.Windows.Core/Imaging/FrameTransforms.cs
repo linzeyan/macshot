@@ -49,6 +49,38 @@ public static class FrameTransforms
     }
 
     /// <summary>
+    /// The frame with every colour turned to its opposite.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// What it is for is a screenshot of a dark interface being put into a light
+    /// document, or the other way round — so it is a straight per-channel inversion
+    /// rather than a hue rotation or a "smart" theme swap. Those guess at what the
+    /// picture means; this one is reversible, which is what makes pressing the button
+    /// twice the way back.
+    /// </para>
+    /// <para>
+    /// Alpha is left alone. Inverting it would turn an opaque capture transparent, and
+    /// the byte is undefined in most of what reaches here anyway.
+    /// </para>
+    /// </remarks>
+    public static byte[] Invert(int width, int height, ReadOnlySpan<byte> bgraPixels)
+    {
+        Validate(width, height, bgraPixels);
+
+        var output = new byte[bgraPixels.Length];
+        for (var index = 0; index < bgraPixels.Length; index += 4)
+        {
+            output[index] = (byte)(255 - bgraPixels[index]);
+            output[index + 1] = (byte)(255 - bgraPixels[index + 1]);
+            output[index + 2] = (byte)(255 - bgraPixels[index + 2]);
+            output[index + 3] = bgraPixels[index + 3];
+        }
+
+        return output;
+    }
+
+    /// <summary>
     /// The pixels inside <paramref name="region"/>, clamped to the frame.
     /// </summary>
     /// <remarks>

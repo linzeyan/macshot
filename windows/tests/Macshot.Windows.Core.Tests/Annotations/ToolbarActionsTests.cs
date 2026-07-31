@@ -83,23 +83,32 @@ public sealed class ToolbarActionsTests
         var commands = ToolbarActions.Tools(AnnotationTool.Arrow).Select(item => item.Command).ToArray();
 
         Assert.IsTrue(
-            Array.IndexOf(commands, ToolbarCommand.Beautify) > Array.IndexOf(commands, ToolbarCommand.Redo),
-            "beautify belongs to the block after the undo pair, not among the tools");
+            Array.IndexOf(commands, ToolbarCommand.InvertColors) > Array.IndexOf(commands, ToolbarCommand.Redo),
+            "the block that rewrites the pixels comes after the undo pair, not among the tools");
+        Assert.IsTrue(
+            Array.IndexOf(commands, ToolbarCommand.Beautify) > Array.IndexOf(commands, ToolbarCommand.InvertColors),
+            "macshot lists invert before beautify, and the gaps between them are for the two the port lacks");
         Assert.IsTrue(
             Array.IndexOf(commands, ToolbarCommand.Redact) > Array.IndexOf(commands, ToolbarCommand.Beautify),
             "the port's own redact button follows macshot's block rather than sitting inside it");
     }
 
     [TestMethod]
-    public void TheBeautifyButton_SaysWhetherTheCaptureIsAlreadyFramed()
+    public void TheSwitchesSayWhetherTheyAreOn()
     {
-        // Nothing in the overlay can show the frame — it is bigger than the region — so
-        // the lit button is the only thing that says the switch is on.
-        Assert.IsFalse(Beautify(ToolbarActions.Tools(AnnotationTool.Arrow)).IsSelected);
-        Assert.IsTrue(Beautify(ToolbarActions.Tools(AnnotationTool.Arrow, null, beautified: true)).IsSelected);
+        // Nothing in the overlay can show the gradient frame — it is bigger than the
+        // region — so for that one the lit button is the only thing that says so. Invert
+        // is previewed, and still lights, because a switch whose button looks the same
+        // both ways reads as a button that did nothing the second time.
+        Assert.IsFalse(Item(ToolbarActions.Tools(AnnotationTool.Arrow), ToolbarCommand.Beautify).IsSelected);
+        Assert.IsFalse(Item(ToolbarActions.Tools(AnnotationTool.Arrow), ToolbarCommand.InvertColors).IsSelected);
 
-        static ToolbarItem Beautify(IReadOnlyList<ToolbarItem> items) =>
-            items.Single(item => item.Command == ToolbarCommand.Beautify);
+        var on = ToolbarActions.Tools(AnnotationTool.Arrow, null, beautified: true, inverted: true);
+        Assert.IsTrue(Item(on, ToolbarCommand.Beautify).IsSelected);
+        Assert.IsTrue(Item(on, ToolbarCommand.InvertColors).IsSelected);
+
+        static ToolbarItem Item(IReadOnlyList<ToolbarItem> items, ToolbarCommand command) =>
+            items.Single(item => item.Command == command);
     }
 
     [TestMethod]

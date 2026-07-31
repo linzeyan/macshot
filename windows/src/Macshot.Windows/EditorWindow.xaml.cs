@@ -167,6 +167,10 @@ public sealed partial class EditorWindow : Window
                 _ = RedactPiiAsync();
                 return;
 
+            case ToolbarCommand.InvertColors:
+                InvertImage();
+                return;
+
             case ToolbarCommand.Beautify:
                 // The style last chosen from the Frame menu, which is where a different
                 // one is picked. One press for the usual answer, the menu for the rest —
@@ -602,6 +606,26 @@ public sealed partial class EditorWindow : Window
         // One crop at a time: staying armed would let the next drag crop the crop, which
         // is rarely what was meant and always a surprise.
         SetCropping(false);
+    }
+
+    /// <summary>
+    /// Turns every colour over.
+    /// </summary>
+    /// <remarks>
+    /// Done to the pixels here and then, rather than held as a switch the way the
+    /// overlay holds it: the editor already has an undo stack for exactly this kind of
+    /// change, and inverting twice through it gives back what was there.
+    /// </remarks>
+    private void InvertImage()
+    {
+        ApplyImageOperation(
+            frame => new CapturedFrame(
+                frame.VirtualX,
+                frame.VirtualY,
+                frame.Width,
+                frame.Height,
+                FrameTransforms.Invert(frame.Width, frame.Height, frame.BgraPixels)),
+            "Colours inverted • Ctrl+Z to undo");
     }
 
     private void FlipImage(bool horizontal)

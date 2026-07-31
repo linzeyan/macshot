@@ -4,6 +4,11 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 
+// Imported rather than written out at each use site: inside namespace Macshot.Windows
+// the name "Windows" binds to Macshot.Windows, so a qualified Rect resolves to
+// Macshot.Rect and does not compile.
+using Windows.Foundation;
+
 namespace Macshot.Windows.Toolbar;
 
 /// <summary>
@@ -124,6 +129,24 @@ internal static class ToolbarIcons
             canvas.Children.Add(Stroke(3, 5, 13, 5, opacity: 0.5));
             canvas.Children.Add(Stroke(3, 12, 9, 12, opacity: 0.5));
             canvas.Children.Add(Block(3, 7.5, 10, 3));
+            break;
+
+        case ToolbarCommand.InvertColors:
+            // A circle with one half filled, which is what macshot draws: the shape says
+            // "the same picture, the other way round" without naming a colour.
+            canvas.Children.Add(Ring(1, 14, 1));
+            canvas.Children.Add(new Ellipse
+            {
+                Width = 14,
+                Height = 14,
+                Fill = ToolbarPalette.IconBrush(),
+                Margin = new Thickness(2, 1, 0, 0),
+
+                // A clip rather than a drawn half-disc: the geometry a Path would need is
+                // two arcs and a line, and the right half of a circle is exactly the
+                // intersection of the circle with the rectangle beside it.
+                Clip = new RectangleGeometry { Rect = new Rect(7, 0, 7, 14) },
+            });
             break;
 
         case ToolbarCommand.Beautify:

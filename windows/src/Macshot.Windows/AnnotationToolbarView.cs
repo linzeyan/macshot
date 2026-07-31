@@ -85,6 +85,8 @@ public sealed partial class AnnotationToolbarView : UserControl
 
     private bool _beautified;
 
+    private bool _inverted;
+
     public AnnotationToolbarView()
     {
         _optionsContent = new StackPanel
@@ -162,6 +164,24 @@ public sealed partial class AnnotationToolbarView : UserControl
             }
 
             _beautified = value;
+            RefreshStrips();
+        }
+    }
+
+    /// <summary>
+    /// Whether the capture's colours are turned, which lights the Invert button.
+    /// </summary>
+    public bool Inverted
+    {
+        get => _inverted;
+        set
+        {
+            if (_inverted == value)
+            {
+                return;
+            }
+
+            _inverted = value;
             RefreshStrips();
         }
     }
@@ -504,7 +524,7 @@ public sealed partial class AnnotationToolbarView : UserControl
             return;
         }
 
-        _tools.SetItems(ToolbarActions.Tools(editor.Tool, _settings?.Current.EnabledTools(), _beautified));
+        _tools.SetItems(ToolbarActions.Tools(editor.Tool, _settings?.Current.EnabledTools(), _beautified, _inverted));
         _actions.SetItems(ToolbarActions.Actions(EditorMode));
         _tools.ShowSwatch(ToUiColor(editor.Style.Color));
         ShowOptionsFor(editor.Tool);

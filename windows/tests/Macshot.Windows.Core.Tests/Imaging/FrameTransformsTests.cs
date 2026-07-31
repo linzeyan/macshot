@@ -115,6 +115,30 @@ public sealed class FrameTransformsTests
     }
 
     [TestMethod]
+    public void Invert_TurnsEveryColourChannelAndLeavesAlphaAlone()
+    {
+        // Alpha inverted would turn an opaque capture transparent, which is the one way
+        // this can silently destroy an image rather than change it.
+        var pixels = new byte[] { 0, 40, 255, 255, 128, 200, 10, 0 };
+
+        var inverted = FrameTransforms.Invert(2, 1, pixels);
+
+        CollectionAssert.AreEqual(new byte[] { 255, 215, 0, 255, 127, 55, 245, 0 }, inverted);
+    }
+
+    [TestMethod]
+    public void Invert_IsItsOwnWayBack()
+    {
+        // The button is a switch, so pressing it twice has to give back exactly what was
+        // captured — not something a rounding step left one level off.
+        var pixels = Numbered(8, 8);
+
+        var thereAndBack = FrameTransforms.Invert(8, 8, FrameTransforms.Invert(8, 8, pixels));
+
+        CollectionAssert.AreEqual(pixels, thereAndBack);
+    }
+
+    [TestMethod]
     public void Transforms_RejectABufferThatIsNotTheFrame()
     {
         Assert.ThrowsException<ArgumentException>(() => FrameTransforms.FlipHorizontal(4, 4, new byte[10]));

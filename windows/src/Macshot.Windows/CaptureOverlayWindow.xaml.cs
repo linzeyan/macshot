@@ -165,6 +165,21 @@ public sealed partial class CaptureOverlayWindow : Window
     private bool _beautify;
 
     /// <summary>
+    /// Whether the preview and the delivered capture have their colours turned. Unlike
+    /// the gradient frame this one is the same size as the region, so it is shown rather
+    /// than only promised.
+    /// </summary>
+    private bool _inverted;
+
+    /// <summary>
+    /// The window's own pixels, when the region came from clicking a window rather than
+    /// from a drag. Held because the preview is rebuilt whenever the region or an image
+    /// switch changes, and re-cropping the screenshot would quietly swap the window's
+    /// own capture for the screenshot of whatever was in front of it.
+    /// </summary>
+    private CapturedFrame? _capturedWindow;
+
+    /// <summary>
     /// The region the last capture was taken from, offered on the display it was
     /// drawn on. Null on every other overlay, and once the offer has been taken or
     /// drawn over.
@@ -873,6 +888,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         _selection = region;
         _hoveredWindow = null;
+        _capturedWindow = capturedWindow;
         _regionIsAdjustable = capturedWindow is null;
         SnapHighlight.Visibility = Visibility.Collapsed;
 
@@ -886,10 +902,7 @@ public sealed partial class CaptureOverlayWindow : Window
         // The preview covers the selection with the pixels that will be delivered,
         // which also hides the selection tint inside it: from here on, what is inside
         // the marquee is the finished image rather than a tinted approximation of it.
-        AnnotationCanvas.Present(
-            capturedWindow ?? NativeScreenCaptureService.Crop(_desktopFrame, region),
-            region,
-            _placement);
+        AnnotationCanvas.Present(PixelsFor(region), region, _placement);
 
         AnnotationToolbar.ShowToolbar(true);
         _sizeBox.Visibility = Visibility.Visible;
@@ -1218,7 +1231,7 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         _selection = taken;
-        AnnotationCanvas.Present(NativeScreenCaptureService.Crop(_desktopFrame, taken), taken, _placement);
+        AnnotationCanvas.Present(PixelsFor(taken), taken, _placement);
 
         DiagnosticLog.Verbose(
             $"region adjusted to {taken.Width}x{taken.Height} at {taken.X},{taken.Y} on {_monitor.DeviceName}");
@@ -1608,6 +1621,10 @@ public sealed partial class CaptureOverlayWindow : Window
                 _ = RedactPiiAsync();
                 return;
 
+            case ToolbarCommand.InvertColors:
+                ToggleInvert();
+                return;
+
             case ToolbarCommand.Beautify:
                 ToggleBeautify();
                 return;
@@ -1637,6 +1654,52 @@ public sealed partial class CaptureOverlayWindow : Window
                 // and never reach the host.
                 return;
         }
+    }
+
+    /// <summary>
+    /// The pixels the preview shows for a region: the window's own capture or the
+    /// screenshot under it, with the colours turned if that switch is on.
+    /// </summary>
+    /// <remarks>
+    /// One place, because the preview is rebuilt from three different events — the
+    /// region being chosen, a grip being dragged, and the invert switch — and each of
+    /// them getting its own answer about where the pixels come from is how a snapped
+    /// window quietly turns back into a screenshot of the desktop.
+    /// </remarks>
+    private CapturedFrame PixelsFor(CaptureRegion region)
+    {
+        var source = _capturedWindow ?? NativeScreenCaptureService.Crop(_desktopFrame, region);
+        if (!_inverted)
+        {
+            return source;
+        }
+
+        return new CapturedFrame(
+            source.VirtualX,
+            source.VirtualY,
+            source.Width,
+            source.Height,
+            FrameTransforms.Invert(source.Width, source.Height, source.BgraPixels));
+    }
+
+    /// <summary>
+    /// Turns the capture's colours over, and back.
+    /// </summary>
+    /// <remarks>
+    /// Shown rather than promised: the turned image is exactly the size of the one it
+    /// replaces, so the preview can simply be rebuilt from it — which also means the
+    /// marks drawn on top keep their own colours, the way they do on macshot.
+    /// </remarks>
+    private void ToggleInvert()
+    {
+        if (_selection is not { } region)
+        {
+            return;
+        }
+
+        _inverted = !_inverted;
+        AnnotationToolbar.Inverted = _inverted;
+        AnnotationCanvas.Present(PixelsFor(region), region, _placement);
     }
 
     /// <summary>
