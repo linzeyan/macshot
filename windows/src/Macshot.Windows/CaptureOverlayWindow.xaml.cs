@@ -187,6 +187,17 @@ public sealed partial class CaptureOverlayWindow : Window
     private CapturedFrame? _capturedWindow;
 
     /// <summary>
+    /// What the window the region came from calls itself, for the <c>{window}</c>
+    /// filename token. Null for a region that was dragged out.
+    /// </summary>
+    /// <remarks>
+    /// Kept even when the window's own capture failed and the pixels came from the
+    /// screenshot instead. The region is still that window's, which is what the name is
+    /// describing.
+    /// </remarks>
+    private string? _capturedWindowTitle;
+
+    /// <summary>
     /// The region the last capture was taken from, offered on the display it was
     /// drawn on. Null on every other overlay, and once the offer has been taken or
     /// drawn over.
@@ -880,7 +891,7 @@ public sealed partial class CaptureOverlayWindow : Window
                 captured = null;
             }
 
-            EnterAnnotationPhase(window.Bounds, captured);
+            EnterAnnotationPhase(window.Bounds, captured, window.Title);
 
             if (captured is null)
             {
@@ -896,7 +907,10 @@ public sealed partial class CaptureOverlayWindow : Window
         }
     }
 
-    private void EnterAnnotationPhase(CaptureRegion region, CapturedFrame? capturedWindow = null)
+    private void EnterAnnotationPhase(
+        CaptureRegion region,
+        CapturedFrame? capturedWindow = null,
+        string? windowTitle = null)
     {
         // Where the annotation phase's pixels came from, which is the difference between
         // "the window itself" and "the screenshot with whatever was over it". The two
@@ -910,6 +924,7 @@ public sealed partial class CaptureOverlayWindow : Window
         _selection = region;
         _hoveredWindow = null;
         _capturedWindow = capturedWindow;
+        _capturedWindowTitle = windowTitle;
         _regionIsAdjustable = capturedWindow is null;
         SnapHighlight.Visibility = Visibility.Collapsed;
 
@@ -1810,6 +1825,28 @@ public sealed partial class CaptureOverlayWindow : Window
     }
 
     /// <summary>
+    /// The capture as it is delivered, together with what it can be reopened from and
+    /// what the window it came from is called. Null when there is nothing to deliver.
+    /// </summary>
+    /// <remarks>
+    /// The editable pair is withheld from a framed capture. The background a frame puts
+    /// around the image is not one of the marks, so the pixels and the marks would
+    /// reopen as the picture without it — a different picture from the one that was
+    /// approved, and silently so. Archiving nothing for it is the honest answer until
+    /// the frame is something the editor can be handed back.
+    /// </remarks>
+    private CaptureCompletion? Completed(CaptureOutcome outcome)
+    {
+        return Finished() is { } finished
+            ? new CaptureCompletion(
+                finished,
+                outcome,
+                _beautify ? null : AnnotationCanvas.ToEditable(),
+                _capturedWindowTitle)
+            : null;
+    }
+
+    /// <summary>
     /// Asks for the window behind the region to be scrolled and the region stitched.
     /// </summary>
     /// <remarks>
@@ -1969,16 +2006,16 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         await AnnotationCanvas.FlushAsync();
-        if (Finished() is not { } finished)
+        if (Completed(CaptureOutcome.SaveAs) is not { } completion)
         {
             return;
         }
 
         try
         {
-            if (await SavePrompt.WriteAsync(this, finished, _settings.Current) is not null)
+            if (await SavePrompt.WriteAsync(this, completion.Frame, _settings.Current, completion.WindowTitle) is not null)
             {
-                CaptureCompleted?.Invoke(this, new CaptureCompletion(finished, CaptureOutcome.SaveAs));
+                CaptureCompleted?.Invoke(this, completion);
             }
         }
         catch (Exception exception)
@@ -2098,9 +2135,9 @@ public sealed partial class CaptureOverlayWindow : Window
             RememberSelection(taken);
         }
 
-        if (Finished() is { } finished)
+        if (Completed(outcome) is { } completion)
         {
-            CaptureCompleted?.Invoke(this, new CaptureCompletion(finished, outcome));
+            CaptureCompleted?.Invoke(this, completion);
         }
     }
 

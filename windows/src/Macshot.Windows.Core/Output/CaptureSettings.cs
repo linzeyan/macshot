@@ -82,6 +82,28 @@ public sealed record CaptureSettings
     public int ThumbnailSeconds { get; init; } = 6;
 
     /// <summary>
+    /// How many frames a second a screen recording is taken at.
+    /// </summary>
+    /// <remarks>
+    /// macshot's <c>recordingFPS</c>, whose menu offers 15, 24, 30, 60 and 120 —
+    /// <c>SettingsWindowController.swift:1551</c>. Anything in the plan's range is
+    /// accepted here rather than only those five, because this file is edited by hand
+    /// and refusing 45 would be refusing it for no reason.
+    /// </remarks>
+    public int RecordingFrameRate { get; init; } = RecordingPlan.DefaultFrameRate;
+
+    /// <summary>
+    /// How many frames a second a recording written as a GIF is taken at.
+    /// </summary>
+    /// <remarks>
+    /// Its own setting rather than <see cref="RecordingFrameRate"/>, because the two
+    /// are answers to different questions: one is how smooth the recording should be,
+    /// the other is how large a GIF may get before the destination that only takes GIFs
+    /// refuses it.
+    /// </remarks>
+    public int GifFrameRate { get; init; } = GifRecordingPlan.DefaultFrameRate;
+
+    /// <summary>
     /// The drawing style the toolbar was last left on, as <c>#AARRGGBB</c>. This is
     /// remembered rather than configured — nobody opens a settings window to pick
     /// the colour of the next arrow — which is why it has no preferences UI. It is
@@ -168,6 +190,26 @@ public sealed record CaptureSettings
 
     /// <summary>How many past captures are kept. Zero turns history off entirely.</summary>
     public int HistorySize { get; init; } = 20;
+
+    /// <summary>
+    /// Keeps every capture, whatever <see cref="HistorySize"/> says.
+    /// </summary>
+    /// <remarks>
+    /// macshot's <c>historyUnlimited</c>, which overrides its own count the same way —
+    /// <c>ScreenshotHistory.swift:40–45</c>. Off by default: an archive that grows
+    /// without end is a choice, and one nobody should be given by accident.
+    /// </remarks>
+    public bool HistoryUnlimited { get; init; }
+
+    /// <summary>
+    /// How many past captures to keep, once the unlimited switch has had its say.
+    /// </summary>
+    /// <remarks>
+    /// Unlimited wins over a count of zero. Someone who has asked to keep everything
+    /// has not asked for history to be off, and reading it the other way would turn the
+    /// switch into one that silently deletes.
+    /// </remarks>
+    public int EffectiveHistorySize => HistoryUnlimited ? int.MaxValue : HistorySize;
 
     /// <summary>
     /// The three global shortcuts, written the way <see cref="HotkeyBinding"/> reads
@@ -377,6 +419,14 @@ public sealed record CaptureSettings
                 ? Output.FilenameTemplate.DefaultRecording
                 : RecordingFilenameTemplate.Trim(),
             ThumbnailSeconds = Math.Clamp(ThumbnailSeconds, MinThumbnailSeconds, MaxThumbnailSeconds),
+            RecordingFrameRate = Math.Clamp(
+                RecordingFrameRate,
+                RecordingPlan.MinFrameRate,
+                RecordingPlan.MaxFrameRate),
+            GifFrameRate = Math.Clamp(
+                GifFrameRate,
+                GifRecordingPlan.MinFrameRate,
+                GifRecordingPlan.MaxFrameRate),
 
             // Round-tripped through the parser so an unreadable colour becomes the
             // default here, rather than silently at every point that draws.

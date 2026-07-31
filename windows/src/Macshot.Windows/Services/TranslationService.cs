@@ -18,10 +18,23 @@ namespace Macshot.Windows.Services;
 /// form-encoded POST needs no SDK, and an SDK would pull a credential stack into a
 /// build variant whose purpose is to have no network stack in it.
 /// </para>
+/// <para>
+/// With no key there is a second endpoint: the keyless one macshot uses —
+/// <c>TranslationService.swift:161, 208</c>. It is undocumented and rate-limited, and
+/// for a while this port refused to translate at all rather than depend on it. That was
+/// the wrong trade for the same product on two platforms: it made translation a feature
+/// that worked on a Mac and asked for a Google Cloud account on Windows. A key, when
+/// there is one, is still preferred — it is the endpoint with a contract behind it.
+/// </para>
 /// </remarks>
 internal static class TranslationService
 {
     private const string Endpoint = "https://translation.googleapis.com/language/translate/v2";
+
+    /// <summary>
+    /// The keyless endpoint, which is what macshot translates through.
+    /// </summary>
+    private const string FreeEndpoint = "https://translate.googleapis.com/translate_a/single";
 
     /// <summary>
     /// Long enough for a slow link, short enough that a hung request does not leave the
@@ -51,15 +64,14 @@ internal static class TranslationService
         string apiKey,
         CancellationToken cancellation)
     {
-        if (string.IsNullOrWhiteSpace(apiKey))
-        {
-            return TranslationOutcome.Failed(
-                "Translation needs a Google Cloud Translation API key. Add one in Preferences.");
-        }
-
         if (string.IsNullOrWhiteSpace(text))
         {
             return TranslationOutcome.Failed("There is no text to translate.");
+        }
+
+        if (string.IsNullOrWhiteSpace(apiKey))
+        {
+            return await TranslateWithoutKeyAsync(text, targetLanguage, cancellation);
         }
 
         try
@@ -91,6 +103,59 @@ internal static class TranslationService
             // HttpClient reports its own timeout as a cancellation, which is
             // indistinguishable from the user closing the window unless the token is
             // checked. Only the timeout is worth a message.
+            return TranslationOutcome.Failed("The translation service did not answer in time.");
+        }
+        catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
+        {
+            return TranslationOutcome.Failed($"Could not reach the translation service: {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Translates through the keyless endpoint, so that translation works out of the box
+    /// as it does on macOS.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A GET with the text in the query string, which is what the endpoint takes and what
+    /// bounds this: a page of recognized text can outgrow a URL. Longer text is refused
+    /// here with the sentence that says how to lift the limit, rather than sent and
+    /// truncated by something in the middle.
+    /// </para>
+    /// <para>
+    /// A browser's user agent, as macshot sends. Without one the endpoint answers some
+    /// callers with a redirect to a consent page instead of a translation.
+    /// </para>
+    /// </remarks>
+    private static async Task<TranslationOutcome> TranslateWithoutKeyAsync(
+        string text,
+        string targetLanguage,
+        CancellationToken cancellation)
+    {
+        // Comfortably inside what every part of the path will carry, and past anything
+        // an overlay's worth of recognized text comes to.
+        const int MaxTextLength = 1_500;
+
+        if (text.Length > MaxTextLength)
+        {
+            return TranslationOutcome.Failed(
+                "That is more text than the free translation service takes at once. "
+                    + "Add a Google Cloud Translation API key in Preferences to translate it.");
+        }
+
+        try
+        {
+            var query = $"{FreeEndpoint}?client=gtx&sl=auto&tl={Uri.EscapeDataString(TranslationLanguages.Normalize(targetLanguage))}"
+                + $"&dt=t&q={Uri.EscapeDataString(text)}";
+
+            using var request = new HttpRequestMessage(HttpMethod.Get, query);
+            request.Headers.TryAddWithoutValidation("User-Agent", "Mozilla/5.0");
+
+            using var response = await Client.SendAsync(request, cancellation);
+            return TranslationResponse.ReadFree(await response.Content.ReadAsStringAsync(cancellation));
+        }
+        catch (OperationCanceledException) when (!cancellation.IsCancellationRequested)
+        {
             return TranslationOutcome.Failed("The translation service did not answer in time.");
         }
         catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)

@@ -124,6 +124,18 @@ public sealed partial class AnnotationCanvasView : UserControl
     /// <summary>The pixels on show, ready to be delivered.</summary>
     public CapturedFrame? ToFrame() => _preview?.ToFrame();
 
+    /// <summary>
+    /// The same capture in the two pieces it was made from, for archiving it in a form
+    /// that can be edited again. Null before anything is being previewed.
+    /// </summary>
+    /// <remarks>
+    /// The whole document rather than <c>VisibleAnnotations</c>: what is hidden is
+    /// hidden for the length of a drag, and a mark left out here would be lost from the
+    /// archive rather than merely not drawn.
+    /// </remarks>
+    public EditableCapture? ToEditable() =>
+        _preview?.ToEditable(_editor?.Document.Annotations ?? []);
+
     public void Render()
     {
         _preview?.Render(_editor?.VisibleAnnotations ?? []);

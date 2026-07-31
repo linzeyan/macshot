@@ -35,4 +35,18 @@ public enum CaptureOutcome
 /// <summary>
 /// A finished capture and where its pixels were asked to go.
 /// </summary>
-public sealed record CaptureCompletion(CapturedFrame Frame, CaptureOutcome Outcome);
+/// <param name="Editable">
+/// The pixels and marks the capture can be rebuilt from, when it can be. Carried
+/// alongside the finished image rather than instead of it: what the user approved is
+/// the finished image, and the pair is for archiving it in a form that can be edited
+/// again. Null when the two would not reproduce it.
+/// </param>
+/// <param name="WindowTitle">
+/// What the captured window called itself, for the <c>{window}</c> filename token. Null
+/// for a capture that was dragged out rather than aimed at a window.
+/// </param>
+public sealed record CaptureCompletion(
+    CapturedFrame Frame,
+    CaptureOutcome Outcome,
+    EditableCapture? Editable = null,
+    string? WindowTitle = null);

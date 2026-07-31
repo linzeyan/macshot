@@ -30,7 +30,11 @@ internal static class SavePrompt
     /// Asks where to put it and writes it there. Answers the path, or null if the
     /// dialog was dismissed — which means the capture is still in hand, not thrown away.
     /// </summary>
-    public static async Task<string?> WriteAsync(Window owner, CapturedFrame frame, CaptureSettings settings)
+    public static async Task<string?> WriteAsync(
+        Window owner,
+        CapturedFrame frame,
+        CaptureSettings settings,
+        string? windowTitle = null)
     {
         ArgumentNullException.ThrowIfNull(owner);
         ArgumentNullException.ThrowIfNull(frame);
@@ -39,7 +43,7 @@ internal static class SavePrompt
         var picker = new FileSavePicker
         {
             SuggestedStartLocation = PickerLocationId.PicturesLibrary,
-            SuggestedFileName = Path.GetFileNameWithoutExtension(SuggestedName(settings)),
+            SuggestedFileName = Path.GetFileNameWithoutExtension(SuggestedName(settings, windowTitle)),
         };
 
         // A desktop app has no CoreWindow for the picker to belong to, so it is given the
@@ -86,9 +90,11 @@ internal static class SavePrompt
     /// The name the folder would have given it. Uniqueness is the dialog's business from
     /// here, so nothing on disk is checked.
     /// </summary>
-    private static string SuggestedName(CaptureSettings settings) => FilenameTemplate.ResolveUnique(
-        settings.FilenameTemplate,
-        DateTimeOffset.Now,
-        settings.Format.FileExtension(),
-        _ => false);
+    private static string SuggestedName(CaptureSettings settings, string? windowTitle) =>
+        FilenameTemplate.ResolveUnique(
+            settings.FilenameTemplate,
+            DateTimeOffset.Now,
+            settings.Format.FileExtension(),
+            _ => false,
+            new FilenameContext(windowTitle));
 }

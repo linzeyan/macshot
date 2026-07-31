@@ -56,7 +56,7 @@ public static class WindowEnumerator
         {
             if (IsSnapCandidate(window, ownProcess) && TryGetFrameBounds(window, out var bounds))
             {
-                windows.Add(new CaptureWindow((long)window, bounds));
+                windows.Add(new CaptureWindow((long)window, bounds, TitleOf(window)));
             }
 
             return true;
@@ -116,6 +116,28 @@ public static class WindowEnumerator
         return !IsShellWindow(window);
     }
 
+    /// <summary>
+    /// What the window calls itself, or null when it says nothing.
+    /// </summary>
+    /// <remarks>
+    /// Taken here rather than at capture time, with the rest of what is known about the
+    /// window: by the time a capture is delivered the window may have retitled itself —
+    /// a browser tab switched, a document saved — and the name in the file should be the
+    /// one that was on screen in the pixels.
+    /// </remarks>
+    private static string? TitleOf(IntPtr window)
+    {
+        var length = GetWindowTextLength(window);
+        if (length <= 0)
+        {
+            return null;
+        }
+
+        // One past the text, for the terminator the API writes and counts separately.
+        var title = new StringBuilder(length + 1);
+        return GetWindowText(window, title, title.Capacity) > 0 ? title.ToString() : null;
+    }
+
     private static bool IsShellWindow(IntPtr window)
     {
         var name = new StringBuilder(64);
@@ -170,6 +192,12 @@ public static class WindowEnumerator
 
     [DllImport("user32.dll", EntryPoint = "GetClassNameW", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern int GetClassName(IntPtr window, StringBuilder name, int capacity);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowTextW", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int GetWindowText(IntPtr window, StringBuilder text, int capacity);
+
+    [DllImport("user32.dll", EntryPoint = "GetWindowTextLengthW", CharSet = CharSet.Unicode, SetLastError = true)]
+    private static extern int GetWindowTextLength(IntPtr window);
 
     [DllImport("user32.dll")]
     private static extern uint GetWindowThreadProcessId(IntPtr window, out uint processId);

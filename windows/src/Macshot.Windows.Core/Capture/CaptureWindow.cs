@@ -10,7 +10,12 @@ namespace Macshot.Windows.Core.Capture;
 /// it is carried as an opaque number rather than as a type Core would have to
 /// reference the OS to describe.
 /// </remarks>
-public readonly record struct CaptureWindow(long Id, CaptureRegion Bounds)
+/// <param name="Title">
+/// What the window calls itself, for the <c>{window}</c> filename token. Null or empty
+/// for a window with no title, which resolves to nothing in a name rather than to the
+/// word "null" — macshot does the same, <c>FilenameFormatter.swift:17</c>.
+/// </param>
+public readonly record struct CaptureWindow(long Id, CaptureRegion Bounds, string? Title = null)
 {
     /// <summary>
     /// The same window with its bounds clipped to <paramref name="bounds"/>. The

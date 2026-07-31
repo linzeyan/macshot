@@ -27,6 +27,17 @@ public sealed record BeautifyStyle(string Name, double Angle, params AnnotationC
     public double[]? Offsets { get; init; }
 
     /// <summary>
+    /// The mesh this style really is, when it is one. Null for a plain linear gradient.
+    /// </summary>
+    /// <remarks>
+    /// The stops are kept alongside it rather than replaced. They are macshot's own
+    /// macOS 14 fallback, so they are the right answer if the mesh ever cannot be drawn,
+    /// and they are what the swatch in a picker can be painted from without solving a
+    /// patch inversion per pixel.
+    /// </remarks>
+    public BeautifyMesh? Mesh { get; init; }
+
+    /// <summary>
     /// The colour this style shows at <paramref name="progress"/> along the gradient,
     /// interpolated between the two stops it falls between.
     /// </summary>
@@ -154,7 +165,7 @@ public static class BeautifyRenderer
     /// colours each one runs through.
     /// </para>
     /// </remarks>
-    public static IReadOnlyList<BeautifyStyle> Styles { get; } =
+    public static IReadOnlyList<BeautifyStyle> Styles { get; } = Meshed(
     [
         new("Ultraviolet", 135, Rgb(0x8C, 0x1A, 0xF2), Rgb(0xE6, 0x66, 0xE6), Rgb(0xD9, 0x59, 0xB2)),
         new("Inferno", 135, Rgb(0xFF, 0x40, 0x66), Rgb(0xFF, 0xA6, 0x4C), Rgb(0xFF, 0xD9, 0x40)),
@@ -204,7 +215,27 @@ public static class BeautifyRenderer
         new("Sand", 135, Rgb(0xD9, 0xBF, 0x8C), Rgb(0xF2, 0xE0, 0xB2), Rgb(0xBF, 0xA6, 0x73)),
         new("Paper", 180, Rgb(0xF2, 0xF2, 0xF2), Rgb(0xFF, 0xFF, 0xFF), Rgb(0xEB, 0xEB, 0xEB)),
         new("Ink", 180, Rgb(0x0D, 0x0D, 0x0D), Rgb(0x1F, 0x1F, 0x1F), Rgb(0x00, 0x00, 0x00)),
-    ];
+    ]);
+
+    /// <summary>
+    /// Hands each style that is really a mesh the mesh it is.
+    /// </summary>
+    /// <remarks>
+    /// Done here rather than in the list above so the catalogue stays a readable column
+    /// of colours, and so the eighteen meshes stay in the one file a script writes. The
+    /// pairing is by position, which is the same thing that makes a stored style index
+    /// mean the same background in both products.
+    /// </remarks>
+    private static IReadOnlyList<BeautifyStyle> Meshed(BeautifyStyle[] styles)
+    {
+        var meshes = BeautifyMeshes.Catalogue;
+        for (var index = 0; index < meshes.Count && index < styles.Length; index++)
+        {
+            styles[index] = styles[index] with { Mesh = meshes[index] };
+        }
+
+        return styles;
+    }
 
     /// <summary>
     /// Frames <paramref name="bgraPixels"/> and returns the larger image.
@@ -255,13 +286,21 @@ public static class BeautifyRenderer
         var contactBlur = shadow * ContactBlurRatio;
         var contactOffset = shadowOffset * ContactOffsetRatio;
 
+        // One sampler for the whole scan: it carries the previous pixel's place on the
+        // mesh over as the next one's starting guess, which is where nearly all of the
+        // cost of inverting a patch goes.
+        var mesh = style.Mesh is { IsUsable: true } definition ? definition.CreateSampler() : null;
+
         for (var row = 0; row < outputHeight; row++)
         {
             for (var column = 0; column < outputWidth; column++)
             {
                 var offset = ((row * outputWidth) + column) * 4;
-                var background = style.Sample(
-                    GradientProgress(style.Angle, column, row, outputWidth, outputHeight));
+                var background = mesh is null
+                    ? style.Sample(GradientProgress(style.Angle, column, row, outputWidth, outputHeight))
+                    : mesh.Sample(
+                        (column + 0.5) / outputWidth,
+                        (row + 0.5) / outputHeight);
 
                 var pixelX = column + 0.5 - padding;
                 var pixelY = row + 0.5 - padding;

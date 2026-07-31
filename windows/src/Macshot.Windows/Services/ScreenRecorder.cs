@@ -111,19 +111,25 @@ public sealed class ScreenRecorder : IDisposable
     /// of it. There is no crop in the capture API, so a region costs the frames a trip
     /// through main memory — see <see cref="CropperOrNull"/>.
     /// </param>
+    /// <param name="frameRate">
+    /// Frames a second, or null for whichever plan's own default the format calls for.
+    /// The two plans clamp it to what they can encode, so a number out of range slows or
+    /// smooths the recording rather than failing it.
+    /// </param>
     public Task<RecordingResult> RecordDisplayAsync(
         nint monitorHandle,
         string path,
         RecordingFormat format,
         CancellationToken cancellation,
-        CaptureRegion? region = null)
+        CaptureRegion? region = null,
+        int? frameRate = null)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         var item = GraphicsCaptureService.OpenDisplay(monitorHandle);
         return format == RecordingFormat.Gif
-            ? RecordGifAsync(item, path, region, cancellation)
-            : RecordMp4Async(item, path, region, cancellation);
+            ? RecordGifAsync(item, path, region, frameRate ?? GifRecordingPlan.DefaultFrameRate, cancellation)
+            : RecordMp4Async(item, path, region, frameRate ?? RecordingPlan.DefaultFrameRate, cancellation);
     }
 
     public void Dispose()
@@ -142,11 +148,12 @@ public sealed class ScreenRecorder : IDisposable
         GraphicsCaptureItem item,
         string path,
         CaptureRegion? region,
+        int frameRate,
         CancellationToken cancellation)
     {
         var size = item.Size;
         var crop = CropperOrNull(size, region);
-        var plan = RecordingPlan.Resolve(crop?.Width ?? size.Width, crop?.Height ?? size.Height);
+        var plan = RecordingPlan.Resolve(crop?.Width ?? size.Width, crop?.Height ?? size.Height, frameRate);
         var kept = 0;
 
         using var frames = new FrameStream(Device(), item, plan.FrameInterval, cancellation);
@@ -237,11 +244,12 @@ public sealed class ScreenRecorder : IDisposable
         GraphicsCaptureItem item,
         string path,
         CaptureRegion? region,
+        int frameRate,
         CancellationToken cancellation)
     {
         var size = item.Size;
         var crop = CropperOrNull(size, region);
-        var plan = GifRecordingPlan.Resolve(crop?.Width ?? size.Width, crop?.Height ?? size.Height);
+        var plan = GifRecordingPlan.Resolve(crop?.Width ?? size.Width, crop?.Height ?? size.Height, frameRate);
         var timing = new GifFrameTiming();
 
         using var frames = new FrameStream(Device(), item, plan.FrameInterval, cancellation);

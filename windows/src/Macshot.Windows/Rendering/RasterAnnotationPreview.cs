@@ -89,6 +89,26 @@ public sealed class RasterAnnotationPreview
         (byte[])_pixels.Clone());
 
     /// <summary>
+    /// The same pixels before anything was drawn on them, with the marks alongside in
+    /// that image's own coordinates.
+    /// </summary>
+    /// <remarks>
+    /// The shift is the one <see cref="Render"/> does, for the same reason and from the
+    /// same place: annotations are held against the whole virtual desktop, and what is
+    /// archived is the crop. Doing it here rather than at the call site is what keeps
+    /// the two from drifting — a mark archived at desktop coordinates would reopen
+    /// somewhere off the edge of the picture.
+    /// </remarks>
+    public EditableCapture ToEditable(IEnumerable<Annotation> annotations)
+    {
+        ArgumentNullException.ThrowIfNull(annotations);
+
+        return new EditableCapture(
+            _baseFrame,
+            [.. annotations.Select(annotation => annotation.Translate(-_region.X, -_region.Y))]);
+    }
+
+    /// <summary>
     /// Takes the preview off the overlay.
     /// </summary>
     /// <remarks>

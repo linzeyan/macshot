@@ -85,4 +85,49 @@ public sealed class TranslationTests
         Assert.IsTrue(TranslationLanguages.All.Any(language => language.Code == "zh-CN"));
         Assert.IsTrue(TranslationLanguages.All.Any(language => language.Code == "zh-TW"));
     }
+
+    [TestMethod]
+    public void ReadFree_JoinsEverySentenceTheServiceSplitTheTextInto()
+    {
+        // The keyless endpoint breaks a paragraph into sentences and answers with one
+        // entry each. Taking only the first would truncate anything past a line, and
+        // nothing about the shape of the response says so.
+        const string Body = """
+            [[["Hello there. ","Hallo da. ",null,null,10],["How are you?","Wie geht es dir?",null,null,3]],null,"de"]
+            """;
+
+        var outcome = TranslationResponse.ReadFree(Body);
+
+        Assert.IsTrue(outcome.Succeeded);
+        Assert.AreEqual("Hello there. How are you?", outcome.Text);
+    }
+
+    [TestMethod]
+    public void ReadFree_SkipsTheTrailingEntriesThatAreNotTheTranslation()
+    {
+        const string Body = """
+            [[["Cat","Katze",null,null,10],[null,null,null,null,null]],null,"de",null,null,[["Katze"]]]
+            """;
+
+        Assert.AreEqual("Cat", TranslationResponse.ReadFree(Body).Text);
+    }
+
+    [TestMethod]
+    public void ReadFree_TurnsAnHtmlRefusalIntoASentence()
+    {
+        // What a rate-limited caller gets back from an undocumented endpoint: a page,
+        // not JSON. It has to end as a message in the window rather than as a throw
+        // over recognized text the user already has.
+        var outcome = TranslationResponse.ReadFree("<html><body>429</body></html>");
+
+        Assert.IsFalse(outcome.Succeeded);
+        Assert.IsNotNull(outcome.Failure);
+    }
+
+    [TestMethod]
+    public void ReadFree_AnswersFailureForAnEmptyTranslation()
+    {
+        Assert.IsFalse(TranslationResponse.ReadFree("[[],null,\"de\"]").Succeeded);
+        Assert.IsFalse(TranslationResponse.ReadFree(null).Succeeded);
+    }
 }

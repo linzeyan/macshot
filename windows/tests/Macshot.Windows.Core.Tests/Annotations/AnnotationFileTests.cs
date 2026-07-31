@@ -1,0 +1,167 @@
+using Macshot.Windows.Core.Annotations;
+using Macshot.Windows.Core.Capture;
+
+namespace Macshot.Windows.Core.Tests.Annotations;
+
+[TestClass]
+public sealed class AnnotationFileTests
+{
+    private static AnnotationSprite Sprite(int width = 3, int height = 2)
+    {
+        var pixels = new byte[width * height * 4];
+        for (var index = 0; index < pixels.Length; index++)
+        {
+            pixels[index] = (byte)(index * 7 % 251);
+        }
+
+        return new AnnotationSprite(width, height, pixels);
+    }
+
+    [TestMethod]
+    public void RoundTrip_KeepsEveryFieldAMarkIsMadeOf()
+    {
+        var group = Guid.NewGuid();
+        var original = Annotation.Create(
+            AnnotationTool.Arrow,
+            new CapturePoint(12.5, 20),
+            new CapturePoint(200, 33.25),
+            new AnnotationStyle(
+                new AnnotationColor(10, 20, 30, 128),
+                7.5,
+                LineStyle.Dashed,
+                0.5,
+                ArrowStyle.Double,
+                12)) with
+        {
+            Rotation = 0.75,
+            Bend = -0.25,
+            GroupId = group,
+            Text = "note",
+            NumberValue = 4,
+        };
+
+        var restored = AnnotationFile.Read(AnnotationFile.Write([original]));
+
+        // Every property, not a sample of them: a field left out of the writer is
+        // exactly the failure this file exists to prevent, and it is invisible until
+        // someone reopens a capture and finds a mark subtly wrong.
+        Assert.AreEqual(1, restored.Count);
+        Assert.AreEqual(original.Id, restored[0].Id);
+        Assert.AreEqual(original.Tool, restored[0].Tool);
+        Assert.AreEqual(original.Start, restored[0].Start);
+        Assert.AreEqual(original.End, restored[0].End);
+        Assert.AreEqual(original.Style.Color, restored[0].Style.Color);
+        Assert.AreEqual(original.Style.StrokeWidth, restored[0].Style.StrokeWidth);
+        Assert.AreEqual(original.Style.LineStyle, restored[0].Style.LineStyle);
+        Assert.AreEqual(original.Style.Opacity, restored[0].Style.Opacity);
+        Assert.AreEqual(original.Style.ArrowStyle, restored[0].Style.ArrowStyle);
+        Assert.AreEqual(original.Style.CornerRadius, restored[0].Style.CornerRadius);
+        Assert.AreEqual(original.Rotation, restored[0].Rotation);
+        Assert.AreEqual(original.Bend, restored[0].Bend);
+        Assert.AreEqual(group, restored[0].GroupId);
+        Assert.AreEqual("note", restored[0].Text);
+        Assert.AreEqual(4, restored[0].NumberValue);
+    }
+
+    [TestMethod]
+    public void RoundTrip_KeepsEverySampleOfAFreeformStroke()
+    {
+        var points = Enumerable.Range(0, 64).Select(step => new CapturePoint(step, step * 1.5)).ToArray();
+        var stroke = Annotation.CreateFreeform(AnnotationTool.Pencil, points);
+
+        var restored = AnnotationFile.Read(AnnotationFile.Write([stroke]));
+
+        CollectionAssert.AreEqual(points, restored[0].Points.ToArray());
+    }
+
+    [TestMethod]
+    public void RoundTrip_KeepsASpritesPixelsExactly()
+    {
+        var sprite = Sprite(5, 4);
+        var badge = Annotation.CreateSprite(AnnotationTool.Number, new CapturePoint(4, 8), sprite);
+
+        var restored = AnnotationFile.Read(AnnotationFile.Write([badge]));
+
+        // The pixels are what the mark says. A sprite re-rasterized from the text would
+        // depend on the fonts of whatever machine reopened it; these do not.
+        var stored = restored[0].Sprite;
+        Assert.IsNotNull(stored);
+        Assert.AreEqual(sprite.Width, stored.Width);
+        Assert.AreEqual(sprite.Height, stored.Height);
+        CollectionAssert.AreEqual(sprite.Pixels.ToArray(), stored.Pixels.ToArray());
+    }
+
+    [TestMethod]
+    public void Write_CompressesASpriteRatherThanStoringItsBytesOutright()
+    {
+        // A glyph sprite is mostly transparent, and the history keeps one file per
+        // capture: uncompressed base64 would make the notes larger than the screenshot.
+        var blank = new AnnotationSprite(64, 64, new byte[64 * 64 * 4]);
+        var written = AnnotationFile.Write(
+            [Annotation.CreateSprite(AnnotationTool.Stamp, new CapturePoint(0, 0), blank)]);
+
+        Assert.IsTrue(written.Length < 64 * 64 * 4 / 4, $"the document is {written.Length} bytes");
+    }
+
+    [TestMethod]
+    public void Read_DropsAnAnnotationNamingAToolThisVersionDoesNotHave()
+    {
+        var document = AnnotationFile.Write(
+            [Annotation.Create(AnnotationTool.Rectangle, new CapturePoint(0, 0), new CapturePoint(10, 10))]);
+
+        var restored = AnnotationFile.Read(document.Replace("\"Rectangle\"", "\"Hyperbola\"", StringComparison.Ordinal));
+
+        Assert.AreEqual(0, restored.Count);
+    }
+
+    [TestMethod]
+    public void Read_DropsOnlyTheUnreadableMarkAndKeepsTheRest()
+    {
+        var document = AnnotationFile.Write(
+        [
+            Annotation.Create(AnnotationTool.Rectangle, new CapturePoint(0, 0), new CapturePoint(10, 10)),
+            Annotation.Create(AnnotationTool.Ellipse, new CapturePoint(1, 1), new CapturePoint(9, 9)),
+        ]);
+
+        var restored = AnnotationFile.Read(document.Replace("\"Rectangle\"", "\"Hyperbola\"", StringComparison.Ordinal));
+
+        Assert.AreEqual(1, restored.Count);
+        Assert.AreEqual(AnnotationTool.Ellipse, restored[0].Tool);
+    }
+
+    [TestMethod]
+    public void Read_DropsASpriteToolThatArrivedWithoutItsPixels()
+    {
+        // Reconstructed by hand: a text annotation with no sprite draws nothing but
+        // still hit tests, which is a mark the user cannot see and cannot get rid of.
+        const string Document =
+            """
+            {"version":1,"annotations":[{"id":"00000000-0000-0000-0000-000000000001",
+            "tool":"Text","startX":0,"startY":0,"endX":10,"endY":10,
+            "color":"#FF000000","strokeWidth":3,"lineStyle":"Solid","opacity":1,
+            "arrowStyle":"Filled","cornerRadius":0}]}
+            """;
+
+        Assert.AreEqual(0, AnnotationFile.Read(Document).Count);
+    }
+
+    [TestMethod]
+    public void Read_AnswersNothingForADocumentFromALaterVersion()
+    {
+        var document = AnnotationFile.Write(
+            [Annotation.Create(AnnotationTool.Line, new CapturePoint(0, 0), new CapturePoint(4, 4))]);
+
+        // Better than a partial read: a later version's meaning for a field this one
+        // understands is not knowable, and a mark placed wrongly is worse than none.
+        Assert.AreEqual(0, AnnotationFile.Read(document.Replace("\"version\":1", "\"version\":2", StringComparison.Ordinal)).Count);
+    }
+
+    [TestMethod]
+    public void Read_AnswersNothingForRubbish()
+    {
+        Assert.AreEqual(0, AnnotationFile.Read(null).Count);
+        Assert.AreEqual(0, AnnotationFile.Read(string.Empty).Count);
+        Assert.AreEqual(0, AnnotationFile.Read("not json at all").Count);
+        Assert.AreEqual(0, AnnotationFile.Read("{\"version\":1}").Count);
+    }
+}

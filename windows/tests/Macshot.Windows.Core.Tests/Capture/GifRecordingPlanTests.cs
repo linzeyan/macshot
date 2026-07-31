@@ -78,4 +78,13 @@ public sealed class GifRecordingPlanTests
         // shortest honest delay is the floor.
         Assert.AreEqual(GifFrameTiming.MinimumDelay, timing.Next(TimeSpan.FromMilliseconds(4)));
     }
+
+    [TestMethod]
+    public void Resolve_AcceptsMacshotsOwnCeilingOfThirty()
+    {
+        // GIFEncoder.swift:29 caps whatever it is asked for at 30. The ceiling here was
+        // 24, which is a caution rather than a limit — and one that would have made the
+        // frame-rate setting unable to ask for what macshot allows.
+        Assert.AreEqual(30, GifRecordingPlan.Resolve(320, 240, 30).FrameRate);
+    }
 }

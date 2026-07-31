@@ -70,6 +70,13 @@ public sealed partial class EditorWindow : Window
     private CapturedFrame _frame;
 
     /// <summary>
+    /// The marks this window was asked to open with, until it has opened. Applied in
+    /// <see cref="ShowAsync"/> rather than in the constructor, because a document reset
+    /// before there is a canvas to draw on has nothing to show for itself.
+    /// </summary>
+    private readonly IReadOnlyList<Annotation>? _opensWith;
+
+    /// <summary>
     /// What the Adjust popover is asking for. A layer over the image rather than
     /// something burnt into it, because the sliders are dragged: an adjustment applied on
     /// every tick would leave an undo stack thirty entries deep for one decision. The
@@ -94,10 +101,19 @@ public sealed partial class EditorWindow : Window
     /// <summary>What one step of the zoom menu multiplies by, as macshot's does.</summary>
     private const double ZoomStep = 1.25;
 
-    public EditorWindow(CapturedFrame frame, SettingsStore settings)
+    /// <param name="annotations">
+    /// Marks to open with, for a capture reopened from the history with its marks
+    /// archived beside it. They are the capture's own marks as objects again, so they can
+    /// be moved, restyled and undone rather than only drawn over.
+    /// </param>
+    public EditorWindow(
+        CapturedFrame frame,
+        SettingsStore settings,
+        IReadOnlyList<Annotation>? annotations = null)
     {
         _frame = frame ?? throw new ArgumentNullException(nameof(frame));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
+        _opensWith = annotations;
         InitializeComponent();
         this.GetAppWindow().UseAppIcon();
     }
@@ -117,7 +133,13 @@ public sealed partial class EditorWindow : Window
     /// delivery means, exactly as it does for a capture, so this window needs no opinion
     /// about clipboards or folders.
     /// </summary>
-    public event EventHandler<CapturedFrame>? Finished;
+    /// <remarks>
+    /// A completion rather than the image alone, so that what the editor hands over
+    /// carries the marks beside the pixels the same way a capture from the overlay does.
+    /// Without it a capture edited here would archive as flat pixels, and reopening it a
+    /// second time would find nothing left to edit.
+    /// </remarks>
+    public event EventHandler<CaptureCompletion>? Finished;
 
     public async Task ShowAsync()
     {
@@ -125,6 +147,15 @@ public sealed partial class EditorWindow : Window
         WireCanvas();
         BuildActions();
         Present();
+
+        // After the canvas exists, and as a reset rather than an add: the marks are the
+        // ones this capture already had, so undoing straight after opening should not
+        // take them off something that was archived with them on.
+        if (_opensWith is { Count: > 0 } restored)
+        {
+            _editor.Document.Reset(restored);
+            AnnotationCanvas.Render();
+        }
 
         var appWindow = this.GetAppWindow();
         appWindow.MoveAndResize(PlaceOverImage());
@@ -1029,7 +1060,9 @@ public sealed partial class EditorWindow : Window
             await AnnotationCanvas.FlushAsync();
             if (AnnotationCanvas.ToFrame() is { } finished)
             {
-                Finished?.Invoke(this, finished);
+                Finished?.Invoke(
+                    this,
+                    new CaptureCompletion(finished, CaptureOutcome.Deliver, AnnotationCanvas.ToEditable()));
             }
 
             Close();

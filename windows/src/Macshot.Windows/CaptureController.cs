@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Input;
@@ -502,7 +503,7 @@ public sealed class CaptureController : IDisposable
                 return;
             }
 
-            await DeliverAsync(result.Frame, result.Outcome);
+            await DeliverAsync(result);
         }
         catch (Exception exception)
         {
@@ -518,34 +519,36 @@ public sealed class CaptureController : IDisposable
     /// History is written whichever button was pressed, the same as it is for an ordinary
     /// delivery: it is the net under every capture, not one of the destinations.
     /// </remarks>
-    private async Task DeliverAsync(CapturedFrame frame, CaptureOutcome outcome)
+    private async Task DeliverAsync(CaptureCompletion completion)
     {
-        if (outcome is CaptureOutcome.Deliver)
+        var frame = completion.Frame;
+        if (completion.Outcome is CaptureOutcome.Deliver)
         {
-            await DeliverAsync(frame);
+            await DeliverAsync(frame, completion.Editable, completion.WindowTitle);
             return;
         }
 
-        DiagnosticLog.Verbose($"delivering {frame.Width}x{frame.Height} to {outcome}, asked for on the toolbar");
+        DiagnosticLog.Verbose(
+            $"delivering {frame.Width}x{frame.Height} to {completion.Outcome}, asked for on the toolbar");
 
         var settings = _settings.Current;
-        switch (outcome)
+        switch (completion.Outcome)
         {
             case CaptureOutcome.Copy:
                 await ImageDelivery.CopyToClipboardAsync(frame);
                 break;
 
             case CaptureOutcome.Save:
-                await ImageDelivery.SaveAsync(frame, settings);
+                await ImageDelivery.SaveAsync(frame, settings, completion.WindowTitle);
                 break;
 
             default:
                 break;
         }
 
-        _ = await ScreenshotHistory.RecordAsync(frame, settings);
+        _ = await ScreenshotHistory.RecordAsync(frame, settings, completion.Editable);
 
-        if (outcome is CaptureOutcome.Pin)
+        if (completion.Outcome is CaptureOutcome.Pin)
         {
             await PinAsync(frame);
         }
@@ -556,7 +559,10 @@ public sealed class CaptureController : IDisposable
     /// already cropped the selection and burned in the annotations, so this stage
     /// only decides where the pixels go.
     /// </summary>
-    private async Task DeliverAsync(CapturedFrame frame)
+    private async Task DeliverAsync(
+        CapturedFrame frame,
+        EditableCapture? editable = null,
+        string? windowTitle = null)
     {
         var settings = _settings.Current;
 
@@ -575,13 +581,13 @@ public sealed class CaptureController : IDisposable
 
         if (settings.AutoSave)
         {
-            await ImageDelivery.SaveAsync(frame, settings);
+            await ImageDelivery.SaveAsync(frame, settings, windowTitle);
         }
 
         // After the actions the user asked for, so the extra encode is never in front
         // of the clipboard. History is the safety net under delivery, not part of it,
         // and it is written whether or not the capture was saved anywhere else.
-        var archived = await ScreenshotHistory.RecordAsync(frame, settings);
+        var archived = await ScreenshotHistory.RecordAsync(frame, settings, editable);
 
         if (settings.ShowThumbnail)
         {
@@ -699,19 +705,54 @@ public sealed class CaptureController : IDisposable
             return;
         }
 
-        var path = _recent[index].Path;
+        var entry = _recent[index];
         Post(async () =>
         {
             try
             {
-                await ShowEditorAsync(await ImageLoader.LoadAsync(path));
+                await ReopenAsync(entry);
             }
             catch (Exception exception)
             {
-                DiagnosticLog.Write($"Could not reopen '{path}': {exception.Message}");
-                OpenWithShell(path);
+                DiagnosticLog.Write($"Could not reopen '{entry.Path}': {exception.Message}");
+                OpenWithShell(entry.Path);
             }
         });
+    }
+
+    /// <summary>
+    /// Opens a past capture in the editor, with its marks still separate from the pixels
+    /// when they were archived that way.
+    /// </summary>
+    /// <remarks>
+    /// The unannotated copy and the marks are read rather than the finished image, which
+    /// is what makes an arrow drawn last week something that can still be moved. An entry
+    /// archived without them — every entry from before this existed, and every framed
+    /// capture — opens as the flat image it is, so nothing that was reachable stops being
+    /// reachable.
+    /// </remarks>
+    private async Task ReopenAsync(HistoryEntry entry)
+    {
+        if (entry is { IsEditable: true, RawPath: { } raw, NotesPath: { } notes })
+        {
+            try
+            {
+                var annotations = AnnotationFile.Read(await File.ReadAllTextAsync(notes));
+                await ShowEditorAsync(await ImageLoader.LoadAsync(raw), annotations);
+                return;
+            }
+            catch (Exception exception)
+            {
+                // Anything at all, because the answer to all of it is the same and it is
+                // a good one: the finished image is still there and still worth opening.
+                // Failing the whole reopen because the editable copy would not load —
+                // deleted by hand, half-written, decoded by a codec that has changed —
+                // would be losing the capture over the extra.
+                DiagnosticLog.Write($"Could not reopen '{raw}' for editing: {exception.Message}");
+            }
+        }
+
+        await ShowEditorAsync(await ImageLoader.LoadAsync(entry.Path));
     }
 
     private static void OpenWithShell(string path)
@@ -742,8 +783,7 @@ public sealed class CaptureController : IDisposable
         }
 
         var history = new HistoryWindow();
-        history.OpenRequested += (_, entry) => Post(async () =>
-            await ShowEditorAsync(await ImageLoader.LoadAsync(entry.Path)));
+        history.OpenRequested += (_, entry) => Post(() => ReopenAsync(entry));
 
         history.Closed += (_, _) =>
         {
@@ -992,12 +1032,18 @@ public sealed class CaptureController : IDisposable
 
         var format = _settings.Current.RecordingFormat;
 
+        // Each format has its own rate, because they are answers to different questions:
+        // how smooth the recording should be, and how large a GIF may get.
+        var frameRate = format == RecordingFormat.Gif
+            ? _settings.Current.GifFrameRate
+            : _settings.Current.RecordingFrameRate;
+
         try
         {
             var path = ResolveRecordingPath(format);
             DiagnosticLog.Verbose(
                 $"recording {monitor.DeviceName} ({monitor.Bounds.Width}x{monitor.Bounds.Height}) "
-                    + $"as {format} to {path}"
+                    + $"as {format} at {frameRate} fps to {path}"
                     + (region is { } cropped
                         ? $", cropped to {cropped.Width}x{cropped.Height} at {cropped.X},{cropped.Y}"
                         : string.Empty));
@@ -1007,7 +1053,8 @@ public sealed class CaptureController : IDisposable
                 path,
                 format,
                 cancellation.Token,
-                region);
+                region,
+                frameRate);
 
             DiagnosticLog.Verbose($"recording finished: {result.Path}");
 
@@ -1074,11 +1121,11 @@ public sealed class CaptureController : IDisposable
     /// versions of nearly the same screenshot, and the one thing worse than losing an
     /// annotation is saving the wrong copy of it.
     /// </remarks>
-    private async Task ShowEditorAsync(CapturedFrame frame)
+    private async Task ShowEditorAsync(CapturedFrame frame, IReadOnlyList<Annotation>? annotations = null)
     {
         _editor?.Close();
 
-        var editor = new EditorWindow(frame, _settings);
+        var editor = new EditorWindow(frame, _settings, annotations);
         editor.PinRequested += (_, pinned) => Post(() => PinAsync(pinned));
         editor.AddCaptureRequested += (_, _) => Post(() => AddCaptureAsync(editor));
 

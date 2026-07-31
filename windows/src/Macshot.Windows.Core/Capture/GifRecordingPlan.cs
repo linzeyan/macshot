@@ -25,7 +25,13 @@ public sealed record GifRecordingPlan
     public const int DefaultFrameRate = 12;
 
     public const int MinFrameRate = 2;
-    public const int MaxFrameRate = 24;
+
+    /// <summary>
+    /// macshot's own ceiling — <c>GIFEncoder.swift:29</c> caps whatever it is asked for
+    /// at 30, and its export control offers 5 to 30. The ceiling was 24 here for no
+    /// reason but caution, which is a different thing from a limit.
+    /// </summary>
+    public const int MaxFrameRate = 30;
 
     /// <summary>
     /// The longest edge a GIF frame is allowed. Wide enough to read a window's text,

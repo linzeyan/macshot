@@ -39,7 +39,15 @@ public static class ImageDelivery
         return await ReadAllAsync(stream);
     }
 
-    public static async Task<string> SaveAsync(CapturedFrame frame, CaptureSettings settings)
+    /// <param name="windowTitle">
+    /// What the captured window called itself, which is all the <c>{window}</c> token in
+    /// the template needs. Null for a capture that was dragged out rather than aimed at
+    /// a window, and then the token resolves to nothing.
+    /// </param>
+    public static async Task<string> SaveAsync(
+        CapturedFrame frame,
+        CaptureSettings settings,
+        string? windowTitle = null)
     {
         ArgumentNullException.ThrowIfNull(frame);
         ArgumentNullException.ThrowIfNull(settings);
@@ -53,7 +61,8 @@ public static class ImageDelivery
             settings.FilenameTemplate,
             DateTimeOffset.Now,
             settings.Format.FileExtension(),
-            candidate => File.Exists(Path.Combine(directory, candidate)));
+            candidate => File.Exists(Path.Combine(directory, candidate)),
+            new FilenameContext(windowTitle));
 
         var bytes = await EncodeAsync(frame, settings.Format, settings.Quality);
         var path = Path.Combine(directory, name);

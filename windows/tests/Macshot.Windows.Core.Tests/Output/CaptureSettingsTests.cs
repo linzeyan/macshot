@@ -1,4 +1,5 @@
 using Macshot.Windows.Core.Annotations;
+using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Output;
 
 namespace Macshot.Windows.Core.Tests.Output;
@@ -168,5 +169,40 @@ public sealed class CaptureSettingsTests
         Assert.IsTrue(CaptureSettings.Default.CopyToClipboard);
         Assert.IsTrue(CaptureSettings.Default.AutoSave);
         Assert.AreEqual(CaptureImageFormat.Png, CaptureSettings.Default.Format);
+    }
+
+    [TestMethod]
+    public void Normalized_PullsTheRecordingRatesIntoWhatThePlansCanEncode()
+    {
+        var settings = (CaptureSettings.Default with
+        {
+            RecordingFrameRate = 500,
+            GifFrameRate = 0,
+        }).Normalized();
+
+        // The file is hand-edited, so these arrive from a person rather than from a
+        // control that could not offer 500 in the first place.
+        Assert.AreEqual(RecordingPlan.MaxFrameRate, settings.RecordingFrameRate);
+        Assert.AreEqual(GifRecordingPlan.MinFrameRate, settings.GifFrameRate);
+    }
+
+    [TestMethod]
+    public void Default_RecordsAtTheRateThePlanRecordsAt()
+    {
+        // The setting exists so that the rate can be changed, not so that there are two
+        // places to disagree about what it is when nobody has.
+        Assert.AreEqual(RecordingPlan.DefaultFrameRate, CaptureSettings.Default.RecordingFrameRate);
+        Assert.AreEqual(GifRecordingPlan.DefaultFrameRate, CaptureSettings.Default.GifFrameRate);
+    }
+
+    [TestMethod]
+    public void EffectiveHistorySize_LetsUnlimitedOverrideACountOfNone()
+    {
+        // Someone who asked to keep everything has not asked for history to be off, and
+        // reading it the other way would turn the switch into one that deletes.
+        var unlimited = CaptureSettings.Default with { HistorySize = 0, HistoryUnlimited = true };
+
+        Assert.AreEqual(int.MaxValue, unlimited.EffectiveHistorySize);
+        Assert.AreEqual(0, (unlimited with { HistoryUnlimited = false }).EffectiveHistorySize);
     }
 }
