@@ -3,33 +3,39 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="Macshot Capture">
-    <Window.Resources>
-        <!-- macshot's hover chrome: a 28 disc at white 18% behind a white-50% hairline. -->
-        <Style x:Key="CornerDisc" TargetType="Border">
-            <Setter Property="Width" Value="28" />
-            <Setter Property="Height" Value="28" />
-            <Setter Property="CornerRadius" Value="14" />
-            <Setter Property="Background" Value="#2EFFFFFF" />
-            <Setter Property="BorderBrush" Value="#80FFFFFF" />
-            <Setter Property="BorderThickness" Value="1" />
-            <Setter Property="Margin" Value="10" />
-        </Style>
-
-        <!-- The two actions worth a word rather than a picture, at macshot's 110 x 32 on
-             white 85% — which is why their labels are dark. -->
-        <Style x:Key="CentreAction" TargetType="Border">
-            <Setter Property="Width" Value="110" />
-            <Setter Property="Height" Value="32" />
-            <Setter Property="CornerRadius" Value="16" />
-            <Setter Property="Background" Value="#D9FFFFFF" />
-        </Style>
-    </Window.Resources>
 
     <Grid
         x:Name="ThumbnailRoot"
         Background="#1F1F1F"
         PointerEntered="ThumbnailRoot_PointerEntered"
         PointerExited="ThumbnailRoot_PointerExited">
+
+        <!-- On the root element rather than on the Window. A WinUI Window is not a
+             FrameworkElement and has no Resources of its own — that is WPF, where this
+             markup would have compiled. Everything that uses these lives under this
+             Grid, so the lookup is unchanged. -->
+        <Grid.Resources>
+            <!-- macshot's hover chrome: a 28 disc at white 18% behind a white-50% hairline. -->
+            <Style x:Key="CornerDisc" TargetType="Border">
+                <Setter Property="Width" Value="28" />
+                <Setter Property="Height" Value="28" />
+                <Setter Property="CornerRadius" Value="14" />
+                <Setter Property="Background" Value="#2EFFFFFF" />
+                <Setter Property="BorderBrush" Value="#80FFFFFF" />
+                <Setter Property="BorderThickness" Value="1" />
+                <Setter Property="Margin" Value="10" />
+            </Style>
+
+            <!-- The two actions worth a word rather than a picture, at macshot's 110 x 32 on
+                 white 85% — which is why their labels are dark. -->
+            <Style x:Key="CentreAction" TargetType="Border">
+                <Setter Property="Width" Value="110" />
+                <Setter Property="Height" Value="32" />
+                <Setter Property="CornerRadius" Value="16" />
+                <Setter Property="Background" Value="#D9FFFFFF" />
+            </Style>
+        </Grid.Resources>
+
         <Grid.ContextFlyout>
             <!-- Everything the panel has no room to show, which is where macshot keeps
                  the same list. -->
