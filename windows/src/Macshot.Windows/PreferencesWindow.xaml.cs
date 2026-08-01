@@ -909,6 +909,7 @@ public sealed partial class PreferencesWindow : Window
         RememberSelectionCheck.IsChecked = settings.RememberLastSelection;
         CaptureCursorCheck.IsChecked = settings.CaptureCursor;
         HideInstructionsCheck.IsChecked = settings.HideCaptureInstructions;
+        SelectionShadowCheck.IsChecked = settings.DisableSelectionShadow;
         VerboseLoggingCheck.IsChecked = settings.VerboseLogging;
         AutomaticUpdatesCheck.IsChecked = settings.AutomaticUpdateChecks;
         BetaUpdatesCheck.IsChecked = settings.BetaUpdates;
@@ -1270,6 +1271,7 @@ public sealed partial class PreferencesWindow : Window
             RememberLastSelection = RememberSelectionCheck.IsChecked == true,
             CaptureCursor = CaptureCursorCheck.IsChecked == true,
             HideCaptureInstructions = HideInstructionsCheck.IsChecked == true,
+            DisableSelectionShadow = SelectionShadowCheck.IsChecked == true,
             // No PencilSmoothing here. It is set from the tool options row while drawing,
             // and this record is built with "with", so leaving it out carries the stored
             // choice through rather than overwriting it with a control that is gone.

@@ -256,6 +256,12 @@
                             Checked="Setting_Toggled"
                             Unchecked="Setting_Toggled" />
                         <CheckBox
+                            x:Name="SelectionShadowCheck"
+                            Content="Disable shadow outside selection"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <CheckBox
                             x:Name="CaptureSoundCheck"
                             Content="Play sound on capture"
                             Style="{StaticResource Unlabelled}"

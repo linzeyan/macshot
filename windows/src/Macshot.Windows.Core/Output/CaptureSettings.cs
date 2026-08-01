@@ -398,6 +398,18 @@ public sealed record CaptureSettings
     public bool WindowSnapEnabled { get; init; } = true;
 
     /// <summary>
+    /// Takes the dark wash off everything outside the selection.
+    /// </summary>
+    /// <remarks>
+    /// macshot's <c>disableSelectionOutsideShadow</c>, off by default. The wash is what
+    /// says which part of the screen is being taken, so it earns its place — but it also
+    /// changes every colour on the display except the ones inside the marquee, and
+    /// someone lining a selection up against what is beside it, or sampling a colour out
+    /// there, needs the screen to look like the screen.
+    /// </remarks>
+    public bool DisableSelectionShadow { get; init; }
+
+    /// <summary>
     /// Whether a finished capture makes a sound.
     /// </summary>
     /// <remarks>

@@ -2576,6 +2576,16 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         var screen = LayoutBounds;
 
+        // The whole wash, not a paler one: macshot's disableSelectionOutsideShadow leaves
+        // the screenshot exactly as the screen looked. Set here rather than once at
+        // startup so an overlay opened while the settings window is up follows it too.
+        // The rectangles behind it are kept in step regardless — the layer is collapsed,
+        // so it costs four numbers, and turning the setting back on then shows the wash
+        // in the right place instead of wherever the selection was when it went off.
+        DimLayer.Visibility = _settings.Current.DisableSelectionShadow
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+
         if (clear is not { } hole || hole.IsEmpty)
         {
             // Nothing chosen yet, so all of it is "not being captured".
