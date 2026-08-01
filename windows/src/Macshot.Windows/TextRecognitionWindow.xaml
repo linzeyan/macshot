@@ -20,7 +20,7 @@
             Grid.Column="1"
             Background="{ThemeResource DividerStrokeColorDefaultBrush}" />
 
-        <Grid Grid.Column="2" RowDefinitions="52,*,52">
+        <Grid Grid.Column="2" RowDefinitions="52,*,Auto,52">
             <!-- Header: what to translate into, the button that does it, and how much
                  text was read. macshot's 52, with a 28 row inside it. -->
             <Grid Padding="12,0" ColumnDefinitions="Auto,Auto,Auto,*" ColumnSpacing="8">
@@ -69,8 +69,24 @@
                 IsSpellCheckEnabled="False"
                 ScrollViewer.VerticalScrollBarVisibility="Auto" />
 
+            <!-- Below the words, above the buttons — macshot's placement. Collapsed
+                 unless the capture had a code in it, which is almost every capture. -->
+            <StackPanel x:Name="QrSection" Grid.Row="2" Margin="12,10,12,0" Visibility="Collapsed">
+                <TextBlock
+                    x:Name="QrHeading"
+                    FontSize="12"
+                    FontWeight="SemiBold"
+                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+
+                <!-- macshot caps this section at 168 so a picture full of codes cannot
+                     push the text out of the window. -->
+                <ScrollViewer MaxHeight="140" VerticalScrollBarVisibility="Auto">
+                    <StackPanel x:Name="QrRows" Spacing="4" Margin="0,6,0,0" />
+                </ScrollViewer>
+            </StackPanel>
+
             <StackPanel
-                Grid.Row="2"
+                Grid.Row="3"
                 Orientation="Horizontal"
                 HorizontalAlignment="Right"
                 VerticalAlignment="Center"

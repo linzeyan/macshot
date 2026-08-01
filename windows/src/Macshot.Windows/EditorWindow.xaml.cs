@@ -896,16 +896,28 @@ public sealed partial class EditorWindow : Window
         }
     }
 
+    /// <remarks>
+    /// Written out rather than routed through <see cref="RunRecognitionAsync"/>, whose
+    /// callback is synchronous: the QR scan is a second await. See the same method on
+    /// the overlay.
+    /// </remarks>
     private async Task ReadTextAsync()
     {
-        await RunRecognitionAsync(lines =>
+        var previousHint = HintText.Text;
+        HintText.Text = "Reading text...";
+        try
         {
-            var window = new TextRecognitionWindow(
-                TextRecognizer.ToText(lines),
-                _settings,
-                AnnotationCanvas.ToFrame() ?? _frame);
-            window.Activate();
-        });
+            var lines = await AnnotationCanvas.RecognizeAsync();
+            var frame = AnnotationCanvas.ToFrame() ?? _frame;
+            var codes = await TextRecognizer.ScanQrCodesAsync(frame);
+            HintText.Text = previousHint;
+
+            new TextRecognitionWindow(TextRecognizer.ToText(lines), _settings, frame, codes).Activate();
+        }
+        catch (Exception exception)
+        {
+            HintText.Text = exception.Message;
+        }
     }
 
     private async Task RedactPiiAsync()

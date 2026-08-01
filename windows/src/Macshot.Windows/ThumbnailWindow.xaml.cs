@@ -250,7 +250,8 @@ public sealed partial class ThumbnailWindow : Window
     private Task ReadTextAsync() => RunAsync("Could not read the text", async () =>
     {
         var lines = await TextRecognizer.RecognizeAsync(_frame, 0, 0);
-        new TextRecognitionWindow(TextRecognizer.ToText(lines), _settings, _frame).Activate();
+        var codes = await TextRecognizer.ScanQrCodesAsync(_frame);
+        new TextRecognitionWindow(TextRecognizer.ToText(lines), _settings, _frame, codes).Activate();
     });
 
     private async Task RunAsync(string failureTitle, Func<Task> action)

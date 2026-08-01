@@ -6,6 +6,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
+using Windows.System;
 
 namespace Macshot.Windows;
 
@@ -34,6 +35,9 @@ public sealed partial class TextRecognitionWindow : Window
     /// </summary>
     private readonly CancellationTokenSource _closing = new();
 
+    /// <summary>What the capture decoded to, in the order it was found.</summary>
+    private readonly IReadOnlyList<QrCode> _qrCodes;
+
     /// <summary>macshot's window, in its size.</summary>
     private const double WidthDips = 720;
 
@@ -51,7 +55,17 @@ public sealed partial class TextRecognitionWindow : Window
     /// The capture the text was read out of, shown down the left. Null leaves the pane
     /// out, as macshot does when it has no image to put there.
     /// </param>
-    public TextRecognitionWindow(string text, SettingsStore settings, CapturedFrame? source = null)
+    /// <param name="qrCodes">
+    /// What the same capture decoded to, listed under the words. macshot reads text and
+    /// QR codes in one pass and shows them in one window (<c>VisionOCR.swift:48</c>),
+    /// because a screenshot of a page with a code on it is one thing the user captured,
+    /// not two.
+    /// </param>
+    public TextRecognitionWindow(
+        string text,
+        SettingsStore settings,
+        CapturedFrame? source = null,
+        IReadOnlyList<QrCode>? qrCodes = null)
     {
         // Checked in both builds even though only one keeps it: the caller passing null
         // is a defect either way, and it should not be a defect that only shows up in
@@ -62,9 +76,13 @@ public sealed partial class TextRecognitionWindow : Window
 #endif
 
         InitializeComponent();
+        _qrCodes = qrCodes ?? [];
         RecognizedTextBox.Text = text ?? string.Empty;
-        StatusText.Text = string.IsNullOrWhiteSpace(text) ? "No text was recognized." : string.Empty;
+        StatusText.Text = string.IsNullOrWhiteSpace(text) && _qrCodes.Count == 0
+            ? "No text was recognized."
+            : string.Empty;
         ShowCount(text ?? string.Empty);
+        ShowQrCodes();
 
         var appWindow = this.GetAppWindow();
         appWindow.UseAppIcon();
@@ -142,10 +160,84 @@ public sealed partial class TextRecognitionWindow : Window
             (int)(HeightDips * monitor.Scale)));
     }
 
+    /// <summary>
+    /// Lists the decoded codes, each with the two things worth doing to one.
+    /// </summary>
+    /// <remarks>
+    /// Built here rather than bound through a template because macshot builds the same
+    /// section a row at a time, and a row is a label and two buttons — a template and a
+    /// converter for the Open button's visibility would be more machinery than the
+    /// thing it draws.
+    /// </remarks>
+    private void ShowQrCodes()
+    {
+        // macshot's titles: the window says what it holds, and it does not always hold
+        // the same thing.
+        Title = _qrCodes.Count == 0 ? "Text Recognition" : "Text & QR Recognition";
+
+        if (_qrCodes.Count == 0)
+        {
+            return;
+        }
+
+        QrSection.Visibility = Visibility.Visible;
+        QrHeading.Text = _qrCodes.Count == 1 ? "QR Code" : "QR Codes";
+
+        foreach (var code in _qrCodes)
+        {
+            var row = new Grid { ColumnSpacing = 8 };
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(1, GridUnitType.Star) });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+            row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
+
+            var value = new TextBlock
+            {
+                Text = code.Value,
+                FontSize = 12,
+                VerticalAlignment = VerticalAlignment.Center,
+
+                // One line with an ellipsis: a payload can be a page of text, and the
+                // row is a handle for copying it rather than a place to read it.
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                TextWrapping = TextWrapping.NoWrap,
+            };
+            ToolTipService.SetToolTip(value, code.Value);
+            row.Children.Add(value);
+
+            var copy = new Button { Content = "Copy", FontSize = 12, Padding = new Thickness(10, 2, 10, 2) };
+            copy.Click += (_, _) => CopyText(code.Value, "QR code copied.");
+            Grid.SetColumn(copy, 1);
+            row.Children.Add(copy);
+
+            // No Open button at all when the payload is not a web address, rather than a
+            // disabled one: a Wi-Fi or vCard code is not a broken link.
+            if (code.Url is { } url)
+            {
+                var open = new Button { Content = "Open", FontSize = 12, Padding = new Thickness(10, 2, 10, 2) };
+                open.Click += async (_, _) => await Launcher.LaunchUriAsync(url);
+                Grid.SetColumn(open, 2);
+                row.Children.Add(open);
+            }
+
+            QrRows.Children.Add(row);
+        }
+    }
+
     private void Copy_Click(object sender, RoutedEventArgs e)
     {
+        // macshot's `copyText`: with nothing recognized, Copy takes the payloads rather
+        // than copying an empty string over whatever the user already had.
+        var text = string.IsNullOrWhiteSpace(RecognizedTextBox.Text) && _qrCodes.Count > 0
+            ? string.Join(Environment.NewLine, _qrCodes.Select(code => code.Value))
+            : RecognizedTextBox.Text;
+
+        CopyText(text, "Copied.");
+    }
+
+    private void CopyText(string text, string done)
+    {
         var package = new DataPackage { RequestedOperation = DataPackageOperation.Copy };
-        package.SetText(RecognizedTextBox.Text);
+        package.SetText(text);
 
         try
         {
@@ -154,7 +246,7 @@ public sealed partial class TextRecognitionWindow : Window
             // macshot is a background tool the user will quit, and without this the
             // text would go with it.
             Clipboard.Flush();
-            StatusText.Text = "Copied.";
+            StatusText.Text = done;
         }
         catch (Exception exception)
         {

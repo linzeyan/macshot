@@ -1949,22 +1949,46 @@ public sealed partial class CaptureOverlayWindow : Window
         };
     }
 
+    /// <remarks>
+    /// Not routed through <see cref="RunRecognitionAsync"/> like the other two readers:
+    /// this one has a second await in it, for the QR codes, and that callback is not
+    /// asynchronous. macshot reads text and codes in one Vision pass; here they are two
+    /// different engines and the window waits for both.
+    /// </remarks>
     private async Task ReadTextAsync()
     {
-        await RunRecognitionAsync(lines =>
+        if (!IsAnnotating)
         {
+            return;
+        }
+
+        var previousHint = HintText.Text;
+        Hint("Reading text...");
+        try
+        {
+            var lines = await AnnotationCanvas.RecognizeAsync();
+
             // With the capture, so the results window shows what the words were read
             // out of — the overlay it came from is about to be dismissed.
+            var frame = AnnotationCanvas.ToFrame();
+            var codes = await TextRecognizer.ScanQrCodesAsync(frame);
+            Hint(previousHint);
+
             var window = new TextRecognitionWindow(
                 TextRecognizer.ToText(lines),
                 _settings,
-                AnnotationCanvas.ToFrame());
+                frame,
+                codes);
 
             // The overlay is always on top, so the results window would open behind
             // it. Reading the text ends the capture, the same way it does on macOS.
             Cancelled?.Invoke(this, EventArgs.Empty);
             window.Activate();
-        });
+        }
+        catch (Exception exception)
+        {
+            Hint(exception.Message);
+        }
     }
 
     private async Task RedactPiiAsync()

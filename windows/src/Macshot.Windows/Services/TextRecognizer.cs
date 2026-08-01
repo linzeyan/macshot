@@ -79,6 +79,27 @@ public static class TextRecognizer
         return lines;
     }
 
+    /// <summary>
+    /// Reads the QR codes in the same pixels the text was read from.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Separate from <see cref="RecognizeAsync"/> where macshot has one call that does
+    /// both (<c>VisionOCR.performTextAndQRCodeRecognition</c>), because the two use
+    /// entirely different machinery here: text comes from the OS, codes from ZXing. The
+    /// callers run them together, which is what a user sees.
+    /// </para>
+    /// <para>
+    /// On a worker thread. The decode is arithmetic over every pixel and asks ZXing to
+    /// try harder than its default; on a 4K selection that is long enough to be seen as
+    /// the window failing to open.
+    /// </para>
+    /// </remarks>
+    public static Task<IReadOnlyList<QrCode>> ScanQrCodesAsync(CapturedFrame? frame) =>
+        frame is null
+            ? Task.FromResult<IReadOnlyList<QrCode>>([])
+            : Task.Run(() => QrCodeScanner.Scan(frame.BgraPixels, frame.Width, frame.Height));
+
     /// <summary>Joins recognized lines back into readable text.</summary>
     public static string ToText(IEnumerable<RecognizedLine> lines)
     {

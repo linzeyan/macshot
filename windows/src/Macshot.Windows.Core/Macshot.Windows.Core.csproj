@@ -5,4 +5,7 @@
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
   </PropertyGroup>
+  <ItemGroup>
+    <PackageReference Include="ZXing.Net" Version="0.16.11" />
+  </ItemGroup>
 </Project>
