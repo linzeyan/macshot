@@ -138,6 +138,31 @@ public sealed record CaptureSettings
     public bool ShowClickHighlight { get; init; }
 
     /// <summary>
+    /// Whether macshot starts with Windows. macshot's <c>launchAtLogin</c>.
+    /// </summary>
+    /// <remarks>
+    /// Stored here as well as in the registry so the setting travels with an exported
+    /// settings file, and so the checkbox has something to show before the registry has
+    /// been read. The registry is still the authority — the app writes one from the
+    /// other on save.
+    /// </remarks>
+    public bool LaunchAtLogin { get; init; }
+
+    /// <summary>
+    /// Whether the notification-area icon is hidden. macshot's <c>hideMenuBarIcon</c>.
+    /// </summary>
+    /// <remarks>
+    /// The shortcuts still work with the icon gone, which is the point: someone who
+    /// captures by hotkey has no use for an icon sitting in the tray. Read once at
+    /// startup, as macshot's is, because an icon that came and went as the checkbox was
+    /// clicked would leave the tray reordering itself under the user's pointer.
+    /// </remarks>
+    public bool HideTrayIcon { get; init; }
+
+    /// <summary>Which light or dark macshot's own windows are drawn in.</summary>
+    public AppTheme Theme { get; init; } = AppTheme.System;
+
+    /// <summary>
     /// Whether a recording carries the microphone. macshot's <c>recordMicAudio</c>,
     /// off by default for the same reason.
     /// </summary>

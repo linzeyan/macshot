@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Input;
@@ -80,6 +81,8 @@ public sealed partial class PreferencesWindow : Window
         // Every string in the XAML is already the English text macshot keys by,
         // so the page is translated in place rather than written twice.
         this.Localize();
+        ShoutTheSectionHeadings();
+        AppThemes.Apply(this, _settings.Current.Theme);
 
         // The markup selects the first item, which happens while the pages it switches
         // between are still being built — so the handler that would have shown it declined
@@ -194,9 +197,24 @@ public sealed partial class PreferencesWindow : Window
             return;
         }
 
+        var settings = Collect();
+
+        // Before the file, because this one lives outside it: the registry is what
+        // actually makes macshot start with Windows, and a checkbox Windows refused has
+        // to say so rather than be saved as though it took.
+        if (settings.LaunchAtLogin != StartupRegistration.IsEnabled()
+            && !StartupRegistration.Set(settings.LaunchAtLogin))
+        {
+            LaunchAtLoginCheck.IsChecked = StartupRegistration.IsEnabled();
+            StatusText.Text = L("Windows would not let macshot change its startup entry.");
+            return;
+        }
+
+        AppThemes.Apply(this, settings.Theme);
+
         try
         {
-            _settings.Save(Collect());
+            _settings.Save(settings);
         }
         // Everything, not only the file system failures. This runs from a timer tick with
         // nobody above it to catch anything that escapes, and a preference that cannot be
@@ -209,6 +227,65 @@ public sealed partial class PreferencesWindow : Window
 
         _pending = false;
         StatusText.Text = string.Empty;
+    }
+
+    /// <summary>
+    /// Puts every section heading in capitals, after they have been translated.
+    /// </summary>
+    /// <remarks>
+    /// macOS uppercases its headings in code because AppKit has no such transform, and
+    /// XAML has none either. Done here rather than by writing the headings in capitals,
+    /// because the capitals were what broke the translation: "APPLICATION" is not a key
+    /// macshot ships and "Application" is. Uppercasing a translated Chinese or Japanese
+    /// heading does nothing, which is exactly what macOS does with it too.
+    /// </remarks>
+    private void ShoutTheSectionHeadings()
+    {
+        if (Content is not FrameworkElement root
+            || !root.Resources.TryGetValue("SectionHeading", out var found)
+            || found is not Style heading)
+        {
+            return;
+        }
+
+        Shout(root, 0);
+
+        void Shout(DependencyObject? node, int depth)
+        {
+            // The logical tree, not VisualTreeHelper's: five of the six pages are
+            // collapsed when this runs, and a collapsed page has no visual children to
+            // walk. The cases are the ones LocalizedTree walks, for the same reason —
+            // they are what this markup is built out of.
+            const int MaxDepth = 64;
+
+            if (node is null || depth > MaxDepth)
+            {
+                return;
+            }
+
+            switch (node)
+            {
+            case TextBlock text when ReferenceEquals(text.Style, heading):
+                text.Text = text.Text.ToUpper(CultureInfo.CurrentCulture);
+                break;
+
+            case Panel panel:
+                foreach (var child in panel.Children)
+                {
+                    Shout(child, depth + 1);
+                }
+
+                break;
+
+            case ContentControl control:
+                Shout(control.Content as DependencyObject, depth + 1);
+                break;
+
+            case Border border:
+                Shout(border.Child, depth + 1);
+                break;
+            }
+        }
     }
 
     /// <summary>
@@ -330,6 +407,14 @@ public sealed partial class PreferencesWindow : Window
         AutomaticUpdatesCheck.IsChecked = settings.AutomaticUpdateChecks;
         BetaUpdatesCheck.IsChecked = settings.BetaUpdates;
 
+        // The registry rather than the settings file: someone may have taken the entry
+        // out from Task Manager's Startup tab, and the box has to say what is true.
+        LaunchAtLoginCheck.IsChecked = StartupRegistration.IsEnabled();
+        HideTrayIconCheck.IsChecked = settings.HideTrayIcon;
+
+        ThemeBox.ItemsSource = new List<string> { L("Default"), L("Light"), L("Dark") };
+        ThemeBox.SelectedIndex = (int)settings.Theme;
+
         // Each language named in itself, macshot's list in macshot's order: a reader
         // looking for their own language scans endonyms, not English names.
         LanguageBox.ItemsSource = AppLanguages.All.Select(language => language.Name).ToList();
@@ -429,6 +514,9 @@ public sealed partial class PreferencesWindow : Window
             VerboseLogging = VerboseLoggingCheck.IsChecked == true,
             AutomaticUpdateChecks = AutomaticUpdatesCheck.IsChecked == true,
             BetaUpdates = BetaUpdatesCheck.IsChecked == true,
+            LaunchAtLogin = LaunchAtLoginCheck.IsChecked == true,
+            HideTrayIcon = HideTrayIconCheck.IsChecked == true,
+            Theme = ThemeBox.SelectedIndex >= 0 ? (AppTheme)ThemeBox.SelectedIndex : AppTheme.System,
             Language = LanguageBox.SelectedIndex >= 0 && LanguageBox.SelectedIndex < AppLanguages.All.Count
                 ? AppLanguages.All[LanguageBox.SelectedIndex].Code
                 : AppLanguages.System,

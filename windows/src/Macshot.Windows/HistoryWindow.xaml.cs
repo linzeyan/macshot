@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using Macshot.Windows.Core.Output;
 using Macshot.Windows.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -55,12 +56,13 @@ public sealed partial class HistoryWindow : Window
     private const int WidthDips = 900;
     private const int HeightDips = 620;
 
-    public HistoryWindow()
+    public HistoryWindow(AppTheme theme)
     {
         InitializeComponent();
         // Every string in the XAML is already the English text macshot keys by,
         // so the page is translated in place rather than written twice.
         this.Localize();
+        AppThemes.Apply(this, theme);
         this.GetAppWindow().UseAppIcon();
     }
 

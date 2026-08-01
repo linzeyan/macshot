@@ -4,6 +4,7 @@ using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Output;
 using Macshot.Windows.Rendering;
 using Macshot.Windows.Services;
+using static Macshot.Windows.Services.Localization;
 using Macshot.Windows.Toolbar;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
@@ -80,7 +81,7 @@ public sealed partial class AnnotationToolbarView : UserControl
     private readonly Slider _size = OptionSlider(100, MinStroke, MaxStroke);
     private readonly TextBlock _sizeValue = OptionValue(28);
     private readonly StyleSegments _lineStyle = new();
-    private readonly TextBlock _cornerLabel = OptionLabel("Corners");
+    private readonly TextBlock _cornerLabel = OptionLabel(L("Rounded"));
     private readonly Slider _cornerRadius = OptionSlider(84, 0, 64);
     private readonly TextBlock _cornerValue = OptionValue(28);
     private readonly StyleSegments _arrowStyle = new();
@@ -89,8 +90,8 @@ public sealed partial class AnnotationToolbarView : UserControl
     private readonly Button _font = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 10, Padding = new Thickness(8, 2, 8, 2) };
     private readonly FontPickerView _fontChoices = new();
     private readonly StyleSegments _weight = new();
-    private readonly ToggleSwatch _textFill = new("Fill");
-    private readonly ToggleSwatch _textOutline = new("Outline");
+    private readonly ToggleSwatch _textFill = new(L("Fill"));
+    private readonly ToggleSwatch _textOutline = new(L("Outline"));
     private readonly Button _stamp = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly GridView _stampChoices = new() { MaxWidth = 240, SelectionMode = ListViewSelectionMode.Single, RequestedTheme = ElementTheme.Dark };
 
@@ -909,7 +910,11 @@ public sealed partial class AnnotationToolbarView : UserControl
         ToolTipService.SetToolTip(_font, "Typeface");
         _font.Flyout = new Flyout { Content = _fontChoices };
         _fontChoices.SelectionChanged += FontChoice_Changed;
-        _weight.SetSegments([new StyleSegment(null, "Regular", 0), new StyleSegment(null, "Bold", 0)]);
+        _weight.SetSegments(
+        [
+            new StyleSegment(null, L("Regular"), 0),
+            new StyleSegment(null, L("Bold"), 0),
+        ]);
         _weight.SelectionChanged += (_, _) => ApplyStyle();
         _textFill.Toggled += (_, _) => ApplyStyle();
         _textOutline.Toggled += (_, _) => ApplyStyle();
@@ -1118,8 +1123,8 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// </summary>
     private static string SizeLabelFor(AnnotationTool tool) => AnnotationToolOptions.SizeMeaning(tool) switch
     {
-        AnnotationSizeMeaning.Extent => "Size",
-        _ => "Width",
+        AnnotationSizeMeaning.Extent => L("Size"),
+        _ => L("Stroke"),
     };
 
     private static Color ToUiColor(AnnotationColor color) =>

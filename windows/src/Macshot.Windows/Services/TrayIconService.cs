@@ -54,9 +54,16 @@ public sealed class TrayIconService : IDisposable
 
     private readonly MessageWindow _window;
     private readonly List<MenuEntry> _menuItems = [];
+    private readonly bool _visible;
     private bool _disposed;
 
-    public TrayIconService(MessageWindow window, string tooltip)
+    /// <param name="visible">
+    /// Whether the icon is put in the notification area at all. macshot's
+    /// <c>hideMenuBarIcon</c>: the shortcuts still work without it, which is the point —
+    /// someone who captures by hotkey has no use for an icon sitting in the tray. The
+    /// menu is still built either way, so nothing downstream has to know.
+    /// </param>
+    public TrayIconService(MessageWindow window, string tooltip, bool visible = true)
     {
         _window = window ?? throw new ArgumentNullException(nameof(window));
         ArgumentException.ThrowIfNullOrWhiteSpace(tooltip);
@@ -67,6 +74,13 @@ public sealed class TrayIconService : IDisposable
 
         data.Icon = LoadTrayIcon();
         data.Tip = tooltip;
+
+        _visible = visible;
+
+        if (!visible)
+        {
+            return;
+        }
 
         if (!ShellNotifyIcon(NotifyIconAdd, ref data))
         {
@@ -138,11 +152,17 @@ public sealed class TrayIconService : IDisposable
         }
 
         _disposed = true;
+        GC.SuppressFinalize(this);
+
+        if (!_visible)
+        {
+            return;
+        }
+
         _window.MessageReceived -= OnMessageReceived;
 
         var data = CreateData();
         ShellNotifyIcon(NotifyIconDelete, ref data);
-        GC.SuppressFinalize(this);
     }
 
     private NotifyIconData CreateData()

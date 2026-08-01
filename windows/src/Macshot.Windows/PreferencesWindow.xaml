@@ -135,10 +135,43 @@
                  to launch at login and no updater to point at a channel. -->
             <ScrollViewer x:Name="GeneralPage">
                 <StackPanel Spacing="20">
-                    <!-- Above Appearance, which is macshot's order on the same tab
-                         (SettingsWindowController.swift:500–508). -->
+                    <!-- macshot's order on this tab, section for section:
+                         Language, Application, Appearance, Settings Backup
+                         (SettingsWindowController.swift:500–508). The headings carry
+                         macshot's own strings so they resolve against its translations —
+                         "UPDATES" matched nothing, "Application" matches every language
+                         the Mac app ships. -->
                     <StackPanel Style="{StaticResource Section}">
-                        <TextBlock Text="UPDATES" Style="{StaticResource SectionHeading}" />
+                        <TextBlock Text="Language" Style="{StaticResource SectionHeading}" />
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Language:" Style="{StaticResource RowLabel}" />
+                            <ComboBox
+                                x:Name="LanguageBox"
+                                Width="240"
+                                SelectionChanged="Setting_SelectionChanged" />
+                        </StackPanel>
+                        <TextBlock
+                            Text="Windows opened after this takes the new language. macshot's own translations are used, so a language contributed to the Mac app arrives here too."
+                            Style="{StaticResource Caption}" />
+                    </StackPanel>
+
+                    <StackPanel Style="{StaticResource Section}">
+                        <TextBlock Text="Application" Style="{StaticResource SectionHeading}" />
+                        <CheckBox
+                            x:Name="LaunchAtLoginCheck"
+                            Content="Launch at Login"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <CheckBox
+                            x:Name="HideTrayIconCheck"
+                            Content="Hide Menu Bar Icon"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <TextBlock
+                            Text="Shortcuts still work. To show the icon again, restart macshot."
+                            Style="{StaticResource Caption}" />
                         <CheckBox
                             x:Name="AutomaticUpdatesCheck"
                             Content="Check for updates automatically"
@@ -157,21 +190,17 @@
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
-                        <TextBlock Text="LANGUAGE" Style="{StaticResource SectionHeading}" />
+                        <TextBlock Text="Appearance" Style="{StaticResource SectionHeading}" />
                         <StackPanel Style="{StaticResource Row}">
-                            <TextBlock Text="Language:" Style="{StaticResource RowLabel}" />
+                            <TextBlock Text="Theme:" Style="{StaticResource RowLabel}" />
                             <ComboBox
-                                x:Name="LanguageBox"
+                                x:Name="ThemeBox"
                                 Width="240"
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
                         <TextBlock
-                            Text="Windows opened after this takes the new language. macshot's own translations are used, so a language contributed to the Mac app arrives here too."
+                            Text="Applies to macshot's own windows. The capture toolbar keeps its dark palette either way — it is drawn over a screenshot rather than inside a window, so following the system theme would make it disappear into half the captures anyone takes."
                             Style="{StaticResource Caption}" />
-                    </StackPanel>
-
-                    <StackPanel Style="{StaticResource Section}">
-                        <TextBlock Text="APPEARANCE" Style="{StaticResource SectionHeading}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Toolbar:" Style="{StaticResource RowLabel}" />
                             <StackPanel x:Name="ToolbarColorRow" Orientation="Horizontal" Spacing="8" />
@@ -186,7 +215,7 @@
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
-                        <TextBlock Text="SETTINGS BACKUP" Style="{StaticResource SectionHeading}" />
+                        <TextBlock Text="Settings Backup" Style="{StaticResource SectionHeading}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="" Style="{StaticResource RowLabel}" />
                             <StackPanel Orientation="Horizontal" Spacing="8">

@@ -120,6 +120,7 @@ public sealed partial class EditorWindow : Window
         // Every string in the XAML is already the English text macshot keys by,
         // so the page is translated in place rather than written twice.
         this.Localize();
+        AppThemes.Apply(this, settings.Current.Theme);
         this.GetAppWindow().UseAppIcon();
     }
 

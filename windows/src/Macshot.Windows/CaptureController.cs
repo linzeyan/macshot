@@ -159,7 +159,13 @@ public sealed class CaptureController : IDisposable
 
         // The variant's own name, so someone running both can tell which icon is which
         // from the tooltip alone.
-        _trayIcon = new TrayIconService(_messageWindow, BuildVariant.DisplayName);
+        // Read once, as macshot reads hideMenuBarIcon once: an icon that came and went
+        // as the checkbox was clicked would leave the tray reordering itself under the
+        // user's pointer.
+        _trayIcon = new TrayIconService(
+            _messageWindow,
+            BuildVariant.DisplayName,
+            !_settings.Current.HideTrayIcon);
 
         // macshot's own menu, item for item and in its order — AppDelegate.swift:707–805.
         // The strings are macshot's source strings rather than paraphrases of them, which
@@ -885,7 +891,7 @@ public sealed class CaptureController : IDisposable
             return;
         }
 
-        var history = new HistoryWindow();
+        var history = new HistoryWindow(_settings.Current.Theme);
         history.OpenRequested += (_, entry) => Post(() => ReopenAsync(entry));
 
         history.Closed += (_, _) =>
