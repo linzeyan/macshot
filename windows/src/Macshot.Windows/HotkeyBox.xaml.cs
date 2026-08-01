@@ -4,6 +4,7 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Macshot.Windows.Services;
+using static Macshot.Windows.Services.Localization;
 
 using Windows.System;
 using Windows.UI.Core;
@@ -40,6 +41,9 @@ public sealed partial class HotkeyBox : UserControl
         // Every string in the XAML is already the English text macshot keys by,
         // so the page is translated in place rather than written twice.
         this.Localize();
+
+        // Nothing bound yet reads as None rather than as a blank button.
+        ShowBinding();
     }
 
     /// <summary>
@@ -74,6 +78,19 @@ public sealed partial class HotkeyBox : UserControl
             _binding = value ?? string.Empty;
             ShowBinding();
         }
+    }
+
+    /// <summary>
+    /// Takes a binding from somewhere other than the keyboard — the buttons beside the
+    /// row that clear it and put the default back — abandoning any gesture in progress,
+    /// because the user has just answered the question a different way.
+    /// </summary>
+    public void Assign(string binding)
+    {
+        _recording = false;
+        _binding = binding;
+        ShowBinding();
+        BindingChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void Record_Click(object sender, RoutedEventArgs e)
@@ -144,10 +161,16 @@ public sealed partial class HotkeyBox : UserControl
         ShowBinding();
     }
 
+    /// <remarks>
+    /// Blank is macshot's <c>None</c> rather than an error: six of its shortcuts ship
+    /// that way and any of them can be put back that way.
+    /// </remarks>
     private void ShowBinding() =>
-        RecordButton.Content = HotkeyBinding.TryParse(_binding, out var parsed)
-            ? parsed.ToString()
-            : $"{_binding} (not a shortcut)";
+        RecordButton.Content = string.IsNullOrEmpty(_binding)
+            ? L("None")
+            : HotkeyBinding.TryParse(_binding, out var parsed)
+                ? parsed.ToString()
+                : $"{_binding} (not a shortcut)";
 
     private static bool IsModifier(VirtualKey key) => key
         is VirtualKey.Control or VirtualKey.LeftControl or VirtualKey.RightControl

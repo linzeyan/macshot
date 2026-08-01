@@ -477,30 +477,83 @@ public sealed record CaptureSettings
     public int EffectiveHistorySize => HistoryUnlimited ? int.MaxValue : HistorySize;
 
     /// <summary>
-    /// The three global shortcuts, written the way <see cref="HotkeyBinding"/> reads
-    /// them.
+    /// The twelve global shortcuts, in macshot's own order, written the way
+    /// <see cref="HotkeyBinding"/> reads them.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Stored as text rather than as a modifier mask and a key code, because the
     /// settings file is meant to be hand-editable and <c>Ctrl+Shift+X</c> says what it
-    /// means where <c>{"modifiers":6,"key":88}</c> does not. Normalizing rewrites
-    /// whatever is in the file through the parser, so a shortcut that cannot be
-    /// registered becomes the default here rather than at the point of registering.
+    /// means where <c>{"modifiers":6,"key":88}</c> does not. Empty means the shortcut is
+    /// off, which is how six of them ship and how any of them can be left.
+    /// </para>
+    /// <para>
+    /// The recording shortcut used to be one entry named for the screen and bound to
+    /// Ctrl+Shift+R. macshot gives that combination to recording an area and leaves
+    /// recording the whole screen unbound, so the two are separate here now. A file from
+    /// before the split still names the screen, and would ask for Ctrl+Shift+R twice;
+    /// normalizing drops the second claim, which leaves the R where macshot puts it.
+    /// </para>
     /// </remarks>
     public string CaptureAreaHotkey { get; init; } = HotkeyBinding.CaptureArea.ToString();
 
     public string CaptureAllScreensHotkey { get; init; } = HotkeyBinding.CaptureAllScreens.ToString();
 
-    public string RecordScreenHotkey { get; init; } = HotkeyBinding.RecordScreen.ToString();
+    public string RecordAreaHotkey { get; init; } = HotkeyBinding.RecordArea.ToString();
 
-    public HotkeyBinding CaptureAreaBinding =>
-        HotkeyBinding.ParseOrDefault(CaptureAreaHotkey, HotkeyBinding.CaptureArea);
+    public string RecordScreenHotkey { get; init; } = string.Empty;
 
-    public HotkeyBinding CaptureAllScreensBinding =>
-        HotkeyBinding.ParseOrDefault(CaptureAllScreensHotkey, HotkeyBinding.CaptureAllScreens);
+    public string HistoryHotkey { get; init; } = HotkeyBinding.History.ToString();
 
-    public HotkeyBinding RecordScreenBinding =>
-        HotkeyBinding.ParseOrDefault(RecordScreenHotkey, HotkeyBinding.RecordScreen);
+    public string CaptureTextHotkey { get; init; } = HotkeyBinding.CaptureText.ToString();
+
+    public string QuickCaptureHotkey { get; init; } = HotkeyBinding.QuickCapture.ToString();
+
+    public string ScrollCaptureHotkey { get; init; } = string.Empty;
+
+    public string OpenFromClipboardHotkey { get; init; } = string.Empty;
+
+    public string CaptureLastAreaHotkey { get; init; } = string.Empty;
+
+    public string PinFromClipboardHotkey { get; init; } = string.Empty;
+
+    public string ClearHistoryHotkey { get; init; } = string.Empty;
+
+    public HotkeyBinding? CaptureAreaBinding =>
+        HotkeyBinding.ParseOptional(CaptureAreaHotkey, HotkeyBinding.CaptureArea);
+
+    public HotkeyBinding? CaptureAllScreensBinding =>
+        HotkeyBinding.ParseOptional(CaptureAllScreensHotkey, HotkeyBinding.CaptureAllScreens);
+
+    public HotkeyBinding? RecordAreaBinding =>
+        HotkeyBinding.ParseOptional(RecordAreaHotkey, HotkeyBinding.RecordArea);
+
+    public HotkeyBinding? RecordScreenBinding =>
+        HotkeyBinding.ParseOptional(RecordScreenHotkey, null);
+
+    public HotkeyBinding? HistoryBinding =>
+        HotkeyBinding.ParseOptional(HistoryHotkey, HotkeyBinding.History);
+
+    public HotkeyBinding? CaptureTextBinding =>
+        HotkeyBinding.ParseOptional(CaptureTextHotkey, HotkeyBinding.CaptureText);
+
+    public HotkeyBinding? QuickCaptureBinding =>
+        HotkeyBinding.ParseOptional(QuickCaptureHotkey, HotkeyBinding.QuickCapture);
+
+    public HotkeyBinding? ScrollCaptureBinding =>
+        HotkeyBinding.ParseOptional(ScrollCaptureHotkey, null);
+
+    public HotkeyBinding? OpenFromClipboardBinding =>
+        HotkeyBinding.ParseOptional(OpenFromClipboardHotkey, null);
+
+    public HotkeyBinding? CaptureLastAreaBinding =>
+        HotkeyBinding.ParseOptional(CaptureLastAreaHotkey, null);
+
+    public HotkeyBinding? PinFromClipboardBinding =>
+        HotkeyBinding.ParseOptional(PinFromClipboardHotkey, null);
+
+    public HotkeyBinding? ClearHistoryBinding =>
+        HotkeyBinding.ParseOptional(ClearHistoryHotkey, null);
 
     /// <summary>
     /// Writes a step-by-step trace next to this file, for diagnosing a fault that
@@ -877,6 +930,18 @@ public sealed record CaptureSettings
     /// </summary>
     public CaptureSettings Normalized()
     {
+        // Windows hands a shortcut to one claimant, so a second slot asking for the same
+        // keys gets nothing but a refusal at startup — and the refusal names a shortcut
+        // the user may never have typed. Taken off here instead, in macshot's own order,
+        // so the first slot that asked keeps it and the settings page shows the loser as
+        // unbound rather than as bound to something that does not work.
+        var claimed = new HashSet<string>(StringComparer.Ordinal);
+        string Once(HotkeyBinding? binding)
+        {
+            var text = binding?.ToString();
+            return text is not null && claimed.Add(text) ? text : string.Empty;
+        }
+
         return this with
         {
             Format = Enum.IsDefined(Format) ? Format : CaptureImageFormat.Png,
@@ -961,9 +1026,19 @@ public sealed record CaptureSettings
 
             TranslateTargetLanguage = TranslationLanguages.Normalize(TranslateTargetLanguage),
 
-            CaptureAreaHotkey = CaptureAreaBinding.ToString(),
-            CaptureAllScreensHotkey = CaptureAllScreensBinding.ToString(),
-            RecordScreenHotkey = RecordScreenBinding.ToString(),
+            // In macshot's order, because Once keeps the first claim on a combination.
+            CaptureAreaHotkey = Once(CaptureAreaBinding),
+            CaptureAllScreensHotkey = Once(CaptureAllScreensBinding),
+            RecordAreaHotkey = Once(RecordAreaBinding),
+            RecordScreenHotkey = Once(RecordScreenBinding),
+            HistoryHotkey = Once(HistoryBinding),
+            CaptureTextHotkey = Once(CaptureTextBinding),
+            QuickCaptureHotkey = Once(QuickCaptureBinding),
+            ScrollCaptureHotkey = Once(ScrollCaptureBinding),
+            OpenFromClipboardHotkey = Once(OpenFromClipboardBinding),
+            CaptureLastAreaHotkey = Once(CaptureLastAreaBinding),
+            PinFromClipboardHotkey = Once(PinFromClipboardBinding),
+            ClearHistoryHotkey = Once(ClearHistoryBinding),
 
             // A selection with no display to belong to cannot be placed, and a display
             // with no selection has nothing to place, so neither survives alone.

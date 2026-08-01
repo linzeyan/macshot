@@ -112,6 +112,27 @@ public sealed partial class PreferencesWindow : Window
     /// </summary>
     private string? _recordingShortcut;
 
+    /// <summary>
+    /// macshot's twelve global shortcuts. Named fields rather than a dictionary keyed by
+    /// string, so that reading one back into the settings record is checked when this is
+    /// compiled instead of when the window opens.
+    /// </summary>
+    private readonly HotkeyBox _captureAreaHotkey = new();
+    private readonly HotkeyBox _captureAllScreensHotkey = new();
+    private readonly HotkeyBox _recordAreaHotkey = new();
+    private readonly HotkeyBox _recordScreenHotkey = new();
+    private readonly HotkeyBox _historyHotkey = new();
+    private readonly HotkeyBox _captureTextHotkey = new();
+    private readonly HotkeyBox _quickCaptureHotkey = new();
+    private readonly HotkeyBox _scrollCaptureHotkey = new();
+    private readonly HotkeyBox _openFromClipboardHotkey = new();
+    private readonly HotkeyBox _captureLastAreaHotkey = new();
+    private readonly HotkeyBox _pinFromClipboardHotkey = new();
+    private readonly HotkeyBox _clearHistoryHotkey = new();
+
+    /// <summary>All twelve again, for the checks that do not care which is which.</summary>
+    private readonly List<HotkeyBox> _globalShortcuts = [];
+
     private readonly ColorChoice _toolbarBackground = new("Background");
     private readonly ColorChoice _toolbarAccent = new("Accent");
     private readonly ColorChoice _toolbarIcon = new("Icon");
@@ -131,15 +152,12 @@ public sealed partial class PreferencesWindow : Window
         // to, and the first page has to be shown from here instead.
         ShowPage(Tabs.SelectedItem as ListViewItem);
         BuildToolsPage();
+        BuildGlobalShortcutRows();
         BuildShortcutRows();
         Load(_settings.Current);
         PlaceOnScreen();
 
         _write.Tick += (_, _) => Persist();
-
-        CaptureAreaHotkeyBox.BindingChanged += Setting_Changed;
-        CaptureAllScreensHotkeyBox.BindingChanged += Setting_Changed;
-        RecordScreenHotkeyBox.BindingChanged += Setting_Changed;
 
         // A change still waiting out its delay when the window goes is a change the user
         // made and watched take effect on screen.
@@ -217,6 +235,65 @@ public sealed partial class PreferencesWindow : Window
         {
             choice.Changed += Setting_Changed;
             ToolbarColorRow.Children.Add(choice);
+        }
+    }
+
+    /// <summary>
+    /// Builds macshot's twelve global shortcut rows, in macshot's order and under
+    /// macshot's names.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Built here rather than written as twelve rows of markup because each row is a
+    /// label, a recorder and two buttons whose behaviour depends on the same default —
+    /// written out, that default would appear twice per row and be free to disagree with
+    /// itself.
+    /// </para>
+    /// <para>
+    /// The label is macshot's own name with a colon added after translating, not before:
+    /// <c>Capture Area</c> is a string macshot ships and <c>Capture Area:</c> is not, so
+    /// keying by the second would give twelve English labels in every other language.
+    /// </para>
+    /// </remarks>
+    private void BuildGlobalShortcutRows()
+    {
+        // Cast rather than tested: the style is declared in this window's own markup, and
+        // rows silently losing their column would be a worse failure than not opening.
+        var labelStyle = (Style)((Grid)Content).Resources["RowLabel"];
+
+        Add("Capture Area", _captureAreaHotkey, HotkeyBinding.CaptureArea.ToString());
+        Add("Capture Screen", _captureAllScreensHotkey, HotkeyBinding.CaptureAllScreens.ToString());
+        Add("Record Area", _recordAreaHotkey, HotkeyBinding.RecordArea.ToString());
+        Add("Record Screen", _recordScreenHotkey, string.Empty);
+        Add("History", _historyHotkey, HotkeyBinding.History.ToString());
+        Add("Capture OCR & QR", _captureTextHotkey, HotkeyBinding.CaptureText.ToString());
+        Add("Quick Capture", _quickCaptureHotkey, HotkeyBinding.QuickCapture.ToString());
+        Add("Scroll Capture", _scrollCaptureHotkey, string.Empty);
+        Add("Open from Clipboard", _openFromClipboardHotkey, string.Empty);
+        Add("Capture Last Area", _captureLastAreaHotkey, string.Empty);
+        Add("Pin from Clipboard", _pinFromClipboardHotkey, string.Empty);
+        Add("Clear History", _clearHistoryHotkey, string.Empty);
+
+        void Add(string label, HotkeyBox box, string fallback)
+        {
+            box.BindingChanged += Setting_Changed;
+
+            var clear = SmallButton(ClearGlyph, L("None"));
+            clear.Click += (_, _) => box.Assign(string.Empty);
+
+            // Present even where the default is nothing, because a row can be bound and
+            // then wanted back the way it came, and six of these came unbound.
+            var reset = SmallButton(ResetGlyph, L("Reset to default"));
+            reset.Click += (_, _) => box.Assign(fallback);
+
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            row.Children.Add(new TextBlock { Text = $"{L(label)}:", Style = labelStyle });
+            row.Children.Add(box);
+            row.Children.Add(clear);
+            row.Children.Add(reset);
+
+            _globalShortcuts.Add(box);
+            GlobalShortcutRows.Children.Add(row);
         }
     }
 
@@ -527,12 +604,11 @@ public sealed partial class PreferencesWindow : Window
         // file can, and this window shows what the file held. Refused rather than
         // repaired: normalizing would quietly put the default back, and a shortcut
         // silently reverting to Ctrl+Shift+X reads as macshot ignoring what was set.
-        var unreadable = new[]
-        {
-            CaptureAreaHotkeyBox.Binding,
-            CaptureAllScreensHotkeyBox.Binding,
-            RecordScreenHotkeyBox.Binding,
-        }.Where(text => !HotkeyBinding.TryParse(text, out _)).ToArray();
+        // Blank is not unreadable: it is macshot's None, which half of these ship as.
+        var unreadable = _globalShortcuts
+            .Select(box => box.Binding)
+            .Where(text => !string.IsNullOrEmpty(text) && !HotkeyBinding.TryParse(text, out _))
+            .ToArray();
 
         if (unreadable.Length > 0)
         {
@@ -856,9 +932,18 @@ public sealed partial class PreferencesWindow : Window
                 StringComparison.OrdinalIgnoreCase));
         LanguageBox.SelectedIndex = chosen.language.Code is null ? 0 : chosen.index;
 
-        CaptureAreaHotkeyBox.Binding = settings.CaptureAreaHotkey;
-        CaptureAllScreensHotkeyBox.Binding = settings.CaptureAllScreensHotkey;
-        RecordScreenHotkeyBox.Binding = settings.RecordScreenHotkey;
+        _captureAreaHotkey.Binding = settings.CaptureAreaHotkey;
+        _captureAllScreensHotkey.Binding = settings.CaptureAllScreensHotkey;
+        _recordAreaHotkey.Binding = settings.RecordAreaHotkey;
+        _recordScreenHotkey.Binding = settings.RecordScreenHotkey;
+        _historyHotkey.Binding = settings.HistoryHotkey;
+        _captureTextHotkey.Binding = settings.CaptureTextHotkey;
+        _quickCaptureHotkey.Binding = settings.QuickCaptureHotkey;
+        _scrollCaptureHotkey.Binding = settings.ScrollCaptureHotkey;
+        _openFromClipboardHotkey.Binding = settings.OpenFromClipboardHotkey;
+        _captureLastAreaHotkey.Binding = settings.CaptureLastAreaHotkey;
+        _pinFromClipboardHotkey.Binding = settings.PinFromClipboardHotkey;
+        _clearHistoryHotkey.Binding = settings.ClearHistoryHotkey;
 
         var shown = settings.EnabledTools();
         foreach (var (tool, toggle) in _toolToggles)
@@ -1195,9 +1280,18 @@ public sealed partial class PreferencesWindow : Window
             Language = LanguageBox.SelectedIndex >= 0 && LanguageBox.SelectedIndex < AppLanguages.All.Count
                 ? AppLanguages.All[LanguageBox.SelectedIndex].Code
                 : AppLanguages.System,
-            CaptureAreaHotkey = CaptureAreaHotkeyBox.Binding,
-            CaptureAllScreensHotkey = CaptureAllScreensHotkeyBox.Binding,
-            RecordScreenHotkey = RecordScreenHotkeyBox.Binding,
+            CaptureAreaHotkey = _captureAreaHotkey.Binding,
+            CaptureAllScreensHotkey = _captureAllScreensHotkey.Binding,
+            RecordAreaHotkey = _recordAreaHotkey.Binding,
+            RecordScreenHotkey = _recordScreenHotkey.Binding,
+            HistoryHotkey = _historyHotkey.Binding,
+            CaptureTextHotkey = _captureTextHotkey.Binding,
+            QuickCaptureHotkey = _quickCaptureHotkey.Binding,
+            ScrollCaptureHotkey = _scrollCaptureHotkey.Binding,
+            OpenFromClipboardHotkey = _openFromClipboardHotkey.Binding,
+            CaptureLastAreaHotkey = _captureLastAreaHotkey.Binding,
+            PinFromClipboardHotkey = _pinFromClipboardHotkey.Binding,
+            ClearHistoryHotkey = _clearHistoryHotkey.Binding,
 
             // Stored as what is hidden rather than what is ticked, so a tool added in a
             // later version arrives switched on instead of hidden from everyone who has

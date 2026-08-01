@@ -86,6 +86,22 @@ public sealed class CaptureController : IDisposable
     private const int HotkeyRecordScreen = 4;
 
     /// <summary>
+    /// The rest of macshot's configurable shortcuts. Numbered above the three that came
+    /// first rather than renumbered into macshot's order: the id is what Windows is asked
+    /// for and what a running registration is given back by, so moving one is a way to
+    /// unregister something else.
+    /// </summary>
+    private const int HotkeyRecordArea = 7;
+    private const int HotkeyHistory = 8;
+    private const int HotkeyCaptureText = 9;
+    private const int HotkeyQuickCapture = 10;
+    private const int HotkeyScrollCapture = 11;
+    private const int HotkeyOpenFromClipboard = 12;
+    private const int HotkeyCaptureLastArea = 13;
+    private const int HotkeyPinFromClipboard = 14;
+    private const int HotkeyClearHistory = 15;
+
+    /// <summary>
     /// Held only while a recording runs, and bare for the same reason as the scroll
     /// capture's: whatever is being demonstrated has the foreground, not macshot.
     /// </summary>
@@ -238,14 +254,14 @@ public sealed class CaptureController : IDisposable
     }
 
     /// <summary>
-    /// Claims the three configured shortcuts, and says so once when Windows refuses
-    /// any of them.
+    /// Claims the configured shortcuts, and says so once when Windows refuses any of
+    /// them.
     /// </summary>
     /// <remarks>
     /// The refusals are collected and reported together. Told one at a time they would
-    /// be three message boxes in a row for a user who has just typed one shortcut that
-    /// another program owns, and the second and third would be about shortcuts they
-    /// did not touch.
+    /// be a row of message boxes for a user who has just typed one shortcut that
+    /// another program owns, and all but the first would be about shortcuts they did
+    /// not touch.
     /// </remarks>
     private void ApplyHotkeys(CaptureSettings settings)
     {
@@ -268,11 +284,69 @@ public sealed class CaptureController : IDisposable
             settings.CaptureAllScreensBinding,
             CaptureAllScreensAsync);
         Bind(
+            HotkeyRecordArea,
+            CommandRecordArea,
+            L("Record Area"),
+            settings.RecordAreaBinding,
+            BeginAreaRecordingAsync);
+        Bind(
             HotkeyRecordScreen,
             CommandRecordScreen,
             L("Record Screen"),
             settings.RecordScreenBinding,
             ToggleRecordingAsync);
+        Bind(
+            HotkeyHistory,
+            CommandHistory,
+            L("Show History Panel"),
+            settings.HistoryBinding,
+            ShowHistoryAsync);
+        Bind(
+            HotkeyCaptureText,
+            CommandCaptureText,
+            L("Capture OCR & QR"),
+            settings.CaptureTextBinding,
+            () => BeginAreaCaptureAsync(CaptureIntent.Recognize));
+        Bind(
+            HotkeyQuickCapture,
+            CommandQuickCapture,
+            L("Quick Capture"),
+            settings.QuickCaptureBinding,
+            () => BeginAreaCaptureAsync(CaptureIntent.Quick));
+        Bind(
+            HotkeyScrollCapture,
+            CommandScrollCapture,
+            L("Scroll Capture"),
+            settings.ScrollCaptureBinding,
+            () => BeginAreaCaptureAsync(CaptureIntent.Scroll));
+        Bind(
+            HotkeyOpenFromClipboard,
+            CommandOpenFromClipboard,
+            L("Open from Clipboard"),
+            settings.OpenFromClipboardBinding,
+            OpenFromClipboardAsync);
+        Bind(
+            HotkeyCaptureLastArea,
+            CommandCaptureLastArea,
+            L("Capture Last Area"),
+            settings.CaptureLastAreaBinding,
+            () => BeginAreaCaptureAsync(restoreLastArea: true));
+        Bind(
+            HotkeyPinFromClipboard,
+            CommandPinFromClipboard,
+            L("Pin from Clipboard"),
+            settings.PinFromClipboardBinding,
+            PinFromClipboardAsync);
+
+        // No menu entry of its own: macshot clears the history from the history panel,
+        // and a notification-area menu that can wipe it in one click is a menu with a
+        // trap in it. The shortcut exists because macshot offers one, unbound.
+        Bind(
+            HotkeyClearHistory,
+            command: 0,
+            L("Clear History"),
+            settings.ClearHistoryBinding,
+            ClearHistoryAsync);
 
         if (refused.Count > 0)
         {
@@ -283,21 +357,46 @@ public sealed class CaptureController : IDisposable
                     + ". Another program may already own them. The notification-area menu still works.");
         }
 
-        void Bind(int hotkey, int command, string label, HotkeyBinding binding, Func<Task> action)
+        void Bind(int hotkey, int command, string label, HotkeyBinding? binding, Func<Task> action)
         {
             // Given back first: re-registering an id Windows still holds fails, which
             // would turn every preferences save into a lost shortcut.
             _hotkeys.Unregister(hotkey);
 
+            // A slot with no menu entry of its own. Nothing to name, and asking the menu
+            // to rename an item it does not have would be a silent no-op at best.
+            var named = command != 0;
+
+            if (binding is null)
+            {
+                // Half of macshot's shortcuts ship like this, and any of the rest can be
+                // taken off. Nothing to register and nothing to complain about — only a
+                // menu entry that has to stop claiming a shortcut it no longer has.
+                if (named)
+                {
+                    _trayIcon.SetMenuItemText(command, label);
+                }
+
+                return;
+            }
+
             if (_hotkeys.TryRegister(hotkey, binding, () => Post(action)))
             {
-                _trayIcon.SetMenuItemText(command, $"{label}\t{binding}");
+                if (named)
+                {
+                    _trayIcon.SetMenuItemText(command, $"{label}\t{binding}");
+                }
+
                 DiagnosticLog.Verbose($"hotkey {binding} registered for {label}");
             }
             else
             {
                 // Named without a shortcut rather than with one that does nothing.
-                _trayIcon.SetMenuItemText(command, label);
+                if (named)
+                {
+                    _trayIcon.SetMenuItemText(command, label);
+                }
+
                 refused.Add(binding);
                 DiagnosticLog.Verbose($"hotkey {binding} refused for {label}");
             }
@@ -1046,6 +1145,27 @@ public sealed class CaptureController : IDisposable
 
         _history = history;
         await history.ShowAsync();
+    }
+
+    /// <summary>
+    /// Throws the history away, and puts an open panel back with what is left.
+    /// </summary>
+    /// <remarks>
+    /// The panel reads the folder when it opens rather than watching it, so one left
+    /// standing would go on offering captures whose files have just been deleted.
+    /// Closing and reopening it is the whole of the refresh it needs.
+    /// </remarks>
+    private Task ClearHistoryAsync()
+    {
+        ScreenshotHistory.Clear();
+
+        if (_history is { } panel)
+        {
+            panel.Close();
+            return ShowHistoryAsync();
+        }
+
+        return Task.CompletedTask;
     }
 
     private void ShowPreferences()

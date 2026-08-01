@@ -89,14 +89,39 @@ public sealed record HotkeyBinding(HotkeyModifiers Modifiers, uint Key)
         ("'", 0xDE),
     ];
 
+    /// <summary>
+    /// The shortcuts macshot ships bound, with Control where macOS holds Command.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The keys are macshot's own (<c>HotkeySlot.defaultKeyCode</c>): X for an area, F
+    /// for the screen, R for recording an area, H for the history, T for reading text,
+    /// S for a quick capture. Only the modifier differs, because Command is the one part
+    /// of a macOS shortcut that has no key here.
+    /// </para>
+    /// <para>
+    /// The other six shortcuts macshot offers ship bound to nothing, and are absent here
+    /// for that reason rather than by omission. Recording the whole screen is one of
+    /// them: the R belongs to recording an area, which is the recording a person starts.
+    /// </para>
+    /// </remarks>
     public static HotkeyBinding CaptureArea { get; } =
         new(HotkeyModifiers.Control | HotkeyModifiers.Shift, 'X');
 
     public static HotkeyBinding CaptureAllScreens { get; } =
         new(HotkeyModifiers.Control | HotkeyModifiers.Shift, 'F');
 
-    public static HotkeyBinding RecordScreen { get; } =
+    public static HotkeyBinding RecordArea { get; } =
         new(HotkeyModifiers.Control | HotkeyModifiers.Shift, 'R');
+
+    public static HotkeyBinding History { get; } =
+        new(HotkeyModifiers.Control | HotkeyModifiers.Shift, 'H');
+
+    public static HotkeyBinding CaptureText { get; } =
+        new(HotkeyModifiers.Control | HotkeyModifiers.Shift, 'T');
+
+    public static HotkeyBinding QuickCapture { get; } =
+        new(HotkeyModifiers.Control | HotkeyModifiers.Shift, 'S');
 
     /// <summary>
     /// Whether this is a shortcut Windows will actually register.
@@ -215,6 +240,22 @@ public sealed record HotkeyBinding(HotkeyModifiers Modifiers, uint Key)
     /// </summary>
     public static HotkeyBinding ParseOrDefault(string? text, HotkeyBinding fallback) =>
         TryParse(text, out var parsed) ? parsed : fallback;
+
+    /// <summary>
+    /// The stored binding, where nothing stored means the shortcut is deliberately off.
+    /// </summary>
+    /// <remarks>
+    /// Blank and unreadable are told apart on purpose. Half of macshot's shortcuts ship
+    /// bound to nothing and any of the rest can be taken off, so blank has to mean off —
+    /// falling back there would hand back the default the user just removed, and the
+    /// shortcut could never be cleared. Text that is neither blank nor a shortcut is a
+    /// damaged file instead, and does fall back, so one bad line cannot leave someone
+    /// with no way to take a capture.
+    /// </remarks>
+    public static HotkeyBinding? ParseOptional(string? text, HotkeyBinding? fallback) =>
+        string.IsNullOrWhiteSpace(text) ? null
+            : TryParse(text, out var parsed) ? parsed
+            : fallback;
 
     private static bool TryParseKey(string text, out uint key)
     {

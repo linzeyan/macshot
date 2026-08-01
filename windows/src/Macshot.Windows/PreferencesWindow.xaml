@@ -385,18 +385,12 @@
                 <StackPanel Spacing="20">
                     <StackPanel Style="{StaticResource Section}">
                         <TextBlock Text="Keyboard Shortcuts" Style="{StaticResource SectionHeading}" />
-                        <StackPanel Style="{StaticResource Row}">
-                            <TextBlock Text="Capture area:" Style="{StaticResource RowLabel}" />
-                            <local:HotkeyBox x:Name="CaptureAreaHotkeyBox" />
-                        </StackPanel>
-                        <StackPanel Style="{StaticResource Row}">
-                            <TextBlock Text="Capture all screens:" Style="{StaticResource RowLabel}" />
-                            <local:HotkeyBox x:Name="CaptureAllScreensHotkeyBox" />
-                        </StackPanel>
-                        <StackPanel Style="{StaticResource Row}">
-                            <TextBlock Text="Record screen:" Style="{StaticResource RowLabel}" />
-                            <local:HotkeyBox x:Name="RecordScreenHotkeyBox" />
-                        </StackPanel>
+                        <!-- One row per shortcut, filled in code from macshot's own
+                             list: the label, what it is bound to, and the two buttons
+                             that take it off and put the default back. Written here as
+                             twelve rows it would be the same three facts repeated in
+                             three places, free to disagree. -->
+                        <StackPanel x:Name="GlobalShortcutRows" Spacing="8" />
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">

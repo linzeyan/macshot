@@ -19,7 +19,7 @@ public sealed class HotkeyBindingTests
         {
             HotkeyBinding.CaptureArea,
             HotkeyBinding.CaptureAllScreens,
-            HotkeyBinding.RecordScreen,
+            HotkeyBinding.RecordArea,
             new HotkeyBinding(HotkeyModifiers.Alt | HotkeyModifiers.Windows, 0x7B),
         })
         {
@@ -114,9 +114,14 @@ public sealed class HotkeyBindingTests
     [TestMethod]
     public void Defaults_AreTheShortcutsTheAppAlreadyRegisters()
     {
+        // macshot's own keys, with Control where macOS holds Command
+        // (HotkeyManager.swift:81).
         Assert.AreEqual("Ctrl+Shift+X", HotkeyBinding.CaptureArea.ToString());
         Assert.AreEqual("Ctrl+Shift+F", HotkeyBinding.CaptureAllScreens.ToString());
-        Assert.AreEqual("Ctrl+Shift+R", HotkeyBinding.RecordScreen.ToString());
+        Assert.AreEqual("Ctrl+Shift+R", HotkeyBinding.RecordArea.ToString());
+        Assert.AreEqual("Ctrl+Shift+H", HotkeyBinding.History.ToString());
+        Assert.AreEqual("Ctrl+Shift+T", HotkeyBinding.CaptureText.ToString());
+        Assert.AreEqual("Ctrl+Shift+S", HotkeyBinding.QuickCapture.ToString());
     }
 
     [TestMethod]
@@ -137,11 +142,56 @@ public sealed class HotkeyBindingTests
         var normalized = (CaptureSettings.Default with
         {
             CaptureAreaHotkey = "Q",
-            RecordScreenHotkey = "not a shortcut",
+            RecordAreaHotkey = "not a shortcut",
         }).Normalized();
 
         Assert.AreEqual(HotkeyBinding.CaptureArea.ToString(), normalized.CaptureAreaHotkey);
-        Assert.AreEqual(HotkeyBinding.RecordScreen.ToString(), normalized.RecordScreenHotkey);
+        Assert.AreEqual(HotkeyBinding.RecordArea.ToString(), normalized.RecordAreaHotkey);
+    }
+
+    [TestMethod]
+    public void Settings_LeaveHalfTheShortcutsUnbound()
+    {
+        // macshot ships these six bound to nothing (HotkeyManager.swift:81). Guessing a
+        // key for them is worse than leaving them off: a global shortcut nobody asked
+        // for takes that combination away from every other program on the machine.
+        var settings = CaptureSettings.Default.Normalized();
+
+        Assert.AreEqual(string.Empty, settings.RecordScreenHotkey);
+        Assert.AreEqual(string.Empty, settings.ScrollCaptureHotkey);
+        Assert.AreEqual(string.Empty, settings.OpenFromClipboardHotkey);
+        Assert.AreEqual(string.Empty, settings.CaptureLastAreaHotkey);
+        Assert.AreEqual(string.Empty, settings.PinFromClipboardHotkey);
+        Assert.AreEqual(string.Empty, settings.ClearHistoryHotkey);
+
+        Assert.IsNull(settings.RecordScreenBinding);
+    }
+
+    [TestMethod]
+    public void Settings_LetAShortcutBeTakenOff()
+    {
+        // Blank has to survive normalizing. Falling back to the default here would hand
+        // back the shortcut the user just cleared, and it could never be cleared at all.
+        var normalized = (CaptureSettings.Default with { CaptureAreaHotkey = string.Empty }).Normalized();
+
+        Assert.AreEqual(string.Empty, normalized.CaptureAreaHotkey);
+        Assert.IsNull(normalized.CaptureAreaBinding);
+    }
+
+    [TestMethod]
+    public void Settings_DropTheSecondClaimOnOneCombination()
+    {
+        // The recording shortcut was once a single entry named for the screen and bound
+        // to Ctrl+Shift+R. macshot gives that to recording an area, so a file written
+        // before the two were told apart asks for it twice — and Windows would give it
+        // to one and refuse the other, naming a shortcut the user never typed.
+        var normalized = (CaptureSettings.Default with
+        {
+            RecordScreenHotkey = "Ctrl+Shift+R",
+        }).Normalized();
+
+        Assert.AreEqual("Ctrl+Shift+R", normalized.RecordAreaHotkey);
+        Assert.AreEqual(string.Empty, normalized.RecordScreenHotkey);
     }
 
     [TestMethod]
