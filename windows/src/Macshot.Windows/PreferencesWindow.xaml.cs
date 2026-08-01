@@ -1003,6 +1003,55 @@ public sealed partial class PreferencesWindow : Window
     }
 #endif
 
+#if !OFFLINE
+    /// <summary>
+    /// A named theme brush, or a fixed colour close to it when the name is not in the
+    /// dictionary — a missing brush must not be what stops a connection test reporting.
+    /// </summary>
+    /// <remarks>
+    /// Compiled out of the offline build along with its only caller. Left in, it would be
+    /// a private method nobody calls, which is a warning, which that build treats as an
+    /// error.
+    /// </remarks>
+    private static Brush StatusBrush(string key, Color fallback) =>
+        Application.Current.Resources.TryGetValue(key, out var found) && found is Brush themed
+            ? themed
+            : new SolidColorBrush(fallback);
+#endif
+
+    /// <summary>Writes one small object to the bucket and says what came back.</summary>
+    private async void TestS3_Click(object sender, RoutedEventArgs e)
+    {
+#if !OFFLINE
+        // Persisted first, for the reason the sign-in is: the fields are written on a
+        // delay, and a test that ran against the last saved values would report on
+        // credentials that are no longer the ones on screen.
+        Persist();
+
+        S3TestButton.IsEnabled = false;
+        S3TestStatus.Text = L("Testing...");
+        S3TestStatus.Foreground = StatusBrush("TextFillColorSecondaryBrush", Colors.Gray);
+        try
+        {
+            var failure = await new Upload.UploadService(_settings).TestS3Async(CancellationToken.None);
+            S3TestStatus.Text = failure ?? L("Connection successful!");
+
+            // Green for the one outcome that needs no reading, the system's error colour
+            // for everything else: a failure here is a line of prose about which of six
+            // fields is wrong, and it has to look like something meant to be read.
+            S3TestStatus.Foreground = failure is null
+                ? StatusBrush("SystemFillColorSuccessBrush", Colors.SeaGreen)
+                : StatusBrush("SystemFillColorCriticalBrush", Colors.IndianRed);
+        }
+        finally
+        {
+            S3TestButton.IsEnabled = true;
+        }
+#else
+        await Task.CompletedTask;
+#endif
+    }
+
     /// <summary>Signs in to Google Drive, or forgets the account that is signed in.</summary>
     private async void DriveSignIn_Click(object sender, RoutedEventArgs e)
     {

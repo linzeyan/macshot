@@ -768,6 +768,22 @@
                                 PlaceholderText="screenshots/"
                                 LostFocus="Setting_LostFocus" />
                         </StackPanel>
+                        <!-- macshot's Test Connection, in macshot's place: after the path
+                             prefix and before the note about which services this works
+                             with (SettingsWindowController.swift:1835). Six fields have to
+                             be right together, and until something has been written to the
+                             bucket none of them has been checked at all. -->
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="" Style="{StaticResource RowLabel}" />
+                            <Button x:Name="S3TestButton" Content="Test Connection" FontSize="13" Click="TestS3_Click" />
+                            <TextBlock
+                                x:Name="S3TestStatus"
+                                FontSize="11"
+                                VerticalAlignment="Center"
+                                TextWrapping="Wrap"
+                                MaxWidth="320"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
                         <TextBlock
                             Text="Works with AWS S3, Cloudflare R2, MinIO, DigitalOcean Spaces, Backblaze B2, and other S3-compatible services. Supports images and videos."
                             Style="{StaticResource Caption}" />

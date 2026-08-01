@@ -52,6 +52,35 @@ internal sealed class UploadService
         _ => true,
     };
 
+    /// <summary>
+    /// Puts one small object in the bucket and reports what came back, as macshot's
+    /// Test Connection button does (<c>SettingsWindowController.swift:2110</c>).
+    /// </summary>
+    /// <remarks>
+    /// A real signed PUT rather than a reachability check, because everything worth
+    /// finding out here fails after the connection opens: a wrong secret, a bucket in
+    /// another region, a key the credentials may read but not write. Nothing short of
+    /// writing an object exercises the signature, and a signature is what is usually
+    /// wrong. The object is named so it sorts out of the way and is small enough that
+    /// leaving one behind costs nothing.
+    /// </remarks>
+    public async Task<string?> TestS3Async(CancellationToken cancellationToken)
+    {
+        var settings = _settings.Current.ToS3Settings();
+        if (!settings.IsComplete)
+        {
+            return Localization.L("Fill in endpoint, bucket, and credentials first");
+        }
+
+        var payload = System.Text.Encoding.UTF8.GetBytes("macshot connection test");
+        var name = $".macshot_test_{Guid.NewGuid():N}"[..22] + ".txt";
+        var outcome = await S3Uploader
+            .UploadAsync(Client, settings, payload, name, "text/plain", null, cancellationToken)
+            .ConfigureAwait(false);
+
+        return outcome.Succeeded ? null : outcome.Failure ?? Localization.L("Unknown error");
+    }
+
     /// <summary>Signs in to Google Drive and remembers which account it was.</summary>
     public async Task<bool> SignInToDriveAsync(CancellationToken cancellationToken)
     {
