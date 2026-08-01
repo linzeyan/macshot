@@ -398,6 +398,16 @@ public sealed record CaptureSettings
     public bool WindowSnapEnabled { get; init; } = true;
 
     /// <summary>
+    /// Whether two quick clicks inside the region finish the capture.
+    /// </summary>
+    /// <remarks>
+    /// On by default, as macshot's <c>doubleClickToCopy</c> is. It is Enter for the hand
+    /// already on the mouse: the capture goes wherever the Enter / Quick Capture setting
+    /// sends it, so the gesture and the key can never mean different things.
+    /// </remarks>
+    public bool DoubleClickToCopy { get; init; } = true;
+
+    /// <summary>
     /// Takes the dark wash off everything outside the selection.
     /// </summary>
     /// <remarks>

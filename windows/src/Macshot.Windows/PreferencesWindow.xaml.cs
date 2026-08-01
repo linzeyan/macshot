@@ -908,6 +908,7 @@ public sealed partial class PreferencesWindow : Window
         HistorySizeBox.IsEnabled = !settings.HistoryUnlimited;
         RememberSelectionCheck.IsChecked = settings.RememberLastSelection;
         CaptureCursorCheck.IsChecked = settings.CaptureCursor;
+        DoubleClickCopyCheck.IsChecked = settings.DoubleClickToCopy;
         HideInstructionsCheck.IsChecked = settings.HideCaptureInstructions;
         SelectionShadowCheck.IsChecked = settings.DisableSelectionShadow;
         VerboseLoggingCheck.IsChecked = settings.VerboseLogging;
@@ -1270,6 +1271,7 @@ public sealed partial class PreferencesWindow : Window
             HistoryUnlimited = HistoryUnlimitedCheck.IsChecked == true,
             RememberLastSelection = RememberSelectionCheck.IsChecked == true,
             CaptureCursor = CaptureCursorCheck.IsChecked == true,
+            DoubleClickToCopy = DoubleClickCopyCheck.IsChecked == true,
             HideCaptureInstructions = HideInstructionsCheck.IsChecked == true,
             DisableSelectionShadow = SelectionShadowCheck.IsChecked == true,
             // No PencilSmoothing here. It is set from the tool options row while drawing,

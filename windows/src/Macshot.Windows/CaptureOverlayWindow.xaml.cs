@@ -96,6 +96,14 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private const double ZoomStep = 1.1;
 
+    /// <summary>
+    /// How far the pointer may wander between the two clicks of a double-click, in
+    /// layout units. Windows has a metric for this, but it is in physical pixels and
+    /// this is measured where the pointer is reported; four is the same few pixels on
+    /// every display and well under the distance a deliberate second click travels.
+    /// </summary>
+    private const double DoubleClickSlop = 4;
+
     private readonly CapturedFrame _desktopFrame;
     private readonly MonitorLayout _layout;
     private readonly CaptureMonitor _monitor;
@@ -276,6 +284,11 @@ public sealed partial class CaptureOverlayWindow : Window
     /// Non-null for as long as the middle button is held.
     /// </summary>
     private Point? _panningFrom;
+
+    /// <summary>Where the last press landed, and when, for spotting a double-click.</summary>
+    private Point _lastPressPoint;
+
+    private long _lastPressAt;
 
     public CaptureOverlayWindow(
         CapturedFrame desktopFrame,
@@ -529,6 +542,13 @@ public sealed partial class CaptureOverlayWindow : Window
         if (_movingFrom is not null)
         {
             EndRegionMove(keep: true);
+            return;
+        }
+
+        // Before the tools get the press, so the second click of a double-click finishes
+        // the capture instead of starting a mark on the picture it is about to deliver.
+        if (IsDoubleClick(e) && ConfirmOnDoubleClick(ToFrame(e)))
+        {
             return;
         }
 
@@ -2540,6 +2560,84 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private void RenderAnnotations() => AnnotationCanvas.Render();
 
+    /// <summary>
+    /// Whether this press is the second of a double-click, by Windows' own reckoning of
+    /// how quick and how still that has to be.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Counted here rather than taken from WinUI's <c>DoubleTapped</c>, which arrives
+    /// only after the second click has been released — by which time that click has
+    /// already been handed to a tool — and which the pointer capture this canvas takes
+    /// on every press can withhold altogether. A gesture that quietly stops working is
+    /// worse than one written out.
+    /// </para>
+    /// <para>
+    /// <c>GetDoubleClickTime</c> rather than a number: how fast a double-click is, is
+    /// something the user has already told Windows, and macshot's own gesture answers to
+    /// the same setting on its platform.
+    /// </para>
+    /// </remarks>
+    private bool IsDoubleClick(PointerRoutedEventArgs e)
+    {
+        var position = e.GetCurrentPoint(OverlayRoot).Position;
+        var now = Environment.TickCount64;
+        var quick = now - _lastPressAt <= GetDoubleClickTime()
+            && Math.Abs(position.X - _lastPressPoint.X) <= DoubleClickSlop
+            && Math.Abs(position.Y - _lastPressPoint.Y) <= DoubleClickSlop;
+
+        // A double-click ends the count rather than feeding it: three clicks are one
+        // double-click and a click, not two overlapping double-clicks.
+        _lastPressAt = quick ? 0 : now;
+        _lastPressPoint = position;
+        return quick;
+    }
+
+    /// <summary>
+    /// Finishes the capture on a double-click inside the region, the same as Enter does.
+    /// False when the gesture means something else, and then the press goes on to be
+    /// whatever it would have been.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// macshot's <c>doubleClickToCopy</c>, on by default. "Copy" is what it usually
+    /// amounts to, but what it does is confirm: the capture goes wherever the Enter /
+    /// Quick Capture setting sends it, so the gesture and the key can never disagree.
+    /// </para>
+    /// <para>
+    /// Nothing has to be undone first, which is the one place this is simpler than
+    /// macshot. A press that travels less than
+    /// <see cref="AnnotationEditor.MinimumDragDistance"/> leaves no mark here, so
+    /// neither click can litter the capture with the invisible shapes macshot has to
+    /// rewind off its undo stack.
+    /// </para>
+    /// <para>
+    /// A double-click on a piece of text means edit that text, never copy — macshot
+    /// issue #287. Outside the region it means nothing at all: there is no region under
+    /// the pointer to be done with.
+    /// </para>
+    /// </remarks>
+    private bool ConfirmOnDoubleClick(CapturePoint point)
+    {
+        if (!_settings.Current.DoubleClickToCopy || _selection is not { } region)
+        {
+            return false;
+        }
+
+        if (!region.Contains(point.X, point.Y))
+        {
+            return false;
+        }
+
+        if (_editor.Document.HitTest(point) is { Tool: AnnotationTool.Text })
+        {
+            return false;
+        }
+
+        _ = CompleteAsync();
+        return true;
+    }
+
     private CapturePoint ToFrame(PointerRoutedEventArgs e)
     {
         var position = e.GetCurrentPoint(SelectionCanvas).Position;
@@ -2845,4 +2943,8 @@ public sealed partial class CaptureOverlayWindow : Window
             ? _viewport.ToView(CaptureRegion.FromPoints(start.X, start.Y, now.X, now.Y))
             : null;
     }
+
+    /// <summary>How long Windows gives a user to complete a double-click.</summary>
+    [System.Runtime.InteropServices.DllImport("user32.dll")]
+    private static extern uint GetDoubleClickTime();
 }

@@ -250,6 +250,12 @@
                             Checked="Setting_Toggled"
                             Unchecked="Setting_Toggled" />
                         <CheckBox
+                            x:Name="DoubleClickCopyCheck"
+                            Content="Double-click selection to copy"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <CheckBox
                             x:Name="HideInstructionsCheck"
                             Content="Hide capture instructions"
                             Style="{StaticResource Unlabelled}"
