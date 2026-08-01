@@ -93,6 +93,8 @@ public sealed class SettingsPortabilityTests
             RecordMicAudio = true,
             ShowRecordedRegionBorder = false,
             ShowClickHighlight = true,
+            ShowKeystrokes = true,
+            ShowEveryKeystroke = true,
             FilenameTemplate = "{window} {date}",
             RecordingFilenameTemplate = "Clip {time}",
             AnnotationColor = "#FF2200",

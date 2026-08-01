@@ -138,6 +138,27 @@ public sealed record CaptureSettings
     public bool ShowClickHighlight { get; init; }
 
     /// <summary>
+    /// Whether a pill at the foot of the recorded region says what is being typed.
+    /// </summary>
+    /// <remarks>
+    /// macshot's <c>recordKeystroke</c>, off by default as macshot's is, and in the
+    /// recording for the same reason the click ring is: a viewer watching a shortcut being
+    /// used sees the result and never the shortcut. macOS gates this on Input Monitoring;
+    /// a low-level keyboard hook on Windows asks for nothing, so there is no gate here.
+    /// </remarks>
+    public bool ShowKeystrokes { get; init; }
+
+    /// <summary>
+    /// Whether every keystroke shows, or only the ones that make a shortcut.
+    /// </summary>
+    /// <remarks>
+    /// macshot's <c>keystrokeShowAll</c>, and off by default there too — which is the
+    /// safe way round. A recording of somebody answering an email should not be a
+    /// transcript of the email, and it becomes one the moment this is on and forgotten.
+    /// </remarks>
+    public bool ShowEveryKeystroke { get; init; }
+
+    /// <summary>
     /// Whether macshot starts with Windows. macshot's <c>launchAtLogin</c>.
     /// </summary>
     /// <remarks>

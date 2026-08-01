@@ -516,6 +516,22 @@
                         <TextBlock
                             Text="A yellow ring blooms out of every click and fades in a third of a second. Unlike the outline this one is inside the recording, which is the point — a viewer otherwise sees the pointer move and something happen, with nothing in between."
                             Style="{StaticResource Caption}" />
+                        <CheckBox
+                            x:Name="KeystrokeCheck"
+                            Content="Show Keystrokes"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Keystrokes:" Style="{StaticResource RowLabel}" />
+                            <ComboBox
+                                x:Name="KeystrokeModeBox"
+                                Width="240"
+                                SelectionChanged="Setting_SelectionChanged" />
+                        </StackPanel>
+                        <TextBlock
+                            Text="A dark pill at the foot of the recorded region, holding what was typed for a second and a half. Shortcuts only leaves ordinary typing alone, so a recording of somebody answering an email is not a transcript of the email."
+                            Style="{StaticResource Caption}" />
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">

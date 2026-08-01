@@ -389,6 +389,11 @@ public sealed partial class PreferencesWindow : Window
         GifFrameRateBox.Value = settings.GifFrameRate;
         RecordedRegionBorderCheck.IsChecked = settings.ShowRecordedRegionBorder;
         ClickHighlightCheck.IsChecked = settings.ShowClickHighlight;
+        KeystrokeCheck.IsChecked = settings.ShowKeystrokes;
+
+        // macshot's two words for the same two choices, so the entries translate.
+        KeystrokeModeBox.ItemsSource = new List<string> { L("Shortcuts Only"), L("All Keystrokes") };
+        KeystrokeModeBox.SelectedIndex = settings.ShowEveryKeystroke ? 1 : 0;
         RecordSystemAudioCheck.IsChecked = settings.RecordSystemAudio;
         RecordMicAudioCheck.IsChecked = settings.RecordMicAudio;
         ClipboardCheck.IsChecked = settings.CopyToClipboard;
@@ -488,6 +493,8 @@ public sealed partial class PreferencesWindow : Window
                 : (int)GifFrameRateBox.Value,
             ShowRecordedRegionBorder = RecordedRegionBorderCheck.IsChecked == true,
             ShowClickHighlight = ClickHighlightCheck.IsChecked == true,
+            ShowKeystrokes = KeystrokeCheck.IsChecked == true,
+            ShowEveryKeystroke = KeystrokeModeBox.SelectedIndex == 1,
             RecordSystemAudio = RecordSystemAudioCheck.IsChecked == true,
             RecordMicAudio = RecordMicAudioCheck.IsChecked == true,
             CopyToClipboard = ClipboardCheck.IsChecked == true,

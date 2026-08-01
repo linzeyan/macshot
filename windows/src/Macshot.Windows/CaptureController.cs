@@ -1221,6 +1221,18 @@ public sealed class CaptureController : IDisposable
             clicks.Start();
         }
 
+        // And what is being typed, at the foot of the same rectangle. Also meant to be in
+        // the file: a recording that teaches a shortcut has to show the shortcut.
+        KeystrokeOverlay? keystrokes = null;
+        if (_settings.Current.ShowKeystrokes)
+        {
+            keystrokes = new KeystrokeOverlay(request.Region ?? monitor.Bounds, monitor.Scale)
+            {
+                ShowAll = _settings.Current.ShowEveryKeystroke,
+            };
+            keystrokes.Start();
+        }
+
         var holdsEscape = _hotkeys.TryRegisterBareKey(
             HotkeyStopRecording,
             VirtualKeyEscape,
@@ -1285,6 +1297,7 @@ public sealed class CaptureController : IDisposable
             // ended would put macshot in the path of every mouse event on the machine.
             border?.Close();
             clicks?.Dispose();
+            keystrokes?.Dispose();
 
             if (holdsEscape)
             {
