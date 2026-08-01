@@ -298,6 +298,13 @@
                             <TextBlock Text="seconds" Style="{StaticResource RowText}" />
                         </StackPanel>
                         <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="  Multiple previews:" Style="{StaticResource RowLabel}" />
+                            <ComboBox
+                                x:Name="ThumbnailStackingBox"
+                                Width="240"
+                                SelectionChanged="Setting_SelectionChanged" />
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Position:" Style="{StaticResource RowLabel}" />
                             <ComboBox
                                 x:Name="ThumbnailCornerBox"

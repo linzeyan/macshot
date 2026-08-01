@@ -919,7 +919,11 @@ public sealed class CaptureController : IDisposable
         // The oldest go, so the one just taken is always the one on show. Counted up
         // front rather than looped until short enough: how promptly a closed window is
         // taken off the list is WinUI's business, not a condition to spin on.
-        foreach (var oldest in _thumbnails.Take(_thumbnails.Count - MaxThumbnails + 1).ToArray())
+        // One panel rather than three when the user asked for replacing — macshot's
+        // thumbnailStacking, where the column is the whole difference between the two.
+        var room = _settings.Current.StackThumbnails ? MaxThumbnails : 1;
+
+        foreach (var oldest in _thumbnails.Take(_thumbnails.Count - room + 1).ToArray())
         {
             oldest.Close();
         }

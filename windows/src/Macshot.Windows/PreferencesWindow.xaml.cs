@@ -890,6 +890,14 @@ public sealed partial class PreferencesWindow : Window
         ThumbnailCheck.IsChecked = settings.ShowThumbnail;
         ThumbnailSecondsBox.Value = settings.ThumbnailSeconds;
 
+        // macshot's two, in its order, so stacking is the first and the default.
+        ThumbnailStackingBox.ItemsSource = new List<string>
+        {
+            L("Stack (keep all)"),
+            L("Replace (show only latest)"),
+        };
+        ThumbnailStackingBox.SelectedIndex = settings.StackThumbnails ? 0 : 1;
+
         // macshot's four, in its order, so bottom-right is the first and the default.
         ThumbnailCornerBox.ItemsSource = new List<string>
         {
@@ -1227,6 +1235,7 @@ public sealed partial class PreferencesWindow : Window
                 : (int)GifFrameRateBox.Value,
             ShowRecordedRegionBorder = RecordedRegionBorderCheck.IsChecked == true,
             ThumbnailCorner = (ThumbnailCorner)Math.Max(ThumbnailCornerBox.SelectedIndex, 0),
+            StackThumbnails = ThumbnailStackingBox.SelectedIndex != 1,
             ThumbnailScale = ThumbnailScaleSlider.Value / 100,
             // No ShowClickHighlight, ShowKeystrokes, RecordSystemAudio, RecordMicAudio or
             // RecordWebcam. The recording strip owns those five, as it does on macOS, and

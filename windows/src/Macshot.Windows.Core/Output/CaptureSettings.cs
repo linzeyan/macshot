@@ -98,6 +98,17 @@ public sealed record CaptureSettings
     public ThumbnailCorner ThumbnailCorner { get; init; } = ThumbnailCorner.BottomRight;
 
     /// <summary>
+    /// Whether a second capture stands above the first or takes its place.
+    /// </summary>
+    /// <remarks>
+    /// Stacking by default, as macshot's <c>thumbnailStacking</c> does: capture, capture,
+    /// capture, then deal with all three is how the tool is used, and a panel that
+    /// vanishes as the next capture is taken takes its copy of those pixels with it.
+    /// Replacing is for the person who wants one corner of the screen back.
+    /// </remarks>
+    public bool StackThumbnails { get; init; } = true;
+
+    /// <summary>
     /// How big those panels are, as a multiple of macshot's 240 × 160. macshot's
     /// <c>thumbnailScale</c>, from half size to double.
     /// </summary>
