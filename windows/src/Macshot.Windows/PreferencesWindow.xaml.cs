@@ -320,7 +320,7 @@ public sealed partial class PreferencesWindow : Window
 
         ShowToolbarColors(settings.ToToolbarColors());
 
-        VersionText.Text = $"Version {typeof(PreferencesWindow).Assembly.GetName().Version?.ToString(3) ?? "unknown"}";
+        VersionText.Text = $"Version {Version}";
         SettingsPathText.Text = _settings.Path;
 
         UpdateQualityVisibility();
@@ -458,6 +458,119 @@ public sealed partial class PreferencesWindow : Window
         }
     }
 
+    /// <summary>
+    /// Writes the portable half of the preferences to a file the user chooses.
+    /// </summary>
+    /// <remarks>
+    /// Pending edits are written first. The export reads the store, not the controls, so
+    /// exporting immediately after typing in a box would otherwise miss what was typed —
+    /// the window writes 250 ms after a change, and a user is faster than that.
+    /// </remarks>
+    private async void ExportSettings_Click(object sender, RoutedEventArgs e)
+    {
+        Persist();
+
+        var picker = new FileSavePicker
+        {
+            SuggestedStartLocation = PickerLocationId.DocumentsLibrary,
+
+            // macshot's name for the same file, dated so a folder of them sorts.
+            SuggestedFileName = $"macshot-settings-{DateTimeOffset.Now:yyyy-MM-dd}",
+        };
+        picker.FileTypeChoices.Add("macshot settings", [".json"]);
+
+        // An unpackaged app has no implicit window for the picker to parent itself
+        // to, so it has to be told which one to use or the call fails outright.
+        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
+
+        var file = await picker.PickSaveFileAsync();
+        if (file is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var export = SettingsPortability.Export(_settings.Current, Version, DateTimeOffset.Now);
+            await File.WriteAllTextAsync(file.Path, export.Json);
+            StatusText.Text = $"Exported {export.KeyCount} settings.";
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text = $"Could not export the settings: {exception.Message}";
+        }
+    }
+
+    /// <summary>
+    /// Replaces the preferences with the ones in a file, after asking.
+    /// </summary>
+    /// <remarks>
+    /// The confirmation is macshot's, and it is worth keeping: an import replaces every
+    /// portable setting at once, including the ones on tabs the user is not looking at,
+    /// and there is no undo for it.
+    /// </remarks>
+    private async void ImportSettings_Click(object sender, RoutedEventArgs e)
+    {
+        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.DocumentsLibrary };
+        picker.FileTypeFilter.Add(".json");
+        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
+
+        var file = await picker.PickSingleFileAsync();
+        if (file is null)
+        {
+            return;
+        }
+
+        string json;
+        try
+        {
+            json = await File.ReadAllTextAsync(file.Path);
+        }
+        catch (Exception exception)
+        {
+            StatusText.Text = $"Could not read that file: {exception.Message}";
+            return;
+        }
+
+        // Read before asking, so a file that is not a settings file is refused without
+        // a warning dialog about replacing anything.
+        var imported = SettingsPortability.Import(json, _settings.Current);
+        if (imported.Settings is not { } restored)
+        {
+            StatusText.Text = imported.Failure ?? "That file could not be imported.";
+            return;
+        }
+
+        var confirm = new ContentDialog
+        {
+            XamlRoot = Content.XamlRoot,
+            Title = "Replace your current settings?",
+            Content = "Importing replaces your preferences with the ones in this file. "
+                + "Your save folder, the last selection, and screenshot history are kept. "
+                + "This cannot be undone.",
+            PrimaryButtonText = "Import",
+            CloseButtonText = "Cancel",
+            DefaultButton = ContentDialogButton.Close,
+        };
+
+        if (await confirm.ShowAsync() != ContentDialogResult.Primary)
+        {
+            return;
+        }
+
+        // Saved before the controls are refilled: Load suppresses the write-back, so
+        // nothing here would reach the file otherwise.
+        _settings.Save(restored);
+        Load(restored);
+
+        StatusText.Text = imported.SkippedKeys.Count == 0
+            ? $"Imported {imported.AppliedCount} settings."
+            : $"Imported {imported.AppliedCount} settings; {imported.SkippedKeys.Count} were not this version's to take.";
+    }
+
+    /// <summary>Opens the folder holding the settings file, with the file selected.</summary>
+    private void ShowSettingsFile_Click(object sender, RoutedEventArgs e) => Reveal(_settings.Path);
+
     private void ResetDirectory_Click(object sender, RoutedEventArgs e)
     {
         DirectoryBox.Text = string.Empty;
@@ -474,17 +587,25 @@ public sealed partial class PreferencesWindow : Window
     /// </remarks>
     private void OpenLogFolder_Click(object sender, RoutedEventArgs e)
     {
+        Directory.CreateDirectory(DiagnosticLog.Directory);
+        Reveal(DiagnosticLog.Path);
+    }
+
+    /// <summary>
+    /// Opens Explorer on <paramref name="path"/>'s folder with the file selected, or on
+    /// the folder alone when the file is not there yet.
+    /// </summary>
+    private void Reveal(string path)
+    {
         try
         {
-            Directory.CreateDirectory(DiagnosticLog.Directory);
-
             using var opened = Process.Start(new ProcessStartInfo("explorer.exe")
             {
                 // Quoted: the path runs through the user's profile name, which can
                 // contain a space.
-                Arguments = File.Exists(DiagnosticLog.Path)
-                    ? $"/select,\"{DiagnosticLog.Path}\""
-                    : $"\"{DiagnosticLog.Directory}\"",
+                Arguments = File.Exists(path)
+                    ? $"/select,\"{path}\""
+                    : $"\"{Path.GetDirectoryName(path)}\"",
                 UseShellExecute = true,
             });
         }
@@ -493,6 +614,10 @@ public sealed partial class PreferencesWindow : Window
             StatusText.Text = $"Could not open the folder: {exception.Message}";
         }
     }
+
+    /// <summary>What this build calls itself, shown on the About page and stamped into an export.</summary>
+    private static string Version =>
+        typeof(PreferencesWindow).Assembly.GetName().Version?.ToString(3) ?? "unknown";
 
     /// <summary>
     /// Deletes the kept copies now.

@@ -1,5 +1,4 @@
 using System.Text.Json;
-using System.Text.Json.Serialization;
 using Macshot.Windows.Core.Output;
 
 namespace Macshot.Windows.Services;
@@ -16,14 +15,9 @@ namespace Macshot.Windows.Services;
 /// </remarks>
 public sealed class SettingsStore
 {
-    private static readonly JsonSerializerOptions SerializerOptions = new()
-    {
-        PropertyNamingPolicy = JsonNamingPolicy.CamelCase,
-        WriteIndented = true,
-        // The file is meant to be hand-editable, and "Jpeg" survives a reordering
-        // of the enum in a way that a bare 1 does not.
-        Converters = { new JsonStringEnumConverter() },
-    };
+    // Shared with SettingsPortability, which has to name every property exactly as this
+    // file does or an imported setting quietly fails to take.
+    private static readonly JsonSerializerOptions SerializerOptions = CaptureSettingsJson.Options;
 
     private CaptureSettings _current;
 

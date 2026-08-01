@@ -151,7 +151,21 @@
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
-                        <TextBlock Text="SETTINGS FILE" Style="{StaticResource SectionHeading}" />
+                        <TextBlock Text="SETTINGS BACKUP" Style="{StaticResource SectionHeading}" />
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="" Style="{StaticResource RowLabel}" />
+                            <StackPanel Orientation="Horizontal" Spacing="8">
+                                <Button Content="Export Settings…" FontSize="13" Click="ExportSettings_Click" />
+                                <Button Content="Import Settings…" FontSize="13" Click="ImportSettings_Click" />
+                            </StackPanel>
+                        </StackPanel>
+                        <TextBlock
+                            Text="Export your preferences to a file to move them to another PC or a clean install. Your save folder, the last selection, and screenshot history are not included."
+                            Style="{StaticResource Caption}" />
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="" Style="{StaticResource RowLabel}" />
+                            <Button Content="Show the settings file" FontSize="13" Click="ShowSettingsFile_Click" />
+                        </StackPanel>
                         <TextBlock
                             x:Name="SettingsPathText"
                             IsTextSelectionEnabled="True"
