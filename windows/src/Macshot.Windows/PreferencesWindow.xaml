@@ -822,12 +822,59 @@
 
             <ScrollViewer x:Name="AboutPage" Visibility="Collapsed">
                 <StackPanel Spacing="20">
-                    <StackPanel Style="{StaticResource Section}">
-                        <TextBlock Text="macshot" Style="{StaticResource SubtitleTextBlockStyle}" />
-                        <TextBlock x:Name="VersionText" Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                    <!-- macshot's About page, in macshot's order and centred as its is:
+                         icon, name, version, what it is, licence, Copy Screen Info
+                         (SettingsWindowController.swift:1928–1979). The name is filled in
+                         at run time because the offline build calls itself something
+                         else. -->
+                    <StackPanel Style="{StaticResource Section}" HorizontalAlignment="Center" Spacing="8">
+                        <Image
+                            x:Name="AboutIcon"
+                            Width="80"
+                            Height="80"
+                            HorizontalAlignment="Center" />
+                        <TextBlock
+                            x:Name="AboutNameText"
+                            HorizontalAlignment="Center"
+                            FontSize="22"
+                            FontWeight="Bold" />
+                        <TextBlock
+                            x:Name="VersionText"
+                            HorizontalAlignment="Center"
+                            FontSize="12"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                         <TextBlock
                             Text="A screenshot and annotation tool. This is the Windows build of the macOS app of the same name, with the same tools, the same toolbar and the same shortcuts."
                             TextWrapping="Wrap"
+                            TextAlignment="Center"
+                            MaxWidth="440"
+                            Margin="0,12,0,0"
+                            FontSize="13" />
+                        <TextBlock
+                            x:Name="AboutOfflineNote"
+                            TextWrapping="Wrap"
+                            TextAlignment="Center"
+                            MaxWidth="440"
+                            FontSize="12"
+                            Visibility="Collapsed"
+                            Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        <TextBlock
+                            Text="Licensed under the GPLv3"
+                            HorizontalAlignment="Center"
+                            Margin="0,12,0,0"
+                            FontSize="11"
+                            Foreground="{ThemeResource TextFillColorTertiaryBrush}" />
+                        <Button
+                            x:Name="ScreenInfoButton"
+                            Content="Copy Screen Info"
+                            HorizontalAlignment="Center"
+                            Margin="0,12,0,0"
+                            FontSize="11"
+                            Click="CopyScreenInfo_Click" />
+                        <TextBlock
+                            Text="Copies display and capture diagnostics to clipboard"
+                            HorizontalAlignment="Center"
+                            FontSize="10"
                             Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
                     </StackPanel>
 

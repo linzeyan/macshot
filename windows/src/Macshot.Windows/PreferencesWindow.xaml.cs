@@ -855,7 +855,7 @@ public sealed partial class PreferencesWindow : Window
 
         ShowToolbarColors(settings.ToToolbarColors());
 
-        VersionText.Text = $"Version {Version}";
+        ShowAbout();
         SettingsPathText.Text = _settings.Path;
 
         UpdateQualityVisibility();
@@ -1477,6 +1477,111 @@ public sealed partial class PreferencesWindow : Window
     /// <summary>What this build calls itself, shown on the About page and stamped into an export.</summary>
     private static string Version =>
         typeof(PreferencesWindow).Assembly.GetName().Version?.ToString(3) ?? "unknown";
+
+    /// <summary>Fills in the About page: icon, name, version, and the offline note.</summary>
+    private void ShowAbout()
+    {
+        AboutNameText.Text = BuildVariant.DisplayName;
+
+        // macshot's own format string, filled in here rather than with string.Format:
+        // the placeholders are Cocoa's %@, which .NET has no idea what to do with.
+        var assembly = typeof(PreferencesWindow).Assembly.GetName().Version;
+        var build = assembly?.Revision.ToString(CultureInfo.InvariantCulture) ?? "0";
+        VersionText.Text = Fill(L("Version %@ (%@)"), Version, build);
+
+        try
+        {
+            AboutIcon.Source = new Microsoft.UI.Xaml.Media.Imaging.BitmapImage(
+                new Uri("ms-appx:///Assets/macshot.ico"));
+        }
+        catch (Exception error) when (error is UriFormatException or InvalidOperationException)
+        {
+            // The page is worth showing without its portrait.
+            AboutIcon.Visibility = Visibility.Collapsed;
+        }
+
+        // #if rather than a test on BuildVariant.IsOffline: it is a const, so the branch
+        // the other build never takes is unreachable code, which is a warning, which is an
+        // error here.
+#if OFFLINE
+        AboutOfflineNote.Text = L(
+            "Offline build: upload and cloud storage integrations are removed. Update checks may "
+            + "still connect to MacShot's update server. Screenshots and recordings stay local "
+            + "unless you share or save them yourself.");
+        AboutOfflineNote.Visibility = Visibility.Visible;
+#endif
+    }
+
+    /// <summary>
+    /// Substitutes for Cocoa's <c>%@</c> placeholders in order.
+    /// </summary>
+    /// <remarks>
+    /// macshot's translated strings are Cocoa format strings, and this port reads those
+    /// files as they are shipped rather than re-authoring forty of them. Anything else —
+    /// composing the sentence out of pieces here — puts the word order in the code, where
+    /// no translator can reach it.
+    /// </remarks>
+    private static string Fill(string template, params string[] values)
+    {
+        var text = template;
+        foreach (var value in values)
+        {
+            var at = text.IndexOf("%@", StringComparison.Ordinal);
+            if (at < 0)
+            {
+                break;
+            }
+
+            text = string.Concat(text.AsSpan(0, at), value, text.AsSpan(at + 2));
+        }
+
+        return text;
+    }
+
+    /// <summary>
+    /// Puts what the displays look like from in here on the clipboard, for a bug report
+    /// about a capture that came out the wrong size or off the wrong screen.
+    /// </summary>
+    private async void CopyScreenInfo_Click(object sender, RoutedEventArgs e)
+    {
+        var report = new System.Text.StringBuilder()
+            .Append(BuildVariant.DisplayName).Append(' ').AppendLine(Version);
+
+        try
+        {
+            var layout = MonitorEnumerator.Enumerate().Layout;
+            report.Append("Virtual bounds: ").AppendLine(Describe(layout.VirtualBounds));
+            foreach (var monitor in layout.Monitors)
+            {
+                report
+                    .Append(monitor.IsPrimary ? "* " : "  ")
+                    .Append(monitor.DeviceName).Append("  ")
+                    .Append(Describe(monitor.Bounds))
+                    .Append("  scale ").Append(monitor.Scale.ToString("0.##", CultureInfo.InvariantCulture))
+                    .Append("  work ").AppendLine(Describe(monitor.WorkArea));
+            }
+        }
+        catch (Exception error)
+        {
+            // Whatever went wrong enumerating the displays is itself the most useful thing
+            // this report could carry, so it goes in rather than emptying the clipboard.
+            report.Append("Could not enumerate displays: ").AppendLine(error.Message);
+        }
+
+        var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
+        package.SetText(report.ToString());
+        Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
+        // The button says what happened and then goes back to saying what it does, as
+        // macshot's does. Nothing else on this page reports, so a status line elsewhere
+        // would be looked for in the wrong place.
+        ScreenInfoButton.Content = L("Copied!");
+        await Task.Delay(TimeSpan.FromSeconds(1.5));
+        ScreenInfoButton.Content = L("Copy Screen Info");
+
+        static string Describe(CaptureRegion region) => string.Create(
+            CultureInfo.InvariantCulture,
+            $"{region.Width}x{region.Height} at {region.X},{region.Y}");
+    }
 
     /// <summary>
     /// Deletes the kept copies now.
