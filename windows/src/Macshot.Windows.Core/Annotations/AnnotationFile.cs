@@ -117,6 +117,7 @@ public static class AnnotationFile
             CornerRadius = annotation.Style.CornerRadius,
             CensorMode = annotation.Style.CensorMode.ToString(),
             ArrowReversed = annotation.Style.ArrowReversed,
+            Outline = annotation.Style.Outline?.ToHex(),
             FontSize = annotation.Style.FontSize,
             FontFamily = annotation.Style.FontFamily,
             Bold = annotation.Style.Bold,
@@ -177,6 +178,7 @@ public static class AnnotationFile
             FontFamily = stored.FontFamily ?? string.Empty,
             Bold = stored.Bold,
             ArrowReversed = stored.ArrowReversed,
+            Outline = AnnotationColor.TryParseHex(stored.Outline, out var halo) ? halo : null,
             TextBackground = AnnotationColor.TryParseHex(stored.TextBackground ?? string.Empty, out var fill)
                 ? fill
                 : null,
@@ -326,6 +328,8 @@ public static class AnnotationFile
         public bool Bold { get; init; }
 
         public bool ArrowReversed { get; init; }
+
+        public string? Outline { get; init; }
 
         public string? TextBackground { get; init; }
 

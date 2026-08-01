@@ -54,6 +54,11 @@ public sealed record AnnotationStyle(
 
     public const double MaxFontSize = 144;
 
+    /// <summary>
+    /// How much wider than the mark its halo is drawn — macshot's <c>strokeWidth + 6</c>.
+    /// </summary>
+    public const double OutlineSpread = 6;
+
     public static AnnotationStyle Default { get; } = new(new AnnotationColor(76, 194, 255), 3);
 
     /// <summary>
@@ -101,6 +106,17 @@ public sealed record AnnotationStyle(
     /// exactly the drag that is hardest to aim.
     /// </remarks>
     public bool ArrowReversed { get; init; }
+
+    /// <summary>
+    /// A contrasting halo laid under the mark, or null for none.
+    /// </summary>
+    /// <remarks>
+    /// macshot's <c>outlineColor</c>. A red arrow over a red button is invisible, and the
+    /// answer is not to change the arrow's colour — it is to put a rim round it. Drawn as
+    /// the same path stroked <see cref="OutlineSpread"/> wider and always solid, because a
+    /// dashed halo is a row of dots round a dashed line and reads as neither.
+    /// </remarks>
+    public AnnotationColor? Outline { get; init; }
 
     public void Validate()
     {

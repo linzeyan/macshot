@@ -709,23 +709,49 @@ public static class AnnotationRasterizer
             return;
         }
 
-        var mask = CoverageMask.ForBounds(bounds, style.StrokeWidth / 2 + AntialiasMargin, width, height);
-        if (mask is null)
+        // The halo first, and in a pass of its own: one mask can only be composited in
+        // one colour, and the halo is by definition a different one.
+        if (style.Outline is { } halo)
         {
-            return;
+            Lay(
+                style with
+                {
+                    Color = halo,
+                    StrokeWidth = style.StrokeWidth + AnnotationStyle.OutlineSpread,
+
+                    // Solid whatever the mark is, as macshot forces: a dashed halo round a
+                    // dashed line is two rows of dots and reads as neither.
+                    LineStyle = LineStyle.Solid,
+                });
         }
 
-        foreach (var path in paths)
-        {
-            StrokePath(mask, path, style);
-        }
+        Lay(style);
 
-        foreach (var fill in fills)
+        void Lay(AnnotationStyle laid)
         {
-            mask.AddPolygon(fill);
-        }
+            var mask = CoverageMask.ForBounds(
+                bounds,
+                (laid.StrokeWidth / 2) + AntialiasMargin,
+                width,
+                height);
 
-        mask.Composite(pixels, width, style.Color, style.Opacity);
+            if (mask is null)
+            {
+                return;
+            }
+
+            foreach (var path in paths)
+            {
+                StrokePath(mask, path, laid);
+            }
+
+            foreach (var fill in fills)
+            {
+                mask.AddPolygon(fill);
+            }
+
+            mask.Composite(pixels, width, laid.Color, laid.Opacity);
+        }
     }
 
     private static void CompositeFill(

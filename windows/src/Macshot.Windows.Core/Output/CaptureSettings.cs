@@ -193,6 +193,13 @@ public sealed record CaptureSettings
     /// </summary>
     public bool AnnotationArrowReversed { get; init; }
 
+    /// <summary>
+    /// The halo laid under a mark, as hex, or empty for none. macshot's
+    /// <c>annotationOutlineEnabled</c> and <c>savedOutlineColor</c> in one: a colour that
+    /// cannot be read means off, so the two cannot disagree.
+    /// </summary>
+    public string AnnotationOutline { get; init; } = string.Empty;
+
     /// <summary>How big the text tool sets a label, in frame pixels.</summary>
     /// <remarks>
     /// Remembered apart from the stroke width because it is set apart from it: the two
@@ -551,6 +558,9 @@ public sealed record CaptureSettings
             FontFamily = AnnotationFontFamily,
             Bold = AnnotationBold,
             ArrowReversed = AnnotationArrowReversed,
+            Outline = Annotations.AnnotationColor.TryParseHex(AnnotationOutline, out var halo)
+                ? halo
+                : null,
             TextBackground = Annotations.AnnotationColor.TryParseHex(AnnotationTextBackground, out var fill)
                 ? fill
                 : null,
@@ -576,6 +586,7 @@ public sealed record CaptureSettings
             AnnotationFontFamily = style.FontFamily,
             AnnotationBold = style.Bold,
             AnnotationArrowReversed = style.ArrowReversed,
+            AnnotationOutline = style.Outline?.ToHex() ?? string.Empty,
             AnnotationTextBackground = style.TextBackground?.ToHex() ?? string.Empty,
             AnnotationTextOutline = style.TextOutline?.ToHex() ?? string.Empty,
         };

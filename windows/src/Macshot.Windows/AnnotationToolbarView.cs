@@ -103,6 +103,13 @@ public sealed partial class AnnotationToolbarView : UserControl
     private readonly Button _font = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 10, Padding = new Thickness(8, 2, 8, 2) };
     private readonly FontPickerView _fontChoices = new();
     private readonly StyleSegments _weight = new();
+    /// <summary>
+    /// macshot's outline controls: a halo under the mark, in a colour of its own. A red
+    /// arrow over a red button is invisible, and the answer is a rim rather than a
+    /// different arrow.
+    /// </summary>
+    private readonly ToggleSwatch _outline = new(L("Outline"));
+
     private readonly ToggleSwatch _textFill = new(L("Fill"));
     private readonly ToggleSwatch _textOutline = new(L("Outline"));
     private readonly Button _stamp = new() { VerticalAlignment = VerticalAlignment.Center };
@@ -744,6 +751,10 @@ public sealed partial class AnnotationToolbarView : UserControl
         _arrowStyle.Visibility = Show(AnnotationToolOptions.UsesArrowStyle(tool));
         _flipArrow.Visibility = _arrowStyle.Visibility;
 
+        // Every mark with an edge to rim. Censor marks and the loupe carry their own
+        // chrome, and a halo round a pixelated block would outline the redaction.
+        _outline.Visibility = Show(AnnotationToolOptions.UsesLineStyle(tool) || tool == AnnotationTool.Arrow);
+
         var rounds = Show(AnnotationToolOptions.UsesCornerRadius(tool));
         _cornerLabel.Visibility = rounds;
         _cornerRadius.Visibility = rounds;
@@ -932,6 +943,8 @@ public sealed partial class AnnotationToolbarView : UserControl
             new StyleSegment(null, L("Bold"), 0),
         ]);
         _weight.SelectionChanged += (_, _) => ApplyStyle();
+        _outline.Toggled += (_, _) => ApplyStyle();
+        _outline.SwatchPressed += (_, _) => PickSwatchColor(_outline);
         _textFill.Toggled += (_, _) => ApplyStyle();
         _textOutline.Toggled += (_, _) => ApplyStyle();
         _textFill.SwatchPressed += (_, _) => PickSwatchColor(_textFill);
@@ -940,6 +953,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         AddGroup(_sizeLabel, _size, _sizeValue);
         AddGroup(_lineStyle);
         AddGroup(_arrowStyle, _flipArrow);
+        AddGroup(_outline);
         AddGroup(_cornerLabel, _cornerRadius, _cornerValue);
         AddGroup(_smoothing);
         AddGroup(_censorMode);
@@ -1036,6 +1050,8 @@ public sealed partial class AnnotationToolbarView : UserControl
             _lineStyle.SelectedIndex = (int)_loadedStyle.LineStyle;
             _arrowStyle.SelectedIndex = (int)_loadedStyle.ArrowStyle;
             _flipArrow.IsChecked = _loadedStyle.ArrowReversed;
+            _outline.Show(_loadedStyle.Outline is not null, ToUiColor(
+                _loadedStyle.Outline ?? new AnnotationColor(255, 255, 255)));
             _size.Value = _loadedStyle.StrokeWidth;
             _cornerRadius.Value = _loadedStyle.CornerRadius;
             ShowSliderValue(_size, _sizeValue);
@@ -1125,6 +1141,7 @@ public sealed partial class AnnotationToolbarView : UserControl
                 : FontPickerView.FamilyOf(_fontChoices.SelectedItem),
             Bold = _weight.SelectedIndex == 1,
             ArrowReversed = _flipArrow.IsChecked == true,
+            Outline = _outline.IsOn ? ToAnnotationColor(_outline.Color) : null,
             TextBackground = _textFill.IsOn ? ToAnnotationColor(_textFill.Color) : null,
             TextOutline = _textOutline.IsOn ? ToAnnotationColor(_textOutline.Color) : null,
         };
