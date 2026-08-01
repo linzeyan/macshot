@@ -6,12 +6,48 @@
     Title="macshot">
 
     <Grid x:Name="EditorRoot" Background="{ThemeResource ApplicationPageBackgroundThemeBrush}" KeyDown="EditorRoot_KeyDown">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="*" />
+        </Grid.RowDefinitions>
+
+        <!-- The operations that change the pixels rather than draw on them, in macshot's
+             own top bar: the full width of the window, 32 tall, opaque, with a hairline
+             along its bottom edge. It belongs to the window rather than floating over the
+             image, so the image starts below it rather than behind it — which is also what
+             stops a capture's top-left corner from being under a button. Dark whatever the
+             system theme is, to match the toolbar it shares a window with. -->
+        <Border
+            x:Name="ImageOperationsBar"
+            Grid.Row="0"
+            Height="32"
+            Background="#1F1F1F"
+            BorderBrush="#404040"
+            BorderThickness="0,0,0,0.5"
+            RequestedTheme="Dark">
+            <Grid>
+                <StackPanel
+                    x:Name="ImageOperations"
+                    Orientation="Horizontal"
+                    VerticalAlignment="Center" />
+
+                <!-- At the trailing edge, 12 in, where macshot keeps it. -->
+                <StackPanel
+                    x:Name="ZoomHost"
+                    Orientation="Horizontal"
+                    HorizontalAlignment="Right"
+                    VerticalAlignment="Center"
+                    Margin="0,0,12,0" />
+            </Grid>
+        </Border>
+
         <!-- Zoom is the ScrollViewer's, which is the whole reason the editor exists as a
              separate window: a scroll capture is taller than any screen, and a region
              capture is often smaller than the window it is being marked up in. Content
              alignment centres an image that does not fill the viewport, so a small
              capture sits in the middle rather than in the corner. -->
         <ScrollViewer
+            Grid.Row="1"
             x:Name="Scroller"
             ZoomMode="Enabled"
             MinZoomFactor="0.1"
@@ -56,6 +92,7 @@
         </ScrollViewer>
 
         <Border
+            Grid.Row="1"
             HorizontalAlignment="Center"
             VerticalAlignment="Top"
             Margin="0,12,0,0"
@@ -65,22 +102,6 @@
             <TextBlock x:Name="HintText" Foreground="White" />
         </Border>
 
-        <!-- The operations that change the pixels rather than draw on them. A bar of their
-             own along the top, the way the macOS editor has: they belong to this window
-             rather than to the toolbar, which is the same in both places. Dark whatever the
-             system theme is, to match the toolbar it shares a window with. -->
-        <Border
-            x:Name="ImageOperationsBar"
-            HorizontalAlignment="Left"
-            VerticalAlignment="Top"
-            Margin="12"
-            Padding="6"
-            Background="#CC1F1F1F"
-            CornerRadius="6"
-            RequestedTheme="Dark">
-            <StackPanel x:Name="ImageOperations" Orientation="Horizontal" Spacing="6" />
-        </Border>
-
-        <local:AnnotationToolbarView x:Name="AnnotationToolbar" />
+        <local:AnnotationToolbarView Grid.Row="1" x:Name="AnnotationToolbar" />
     </Grid>
 </Window>

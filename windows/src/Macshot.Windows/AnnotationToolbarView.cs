@@ -77,6 +77,7 @@ public sealed partial class AnnotationToolbarView : UserControl
 
     private readonly ColorPickerView _colorPicker = new();
     private readonly EffectsPickerView _effectsPicker = new();
+    private readonly BeautifySwatchGrid _frames = new();
     private readonly TextBlock _sizeLabel = OptionLabel();
     private readonly Slider _size = OptionSlider(100, MinStroke, MaxStroke);
     private readonly TextBlock _sizeValue = OptionValue(28);
@@ -205,6 +206,12 @@ public sealed partial class AnnotationToolbarView : UserControl
 
     /// <summary>Raised on every move of the Adjust popover, with what it now asks for.</summary>
     public event EventHandler<ImageEffectsOptions>? EffectsChanged;
+
+    /// <summary>
+    /// Raised with the background the user picked from behind the Frame button, so the
+    /// host can arm the frame and say which one it now is.
+    /// </summary>
+    public event EventHandler<int>? FrameStyleChosen;
 
     /// <summary>
     /// True in the editor window, which has no region to cancel or move and places its
@@ -638,16 +645,68 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// </summary>
     private void Action_Alternate(object? sender, ToolbarItem item)
     {
-        if (item.Command != ToolbarCommand.Save || _actions.ButtonFor(ToolbarCommand.Save) is not { } anchor)
+        if (_actions.ButtonFor(item.Command) is not { } anchor)
         {
             return;
         }
 
-        var menu = new MenuFlyout();
-        var saveAs = new MenuFlyoutItem { Text = "Save as..." };
-        saveAs.Click += (_, _) => CommandInvoked?.Invoke(this, ToolbarCommand.SaveAs);
-        menu.Items.Add(saveAs);
-        menu.ShowAt(anchor);
+        switch (item.Command)
+        {
+        case ToolbarCommand.Save:
+            var menu = new MenuFlyout();
+            var saveAs = new MenuFlyoutItem { Text = L("Save As...") };
+            saveAs.Click += (_, _) => CommandInvoked?.Invoke(this, ToolbarCommand.SaveAs);
+            menu.Items.Add(saveAs);
+            menu.ShowAt(anchor);
+            break;
+
+        case ToolbarCommand.Beautify:
+            ShowFramePicker(anchor);
+            break;
+
+        default:
+            break;
+        }
+    }
+
+    /// <summary>
+    /// The backgrounds, offered where the button that uses them is.
+    /// </summary>
+    /// <remarks>
+    /// macshot puts the picker on the options row that appears while the frame is armed.
+    /// The port has no options row for an action button, so it goes behind the right-click
+    /// — the same place Save keeps "Save as...", and the one gesture on this strip that is
+    /// already spoken for by nothing else. Picking a background arms the frame as well as
+    /// choosing it: nobody opens this to change a setting they cannot see the effect of.
+    /// </remarks>
+    private void ShowFramePicker(FrameworkElement anchor)
+    {
+        if (_settings is not { } settings)
+        {
+            return;
+        }
+
+        // Painting 48 gradients is not free, so the grid is filled as it opens rather
+        // than held ready; the only thing that changes between openings is the ring.
+        _frames.Show(settings.Current.ToBeautifyOptions().StyleIndex);
+
+        var bare = new Style(typeof(FlyoutPresenter));
+        bare.Setters.Add(new Setter(FlyoutPresenter.PaddingProperty, new Thickness(0)));
+        bare.Setters.Add(new Setter(FlyoutPresenter.MinWidthProperty, 0d));
+        bare.Setters.Add(new Setter(FlyoutPresenter.BackgroundProperty, ToolbarPalette.BackgroundBrush));
+
+        var flyout = new Flyout { Content = _frames, FlyoutPresenterStyle = bare };
+
+        void Chosen(object? sender, int index)
+        {
+            _frames.Picked -= Chosen;
+            flyout.Hide();
+            Remember(current => current with { BeautifyStyleIndex = index });
+            FrameStyleChosen?.Invoke(this, index);
+        }
+
+        _frames.Picked += Chosen;
+        flyout.ShowAt(anchor);
     }
 
     private void ShowEffectsPicker()

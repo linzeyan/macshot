@@ -103,6 +103,20 @@ public sealed partial class EditorWindow : Window
     /// <summary>What one step of the zoom menu multiplies by, as macshot's does.</summary>
     private const double ZoomStep = 1.25;
 
+    /// <summary>macshot's top bar: 22-tall buttons in a 32-tall bar, 4 apart.</summary>
+    private const double BarButtonHeight = 22;
+
+    /// <summary>
+    /// What a text button gets instead of macshot's fixed 24 of width. macshot's are
+    /// symbols and a symbol is as wide as it is; these are words, and a word is as wide
+    /// as it is.
+    /// </summary>
+    private const double BarButtonPadding = 8;
+
+    private const double BarFontSize = 11;
+    private const double BarGap = 4;
+    private const double BarGroupGap = 12;
+
     /// <param name="annotations">
     /// Marks to open with, for a capture reopened from the history with its marks
     /// archived beside it. They are the capture's own marks as objects again, so they can
@@ -211,6 +225,10 @@ public sealed partial class EditorWindow : Window
             Present();
         };
         AnnotationToolbar.CommandInvoked += (_, command) => RunToolbarCommand(command);
+
+        // In the editor the frame is an image operation rather than a switch, so a
+        // background chosen here applies at once — the same as pressing the button.
+        AnnotationToolbar.FrameStyleChosen += (_, index) => FrameImage(index);
         AnnotationToolbar.ShowToolbar(true);
 
         // The strips sit at fixed corners of the window here rather than around a
@@ -322,7 +340,9 @@ public sealed partial class EditorWindow : Window
             FontWeight = FontWeights.Medium,
             Opacity = 0.45,
             VerticalAlignment = VerticalAlignment.Center,
-            Margin = new Thickness(6, 0, 10, 0),
+
+            // macshot's 12 from the leading edge, and its 16 before the first button.
+            Margin = new Thickness(12, 0, 16, 0),
         };
         Typography.SetNumeralAlignment(_sizeLabel, FontNumeralAlignment.Tabular);
 
@@ -360,12 +380,37 @@ public sealed partial class EditorWindow : Window
         _zoomButton = new Button { Content = "100% ▾" };
         _zoomButton.Flyout = ZoomMenu();
 
-        foreach (var button in new FrameworkElement[] { _sizeLabel, _cropButton, flip, frame, add, _zoomButton })
-        {
-            ImageOperations.Children.Add(button);
-        }
+        // Tabular figures and the same faded 11 medium as the size reading, because the
+        // percentage changes under every scroll and a proportional 8 is a different width
+        // from a proportional 1.
+        _zoomButton.FontSize = BarFontSize;
+        _zoomButton.FontWeight = FontWeights.Medium;
+        _zoomButton.Opacity = 0.45;
+        Typography.SetNumeralAlignment(_zoomButton, FontNumeralAlignment.Tabular);
+
+        ImageOperations.Children.Add(_sizeLabel);
+
+        // macshot's gaps: 4 between the operations that belong together, 12 before the one
+        // that does something else entirely.
+        Seat(_cropButton, 0);
+        Seat(flip, BarGap);
+        Seat(frame, BarGap);
+        Seat(add, BarGroupGap);
+
+        Seat(_zoomButton, 0, ZoomHost);
 
         ShowSize();
+
+        void Seat(Control button, double leading, Panel? host = null)
+        {
+            button.Height = BarButtonHeight;
+            button.MinHeight = BarButtonHeight;
+            button.FontSize = BarFontSize;
+            button.Padding = new Thickness(BarButtonPadding, 0, BarButtonPadding, 0);
+            button.VerticalAlignment = VerticalAlignment.Center;
+            button.Margin = new Thickness(leading, 0, 0, 0);
+            (host ?? ImageOperations).Children.Add(button);
+        }
     }
 
     /// <summary>

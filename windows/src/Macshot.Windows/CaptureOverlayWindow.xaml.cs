@@ -1528,6 +1528,7 @@ public sealed partial class CaptureOverlayWindow : Window
             }
         };
         AnnotationToolbar.CommandInvoked += (_, command) => RunToolbarCommand(command);
+        AnnotationToolbar.FrameStyleChosen += (_, index) => FrameStyleChosen(index);
     }
 
     /// <summary>
@@ -1864,6 +1865,27 @@ public sealed partial class CaptureOverlayWindow : Window
         Hint(_beautify
             ? $"Framed in {BeautifyRenderer.Styles[_settings.Current.ToBeautifyOptions().StyleIndex].Name}"
             : "Frame removed");
+    }
+
+    /// <summary>
+    /// A background chosen from behind the Frame button, which arms the frame as well as
+    /// choosing it.
+    /// </summary>
+    /// <remarks>
+    /// Arming is the whole reason to pick one. Leaving the frame off would mean choosing a
+    /// background, watching nothing change, and then having to find the button that turns
+    /// on the thing already chosen.
+    /// </remarks>
+    private void FrameStyleChosen(int styleIndex)
+    {
+        if (!IsAnnotating)
+        {
+            return;
+        }
+
+        _beautify = true;
+        AnnotationToolbar.Beautified = true;
+        Hint($"Framed in {BeautifyRenderer.Styles[styleIndex].Name}");
     }
 
     /// <summary>
