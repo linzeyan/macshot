@@ -474,6 +474,25 @@
                             Text="What happens to a pencil or highlighter stroke once you let go. A path sampled from a mouse is a staircase: Smooth rounds its corners off, Refined evens out the shake along it as well, and None leaves the points exactly where the pointer went, for tracing something. The same choice sits under the pencil on the toolbar."
                             Style="{StaticResource Caption}" />
                     </StackPanel>
+
+                    <StackPanel Style="{StaticResource Section}">
+                        <TextBlock Text="Bottom Toolbar Actions" Style="{StaticResource SectionHeading}" />
+                        <TextBlock
+                            Text="Hidden actions are removed from the bottom toolbar."
+                            Style="{StaticResource Caption}" />
+                        <!-- Both lists are filled in code from ToolbarCustomActions, for the
+                             reason the tool list above is: the strip and this page then
+                             cannot disagree about what exists. -->
+                        <StackPanel x:Name="BottomActionToggles" Margin="188,4,0,0" Spacing="2" />
+                    </StackPanel>
+
+                    <StackPanel Style="{StaticResource Section}">
+                        <TextBlock Text="Right Toolbar Actions" Style="{StaticResource SectionHeading}" />
+                        <TextBlock
+                            Text="Hidden actions are removed from the right toolbar."
+                            Style="{StaticResource Caption}" />
+                        <StackPanel x:Name="RightActionToggles" Margin="188,4,0,0" Spacing="2" />
+                    </StackPanel>
                 </StackPanel>
             </ScrollViewer>
 

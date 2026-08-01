@@ -170,12 +170,17 @@ public static class ToolbarActions
     /// again: the popover is closed most of the time, and this is the only sign that
     /// what is on show has been altered.
     /// </param>
+    /// <param name="hiddenActions">
+    /// The identifiers of the buttons after the tools that the user has taken off — see
+    /// <see cref="ToolbarCustomActions"/>. Null for none.
+    /// </param>
     public static IReadOnlyList<ToolbarItem> Tools(
         AnnotationTool selected,
         IReadOnlyCollection<AnnotationTool>? enabled = null,
         bool beautified = false,
         bool inverted = false,
-        bool adjusted = false)
+        bool adjusted = false,
+        IReadOnlyCollection<string>? hiddenActions = null)
     {
         var items = new List<ToolbarItem>(ToolOrder.Count + 3);
 
@@ -203,12 +208,20 @@ public static class ToolbarActions
         // here yet; the three that are keep the places they hold there, so filling the
         // gap later moves nothing. The port's own redact button follows the block rather
         // than sitting inside it.
-        items.Add(new ToolbarItem(ToolbarCommand.InvertColors, "Invert the colours", IsSelected: inverted));
-        items.Add(new ToolbarItem(ToolbarCommand.Adjust, "Adjust", IsSelected: adjusted));
-        items.Add(new ToolbarItem(ToolbarCommand.Beautify, "Beautify", IsSelected: beautified));
-        items.Add(new ToolbarItem(ToolbarCommand.Redact, "Cover personal details"));
+        Offer(new ToolbarItem(ToolbarCommand.InvertColors, "Invert the colours", IsSelected: inverted));
+        Offer(new ToolbarItem(ToolbarCommand.Adjust, "Adjust", IsSelected: adjusted));
+        Offer(new ToolbarItem(ToolbarCommand.Beautify, "Beautify", IsSelected: beautified));
+        Offer(new ToolbarItem(ToolbarCommand.Redact, "Cover personal details"));
 
         return items;
+
+        void Offer(ToolbarItem item)
+        {
+            if (ToolbarCustomActions.IsShown(item.Command, hiddenActions))
+            {
+                items.Add(item);
+            }
+        }
     }
 
     /// <summary>
@@ -222,7 +235,16 @@ public static class ToolbarActions
     /// False in the offline build, which contains no translator at all. A button for a
     /// feature compiled out of the binary would be a button that does nothing.
     /// </param>
-    public static IReadOnlyList<ToolbarItem> Actions(bool editorMode, bool translation = true)
+    /// <param name="hiddenActions">
+    /// The identifiers of the buttons the user has taken off — see
+    /// <see cref="ToolbarCustomActions"/>. Null for none. Cancel, Copy and Save are not in
+    /// that list and so are always here: a strip that can lose Copy is one a user can
+    /// break.
+    /// </param>
+    public static IReadOnlyList<ToolbarItem> Actions(
+        bool editorMode,
+        bool translation = true,
+        IReadOnlyCollection<string>? hiddenActions = null)
     {
         var items = new List<ToolbarItem>(8);
 
@@ -235,23 +257,31 @@ public static class ToolbarActions
 
         items.Add(new ToolbarItem(ToolbarCommand.Copy, "Copy"));
         items.Add(new ToolbarItem(ToolbarCommand.Save, "Save"));
-        items.Add(new ToolbarItem(ToolbarCommand.Share, "Share"));
-        items.Add(new ToolbarItem(ToolbarCommand.Pin, "Pin on top"));
-        items.Add(new ToolbarItem(ToolbarCommand.ReadText, "Read the text in it"));
+        Offer(new ToolbarItem(ToolbarCommand.Share, "Share"));
+        Offer(new ToolbarItem(ToolbarCommand.Pin, "Pin on top"));
+        Offer(new ToolbarItem(ToolbarCommand.ReadText, "Read the text in it"));
         if (translation)
         {
-            items.Add(new ToolbarItem(ToolbarCommand.Translate, "Translate the text in it"));
+            Offer(new ToolbarItem(ToolbarCommand.Translate, "Translate the text in it"));
         }
 
         if (!editorMode)
         {
             // Last, in macshot's order. Both aim at a live screen: there is no window
             // behind an image in the editor to scroll, and nothing there to record.
-            items.Add(new ToolbarItem(ToolbarCommand.ScrollCapture, "Scroll the window behind it"));
-            items.Add(new ToolbarItem(ToolbarCommand.Record, "Record the region"));
+            Offer(new ToolbarItem(ToolbarCommand.ScrollCapture, "Scroll the window behind it"));
+            Offer(new ToolbarItem(ToolbarCommand.Record, "Record the region"));
         }
 
         return items;
+
+        void Offer(ToolbarItem item)
+        {
+            if (ToolbarCustomActions.IsShown(item.Command, hiddenActions))
+            {
+                items.Add(item);
+            }
+        }
     }
 
     /// <summary>

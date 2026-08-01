@@ -80,6 +80,9 @@ public sealed partial class PreferencesWindow : Window
     /// <summary>One tick box per tool, in the order the toolbar keeps them.</summary>
     private readonly Dictionary<AnnotationTool, CheckBox> _toolToggles = [];
 
+    /// <summary>One tick box per hideable toolbar button, by identifier.</summary>
+    private readonly Dictionary<string, CheckBox> _actionToggles = new(StringComparer.Ordinal);
+
     /// <summary>The key each shortcut currently stands on, by identifier.</summary>
     /// <remarks>
     /// Held here rather than read back off the labels, because a label says "Space" and
@@ -147,6 +150,22 @@ public sealed partial class PreferencesWindow : Window
             toggle.Unchecked += Setting_Changed;
             _toolToggles[tool] = toggle;
             ToolToggles.Children.Add(toggle);
+        }
+
+        foreach (var (actions, host) in new[]
+        {
+            (ToolbarCustomActions.Bottom, BottomActionToggles),
+            (ToolbarCustomActions.Right, RightActionToggles),
+        })
+        {
+            foreach (var action in actions)
+            {
+                var toggle = new CheckBox { Content = L(action.Label), MinWidth = 0, FontSize = 13 };
+                toggle.Checked += Setting_Changed;
+                toggle.Unchecked += Setting_Changed;
+                _actionToggles[action.Id] = toggle;
+                host.Children.Add(toggle);
+            }
         }
 
         foreach (var choice in new[] { _toolbarBackground, _toolbarAccent, _toolbarIcon })
@@ -765,6 +784,11 @@ public sealed partial class PreferencesWindow : Window
             toggle.IsChecked = shown.Contains(tool);
         }
 
+        foreach (var (id, toggle) in _actionToggles)
+        {
+            toggle.IsChecked = !settings.HiddenActions.Contains(id, StringComparer.Ordinal);
+        }
+
         ShortcutTooltipsCheck.IsChecked = settings.ShowShortcutsInTooltips;
         foreach (var shortcut in ToolShortcuts.All)
         {
@@ -876,6 +900,9 @@ public sealed partial class PreferencesWindow : Window
             HiddenTools = [.. _toolToggles
                 .Where(entry => entry.Value.IsChecked != true)
                 .Select(entry => entry.Key.ToString())],
+            HiddenActions = [.. _actionToggles
+                .Where(entry => entry.Value.IsChecked != true)
+                .Select(entry => entry.Key)],
             ToolShortcuts = ChosenShortcuts(),
             ShowShortcutsInTooltips = ShortcutTooltipsCheck.IsChecked == true,
             ToolbarBackgroundColor = ToAnnotationColor(_toolbarBackground.Color).ToHex(),

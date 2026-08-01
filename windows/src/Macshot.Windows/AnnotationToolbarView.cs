@@ -943,16 +943,22 @@ public sealed partial class AnnotationToolbarView : UserControl
             return;
         }
 
+        var hidden = _settings?.Current.HiddenActions;
+
         _tools.Visibility = Visibility.Visible;
         _tools.SetItems(WithKeys(ToolbarActions.Tools(
             editor.Tool,
             _settings?.Current.EnabledTools(),
             _beautified,
             _inverted,
-            !_effectsPicker.Options.IsIdentity)));
+            !_effectsPicker.Options.IsIdentity,
+            hidden)));
         // The offline build has no translator compiled into it, so it is not offered a
         // button for one.
-        _actions.SetItems(WithKeys(ToolbarActions.Actions(EditorMode, translation: !BuildVariant.IsOffline)));
+        _actions.SetItems(WithKeys(ToolbarActions.Actions(
+            EditorMode,
+            translation: !BuildVariant.IsOffline,
+            hiddenActions: hidden)));
         _tools.ShowSwatch(ToUiColor(editor.Style.Color));
         ShowOptionsFor(editor.Tool);
 

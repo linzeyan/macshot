@@ -505,6 +505,17 @@ public sealed record CaptureSettings
     /// </remarks>
     public IReadOnlyList<string> HiddenTools { get; init; } = [];
 
+    /// <summary>
+    /// The buttons after the tools, and on the action strip, that the user has taken off —
+    /// by <see cref="ToolbarCustomAction.Id"/>. macshot's <c>enabledActions</c>, inverted.
+    /// </summary>
+    /// <remarks>
+    /// Stored as what is hidden for the same reason <see cref="HiddenTools"/> is: macshot
+    /// keeps the list the other way round and has to notice each new action and append it
+    /// to everyone's stored list, which is work this side does not have to do.
+    /// </remarks>
+    public IReadOnlyList<string> HiddenActions { get; init; } = [];
+
     /// <summary>How many colours the picker keeps for the user's own. macshot's seven.</summary>
     public const int CustomColorSlots = 7;
 
@@ -548,6 +559,21 @@ public sealed record CaptureSettings
 
         return [.. ToolbarActions.ToolOrder.Where(tool => !hidden.Contains(tool))];
     }
+
+    /// <summary>
+    /// The hidden buttons, keeping only names this build has a button for.
+    /// </summary>
+    /// <remarks>
+    /// Unlike the tools, there is no floor here: every one of these can be hidden at once
+    /// and what is left is still a working toolbar, because Cancel, Copy and Save cannot
+    /// be hidden at all.
+    /// </remarks>
+    private IReadOnlyList<string> SaneHiddenActions() =>
+    [
+        .. HiddenActions
+            .Where(id => ToolbarCustomActions.Find(id) is not null)
+            .Distinct(StringComparer.Ordinal),
+    ];
 
     private IReadOnlyList<string> SaneHiddenTools()
     {
@@ -814,6 +840,7 @@ public sealed record CaptureSettings
             // A file that hides every tool is treated as hiding none — a toolbar with no
             // tools on it is not a preference, it is a broken window.
             HiddenTools = SaneHiddenTools(),
+            HiddenActions = SaneHiddenActions(),
 
             // Only shortcuts this build has, on keys it can actually match. A binding for
             // a tool that no longer exists is unreachable, and one holding more than a
