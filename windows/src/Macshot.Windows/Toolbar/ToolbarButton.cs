@@ -71,7 +71,7 @@ internal sealed partial class ToolbarButton : UserControl
         Height = ToolbarPalette.ButtonSize;
         base.Content = _surface;
 
-        ToolTipService.SetToolTip(this, L(item.Tooltip));
+        ToolTipService.SetToolTip(this, Hint(item));
 
         PointerEntered += (_, _) => { _isHovered = true; Repaint(); };
         PointerExited += (_, _) => { _isHovered = false; _isPressed = false; Repaint(); };
@@ -98,12 +98,17 @@ internal sealed partial class ToolbarButton : UserControl
     public void Update(ToolbarItem item)
     {
         var iconChanged = item.Command != Item.Command || item.Tool != Item.Tool;
+        var hintChanged = iconChanged || !string.Equals(item.Shortcut, Item.Shortcut, StringComparison.Ordinal);
         Item = item;
 
         if (iconChanged)
         {
             SetFace(FaceOf(item));
-            ToolTipService.SetToolTip(this, L(item.Tooltip));
+        }
+
+        if (hintChanged)
+        {
+            ToolTipService.SetToolTip(this, Hint(item));
         }
 
         Repaint();
@@ -171,6 +176,20 @@ internal sealed partial class ToolbarButton : UserControl
                     ? ToolbarPalette.HoverBrush
                     : ToolbarPalette.TransparentBrush;
     }
+
+    /// <summary>
+    /// What the tooltip says: the button's name, and the key that does the same thing when
+    /// there is one to name.
+    /// </summary>
+    /// <remarks>
+    /// The key is appended after translation rather than folded into the tooltip text,
+    /// because macshot keys its translations on the exact English it ships — "Pencil" has
+    /// a translation and "Pencil (P)" never would.
+    /// </remarks>
+    private static string Hint(ToolbarItem item) =>
+        item.Shortcut.Length == 0
+            ? L(item.Tooltip)
+            : $"{L(item.Tooltip)} ({item.Shortcut})";
 
     /// <summary>
     /// What the button shows: its icon, or the colour itself for the one button that is a

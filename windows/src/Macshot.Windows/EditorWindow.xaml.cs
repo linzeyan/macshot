@@ -747,6 +747,14 @@ public sealed partial class EditorWindow : Window
                 return;
 
             default:
+                // The same single keys the overlay answers to, so a tool is reached the
+                // same way whichever window the capture ended up in. Modifiers are left
+                // alone: Ctrl and Alt belong to this window's commands and the system's.
+                if (!control && !IsDown(VirtualKey.Menu) && AnnotationToolbar.TryShortcut(e.Key))
+                {
+                    e.Handled = true;
+                }
+
                 return;
         }
     }

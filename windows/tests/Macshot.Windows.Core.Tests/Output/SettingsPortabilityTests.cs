@@ -121,6 +121,8 @@ public sealed class SettingsPortabilityTests
             VerboseLogging = true,
             TranslateTargetLanguage = "ja",
             HiddenTools = ["Loupe", "Measure"],
+            ToolShortcuts = new Dictionary<string, string> { ["pencil"] = "k", ["arrow"] = "" },
+            ShowShortcutsInTooltips = false,
             BeautifyStyleIndex = 12,
             BeautifyPadding = 48,
         };

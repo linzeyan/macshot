@@ -7,12 +7,17 @@ using Macshot.Windows.Core.Localization;
 using Macshot.Windows.Core.Output;
 using Macshot.Windows.Services;
 using Macshot.Windows.Toolbar;
+using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Windows.Graphics;
 using Windows.Storage.Pickers;
+using Windows.System;
 using Windows.UI;
+using Windows.UI.Core;
 using WinRT.Interop;
 using static Macshot.Windows.Services.Localization;
 
@@ -36,6 +41,11 @@ namespace Macshot.Windows;
 /// </remarks>
 public sealed partial class PreferencesWindow : Window
 {
+    /// <summary>Segoe Fluent Icons: an X, and a circling arrow — macshot's two.</summary>
+    private const string ClearGlyph = "\uE894";
+
+    private const string ResetGlyph = "\uE72C";
+
     /// <summary>The macOS settings window's content size, which this one is.</summary>
     private const double WidthDips = 620;
 
@@ -70,6 +80,23 @@ public sealed partial class PreferencesWindow : Window
     /// <summary>One tick box per tool, in the order the toolbar keeps them.</summary>
     private readonly Dictionary<AnnotationTool, CheckBox> _toolToggles = [];
 
+    /// <summary>The key each shortcut currently stands on, by identifier.</summary>
+    /// <remarks>
+    /// Held here rather than read back off the labels, because a label says "Space" and
+    /// "None" — words, not keys — and turning those back into what to store would mean
+    /// parsing this window's own display text.
+    /// </remarks>
+    private readonly Dictionary<string, string> _shortcutKeys = new(StringComparer.Ordinal);
+
+    /// <summary>The reading in each shortcut's row, by identifier.</summary>
+    private readonly Dictionary<string, TextBlock> _shortcutFields = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Which shortcut is waiting for a key, or null when none is. Only one row can be
+    /// waiting: a keypress that landed on two of them would bind both.
+    /// </summary>
+    private string? _recordingShortcut;
+
     private readonly ColorChoice _toolbarBackground = new("Background");
     private readonly ColorChoice _toolbarAccent = new("Accent");
     private readonly ColorChoice _toolbarIcon = new("Icons");
@@ -89,6 +116,7 @@ public sealed partial class PreferencesWindow : Window
         // to, and the first page has to be shown from here instead.
         ShowPage(Tabs.SelectedItem as ListViewItem);
         BuildToolsPage();
+        BuildShortcutRows();
         Load(_settings.Current);
         PlaceOnScreen();
 
@@ -112,8 +140,9 @@ public sealed partial class PreferencesWindow : Window
         foreach (var tool in ToolbarActions.ToolOrder)
         {
             // 13 to match the markup's rows rather than WinUI's 14: these sit in the same
-            // column as the tick boxes the markup declares.
-            var toggle = new CheckBox { Content = ToolbarActions.Tooltip(tool), MinWidth = 0, FontSize = 13 };
+            // column as the tick boxes the markup declares. Translated here rather than by
+            // the page-wide pass, which has already run by the time this row exists.
+            var toggle = new CheckBox { Content = L(ToolbarActions.Tooltip(tool)), MinWidth = 0, FontSize = 13 };
             toggle.Checked += Setting_Changed;
             toggle.Unchecked += Setting_Changed;
             _toolToggles[tool] = toggle;
@@ -125,6 +154,213 @@ public sealed partial class PreferencesWindow : Window
             choice.Changed += Setting_Changed;
             ToolbarColorRow.Children.Add(choice);
         }
+    }
+
+    /// <summary>
+    /// Builds one row per single-key shortcut: the name, the key it stands on, and the
+    /// three things that can be done to it — take a new key, take it off, put it back.
+    /// </summary>
+    /// <remarks>
+    /// Built from <see cref="ToolShortcuts.All"/> rather than written out in the markup so
+    /// that this page and the overlay cannot disagree about what exists. macshot's own row:
+    /// label, an 80-wide reading, Set, and two small round buttons.
+    /// </remarks>
+    private void BuildShortcutRows()
+    {
+        // Cast rather than tested: the style is declared in this window's own markup, and
+        // rows silently losing their column would be a worse failure than not opening.
+        var labelStyle = (Style)((Grid)Content).Resources["RowLabel"];
+
+        foreach (var shortcut in ToolShortcuts.All)
+        {
+            var field = new TextBlock
+            {
+                Width = 80,
+                FontSize = 13,
+                TextAlignment = TextAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+
+            var set = new Button { Content = L("Set"), FontSize = 13, MinWidth = 64 };
+
+            // The keypress is taken on the button itself rather than on the window, so
+            // that arming a row and then clicking elsewhere cannot leave a listener behind
+            // that swallows the next key typed into some other control.
+            set.Click += (_, _) => Arm(shortcut, set);
+            set.KeyDown += (_, e) => RecordShortcut(shortcut, set, e);
+            set.LostFocus += (_, _) => CancelRecording(shortcut, set);
+
+            var clear = SmallButton(ClearGlyph, L("None"));
+            clear.Click += (_, _) =>
+            {
+                CancelRecording(shortcut, set);
+                Assign(shortcut.Id, ToolShortcuts.Unbound);
+            };
+
+            var reset = SmallButton(ResetGlyph, L("Reset to default"));
+            reset.Click += (_, _) =>
+            {
+                CancelRecording(shortcut, set);
+                Assign(shortcut.Id, shortcut.DefaultKey);
+            };
+
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+            row.Children.Add(new TextBlock { Text = $"{L(shortcut.Label)}:", Style = labelStyle });
+            row.Children.Add(field);
+            row.Children.Add(set);
+            row.Children.Add(clear);
+            row.Children.Add(reset);
+
+            _shortcutFields[shortcut.Id] = field;
+            ToolShortcutRows.Children.Add(row);
+        }
+    }
+
+    /// <summary>A bordered icon button, the two macshot puts at the end of each row.</summary>
+    /// <remarks>
+    /// The font is named rather than left to the theme, because the theme's icon font
+    /// differs between Windows versions and a glyph that is absent draws as a box.
+    /// </remarks>
+    private static Button SmallButton(string glyph, string tooltip)
+    {
+        var button = new Button
+        {
+            Content = new FontIcon
+            {
+                Glyph = glyph,
+                FontSize = 12,
+                FontFamily = new FontFamily("Segoe Fluent Icons"),
+            },
+            Padding = new Thickness(8, 4, 8, 4),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        ToolTipService.SetToolTip(button, tooltip);
+        return button;
+    }
+
+    /// <summary>
+    /// Puts a row into waiting-for-a-key, having taken any other row out of it.
+    /// </summary>
+    private void Arm(ToolShortcut shortcut, Button set)
+    {
+        // Pressing Set again is how a row is taken back out of waiting, which is what
+        // macshot does — the button is the only thing to press once it says "Press...".
+        if (_recordingShortcut == shortcut.Id)
+        {
+            CancelRecording(shortcut, set);
+            return;
+        }
+
+        // A second row cannot be left waiting behind this one: its reading would say "…"
+        // forever, and the next key would be claimed by whichever happened to have focus.
+        if (_recordingShortcut is { } waiting)
+        {
+            ShowShortcut(waiting, _shortcutKeys.GetValueOrDefault(waiting, ToolShortcuts.Unbound));
+        }
+
+        _recordingShortcut = shortcut.Id;
+        set.Content = L("Press...");
+        if (_shortcutFields.TryGetValue(shortcut.Id, out var field))
+        {
+            field.Text = "…";
+        }
+    }
+
+    /// <summary>
+    /// Takes the key pressed while a row is waiting, and binds it.
+    /// </summary>
+    /// <remarks>
+    /// Every key is handled while armed, including Tab and Space — otherwise Tab would
+    /// move the focus away mid-assignment and Space would press the button it was meant to
+    /// be assigned to. A key nothing can be bound to leaves the row waiting rather than
+    /// binding something the overlay could never match.
+    /// </remarks>
+    private void RecordShortcut(ToolShortcut shortcut, Button set, KeyRoutedEventArgs e)
+    {
+        if (_recordingShortcut != shortcut.Id)
+        {
+            return;
+        }
+
+        e.Handled = true;
+
+        if (e.Key == VirtualKey.Escape)
+        {
+            CancelRecording(shortcut, set);
+            return;
+        }
+
+        // Ctrl and Alt are refused rather than stripped: the overlay only ever looks up
+        // plain keys, so binding Ctrl+P would put a shortcut in the list that no press can
+        // ever match. Shift is allowed through — a shifted letter is the same letter.
+        var key = IsDown(VirtualKey.Control) || IsDown(VirtualKey.Menu)
+            ? ToolShortcuts.Unbound
+            : ShortcutKey.Of(e.Key);
+
+        if (key.Length == 0)
+        {
+            return;
+        }
+
+        _recordingShortcut = null;
+        set.Content = L("Set");
+        Assign(shortcut.Id, key);
+    }
+
+    /// <summary>Leaves a row as it was, if it was the one waiting.</summary>
+    private void CancelRecording(ToolShortcut shortcut, Button set)
+    {
+        if (_recordingShortcut != shortcut.Id)
+        {
+            return;
+        }
+
+        _recordingShortcut = null;
+        set.Content = L("Set");
+        ShowShortcut(shortcut.Id, _shortcutKeys.GetValueOrDefault(shortcut.Id, shortcut.DefaultKey));
+    }
+
+    private static bool IsDown(VirtualKey key) =>
+        InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(CoreVirtualKeyStates.Down);
+
+    private void Assign(string id, string key)
+    {
+        ShowShortcut(id, key);
+        Apply();
+    }
+
+    private void ShowShortcut(string id, string key)
+    {
+        _shortcutKeys[id] = key;
+        if (_shortcutFields.TryGetValue(id, out var field))
+        {
+            field.Text = L(ToolShortcuts.Describe(key));
+        }
+    }
+
+    /// <summary>
+    /// The shortcuts worth writing down: the ones that are not what this build ships.
+    /// </summary>
+    /// <remarks>
+    /// Storing only the differences is what lets a later version change a default and have
+    /// it reach everyone who never touched that row — and an entry that is present and
+    /// empty still says "the user took this key off", because an empty string differs from
+    /// a default that is a letter.
+    /// </remarks>
+    private Dictionary<string, string> ChosenShortcuts()
+    {
+        var chosen = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var shortcut in ToolShortcuts.All)
+        {
+            var key = _shortcutKeys.GetValueOrDefault(shortcut.Id, shortcut.DefaultKey);
+            if (!string.Equals(key, shortcut.DefaultKey, StringComparison.Ordinal))
+            {
+                chosen[shortcut.Id] = key;
+            }
+        }
+
+        return chosen;
     }
 
     /// <summary>
@@ -529,6 +765,12 @@ public sealed partial class PreferencesWindow : Window
             toggle.IsChecked = shown.Contains(tool);
         }
 
+        ShortcutTooltipsCheck.IsChecked = settings.ShowShortcutsInTooltips;
+        foreach (var shortcut in ToolShortcuts.All)
+        {
+            ShowShortcut(shortcut.Id, ToolShortcuts.KeyFor(shortcut, settings.ToolShortcuts));
+        }
+
         ShowToolbarColors(settings.ToToolbarColors());
 
         VersionText.Text = $"Version {Version}";
@@ -634,6 +876,8 @@ public sealed partial class PreferencesWindow : Window
             HiddenTools = [.. _toolToggles
                 .Where(entry => entry.Value.IsChecked != true)
                 .Select(entry => entry.Key.ToString())],
+            ToolShortcuts = ChosenShortcuts(),
+            ShowShortcutsInTooltips = ShortcutTooltipsCheck.IsChecked == true,
             ToolbarBackgroundColor = ToAnnotationColor(_toolbarBackground.Color).ToHex(),
             ToolbarAccentColor = ToAnnotationColor(_toolbarAccent.Color).ToHex(),
             ToolbarIconColor = ToAnnotationColor(_toolbarIcon.Color).ToHex(),

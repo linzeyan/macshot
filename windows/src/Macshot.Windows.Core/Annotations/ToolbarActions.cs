@@ -93,11 +93,17 @@ public enum ToolbarCommand
 /// rather than defaulted to one of them, because a default would make every action
 /// button claim to be that tool.
 /// </param>
+/// <param name="Shortcut">
+/// The key this button also answers to, ready to read — or empty for none, and for the
+/// user who has turned the hint off. Carried on the item rather than looked up when the
+/// tooltip is built, so that the strips stay the one place that knows about settings.
+/// </param>
 public readonly record struct ToolbarItem(
     ToolbarCommand Command,
     string Tooltip,
     AnnotationTool? Tool = null,
-    bool IsSelected = false);
+    bool IsSelected = false,
+    string Shortcut = "");
 
 /// <summary>
 /// Which buttons each strip carries, and in what order.

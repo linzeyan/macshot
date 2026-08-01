@@ -259,4 +259,56 @@ public sealed class CaptureSettingsTests
         Assert.IsTrue(SettingsPortability.IsPortable("betaUpdates"));
     }
 
+    [TestMethod]
+    public void Normalized_DropsAShortcutForSomethingThatNoLongerExists()
+    {
+        // A binding nobody can reach is worse than none: the settings window would draw a
+        // row for it, and the key would appear to be taken.
+        var settings = (CaptureSettings.Default with
+        {
+            ToolShortcuts = new Dictionary<string, string> { ["telepathy"] = "k", ["pencil"] = "k" },
+        }).Normalized();
+
+        Assert.IsFalse(settings.ToolShortcuts.ContainsKey("telepathy"));
+        Assert.AreEqual("k", settings.ToolShortcuts["pencil"]);
+    }
+
+    [TestMethod]
+    public void Normalized_KeepsAShortcutTheUserTookOff()
+    {
+        // The one entry that must survive being tidied: empty means "not on any key", and
+        // dropping it would hand the default straight back.
+        var settings = (CaptureSettings.Default with
+        {
+            ToolShortcuts = new Dictionary<string, string> { ["pencil"] = "" },
+        }).Normalized();
+
+        Assert.AreEqual(string.Empty, settings.ToolShortcuts["pencil"]);
+        Assert.AreEqual(
+            ToolShortcuts.Unbound,
+            ToolShortcuts.KeyFor(ToolShortcuts.All.First(s => s.Id == "pencil"), settings.ToolShortcuts));
+    }
+
+    [TestMethod]
+    public void Normalized_TurnsAKeyNoPressCouldMatchIntoNoKeyAtAll()
+    {
+        // The settings file is hand-editable, and "Ctrl+P" in it would sit in the window
+        // looking assigned while no keypress ever matched it.
+        var settings = (CaptureSettings.Default with
+        {
+            ToolShortcuts = new Dictionary<string, string> { ["arrow"] = "Ctrl+P", ["line"] = "L" },
+        }).Normalized();
+
+        Assert.AreEqual(string.Empty, settings.ToolShortcuts["arrow"]);
+        Assert.AreEqual("l", settings.ToolShortcuts["line"]);
+    }
+
+    [TestMethod]
+    public void ShortcutsTravelToAnotherMachine()
+    {
+        // Which key picks the pencil is a preference about the person, not about the
+        // machine, so it goes in the file they carry.
+        Assert.IsTrue(SettingsPortability.IsPortable("toolShortcuts"));
+        Assert.IsTrue(SettingsPortability.IsPortable("showShortcutsInTooltips"));
+    }
 }

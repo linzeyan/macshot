@@ -13,8 +13,9 @@
                  that product written in another language, and someone who knows the shape
                  of one window must recognise the other. -->
 
-            <!-- Uppercase in the markup rather than by a transform, because XAML has none
-                 and macOS does it in code for the same reason. -->
+            <!-- Written as macshot writes it and put into capitals at runtime, not in the
+                 markup: the capitals were what broke the translation, since "OUTPUT" is
+                 not a key macshot ships and "Output" is. See ShoutTheSectionHeadings. -->
             <Style x:Key="SectionHeading" TargetType="TextBlock">
                 <Setter Property="FontSize" Value="10" />
                 <Setter Property="FontWeight" Value="SemiBold" />
@@ -241,7 +242,7 @@
             <ScrollViewer x:Name="CapturePage" Visibility="Collapsed">
                 <StackPanel Spacing="20">
                     <StackPanel Style="{StaticResource Section}">
-                        <TextBlock Text="CAPTURE" Style="{StaticResource SectionHeading}" />
+                        <TextBlock Text="Capture" Style="{StaticResource SectionHeading}" />
                         <CheckBox
                             x:Name="RememberSelectionCheck"
                             Content="Offer the last selection again"
@@ -318,7 +319,7 @@
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
-                        <TextBlock Text="OUTPUT" Style="{StaticResource SectionHeading}" />
+                        <TextBlock Text="Output" Style="{StaticResource SectionHeading}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Save folder:" Style="{StaticResource RowLabel}" />
                             <TextBox x:Name="DirectoryBox" FontSize="13" Width="240" PlaceholderText="Pictures\Macshot" IsReadOnly="True" />
@@ -406,7 +407,7 @@
             <ScrollViewer x:Name="ShortcutsPage" Visibility="Collapsed">
                 <StackPanel Spacing="20">
                     <StackPanel Style="{StaticResource Section}">
-                        <TextBlock Text="KEYBOARD SHORTCUTS" Style="{StaticResource SectionHeading}" />
+                        <TextBlock Text="Keyboard Shortcuts" Style="{StaticResource SectionHeading}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Capture area:" Style="{StaticResource RowLabel}" />
                             <local:HotkeyBox x:Name="CaptureAreaHotkeyBox" />
@@ -425,9 +426,27 @@
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
-                        <TextBlock Text="OVERLAY SHORTCUTS" Style="{StaticResource SectionHeading}" />
+                        <TextBlock Text="Overlay Shortcuts" Style="{StaticResource SectionHeading}" />
                         <TextBlock
                             Text="Enter takes the capture • Esc gives it up • Tab turns window snap on and off • F takes the whole display • Ctrl+Z and Ctrl+Y undo and redo • Delete removes the selected mark • the arrow keys nudge the region, ten pixels at a time with Shift • right-click opens the colour ring."
+                            Style="{StaticResource Caption}" />
+                    </StackPanel>
+
+                    <StackPanel Style="{StaticResource Section}">
+                        <TextBlock Text="Overlay / Editor Shortcuts" Style="{StaticResource SectionHeading}" />
+                        <CheckBox
+                            x:Name="ShortcutTooltipsCheck"
+                            Content="Show shortcuts in tooltips"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <!-- One row per shortcut, filled in code from the same list the
+                             overlay reads: a tool added later gets a row without this page
+                             being edited, and the two can never disagree about what is
+                             bound. -->
+                        <StackPanel x:Name="ToolShortcutRows" Spacing="8" Margin="0,6,0,0" />
+                        <TextBlock
+                            Text="Press a single key to assign it as the shortcut for that tool. These work when the overlay or editor is active."
                             Style="{StaticResource Caption}" />
                     </StackPanel>
                 </StackPanel>
@@ -436,7 +455,7 @@
             <ScrollViewer x:Name="ToolsPage" Visibility="Collapsed">
                 <StackPanel Spacing="20">
                     <StackPanel Style="{StaticResource Section}">
-                        <TextBlock Text="ANNOTATION TOOLS" Style="{StaticResource SectionHeading}" />
+                        <TextBlock Text="Annotation Tools" Style="{StaticResource SectionHeading}" />
                         <TextBlock
                             Text="Unticked tools are taken off the strip. Nothing is lost by hiding one, and the same choice is on the right-click menu of any tool button."
                             Style="{StaticResource Caption}" />
@@ -461,7 +480,7 @@
             <ScrollViewer x:Name="RecordingPage" Visibility="Collapsed">
                 <StackPanel Spacing="20">
                     <StackPanel Style="{StaticResource Section}">
-                        <TextBlock Text="OUTPUT" Style="{StaticResource SectionHeading}" />
+                        <TextBlock Text="Output" Style="{StaticResource SectionHeading}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Format:" Style="{StaticResource RowLabel}" />
                             <ComboBox x:Name="RecordingFormatBox" FontSize="13" Width="160" SelectionChanged="RecordingFormat_SelectionChanged" />
@@ -496,7 +515,7 @@
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
-                        <TextBlock Text="FRAME RATE" Style="{StaticResource SectionHeading}" />
+                        <TextBlock Text="Frame Rate" Style="{StaticResource SectionHeading}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Video:" Style="{StaticResource RowLabel}" />
                             <ComboBox
@@ -527,7 +546,7 @@
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
-                        <TextBlock Text="BEHAVIOR" Style="{StaticResource SectionHeading}" />
+                        <TextBlock Text="Behavior" Style="{StaticResource SectionHeading}" />
                         <CheckBox
                             x:Name="RecordedRegionBorderCheck"
                             Content="Outline what is being recorded"
@@ -565,7 +584,7 @@
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
-                        <TextBlock Text="SOUND" Style="{StaticResource SectionHeading}" />
+                        <TextBlock Text="Sound" Style="{StaticResource SectionHeading}" />
                         <CheckBox
                             x:Name="RecordSystemAudioCheck"
                             Content="Record system audio"
@@ -584,7 +603,7 @@
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
-                        <TextBlock Text="WHEN DONE" Style="{StaticResource SectionHeading}" />
+                        <TextBlock Text="When Done" Style="{StaticResource SectionHeading}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="When done:" Style="{StaticResource RowLabel}" />
                             <ComboBox
@@ -607,7 +626,7 @@
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
-                        <TextBlock Text="WEBCAM" Style="{StaticResource SectionHeading}" />
+                        <TextBlock Text="Webcam" Style="{StaticResource SectionHeading}" />
                         <CheckBox
                             x:Name="WebcamCheck"
                             Content="Webcam Overlay"
@@ -654,7 +673,7 @@
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
-                        <TextBlock Text="DIAGNOSTICS" Style="{StaticResource SectionHeading}" />
+                        <TextBlock Text="Diagnostics" Style="{StaticResource SectionHeading}" />
                         <CheckBox
                             x:Name="VerboseLoggingCheck"
                             Content="Write a detailed log"

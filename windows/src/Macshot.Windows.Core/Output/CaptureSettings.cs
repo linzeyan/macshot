@@ -219,6 +219,28 @@ public sealed record CaptureSettings
     public bool HideRecordingHud { get; init; }
 
     /// <summary>
+    /// The single keys the overlay and the editor answer to, by
+    /// <see cref="ToolShortcut.Id"/>. macshot's <c>overlayToolShortcuts</c>.
+    /// </summary>
+    /// <remarks>
+    /// Only what the user has changed. A shortcut missing from here keeps macshot's
+    /// default, and one present but empty was taken off on purpose — which is why this
+    /// cannot be a full table filled in from the defaults.
+    /// </remarks>
+    public IReadOnlyDictionary<string, string> ToolShortcuts { get; init; } =
+        new Dictionary<string, string>();
+
+    /// <summary>
+    /// Whether a button's tooltip also says which key does the same thing. macshot's
+    /// <c>showToolShortcutsInTooltips</c>.
+    /// </summary>
+    /// <remarks>
+    /// On by default, unlike macshot's: a shortcut nobody can discover is a shortcut
+    /// nobody uses, and the tooltip is the only place the overlay could say so.
+    /// </remarks>
+    public bool ShowShortcutsInTooltips { get; init; } = true;
+
+    /// <summary>
     /// Whether macshot starts with Windows. macshot's <c>launchAtLogin</c>.
     /// </summary>
     /// <remarks>
@@ -537,6 +559,33 @@ public sealed record CaptureSettings
         return (this with { HiddenTools = known }).EnabledTools().Count > 0 ? known : [];
     }
 
+    /// <summary>
+    /// The chosen shortcuts, keeping only the ones this build can honour.
+    /// </summary>
+    /// <remarks>
+    /// An entry naming nothing is dropped, but an entry naming something with an empty
+    /// key is kept: that is a user who took a default shortcut off, and dropping it would
+    /// hand the key straight back to them.
+    /// </remarks>
+    private IReadOnlyDictionary<string, string> SaneToolShortcuts()
+    {
+        if (ToolShortcuts.Count == 0)
+        {
+            return ToolShortcuts;
+        }
+
+        var sane = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var shortcut in Annotations.ToolShortcuts.All)
+        {
+            if (ToolShortcuts.TryGetValue(shortcut.Id, out var key))
+            {
+                sane[shortcut.Id] = Annotations.ToolShortcuts.Normalize(key);
+            }
+        }
+
+        return sane;
+    }
+
     private static AnnotationColor Color(string hex, AnnotationColor fallback) =>
         Annotations.AnnotationColor.TryParseHex(hex, out var parsed) ? parsed : fallback;
 
@@ -765,6 +814,12 @@ public sealed record CaptureSettings
             // A file that hides every tool is treated as hiding none — a toolbar with no
             // tools on it is not a preference, it is a broken window.
             HiddenTools = SaneHiddenTools(),
+
+            // Only shortcuts this build has, on keys it can actually match. A binding for
+            // a tool that no longer exists is unreachable, and one holding more than a
+            // single character could never fire — both would sit in the settings window
+            // looking assigned.
+            ToolShortcuts = SaneToolShortcuts(),
 
             // Trimmed to the slots the picker has and to the entries it can draw. An
             // empty string is a slot nobody has filled yet and is kept as one, because

@@ -16,6 +16,7 @@ using Microsoft.UI.Xaml.Media;
 // Imported rather than written out at each use site: inside namespace Macshot.Windows
 // the name "Windows" binds to Macshot.Windows, so a qualified Color resolves to
 // Macshot.Color and does not compile.
+using Windows.System;
 using Windows.UI;
 
 namespace Macshot.Windows;
@@ -798,6 +799,88 @@ public sealed partial class AnnotationToolbarView : UserControl
         new Flyout { Content = _effectsPicker }.ShowAt(anchor);
     }
 
+    /// <summary>
+    /// Does whatever <paramref name="key"/> is bound to, and says whether it was bound to
+    /// anything — so the caller knows whether to let the key travel on.
+    /// </summary>
+    /// <remarks>
+    /// A tool cannot be picked while a recording is being set up: the tools are not on
+    /// screen then, and a key that swapped the tool underneath a hidden strip would leave
+    /// the user drawing with something they never chose once the recording started.
+    /// </remarks>
+    public bool TryShortcut(VirtualKey key)
+    {
+        var chosen = _settings?.Current.ToolShortcuts;
+        if (ToolShortcuts.Find(ShortcutKey.Of(key), chosen) is not { } shortcut)
+        {
+            return false;
+        }
+
+        if (shortcut.Tool is { } tool)
+        {
+            if (_recordingSetup)
+            {
+                return false;
+            }
+
+            SelectTool(tool);
+            return true;
+        }
+
+        CommandInvoked?.Invoke(this, shortcut.Command);
+        return true;
+    }
+
+    /// <summary>
+    /// The same buttons, each carrying the key that also does its job.
+    /// </summary>
+    /// <remarks>
+    /// Left alone when the user has turned the hints off, so that nothing has to be
+    /// stripped back out again downstream.
+    /// </remarks>
+    private IReadOnlyList<ToolbarItem> WithKeys(IReadOnlyList<ToolbarItem> items)
+    {
+        var settings = _settings?.Current ?? CaptureSettings.Default;
+        if (!settings.ShowShortcutsInTooltips)
+        {
+            return items;
+        }
+
+        var labelled = new List<ToolbarItem>(items.Count);
+        foreach (var item in items)
+        {
+            var key = KeyFor(item, settings);
+            labelled.Add(key.Length == 0 ? item : item with { Shortcut = ToolShortcuts.Describe(key) });
+        }
+
+        return labelled;
+    }
+
+    /// <summary>
+    /// The key this button also answers to, or empty when nothing is on it.
+    /// </summary>
+    /// <remarks>
+    /// A tool button matches on its tool and every other button on its command, because
+    /// each tool button carries the same <see cref="ToolbarCommand.PickTool"/> and
+    /// matching on that alone would put the pencil's key on all of them.
+    /// </remarks>
+    private static string KeyFor(ToolbarItem item, CaptureSettings settings)
+    {
+        foreach (var shortcut in ToolShortcuts.All)
+        {
+            var matches = item.Tool is { } tool
+                ? shortcut.Tool == tool
+                : shortcut.Tool is null && shortcut.Command == item.Command;
+
+            if (matches)
+            {
+                return ToolShortcuts.KeyFor(shortcut, settings.ToolShortcuts);
+            }
+        }
+
+        return ToolShortcuts.Unbound;
+    }
+
     /// <summary>Makes <paramref name="tool"/> the active one, as clicking its button would.</summary>
     private void SelectTool(AnnotationTool tool)
     {
@@ -840,12 +923,12 @@ public sealed partial class AnnotationToolbarView : UserControl
 
             _tools.Visibility = Visibility.Collapsed;
             _optionsRow.Visibility = Visibility.Collapsed;
-            _actions.SetItems(ToolbarActions.Recording(
+            _actions.SetItems(WithKeys(ToolbarActions.Recording(
                 current.ShowClickHighlight,
                 current.ShowKeystrokes,
                 current.RecordSystemAudio,
                 current.RecordMicAudio,
-                current.RecordWebcam));
+                current.RecordWebcam)));
 
             if (_placedAround is { } placed)
             {
@@ -861,15 +944,15 @@ public sealed partial class AnnotationToolbarView : UserControl
         }
 
         _tools.Visibility = Visibility.Visible;
-        _tools.SetItems(ToolbarActions.Tools(
+        _tools.SetItems(WithKeys(ToolbarActions.Tools(
             editor.Tool,
             _settings?.Current.EnabledTools(),
             _beautified,
             _inverted,
-            !_effectsPicker.Options.IsIdentity));
+            !_effectsPicker.Options.IsIdentity)));
         // The offline build has no translator compiled into it, so it is not offered a
         // button for one.
-        _actions.SetItems(ToolbarActions.Actions(EditorMode, translation: !BuildVariant.IsOffline));
+        _actions.SetItems(WithKeys(ToolbarActions.Actions(EditorMode, translation: !BuildVariant.IsOffline)));
         _tools.ShowSwatch(ToUiColor(editor.Style.Color));
         ShowOptionsFor(editor.Tool);
 

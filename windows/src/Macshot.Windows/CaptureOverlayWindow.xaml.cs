@@ -1519,6 +1519,16 @@ public sealed partial class CaptureOverlayWindow : Window
                 return;
 
             default:
+                // A single key is a shortcut only once a region is chosen: before that
+                // there is no toolbar to shadow, and P would arm a pencil the user cannot
+                // see and cannot draw with. Modifiers are left alone — Ctrl and Alt are how
+                // this window's own commands and the system's are told apart from a letter.
+                if (!control && !IsDown(VirtualKey.Menu) && IsAnnotating
+                    && AnnotationToolbar.TryShortcut(e.Key))
+                {
+                    e.Handled = true;
+                }
+
                 return;
         }
     }
