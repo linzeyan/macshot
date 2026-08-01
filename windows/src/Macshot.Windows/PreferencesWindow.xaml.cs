@@ -885,6 +885,7 @@ public sealed partial class PreferencesWindow : Window
         };
 
         QuickCaptureEditorCheck.IsChecked = settings.QuickCaptureOpenEditor;
+        CaptureSoundCheck.IsChecked = settings.PlayCaptureSound;
         ThumbnailCheck.IsChecked = settings.ShowThumbnail;
         ThumbnailSecondsBox.Value = settings.ThumbnailSeconds;
 
@@ -1239,6 +1240,7 @@ public sealed partial class PreferencesWindow : Window
             AutoSave = QuickCaptureBox.SelectedIndex is 0 or 2,
             CopyToClipboard = QuickCaptureBox.SelectedIndex is 1 or 2,
             QuickCaptureOpenEditor = QuickCaptureEditorCheck.IsChecked == true,
+            PlayCaptureSound = CaptureSoundCheck.IsChecked == true,
             ShowThumbnail = ThumbnailCheck.IsChecked == true,
 
 #if !OFFLINE

@@ -823,6 +823,13 @@ public sealed class CaptureController : IDisposable
 
         _ = await ScreenshotHistory.RecordAsync(frame, settings, completion.Editable);
 
+        // Only for the two that put the capture somewhere. Pinning and uploading each
+        // leave a window on screen saying so, and a sound on top of that is noise.
+        if (completion.Outcome is CaptureOutcome.Copy or CaptureOutcome.Save)
+        {
+            CaptureSound.Play(settings.PlayCaptureSound);
+        }
+
         if (completion.Outcome is CaptureOutcome.Pin)
         {
             await PinAsync(frame);
@@ -857,6 +864,13 @@ public sealed class CaptureController : IDisposable
         if (settings.AutoSave)
         {
             await ImageDelivery.SaveAsync(frame, settings, windowTitle);
+        }
+
+        // Once for the capture rather than once per destination: saving and copying the
+        // same picture is one thing happening, and it should sound like one.
+        if (settings.CopyToClipboard || settings.AutoSave)
+        {
+            CaptureSound.Play(settings.PlayCaptureSound);
         }
 
         // After the actions the user asked for, so the extra encode is never in front

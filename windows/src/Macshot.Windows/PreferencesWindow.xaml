@@ -256,6 +256,12 @@
                             Checked="Setting_Toggled"
                             Unchecked="Setting_Toggled" />
                         <CheckBox
+                            x:Name="CaptureSoundCheck"
+                            Content="Play sound on capture"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <CheckBox
                             x:Name="ThumbnailCheck"
                             Content="Show floating thumbnail after capture"
                             Style="{StaticResource Unlabelled}"

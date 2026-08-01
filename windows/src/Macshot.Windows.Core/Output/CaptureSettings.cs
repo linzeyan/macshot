@@ -398,6 +398,16 @@ public sealed record CaptureSettings
     public bool WindowSnapEnabled { get; init; } = true;
 
     /// <summary>
+    /// Whether a finished capture makes a sound.
+    /// </summary>
+    /// <remarks>
+    /// On by default, as macshot's <c>playCopySound</c> is. A capture taken by hotkey and
+    /// copied to the clipboard leaves nothing else behind — no window, no file the user
+    /// went looking for — so the sound is what says it happened at all.
+    /// </remarks>
+    public bool PlayCaptureSound { get; init; } = true;
+
+    /// <summary>
     /// Whether the pointer is in the picture.
     /// </summary>
     /// <remarks>
