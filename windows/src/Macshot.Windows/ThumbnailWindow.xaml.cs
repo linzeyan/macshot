@@ -1,4 +1,5 @@
 using Macshot.Windows.Core.Annotations;
+using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Services;
 using Macshot.Windows.Toolbar;
 using Microsoft.UI.Windowing;
@@ -25,15 +26,6 @@ namespace Macshot.Windows;
 /// </remarks>
 public sealed partial class ThumbnailWindow : Window
 {
-    private const int WidthDips = 240;
-    private const int HeightDips = 160;
-
-    /// <summary>How far the column sits from the corner of the work area.</summary>
-    private const int MarginDips = 16;
-
-    /// <summary>And how far apart two panels in it are.</summary>
-    private const int StackGapDips = 8;
-
     /// <summary>
     /// The hairline as a COLORREF: macshot draws white at 40% round the thumbnail, and
     /// the attribute that carries it here takes no alpha.
@@ -101,7 +93,7 @@ public sealed partial class ThumbnailWindow : Window
         presenter.IsResizable = false;
         this.RoundCorners(HairlineColour);
 
-        appWindow.MoveAndResize(PlaceBottomRight(stackIndex));
+        appWindow.MoveAndResize(Place(stackIndex));
         Activate();
         _dismissTimer.Start();
     }
@@ -118,7 +110,7 @@ public sealed partial class ThumbnailWindow : Window
     {
         try
         {
-            this.GetAppWindow().MoveAndResize(PlaceBottomRight(stackIndex));
+            this.GetAppWindow().MoveAndResize(Place(stackIndex));
         }
         catch (Exception exception)
         {
@@ -141,23 +133,21 @@ public sealed partial class ThumbnailWindow : Window
     }
 
     /// <summary>
-    /// Bottom-right of the primary display's work area, which is where Windows puts
-    /// transient notifications, and inside the work area so the taskbar does not cover
-    /// the buttons. Each place in the stack is one panel higher, macshot's 8 apart.
+    /// The corner of the primary display's work area the user chose — inside the work
+    /// area, so the taskbar never covers the buttons — with each place in the stack one
+    /// panel further from the edge, macshot's 8 apart.
     /// </summary>
-    private static RectInt32 PlaceBottomRight(int stackIndex)
+    private RectInt32 Place(int stackIndex)
     {
         var monitor = MonitorEnumerator.Enumerate().Layout.Primary;
-        var width = (int)(WidthDips * monitor.Scale);
-        var height = (int)(HeightDips * monitor.Scale);
-        var margin = (int)(MarginDips * monitor.Scale);
-        var gap = (int)(StackGapDips * monitor.Scale);
+        var (x, y, width, height) = ThumbnailPlacement.For(
+            _settings.Current.ThumbnailCorner,
+            monitor.WorkArea,
+            _settings.Current.ThumbnailScale,
+            monitor.Scale,
+            stackIndex);
 
-        return new RectInt32(
-            (int)monitor.WorkArea.Right - width - margin,
-            (int)monitor.WorkArea.Bottom - height - margin - (stackIndex * (height + gap)),
-            width,
-            height);
+        return new RectInt32(x, y, width, height);
     }
 
     private static void Handle(PointerRoutedEventArgs e, Action action)

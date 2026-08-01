@@ -147,6 +147,20 @@ public sealed partial class PreferencesWindow : Window
     private void Setting_SelectionChanged(object sender, SelectionChangedEventArgs e) => Apply();
 
     /// <summary>
+    /// The preview-size slider, which also has a reading of its own — macshot puts one
+    /// beside its slider, and a size expressed only as a knob position is a size nobody
+    /// can go back to.
+    /// </summary>
+    private void ThumbnailScale_Changed(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        ShowThumbnailScale();
+        Apply();
+    }
+
+    private void ShowThumbnailScale() =>
+        ThumbnailScaleReading.Text = $"{ThumbnailScaleSlider.Value:0}%";
+
+    /// <summary>
     /// Takes what a text box holds when the focus leaves it, rather than as it is typed.
     /// </summary>
     /// <remarks>
@@ -400,6 +414,21 @@ public sealed partial class PreferencesWindow : Window
         AutoSaveCheck.IsChecked = settings.AutoSave;
         ThumbnailCheck.IsChecked = settings.ShowThumbnail;
         ThumbnailSecondsBox.Value = settings.ThumbnailSeconds;
+
+        // macshot's four, in its order, so bottom-right is the first and the default.
+        ThumbnailCornerBox.ItemsSource = new List<string>
+        {
+            L("Bottom Right"),
+            L("Bottom Left"),
+            L("Top Right"),
+            L("Top Left"),
+        };
+        ThumbnailCornerBox.SelectedIndex = (int)settings.ThumbnailCorner;
+
+        // As a percentage, because that is what the reading beside it says: the setting
+        // itself is the multiplier macshot stores.
+        ThumbnailScaleSlider.Value = settings.ThumbnailScale * 100;
+        ShowThumbnailScale();
         DelaySecondsBox.Value = settings.DelaySeconds;
         HistorySizeBox.Value = settings.HistorySize;
         HistoryUnlimitedCheck.IsChecked = settings.HistoryUnlimited;
@@ -492,6 +521,8 @@ public sealed partial class PreferencesWindow : Window
                 ? CaptureSettings.Default.GifFrameRate
                 : (int)GifFrameRateBox.Value,
             ShowRecordedRegionBorder = RecordedRegionBorderCheck.IsChecked == true,
+            ThumbnailCorner = (ThumbnailCorner)Math.Max(ThumbnailCornerBox.SelectedIndex, 0),
+            ThumbnailScale = ThumbnailScaleSlider.Value / 100,
             ShowClickHighlight = ClickHighlightCheck.IsChecked == true,
             ShowKeystrokes = KeystrokeCheck.IsChecked == true,
             ShowEveryKeystroke = KeystrokeModeBox.SelectedIndex == 1,

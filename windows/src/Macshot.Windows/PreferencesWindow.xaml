@@ -279,6 +279,25 @@
                             <TextBlock Text="seconds" Style="{StaticResource RowText}" />
                         </StackPanel>
                         <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Position:" Style="{StaticResource RowLabel}" />
+                            <ComboBox
+                                x:Name="ThumbnailCornerBox"
+                                Width="240"
+                                SelectionChanged="Setting_SelectionChanged" />
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Preview size:" Style="{StaticResource RowLabel}" />
+                            <Slider
+                                x:Name="ThumbnailScaleSlider"
+                                Width="180"
+                                Minimum="50"
+                                Maximum="200"
+                                StepFrequency="5"
+                                TickFrequency="25"
+                                ValueChanged="ThumbnailScale_Changed" />
+                            <TextBlock x:Name="ThumbnailScaleReading" Style="{StaticResource RowText}" />
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Delayed capture:" Style="{StaticResource RowLabel}" />
                             <NumberBox
                                 x:Name="DelaySecondsBox"

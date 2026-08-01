@@ -83,6 +83,8 @@ public sealed class SettingsPortabilityTests
             AutoSave = false,
             ShowThumbnail = false,
             ThumbnailSeconds = 21,
+            ThumbnailCorner = ThumbnailCorner.TopLeft,
+            ThumbnailScale = 1.5,
             DelaySeconds = 9,
             HistorySize = 77,
             HistoryUnlimited = true,

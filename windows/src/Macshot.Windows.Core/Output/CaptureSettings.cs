@@ -83,6 +83,20 @@ public sealed record CaptureSettings
     public int ThumbnailSeconds { get; init; } = 6;
 
     /// <summary>
+    /// Which corner the panels after a capture stack in. macshot's
+    /// <c>thumbnailCorner</c>, and bottom-right by default as macshot's is — which is
+    /// also where Windows puts its own notices, so it is the corner a user has already
+    /// arranged their windows around.
+    /// </summary>
+    public ThumbnailCorner ThumbnailCorner { get; init; } = ThumbnailCorner.BottomRight;
+
+    /// <summary>
+    /// How big those panels are, as a multiple of macshot's 240 × 160. macshot's
+    /// <c>thumbnailScale</c>, from half size to double.
+    /// </summary>
+    public double ThumbnailScale { get; init; } = 1;
+
+    /// <summary>
     /// How many frames a second a screen recording is taken at.
     /// </summary>
     /// <remarks>
@@ -633,6 +647,7 @@ public sealed record CaptureSettings
                 ? Output.FilenameTemplate.DefaultRecording
                 : RecordingFilenameTemplate.Trim(),
             ThumbnailSeconds = Math.Clamp(ThumbnailSeconds, MinThumbnailSeconds, MaxThumbnailSeconds),
+            ThumbnailScale = ThumbnailPlacement.SanePreviewScale(ThumbnailScale),
             RecordingFrameRate = Math.Clamp(
                 RecordingFrameRate,
                 RecordingPlan.MinFrameRate,
