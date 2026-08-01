@@ -684,10 +684,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         // Chromeless: the picker paints its own dark slab at macshot's exact size, and
         // the presenter's own 12 of padding and light background would sit around it as
         // a second popover.
-        var bare = new Style(typeof(FlyoutPresenter));
-        bare.Setters.Add(new Setter(FlyoutPresenter.PaddingProperty, new Thickness(0)));
-        bare.Setters.Add(new Setter(FlyoutPresenter.MinWidthProperty, 0d));
-        bare.Setters.Add(new Setter(FlyoutPresenter.BackgroundProperty, ToolbarPalette.BackgroundBrush));
+        var bare = ToolbarPalette.BareFlyoutStyle;
 
         // Detached from any previous anchor first: a Flyout can only be shown from one
         // place at a time, and the strip rebuilds its buttons.
@@ -767,10 +764,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         // than held ready; the only thing that changes between openings is the ring.
         _frames.Show(settings.Current.ToBeautifyOptions().StyleIndex);
 
-        var bare = new Style(typeof(FlyoutPresenter));
-        bare.Setters.Add(new Setter(FlyoutPresenter.PaddingProperty, new Thickness(0)));
-        bare.Setters.Add(new Setter(FlyoutPresenter.MinWidthProperty, 0d));
-        bare.Setters.Add(new Setter(FlyoutPresenter.BackgroundProperty, ToolbarPalette.BackgroundBrush));
+        var bare = ToolbarPalette.BareFlyoutStyle;
 
         var flyout = new Flyout { Content = _frames, FlyoutPresenterStyle = bare };
 
@@ -1238,10 +1232,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         picker.LoadCustomColors(_settings?.Current.CustomColors ?? []);
         picker.ColorChanged += (_, chosen) => swatch.Pick(chosen);
 
-        var bare = new Style(typeof(FlyoutPresenter));
-        bare.Setters.Add(new Setter(FlyoutPresenter.PaddingProperty, new Thickness(0)));
-        bare.Setters.Add(new Setter(FlyoutPresenter.MinWidthProperty, 0d));
-        bare.Setters.Add(new Setter(FlyoutPresenter.BackgroundProperty, ToolbarPalette.BackgroundBrush));
+        var bare = ToolbarPalette.BareFlyoutStyle;
 
         new Flyout { Content = picker, FlyoutPresenterStyle = bare }.ShowAt(swatch.Anchor);
     }

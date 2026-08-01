@@ -23,9 +23,11 @@ public readonly record struct SizeRequest(double Width, double Height, SizedDime
 /// by whatever it is pasted into, and no amount of care with a mouse fixes that.
 /// </para>
 /// <para>
-/// The numbers are pixels, which is what the delivered image is measured in. Showing
-/// layout units would mean the box and the file disagreed on every display that is not at
-/// 100%.
+/// The numbers are pixels by default, which is what the delivered image is measured in —
+/// on any display that is not at 100%, layout units and the file disagree. Points are
+/// offered in the presets panel because that is what macOS reports and what a design handed
+/// over in points is specified in, but the box says which it is showing and everything
+/// behind it stays in pixels.
 /// </para>
 /// </remarks>
 internal sealed partial class ResolutionBox : UserControl
@@ -49,6 +51,7 @@ internal sealed partial class ResolutionBox : UserControl
 
     private readonly TextBox _width = Field();
     private readonly TextBox _height = Field();
+    private readonly ResolutionPresetsView _presetsView = new();
     private readonly Button _presets = new()
     {
         Width = PresetsWidth,
@@ -114,6 +117,34 @@ internal sealed partial class ResolutionBox : UserControl
     /// <summary>Raised when a shape or a size is picked from the menu.</summary>
     public event EventHandler<ResolutionPreset>? PresetPicked;
 
+    /// <summary>Raised when the keep-ratio switch is moved, with its new state.</summary>
+    public event EventHandler<bool>? KeepRatioToggled;
+
+    /// <summary>Raised when the unit is changed. True for points, false for pixels.</summary>
+    public event EventHandler<bool>? UnitPicked;
+
+    /// <summary>The shape being held, so the panel can tick the row that holds it.</summary>
+    public double? LockedAspect { get; set; }
+
+    /// <summary>Whether a picked shape is to outlive this capture.</summary>
+    public bool KeepRatio { get; set; }
+
+    /// <summary>
+    /// Whether the reading is in layout points rather than device pixels.
+    /// </summary>
+    /// <remarks>
+    /// The stored image is measured in pixels, so pixels is the honest default and the
+    /// only unit the two ever agree on. Points are what macOS reports and what a design
+    /// handed over in points is specified in, which is why the choice exists at all.
+    /// </remarks>
+    public bool ShowPoints { get; set; }
+
+    /// <summary>
+    /// How many device pixels a point is on the display this box is over. Only read when
+    /// <see cref="ShowPoints"/> is on.
+    /// </summary>
+    public double Scale { get; set; } = 1;
+
     /// <summary>
     /// Raised when the box is done with the keyboard, so the overlay can take it back —
     /// otherwise Escape and the tool shortcuts would keep going to a text field.
@@ -155,9 +186,25 @@ internal sealed partial class ResolutionBox : UserControl
             return;
         }
 
-        _width.Text = _shownWidth.ToString("0", System.Globalization.CultureInfo.CurrentCulture);
-        _height.Text = _shownHeight.ToString("0", System.Globalization.CultureInfo.CurrentCulture);
+        _width.Text = InTheChosenUnit(_shownWidth);
+        _height.Text = InTheChosenUnit(_shownHeight);
     }
+
+    /// <summary>
+    /// A pixel count as the fields show it: itself, or divided down into points.
+    /// </summary>
+    /// <remarks>
+    /// Rounded to a whole number in either unit, because a size box that reads 1279.5 is a
+    /// size box nobody can type back into it.
+    /// </remarks>
+    private string InTheChosenUnit(double pixels)
+    {
+        var shown = ShowPoints && Scale > 0 ? pixels / Scale : pixels;
+        return Math.Round(shown).ToString("0", System.Globalization.CultureInfo.CurrentCulture);
+    }
+
+    /// <summary>A number typed into a field, back in the pixels everything else works in.</summary>
+    private double InPixels(double typed) => ShowPoints && Scale > 0 ? typed * Scale : typed;
 
     private static TextBox Field()
     {
@@ -181,37 +228,40 @@ internal sealed partial class ResolutionBox : UserControl
         return field;
     }
 
-    private MenuFlyout BuildPresets()
+    private Flyout BuildPresets()
     {
-        var menu = new MenuFlyout { Placement = FlyoutPlacementMode.Bottom };
-
-        foreach (var preset in ResolutionPresets.Ratios)
+        var flyout = new Flyout
         {
-            menu.Items.Add(Item(preset));
-        }
+            Placement = FlyoutPlacementMode.Bottom,
+            Content = _presetsView,
 
-        // The two lists do different things — one holds a shape, the other sets a size —
-        // and a menu that ran them together would read as one list of fourteen sizes.
-        menu.Items.Add(new MenuFlyoutSeparator());
+            // The panel brings its own padding and its own dark background; the default
+            // chrome would put a light card round a control that sits over a screenshot.
+            FlyoutPresenterStyle = ToolbarPalette.BareFlyoutStyle,
+        };
 
-        foreach (var preset in ResolutionPresets.Sizes)
+        // Filled as it opens rather than once: the tick goes on whatever shape is being
+        // held right now, and the two footer controls show what is stored right now.
+        flyout.Opening += (_, _) => _presetsView.Show(
+            LockedAspect,
+            _shownWidth,
+            _shownHeight,
+            KeepRatio,
+            ShowPoints);
+
+        _presetsView.PresetPicked += (_, preset) =>
         {
-            menu.Items.Add(Item(preset));
-        }
-
-        return menu;
-    }
-
-    private MenuFlyoutItem Item(ResolutionPreset preset)
-    {
-        var item = new MenuFlyoutItem { Text = preset.Label };
-        item.Click += (_, _) =>
-        {
+            flyout.Hide();
             PresetPicked?.Invoke(this, preset);
             EditingEnded?.Invoke(this, EventArgs.Empty);
         };
 
-        return item;
+        // The footer does not dismiss: both are switches rather than choices, and closing
+        // the panel on a switch would mean reopening it to see what the switch did.
+        _presetsView.KeepRatioToggled += (_, on) => KeepRatioToggled?.Invoke(this, on);
+        _presetsView.UnitPicked += (_, points) => UnitPicked?.Invoke(this, points);
+
+        return flyout;
     }
 
     private void Field_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -245,7 +295,7 @@ internal sealed partial class ResolutionBox : UserControl
     /// </summary>
     private void Commit(TextBox source)
     {
-        if (!double.TryParse(_width.Text, out var width) || !double.TryParse(_height.Text, out var height))
+        if (!double.TryParse(_width.Text, out var typedWidth) || !double.TryParse(_height.Text, out var typedHeight))
         {
             Show(_shownWidth, _shownHeight);
             return;
@@ -254,6 +304,12 @@ internal sealed partial class ResolutionBox : UserControl
         var edited = ReferenceEquals(source, _width)
             ? SizedDimension.Width
             : SizedDimension.Height;
+
+        // Compared and raised in pixels, whichever unit was typed: the region, the presets
+        // and the delivered image are all measured in pixels, and only these two fields
+        // are ever in anything else.
+        var width = InPixels(typedWidth);
+        var height = InPixels(typedHeight);
 
         if (width == _shownWidth && height == _shownHeight)
         {

@@ -304,6 +304,23 @@ public sealed class CaptureSettingsTests
     }
 
     [TestMethod]
+    public void Normalized_ForgetsAHeldShapeThatIsNotAShape()
+    {
+        // A ratio of zero or below is not something a region can be held to, and letting
+        // one through would make the next drag collapse to nothing.
+        foreach (var value in new[] { 0, -1.5, double.NaN, double.PositiveInfinity })
+        {
+            var settings = (CaptureSettings.Default with { KeepAspectRatioValue = value }).Normalized();
+
+            Assert.AreEqual(0, settings.KeepAspectRatioValue, value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+        }
+
+        Assert.AreEqual(
+            16d / 9,
+            (CaptureSettings.Default with { KeepAspectRatioValue = 16d / 9 }).Normalized().KeepAspectRatioValue);
+    }
+
+    [TestMethod]
     public void ShortcutsTravelToAnotherMachine()
     {
         // Which key picks the pencil is a preference about the person, not about the

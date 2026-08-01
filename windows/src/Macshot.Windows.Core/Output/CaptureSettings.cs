@@ -241,6 +241,29 @@ public sealed record CaptureSettings
     public bool ShowShortcutsInTooltips { get; init; } = true;
 
     /// <summary>
+    /// Whether a shape picked in the size box outlives the capture it was picked on.
+    /// macshot's <c>keepAspectRatio</c>.
+    /// </summary>
+    /// <remarks>
+    /// Off by default, and the difference it makes is the difference between choosing
+    /// 16 : 9 for this screenshot and working in 16 : 9. A shape that silently held over
+    /// into every later capture would be a drag that refuses to be the size it is dragged.
+    /// </remarks>
+    public bool KeepAspectRatio { get; init; }
+
+    /// <summary>
+    /// The shape being held over, as width ÷ height, or 0 for none.
+    /// macshot's <c>keepAspectRatioValue</c>.
+    /// </summary>
+    public double KeepAspectRatioValue { get; init; }
+
+    /// <summary>
+    /// Whether the size box reads in layout points rather than device pixels. macshot's
+    /// <c>resolutionUnitIsPoints</c>.
+    /// </summary>
+    public bool ResolutionUnitIsPoints { get; init; }
+
+    /// <summary>
     /// Whether macshot starts with Windows. macshot's <c>launchAtLogin</c>.
     /// </summary>
     /// <remarks>
@@ -841,6 +864,13 @@ public sealed record CaptureSettings
             // tools on it is not a preference, it is a broken window.
             HiddenTools = SaneHiddenTools(),
             HiddenActions = SaneHiddenActions(),
+
+            // A held shape that is not a positive number is not a shape. Kept separate
+            // from the switch so that turning keep-ratio off and on again does not lose
+            // what was being held.
+            KeepAspectRatioValue = double.IsFinite(KeepAspectRatioValue) && KeepAspectRatioValue > 0
+                ? KeepAspectRatioValue
+                : 0,
 
             // Only shortcuts this build has, on keys it can actually match. A binding for
             // a tool that no longer exists is unreachable, and one holding more than a

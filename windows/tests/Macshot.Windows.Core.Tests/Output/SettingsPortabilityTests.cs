@@ -123,6 +123,9 @@ public sealed class SettingsPortabilityTests
             HiddenTools = ["Loupe", "Measure"],
             ToolShortcuts = new Dictionary<string, string> { ["pencil"] = "k", ["arrow"] = "" },
             ShowShortcutsInTooltips = false,
+            KeepAspectRatio = true,
+            KeepAspectRatioValue = 16d / 9,
+            ResolutionUnitIsPoints = true,
             BeautifyStyleIndex = 12,
             BeautifyPadding = 48,
         };

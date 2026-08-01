@@ -1,4 +1,6 @@
 using Macshot.Windows.Core.Annotations;
+using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 
 using Windows.UI;
@@ -66,6 +68,28 @@ internal static class ToolbarPalette
     public static SolidColorBrush HoverBrush { get; } = new(Hover);
 
     public static SolidColorBrush PressedBrush { get; } = new(Pressed);
+
+    /// <summary>
+    /// A flyout with no chrome of its own, for the popovers that paint their own slab.
+    /// </summary>
+    /// <remarks>
+    /// macshot's popovers are the toolbar's dark background at an exact size. WinUI's
+    /// presenter brings 12 of padding, a minimum width and a light card, all three of which
+    /// read as a second popover drawn around the first.
+    /// </remarks>
+    public static Style BareFlyoutStyle
+    {
+        get
+        {
+            // A fresh Style each time: a Style may only be applied to one presenter, and
+            // two of these popovers can be open at once on two displays.
+            var bare = new Style(typeof(FlyoutPresenter));
+            bare.Setters.Add(new Setter(FlyoutPresenter.PaddingProperty, new Thickness(0)));
+            bare.Setters.Add(new Setter(FlyoutPresenter.MinWidthProperty, 0d));
+            bare.Setters.Add(new Setter(FlyoutPresenter.BackgroundProperty, BackgroundBrush));
+            return bare;
+        }
+    }
 
     /// <summary>The icon colour at a given opacity, for icons drawn from several parts.</summary>
     public static SolidColorBrush IconBrush(double opacity = 1) => new(Color.FromArgb(

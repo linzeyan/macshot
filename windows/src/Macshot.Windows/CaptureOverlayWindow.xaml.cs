@@ -1669,6 +1669,46 @@ public sealed partial class CaptureOverlayWindow : Window
         _sizeBox.SizeCommitted += (_, request) => ApplyTypedSize(request);
         _sizeBox.PresetPicked += (_, preset) => ApplyPreset(preset);
 
+        _sizeBox.Scale = _monitor.Scale;
+        _sizeBox.ShowPoints = _settings.Current.ResolutionUnitIsPoints;
+        _sizeBox.KeepRatio = _settings.Current.KeepAspectRatio;
+
+        // A shape held over from a previous capture is in hand before the first drag, so a
+        // region dragged out under keep-ratio is already the shape that was chosen.
+        if (_sizeBox.KeepRatio && _settings.Current.KeepAspectRatioValue > 0)
+        {
+            _lockedAspect = _settings.Current.KeepAspectRatioValue;
+        }
+
+        _sizeBox.LockedAspect = _lockedAspect;
+
+        _sizeBox.UnitPicked += (_, points) =>
+        {
+            _sizeBox.ShowPoints = points;
+            _settings.Save(_settings.Current with { ResolutionUnitIsPoints = points });
+
+            // Re-read straight away: the panel is still open over the box, and a unit that
+            // only took effect on the next pointer move would look like it had not.
+            if (_selection is { } region)
+            {
+                _sizeBox.Show(region.Width, region.Height);
+            }
+        };
+
+        _sizeBox.KeepRatioToggled += (_, on) =>
+        {
+            _sizeBox.KeepRatio = on;
+            _settings.Save(_settings.Current with
+            {
+                KeepAspectRatio = on,
+
+                // Stored as it is switched on, so the shape in hand is the one that
+                // carries over — switching it on and then having to re-pick the shape
+                // would make the switch look like it did nothing.
+                KeepAspectRatioValue = on ? _lockedAspect ?? 0 : _settings.Current.KeepAspectRatioValue,
+            });
+        };
+
         // The overlay's keyboard is only on loan to the fields. Without this, Escape and
         // every tool shortcut would keep going to a text box the user has finished with.
         _sizeBox.EditingEnded += (_, _) => OverlayRoot.Focus(FocusState.Programmatic);
@@ -1716,15 +1756,34 @@ public sealed partial class CaptureOverlayWindow : Window
 
         if (preset.IsExact)
         {
-            _lockedAspect = null;
+            HoldAspect(null);
             ApplyRegion(SelectionSizing.Resize(current, preset.Width, preset.Height, MonitorBounds));
             return;
         }
 
-        _lockedAspect = preset.Aspect;
+        HoldAspect(preset.Aspect);
         if (preset.Aspect is { } aspect)
         {
             ApplyRegion(SelectionSizing.ApplyAspect(current, aspect, MonitorBounds));
+        }
+    }
+
+    /// <summary>
+    /// Takes a shape, and writes it down when it is to outlive this capture.
+    /// </summary>
+    /// <remarks>
+    /// Only written while keep-ratio is on. With it off, a shape picked here is for this
+    /// capture and the next drag starts freeform, which is macshot's rule too — the switch
+    /// is the whole difference between the two.
+    /// </remarks>
+    private void HoldAspect(double? aspect)
+    {
+        _lockedAspect = aspect;
+        _sizeBox.LockedAspect = aspect;
+
+        if (_sizeBox.KeepRatio)
+        {
+            _settings.Save(_settings.Current with { KeepAspectRatioValue = aspect ?? 0 });
         }
     }
 
