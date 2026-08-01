@@ -944,14 +944,81 @@ public sealed partial class CaptureOverlayWindow : Window
         // the marquee is the finished image rather than a tinted approximation of it.
         AnnotationCanvas.Present(PixelsFor(region), region, _placement);
 
-        AnnotationToolbar.ShowToolbar(true);
-        _sizeBox.Visibility = Visibility.Visible;
-        RepositionChrome(region);
-        Hint(string.Empty);
+        // macshot's auto modes. A region chosen for recording, for its text, for a scroll
+        // or for a quick capture is not a region to draw on, so the toolbar never appears
+        // — putting one up for the one frame before the intent takes over would be a bar
+        // that flickers past. A scroll with nothing behind it is the one intent that can
+        // fail before it starts, and that one falls back to the toolbar rather than to
+        // nothing.
+        var automatic = Intent is not CaptureIntent.Capture
+            && (Intent is not CaptureIntent.Scroll || WindowBehind(region) is not null);
+
+        if (!automatic)
+        {
+            AnnotationToolbar.ShowToolbar(true);
+            _sizeBox.Visibility = Visibility.Visible;
+            RepositionChrome(region);
+            Hint(string.Empty);
+        }
 
         // The other displays' overlays are always on top, so they have to go before
         // the user can see anything but this one.
         SelectionCommitted?.Invoke(this, EventArgs.Empty);
+
+        StartIntent();
+    }
+
+    /// <summary>
+    /// Does what the menu item that opened this overlay said it would, now that there is
+    /// a region to do it to. Nothing at all for an ordinary capture, which is the toolbar's
+    /// to finish.
+    /// </summary>
+    private void StartIntent()
+    {
+        // Cleared first: every one of these can leave the overlay standing — a scroll with
+        // no window behind it, a recognition that finds nothing — and a mode still armed
+        // then would fire again on the next confirm.
+        var intent = Intent;
+        Intent = CaptureIntent.Capture;
+
+        switch (intent)
+        {
+        case CaptureIntent.Record:
+            RequestRecording();
+            break;
+        case CaptureIntent.Recognize:
+            _ = ReadTextAsync();
+            break;
+        case CaptureIntent.Scroll:
+            RequestScrollCapture();
+            break;
+        case CaptureIntent.Quick:
+            _ = CompleteAsync();
+            break;
+        default:
+            break;
+        }
+    }
+
+    /// <summary>
+    /// Takes the remembered region without waiting for Enter, which is what "Capture Last
+    /// Area" means. False when this display has nothing remembered, so the caller can ask
+    /// the next one.
+    /// </summary>
+    /// <remarks>
+    /// Called by the owner once every overlay is up rather than from
+    /// <see cref="OfferRememberedSelection"/>, because taking a region closes the other
+    /// displays' overlays and one closed before it was shown is stranded on screen.
+    /// </remarks>
+    public bool AcceptRememberedSelection()
+    {
+        if (_remembered is not { } remembered)
+        {
+            return false;
+        }
+
+        EnterAnnotationPhase(remembered);
+        return true;
     }
 
     /// <summary>This display, in frame space: what an adjusted region is kept inside.</summary>
@@ -1902,16 +1969,15 @@ public sealed partial class CaptureOverlayWindow : Window
     }
 
     /// <summary>
-    /// Whether confirming the selection records it rather than takes a picture of it.
+    /// What the region this overlay is about to take is for.
     /// </summary>
     /// <remarks>
-    /// macshot's <c>pendingRecordAreaMode</c>. "Record Area" in the menu opens the same
-    /// overlay "Capture Area" does and arms it, so the drag that would have taken a
-    /// screenshot starts a recording of that rectangle. Without it the menu item would
-    /// open an overlay indistinguishable from the capture one and leave the user to find
-    /// the Record button, which is not what the item says it does.
+    /// Every menu item that needs a rectangle opens the same overlay "Capture Area" does
+    /// and sets this. Without it those items would each open an overlay indistinguishable
+    /// from the capture one and leave the user to find the right toolbar button, which is
+    /// not what any of them say they do.
     /// </remarks>
-    public bool ArmRecording { get; set; }
+    public CaptureIntent Intent { get; set; }
 
     /// <summary>Asks for the region to be recorded rather than captured.</summary>
     private void RequestRecording()
@@ -2161,15 +2227,6 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         if (!IsAnnotating)
         {
-            return;
-        }
-
-        // Only the plain confirm: Copy, Save as and the rest still mean what they say
-        // while the overlay is armed, so an armed overlay is not a trap for someone who
-        // reached for Save.
-        if (ArmRecording && outcome == CaptureOutcome.Deliver)
-        {
-            RequestRecording();
             return;
         }
 

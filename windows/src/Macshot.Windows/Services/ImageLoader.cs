@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices.WindowsRuntime;
 
 using Windows.Graphics.Imaging;
+using Windows.Storage.Streams;
 
 namespace Macshot.Windows.Services;
 
@@ -23,7 +24,19 @@ public static class ImageLoader
         // machine shows PNGs with, and refusing to reopen it for that reason would be a
         // failure the user cannot act on.
         using var file = new FileStream(path, FileMode.Open, FileAccess.Read, FileShare.Read);
-        var decoder = await BitmapDecoder.CreateAsync(file.AsRandomAccessStream());
+        return await LoadAsync(file.AsRandomAccessStream());
+    }
+
+    /// <summary>
+    /// The same, for bytes that never were a file — an image handed over by the
+    /// clipboard, which arrives as a stream of whatever format the copying program
+    /// happened to put there.
+    /// </summary>
+    public static async Task<CapturedFrame> LoadAsync(IRandomAccessStream stream)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+
+        var decoder = await BitmapDecoder.CreateAsync(stream);
 
         // Premultiplied because that is what a WriteableBitmap holds, and the preview
         // writes these pixels straight into one. Asking for straight alpha would show

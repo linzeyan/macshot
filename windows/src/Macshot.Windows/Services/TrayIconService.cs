@@ -230,11 +230,11 @@ public sealed class TrayIconService : IDisposable
                         menu,
                         MenuPopup,
                         new UIntPtr((ulong)BuildSubmenu(items(), entry.EmptyText!).ToInt64()),
-                        entry.Text);
+                        Literal(entry.Text));
                 }
                 else
                 {
-                    AppendMenu(menu, MenuString, new UIntPtr((uint)entry.Id), entry.Text);
+                    AppendMenu(menu, MenuString, new UIntPtr((uint)entry.Id), Literal(entry.Text));
                 }
             }
 
@@ -350,7 +350,7 @@ public sealed class TrayIconService : IDisposable
 
         if (entries.Count == 0)
         {
-            AppendMenu(submenu, MenuString | MenuGrayed, UIntPtr.Zero, emptyText);
+            AppendMenu(submenu, MenuString | MenuGrayed, UIntPtr.Zero, Literal(emptyText));
             return submenu;
         }
 
@@ -360,11 +360,25 @@ public sealed class TrayIconService : IDisposable
                 submenu,
                 entry.Checked ? MenuString | MenuChecked : MenuString,
                 new UIntPtr((uint)entry.Id),
-                entry.Text);
+                Literal(entry.Text));
         }
 
         return submenu;
     }
+
+    /// <summary>
+    /// Menu text that means what it says.
+    /// </summary>
+    /// <remarks>
+    /// A single ampersand in a Win32 menu underlines the letter after it and swallows
+    /// itself, so "Capture OCR &amp; QR" would come up as "Capture OCR QR" with the Q
+    /// underlined — and a capture entitled "Q&amp;A notes" in the recent list would lose
+    /// its ampersand too. Doubling turns every one of them back into a character.
+    /// Nothing here sets a mnemonic deliberately: the entries are translated strings and
+    /// the captures are file names, neither of which can carry one.
+    /// </remarks>
+    private static string Literal(string text) =>
+        text.Replace("&", "&&", StringComparison.Ordinal);
 
     /// <summary>
     /// A menu line: a command, a separator (no text), or a submenu (a callback that

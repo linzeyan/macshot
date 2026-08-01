@@ -33,6 +33,13 @@ public sealed class CaptureController : IDisposable
     private const int CommandRecordScreen = 5;
     private const int CommandHistory = 7;
     private const int CommandRecordArea = 8;
+    private const int CommandCaptureText = 9;
+    private const int CommandQuickCapture = 10;
+    private const int CommandCaptureLastArea = 11;
+    private const int CommandScrollCapture = 12;
+    private const int CommandOpenImage = 13;
+    private const int CommandOpenFromClipboard = 14;
+    private const int CommandPinFromClipboard = 15;
 
     /// <summary>
     /// The capture-delay submenu. One command per choice rather than one command
@@ -172,8 +179,13 @@ public sealed class CaptureController : IDisposable
         // is what makes them resolve: the translations are keyed on the English macshot
         // ships, so "Capture area" found nothing where "Capture Area" finds every
         // language the Mac app has.
+        // The first six are macshot's CaptureMenuItemID.defaultOrder, in that order.
         _trayIcon.AddMenuItem(CommandCaptureArea, L("Capture Area"));
         _trayIcon.AddMenuItem(CommandCaptureAllScreens, L("Capture Screen"));
+        _trayIcon.AddMenuItem(CommandCaptureText, L("Capture OCR & QR"));
+        _trayIcon.AddMenuItem(CommandQuickCapture, L("Quick Capture"));
+        _trayIcon.AddMenuItem(CommandCaptureLastArea, L("Capture Last Area"));
+        _trayIcon.AddMenuItem(CommandScrollCapture, L("Scroll Capture"));
         _trayIcon.AddSubmenu(L("Capture Delay"), DelayMenuEntries, L("None"));
         _trayIcon.AddSeparator();
         _trayIcon.AddMenuItem(CommandRecordArea, L("Record Area"));
@@ -182,7 +194,19 @@ public sealed class CaptureController : IDisposable
         _trayIcon.AddSubmenu(L("Recent Captures"), RecentMenuEntries, L("No recent captures"));
         _trayIcon.AddMenuItem(CommandHistory, L("Show History Panel"));
         _trayIcon.AddSeparator();
+        _trayIcon.AddMenuItem(CommandOpenImage, L("Open Image..."));
+
+        // macshot's "Open Video..." belongs between these two. It opens the video editor,
+        // which this port has not got yet, and a menu item that opens nothing is worse
+        // than one that is not there.
+        _trayIcon.AddMenuItem(CommandOpenFromClipboard, L("Open from Clipboard"));
+        _trayIcon.AddMenuItem(CommandPinFromClipboard, L("Pin from Clipboard"));
+        _trayIcon.AddSeparator();
         _trayIcon.AddMenuItem(CommandPreferences, L("Settings..."));
+
+        // And macshot's "Check for Updates..." belongs here, once there is something to
+        // update from. See the parity notes: the format is still undecided.
+        _trayIcon.AddSeparator();
         _trayIcon.AddMenuItem(CommandQuit, L("Quit macshot"));
         _trayIcon.CommandInvoked += OnTrayCommandInvoked;
         _trayIcon.DefaultActionInvoked += (_, _) => Post(BeginAreaCaptureHonouringDelayAsync);
@@ -282,14 +306,18 @@ public sealed class CaptureController : IDisposable
     /// picture starts a recording of that rectangle instead.
     /// </summary>
     public Task BeginAreaRecordingAsync() =>
-        _recording is null ? BeginAreaCaptureAsync(armRecording: true) : Task.CompletedTask;
+        _recording is null ? BeginAreaCaptureAsync(CaptureIntent.Record) : Task.CompletedTask;
 
     /// <summary>Puts one selection overlay on every display.</summary>
-    /// <param name="armRecording">
-    /// Whether confirming the selection records it rather than capturing it —
-    /// macshot's <c>pendingRecordAreaMode</c>.
+    /// <param name="intent">What the region the user is about to draw is for.</param>
+    /// <param name="restoreLastArea">
+    /// Whether to take the remembered region straight away instead of waiting for a drag
+    /// — macshot's <c>pendingRestoreLastArea</c>. Nothing remembered means an ordinary
+    /// capture, which is macshot's fallback too.
     /// </param>
-    public async Task BeginAreaCaptureAsync(bool armRecording = false)
+    public async Task BeginAreaCaptureAsync(
+        CaptureIntent intent = CaptureIntent.Capture,
+        bool restoreLastArea = false)
     {
         if (_overlays.Count > 0)
         {
@@ -333,7 +361,7 @@ public sealed class CaptureController : IDisposable
                 snapCandidates,
                 _screenCapture.TryCaptureWindowAsync)
             {
-                ArmRecording = armRecording,
+                Intent = intent,
             };
             overlay.CaptureCompleted += OnCaptureCompleted;
             overlay.SelectionCommitted += OnSelectionCommitted;
@@ -360,6 +388,20 @@ public sealed class CaptureController : IDisposable
             // like it has stopped responding to its own shortcut.
             DismissOverlays();
             throw;
+        }
+
+        // After every overlay is up rather than as each one appears: taking a region
+        // closes the other displays' overlays, and one closed before it was shown is
+        // left standing over everything with nothing listening to it.
+        if (restoreLastArea)
+        {
+            foreach (var overlay in _overlays.ToArray())
+            {
+                if (overlay.AcceptRememberedSelection())
+                {
+                    break;
+                }
+            }
         }
     }
 
@@ -512,6 +554,27 @@ public sealed class CaptureController : IDisposable
             break;
         case CommandRecordArea:
             Post(BeginAreaRecordingAsync);
+            break;
+        case CommandCaptureText:
+            Post(() => BeginAreaCaptureAsync(CaptureIntent.Recognize));
+            break;
+        case CommandQuickCapture:
+            Post(() => BeginAreaCaptureAsync(CaptureIntent.Quick));
+            break;
+        case CommandCaptureLastArea:
+            Post(() => BeginAreaCaptureAsync(restoreLastArea: true));
+            break;
+        case CommandScrollCapture:
+            Post(() => BeginAreaCaptureAsync(CaptureIntent.Scroll));
+            break;
+        case CommandOpenImage:
+            Post(OpenImageAsync);
+            break;
+        case CommandOpenFromClipboard:
+            Post(OpenFromClipboardAsync);
+            break;
+        case CommandPinFromClipboard:
+            Post(PinFromClipboardAsync);
             break;
         case >= CommandDelayFirst and < CommandDelayFirst + 16:
             SetCaptureDelay(DelayChoices[command - CommandDelayFirst]);
@@ -1272,6 +1335,72 @@ public sealed class CaptureController : IDisposable
     /// versions of nearly the same screenshot, and the one thing worse than losing an
     /// annotation is saving the wrong copy of it.
     /// </remarks>
+    /// <summary>
+    /// Opens a picture that was never a capture in the editor — macshot's "Open Image...".
+    /// </summary>
+    /// <remarks>
+    /// The editor is the same one a capture opens, so everything it can do to a
+    /// screenshot it can do to a file: annotate it, crop it, pin it, save it somewhere
+    /// else. That is the whole feature.
+    /// </remarks>
+    private async Task OpenImageAsync()
+    {
+        try
+        {
+            if (await ClipboardImages.PickAsync(_messageWindow.Handle) is { } frame)
+            {
+                await ShowEditorAsync(frame);
+            }
+        }
+        catch (Exception exception)
+        {
+            // A file the picker offered and the decoder then refused: named as a picture,
+            // and not one Windows can read. macshot returns silently here; the user chose
+            // the file, so they are told why nothing opened. Not through L: macshot has no
+            // string for this, and inventing a key would look translated and never be.
+            FailureReport.Notice(
+                _messageWindow.Handle,
+                $"macshot could not open that image: {exception.Message}");
+        }
+    }
+
+    /// <summary>Opens the picture on the clipboard in the editor.</summary>
+    private async Task OpenFromClipboardAsync()
+    {
+        if (await ClipboardImages.ReadAsync(renderText: false) is not { } frame)
+        {
+            FailureReport.Notice(
+                _messageWindow.Handle,
+                $"{L("No Image on Clipboard")}\n\n"
+                    + L("Copy an image to the clipboard first, then try again."));
+            return;
+        }
+
+        await ShowEditorAsync(frame);
+    }
+
+    /// <summary>
+    /// Pins the picture on the clipboard, or a picture of the text on it.
+    /// </summary>
+    /// <remarks>
+    /// Text counts here and not in the item above it, which is macshot's split too: a pin
+    /// is a thing to keep in front of you while you type somewhere else, and a snippet of
+    /// copied text is exactly that. The editor's item says image and means it.
+    /// </remarks>
+    private async Task PinFromClipboardAsync()
+    {
+        if (await ClipboardImages.ReadAsync(renderText: true) is not { } frame)
+        {
+            FailureReport.Notice(
+                _messageWindow.Handle,
+                $"{L("No Image or Text on Clipboard")}\n\n"
+                    + L("Copy an image or text to the clipboard first, then try again."));
+            return;
+        }
+
+        await PinAsync(frame);
+    }
+
     private async Task ShowEditorAsync(CapturedFrame frame, IReadOnlyList<Annotation>? annotations = null)
     {
         _editor?.Close();
