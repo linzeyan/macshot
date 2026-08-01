@@ -1047,6 +1047,12 @@ public sealed class CaptureController : IDisposable
             ? _settings.Current.GifFrameRate
             : _settings.Current.RecordingFrameRate;
 
+        // GIF has nowhere to put sound, so it is not even opened for one — the same
+        // answer macshot gives.
+        var audio = format == RecordingFormat.Gif
+            ? default
+            : new RecordingAudio(_settings.Current.RecordSystemAudio, _settings.Current.RecordMicAudio);
+
         try
         {
             var path = ResolveRecordingPath(format);
@@ -1063,7 +1069,8 @@ public sealed class CaptureController : IDisposable
                 format,
                 cancellation.Token,
                 region,
-                frameRate);
+                frameRate,
+                audio);
 
             DiagnosticLog.Verbose($"recording finished: {result.Path}");
 

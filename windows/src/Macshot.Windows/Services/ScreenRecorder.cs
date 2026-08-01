@@ -26,6 +26,19 @@ namespace Macshot.Windows.Services;
 public sealed record RecordingResult(string Path, TimeSpan Duration, int Frames, int DroppedFrames);
 
 /// <summary>
+/// Which sounds a recording carries, if any.
+/// </summary>
+/// <remarks>
+/// Both mix into one track rather than becoming two, for the reason
+/// <see cref="AudioPlan"/> gives at length.
+/// </remarks>
+public readonly record struct RecordingAudio(bool SystemAudio, bool Microphone)
+{
+    /// <summary>Whether anything at all was asked for.</summary>
+    public bool IsSilent => !SystemAudio && !Microphone;
+}
+
+/// <summary>
 /// Records a display, as MP4 or as an animated GIF.
 /// </summary>
 /// <remarks>
@@ -116,20 +129,25 @@ public sealed class ScreenRecorder : IDisposable
     /// The two plans clamp it to what they can encode, so a number out of range slows or
     /// smooths the recording rather than failing it.
     /// </param>
+    /// <param name="audio">
+    /// Which sounds to record. Ignored for GIF, which has nowhere to put them — as it
+    /// is on macOS.
+    /// </param>
     public Task<RecordingResult> RecordDisplayAsync(
         nint monitorHandle,
         string path,
         RecordingFormat format,
         CancellationToken cancellation,
         CaptureRegion? region = null,
-        int? frameRate = null)
+        int? frameRate = null,
+        RecordingAudio audio = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         var item = GraphicsCaptureService.OpenDisplay(monitorHandle);
         return format == RecordingFormat.Gif
             ? RecordGifAsync(item, path, region, frameRate ?? GifRecordingPlan.DefaultFrameRate, cancellation)
-            : RecordMp4Async(item, path, region, frameRate ?? RecordingPlan.DefaultFrameRate, cancellation);
+            : RecordMp4Async(item, path, region, frameRate ?? RecordingPlan.DefaultFrameRate, audio, cancellation);
     }
 
     public void Dispose()
@@ -149,6 +167,7 @@ public sealed class ScreenRecorder : IDisposable
         string path,
         CaptureRegion? region,
         int frameRate,
+        RecordingAudio audio,
         CancellationToken cancellation)
     {
         var size = item.Size;
@@ -159,13 +178,18 @@ public sealed class ScreenRecorder : IDisposable
         using var frames = new FrameStream(Device(), item, plan.FrameInterval, cancellation);
         using var held = Holding(frames);
 
-        var source = BuildSource(crop?.Width ?? size.Width, crop?.Height ?? size.Height);
+        // Null when nothing was asked for, and also when nothing could be opened — a
+        // machine with no microphone records without one rather than not at all.
+        using var track = audio.IsSilent ? null : AudioTrack.Open(audio.SystemAudio, audio.Microphone);
+
+        var source = BuildSource(crop?.Width ?? size.Width, crop?.Height ?? size.Height, track is not null);
         source.Starting += (_, args) =>
         {
             // Capture starts here rather than earlier, because here is when the
             // pipeline first wants a frame. Starting sooner would only fill the queue
             // with desktop from before the recording began.
             frames.Start();
+            track?.Start();
             args.Request.SetActualStartPosition(TimeSpan.Zero);
         };
 
@@ -175,6 +199,12 @@ public sealed class ScreenRecorder : IDisposable
             var deferral = request.GetDeferral();
             try
             {
+                if (track is not null && request.StreamDescriptor is AudioStreamDescriptor)
+                {
+                    request.Sample = await track.NextSampleAsync(frames, cancellation);
+                    return;
+                }
+
                 if (await frames.NextAsync() is not { } timed)
                 {
                     // No sample is how a MediaStreamSource says the stream is over,
@@ -218,7 +248,10 @@ public sealed class ScreenRecorder : IDisposable
 
         using var output = await OpenForWritingAsync(path);
         var transcoder = new MediaTranscoder { HardwareAccelerationEnabled = true };
-        var prepared = await transcoder.PrepareMediaStreamSourceTranscodeAsync(source, output, BuildProfile(plan));
+        var prepared = await transcoder.PrepareMediaStreamSourceTranscodeAsync(
+            source,
+            output,
+            BuildProfile(plan, track is not null));
 
         if (!prepared.CanTranscode)
         {
@@ -301,19 +334,29 @@ public sealed class ScreenRecorder : IDisposable
     /// to the encoded size is the transcoder's job, and claiming a size the samples do
     /// not have would corrupt every frame.
     /// </summary>
-    private static MediaStreamSource BuildSource(int width, int height)
+    private static MediaStreamSource BuildSource(int width, int height, bool withAudio)
     {
         var properties = VideoEncodingProperties.CreateUncompressed(
             MediaEncodingSubtypes.Bgra8,
             (uint)width,
             (uint)height);
 
-        return new MediaStreamSource(new VideoStreamDescriptor(properties))
-        {
-            // A live source: buffering ahead would mean the recording lagged what is
-            // on screen, and there is nothing to buffer ahead of anyway.
-            BufferTime = TimeSpan.Zero,
-        };
+        var video = new VideoStreamDescriptor(properties);
+
+        // With no audio track the descriptor is left out entirely rather than added and
+        // starved: a stream nothing ever writes to leaves the file waiting for samples
+        // that never come.
+        var source = withAudio
+            ? new MediaStreamSource(video, new AudioStreamDescriptor(AudioEncodingProperties.CreatePcm(
+                (uint)AudioPlan.SampleRate,
+                (uint)AudioPlan.Channels,
+                (uint)AudioPlan.BitsPerSample)))
+            : new MediaStreamSource(video);
+
+        // A live source: buffering ahead would mean the recording lagged what is
+        // on screen, and there is nothing to buffer ahead of anyway.
+        source.BufferTime = TimeSpan.Zero;
+        return source;
     }
 
     /// <remarks>
@@ -321,15 +364,20 @@ public sealed class ScreenRecorder : IDisposable
     /// more than the four values below — container, codec, profile level — and
     /// assembling one field by field means owning every default it has.
     /// </remarks>
-    private static MediaEncodingProfile BuildProfile(RecordingPlan plan)
+    private static MediaEncodingProfile BuildProfile(RecordingPlan plan, bool withAudio)
     {
         var profile = MediaEncodingProfile.CreateMp4(VideoEncodingQuality.HD1080p);
 
-        // No microphone and no system audio yet: an audio stream nothing ever writes
+        // A recording with no sound gets no audio stream at all: one nothing ever writes
         // to would leave the file waiting for samples that never come. Null-forgiving
         // because the projection does not admit that dropping the stream is allowed,
         // which it is and which is the documented way to do it.
-        profile.Audio = null!;
+        profile.Audio = withAudio
+            ? AudioEncodingProperties.CreateAac(
+                (uint)AudioPlan.SampleRate,
+                (uint)AudioPlan.Channels,
+                AudioPlan.Bitrate)
+            : null!;
 
         profile.Video.Width = (uint)plan.Width;
         profile.Video.Height = (uint)plan.Height;
@@ -577,7 +625,7 @@ public sealed class ScreenRecorder : IDisposable
     /// problem: keep the compositor's frames in order, keep only the ones the rate
     /// calls for, and never leak the texture of one that was turned away.
     /// </remarks>
-    private sealed class FrameStream : IDisposable
+    private sealed class FrameStream : IRecordingClock, IDisposable
     {
         private readonly Direct3D11CaptureFramePool _pool;
         private readonly GraphicsCaptureSession _session;
@@ -629,6 +677,9 @@ public sealed class ScreenRecorder : IDisposable
 
         /// <summary>How long the recording has been running.</summary>
         public TimeSpan Elapsed => _clock.Elapsed;
+
+        /// <summary>Whether the recording is being held. Read by the audio track.</summary>
+        public bool IsPaused => _paused;
 
         /// <summary>Frames the rate did not call for.</summary>
         public int Dropped => _cadence.Dropped;

@@ -196,6 +196,16 @@ public sealed class CaptureSettingsTests
     }
 
     [TestMethod]
+    public void Default_RecordsNoSound()
+    {
+        // Both off, as macshot has them. A recording that carries the room or whatever
+        // was playing without having been asked is a surprise in a file that gets shared,
+        // and the surprise is only found once it has been sent.
+        Assert.IsFalse(CaptureSettings.Default.RecordSystemAudio);
+        Assert.IsFalse(CaptureSettings.Default.RecordMicAudio);
+    }
+
+    [TestMethod]
     public void EffectiveHistorySize_LetsUnlimitedOverrideACountOfNone()
     {
         // Someone who asked to keep everything has not asked for history to be off, and

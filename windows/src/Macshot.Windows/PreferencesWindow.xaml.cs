@@ -310,6 +310,8 @@ public sealed partial class PreferencesWindow : Window
         RecordingFrameRateBox.ItemsSource = rates;
         RecordingFrameRateBox.SelectedIndex = rates.IndexOf(settings.RecordingFrameRate);
         GifFrameRateBox.Value = settings.GifFrameRate;
+        RecordSystemAudioCheck.IsChecked = settings.RecordSystemAudio;
+        RecordMicAudioCheck.IsChecked = settings.RecordMicAudio;
         ClipboardCheck.IsChecked = settings.CopyToClipboard;
         AutoSaveCheck.IsChecked = settings.AutoSave;
         ThumbnailCheck.IsChecked = settings.ShowThumbnail;
@@ -397,6 +399,8 @@ public sealed partial class PreferencesWindow : Window
             GifFrameRate = double.IsNaN(GifFrameRateBox.Value)
                 ? CaptureSettings.Default.GifFrameRate
                 : (int)GifFrameRateBox.Value,
+            RecordSystemAudio = RecordSystemAudioCheck.IsChecked == true,
+            RecordMicAudio = RecordMicAudioCheck.IsChecked == true,
             CopyToClipboard = ClipboardCheck.IsChecked == true,
             AutoSave = AutoSaveCheck.IsChecked == true,
             ShowThumbnail = ThumbnailCheck.IsChecked == true,

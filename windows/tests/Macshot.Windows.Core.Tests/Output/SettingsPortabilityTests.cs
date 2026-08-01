@@ -89,6 +89,8 @@ public sealed class SettingsPortabilityTests
             RecordingFrameRate = 45,
             GifFrameRate = 17,
             RecordingFormat = RecordingFormat.Gif,
+            RecordSystemAudio = true,
+            RecordMicAudio = true,
             FilenameTemplate = "{window} {date}",
             RecordingFilenameTemplate = "Clip {time}",
             AnnotationColor = "#FF2200",

@@ -105,6 +105,21 @@ public sealed record CaptureSettings
     public int GifFrameRate { get; init; } = GifRecordingPlan.DefaultFrameRate;
 
     /// <summary>
+    /// Whether a recording carries what the machine is playing.
+    /// </summary>
+    /// <remarks>
+    /// Off by default, as macshot's <c>recordSystemAudio</c> is: recording sound nobody
+    /// asked for is a surprise in a file that gets shared.
+    /// </remarks>
+    public bool RecordSystemAudio { get; init; }
+
+    /// <summary>
+    /// Whether a recording carries the microphone. macshot's <c>recordMicAudio</c>,
+    /// off by default for the same reason.
+    /// </summary>
+    public bool RecordMicAudio { get; init; }
+
+    /// <summary>
     /// The drawing style the toolbar was last left on, as <c>#AARRGGBB</c>. This is
     /// remembered rather than configured — nobody opens a settings window to pick
     /// the colour of the next arrow — which is why it has no preferences UI. It is

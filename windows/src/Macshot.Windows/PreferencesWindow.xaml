@@ -466,6 +466,25 @@
                             Text="Kept separate because it answers a different question: not how smooth the recording should be, but how large a GIF may get before whatever it is being sent to refuses it."
                             Style="{StaticResource Caption}" />
                     </StackPanel>
+
+                    <StackPanel Style="{StaticResource Section}">
+                        <TextBlock Text="SOUND" Style="{StaticResource SectionHeading}" />
+                        <CheckBox
+                            x:Name="RecordSystemAudioCheck"
+                            Content="Record system audio"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <CheckBox
+                            x:Name="RecordMicAudioCheck"
+                            Content="Record microphone"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <TextBlock
+                            Text="Both off by default, because sound nobody asked for is a surprise in a file that gets shared. Turning both on mixes them into one soundtrack. GIF has nowhere to put sound and ignores this."
+                            Style="{StaticResource Caption}" />
+                    </StackPanel>
                 </StackPanel>
             </ScrollViewer>
 
