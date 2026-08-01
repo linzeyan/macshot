@@ -135,8 +135,10 @@ public sealed partial class UploadToastWindow : Window
         // The one red thing in any of this port's chrome. A failure that looked like the
         // success it replaced would be read as one at a glance, which is exactly how a
         // capture nobody uploaded gets pasted as a link that is not there.
+        // global::, because inside namespace Macshot.Windows the name "Windows" binds to
+        // this assembly's own namespace — the same trap the recorder documents.
         StatusText.Foreground = new Microsoft.UI.Xaml.Media.SolidColorBrush(
-            Windows.UI.Color.FromArgb(255, 255, 69, 58));
+            global::Windows.UI.Color.FromArgb(255, 255, 69, 58));
 
         Resize(MeasuredHeight());
         _dismiss.Interval = FailureLinger;
@@ -204,7 +206,7 @@ public sealed partial class UploadToastWindow : Window
     /// <summary>How tall the content wants to be, once it has been given the width.</summary>
     private double MeasuredHeight()
     {
-        ToastRoot.Measure(new Windows.Foundation.Size(WidthDips, double.PositiveInfinity));
+        ToastRoot.Measure(new global::Windows.Foundation.Size(WidthDips, double.PositiveInfinity));
         return Math.Max(MinimumHeightDips, Math.Ceiling(ToastRoot.DesiredSize.Height) + 20);
     }
 

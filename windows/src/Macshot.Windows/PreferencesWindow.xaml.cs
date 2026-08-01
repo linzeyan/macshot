@@ -972,9 +972,11 @@ public sealed partial class PreferencesWindow : Window
 
     private static void CopyText(string text)
     {
-        var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
+        // global::, because inside namespace Macshot.Windows the name "Windows" binds to
+        // this assembly's own namespace rather than to the platform's.
+        var package = new global::Windows.ApplicationModel.DataTransfer.DataPackage();
         package.SetText(text);
-        Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
+        global::Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
     }
 
     private static void OpenLink(string link)
