@@ -146,6 +146,23 @@ internal static class ToolbarIcons
             canvas.Children.Add(Stroke(8, 2, 10.5, 4.5));
             break;
 
+        case ToolbarCommand.Upload:
+            // A cloud with an arrow going into it, which is macshot's
+            // icloud.and.arrow.up. The cloud is three arcs' worth of outline drawn as
+            // straight runs: at sixteen pixels a curve and a chamfer are the same thing.
+            canvas.Children.Add(Stroke(4, 11, 12, 11, opacity: 0.5));
+            canvas.Children.Add(Stroke(4, 11, 2.5, 9, opacity: 0.5));
+            canvas.Children.Add(Stroke(2.5, 9, 4.5, 7, opacity: 0.5));
+            canvas.Children.Add(Stroke(4.5, 7, 6.5, 5.5, opacity: 0.5));
+            canvas.Children.Add(Stroke(6.5, 5.5, 10, 6, opacity: 0.5));
+            canvas.Children.Add(Stroke(10, 6, 11.5, 8, opacity: 0.5));
+            canvas.Children.Add(Stroke(11.5, 8, 13.5, 9, opacity: 0.5));
+            canvas.Children.Add(Stroke(13.5, 9, 12, 11, opacity: 0.5));
+            canvas.Children.Add(Stroke(8, 14, 8, 8));
+            canvas.Children.Add(Stroke(8, 8, 5.8, 10.2));
+            canvas.Children.Add(Stroke(8, 8, 10.2, 10.2));
+            break;
+
         case ToolbarCommand.Translate:
             // Two scripts side by side — a Latin A and a mark built the way a CJK
             // character is — which is what the button turns one into. An arrow between

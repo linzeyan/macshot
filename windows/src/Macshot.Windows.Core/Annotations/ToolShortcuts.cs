@@ -28,11 +28,16 @@ public readonly record struct ToolShortcut(
 /// modifier is the difference between a tool you switch to and one you go and click.
 /// </para>
 /// <para>
-/// Three of macshot's are missing here and none is an oversight: Upload, Remove Background
-/// and Highlight are things this build cannot do — the first two have no feature behind
-/// them, and the third has no renderer, so it is not on the toolbar either. A key bound to
-/// something that is not on the strip is a key that appears to do nothing. They come back
-/// with the features, and a test fails if one is bound before it is drawable.
+/// Two of macshot's are missing here and neither is an oversight: Remove Background has
+/// no feature behind it, and Highlight has no renderer, so it is not on the toolbar
+/// either. A key bound to something that is not on the strip is a key that appears to do
+/// nothing. They come back with the features, and a test fails if one is bound before it
+/// is drawable.
+/// </para>
+/// <para>
+/// Upload is here unconditionally, as Translate is, even though the offline build has no
+/// uploader. Core is compiled once for both variants, so the list cannot branch on the
+/// variant; the settings page leaves the row out of that build instead.
 /// </para>
 /// </remarks>
 public static class ToolShortcuts
@@ -63,6 +68,7 @@ public static class ToolShortcuts
         new("moveSelection", "Move Selection", " ", ToolbarCommand.MoveSelection),
         new("openInEditor", "Open in Editor", "e", ToolbarCommand.OpenEditor),
         new("pin", "Pin", "f", ToolbarCommand.Pin),
+        new("upload", "Upload", "u", ToolbarCommand.Upload),
         new("copy", "Copy", Unbound, ToolbarCommand.Copy),
         new("save", "Save", Unbound, ToolbarCommand.Save),
         new("ocr", "OCR & QR", Unbound, ToolbarCommand.ReadText),

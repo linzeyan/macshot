@@ -141,6 +141,11 @@ public sealed partial class EditorWindow : Window
     /// <summary>Raised with the image the user wants kept on top of everything else.</summary>
     public event EventHandler<CapturedFrame>? PinRequested;
 
+#if !OFFLINE
+    /// <summary>Raised with the finished canvas when the Upload button is pressed.</summary>
+    public event EventHandler<CapturedFrame>? UploadRequested;
+#endif
+
     /// <summary>
     /// Raised when the user wants another capture added under this one. The owner takes
     /// it, because taking a capture is its job and not this window's, and hands it back
@@ -301,6 +306,12 @@ public sealed partial class EditorWindow : Window
 
             case ToolbarCommand.Pin:
                 _ = PinAsync();
+                return;
+
+            case ToolbarCommand.Upload:
+#if !OFFLINE
+                _ = UploadAsync();
+#endif
                 return;
 
             default:
@@ -1127,6 +1138,42 @@ public sealed partial class EditorWindow : Window
             HintText.Text = exception.Message;
         }
     }
+
+#if !OFFLINE
+    /// <summary>
+    /// Sends what is on the canvas, asking first when the preferences say to.
+    /// </summary>
+    /// <remarks>
+    /// Raised to the owner rather than uploaded here, as Pin is: the toast belongs to the
+    /// app, not to this window, and an editor closed mid-upload must not take the panel
+    /// reporting it away.
+    /// </remarks>
+    private async Task UploadAsync()
+    {
+        try
+        {
+            await AnnotationCanvas.FlushAsync();
+            if (AnnotationCanvas.ToFrame() is not { } finished)
+            {
+                return;
+            }
+
+            if (_settings.Current.UploadConfirm
+                && !Upload.UploadConfirm.Ask(
+                    WinRT.Interop.WindowNative.GetWindowHandle(this),
+                    _settings.Current.UploadProvider))
+            {
+                return;
+            }
+
+            UploadRequested?.Invoke(this, finished);
+        }
+        catch (Exception exception)
+        {
+            HintText.Text = exception.Message;
+        }
+    }
+#endif
 
     private async Task FinishAsync()
     {

@@ -1890,6 +1890,20 @@ public sealed partial class CaptureOverlayWindow : Window
                 _ = ShareAsync();
                 return;
 
+            case ToolbarCommand.Upload:
+#if !OFFLINE
+                // Asked before the overlays come down, so the question is in front of the
+                // capture it is about rather than over whatever was behind it.
+                if (!_settings.Current.UploadConfirm
+                    || Upload.UploadConfirm.Ask(
+                        WinRT.Interop.WindowNative.GetWindowHandle(this),
+                        _settings.Current.UploadProvider))
+                {
+                    _ = CompleteAsync(CaptureOutcome.Upload);
+                }
+#endif
+                return;
+
             default:
                 // Choosing a tool and choosing a colour are the toolbar's own business
                 // and never reach the host.

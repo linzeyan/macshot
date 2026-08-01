@@ -4,6 +4,7 @@ using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Input;
 using Macshot.Windows.Core.Localization;
 using Macshot.Windows.Core.Recognition;
+using Macshot.Windows.Core.Upload;
 
 namespace Macshot.Windows.Core.Output;
 
@@ -687,6 +688,71 @@ public sealed record CaptureSettings
         BeautifyShadowRadius).Normalized();
 
     /// <summary>
+    /// Where the Upload button sends a capture. macshot's <c>uploadProvider</c>.
+    /// </summary>
+    /// <remarks>
+    /// Present in the offline build's settings record as well as the normal one. The
+    /// value is inert there — nothing reads it, because the code that would is compiled
+    /// out — and keeping the property means a settings file written by the normal build
+    /// still round-trips through the offline one instead of losing a setting on the way
+    /// through.
+    /// </remarks>
+    public Upload.UploadProvider UploadProvider { get; init; } = Upload.UploadProvider.Imgbb;
+
+    /// <summary>
+    /// Whether the Upload button asks first. macshot's <c>uploadConfirmEnabled</c>, and
+    /// off by default there as here — the button is already a deliberate act.
+    /// </summary>
+    public bool UploadConfirm { get; init; }
+
+    /// <summary>
+    /// The user's own imgbb key, or empty for the shared one — macshot's <c>imgbbAPIKey</c>.
+    /// </summary>
+    public string ImgbbApiKey { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Everything that has been uploaded to imgbb, newest last, each with the link that
+    /// takes it down again. macshot's <c>imgbbUploads</c>.
+    /// </summary>
+    public IReadOnlyList<UploadHistoryEntry> ImgbbUploads { get; init; } = [];
+
+    /// <summary>
+    /// The address of the signed-in Google account, shown in the settings window so the
+    /// user can tell which one they are uploading into. macshot's <c>gdriveUserEmail</c>.
+    /// The tokens are not here: they live in their own file, as macshot's do.
+    /// </summary>
+    public string GoogleDriveAccount { get; init; } = string.Empty;
+
+    public string S3Endpoint { get; init; } = string.Empty;
+
+    public string S3Region { get; init; } = "auto";
+
+    public string S3Bucket { get; init; } = string.Empty;
+
+    public string S3AccessKeyId { get; init; } = string.Empty;
+
+    public string S3SecretAccessKey { get; init; } = string.Empty;
+
+    public string S3PublicUrlBase { get; init; } = string.Empty;
+
+    public string S3PathPrefix { get; init; } = string.Empty;
+
+    /// <summary>The S3 settings as the signer wants them.</summary>
+    /// <remarks>
+    /// Gathered here rather than passed as seven arguments, and gathered from this record
+    /// rather than stored as one, because every other setting in the file is a scalar and
+    /// a nested object would be the only thing a hand-editor had to indent.
+    /// </remarks>
+    public S3Settings ToS3Settings() => new(
+        S3Endpoint.Trim(),
+        string.IsNullOrWhiteSpace(S3Region) ? "auto" : S3Region.Trim(),
+        S3Bucket.Trim(),
+        S3AccessKeyId.Trim(),
+        S3SecretAccessKey.Trim(),
+        S3PublicUrlBase.Trim(),
+        S3PathPrefix.Trim());
+
+    /// <summary>
     /// The remembered selection, but only when it is worth offering: the setting is
     /// on, it was taken on the display being asked about, and it still fits there.
     /// </summary>
@@ -793,6 +859,19 @@ public sealed record CaptureSettings
         {
             Format = Enum.IsDefined(Format) ? Format : CaptureImageFormat.Png,
             RecordingFormat = Enum.IsDefined(RecordingFormat) ? RecordingFormat : RecordingFormat.Mp4,
+            UploadProvider = Enum.IsDefined(UploadProvider) ? UploadProvider : Upload.UploadProvider.Imgbb,
+
+            // Trimmed rather than validated. Every one of these is pasted from a console
+            // that likes to add a newline, and a trailing space in an access key is a 403
+            // that reads as wrong credentials.
+            ImgbbApiKey = ImgbbApiKey.Trim(),
+            S3Endpoint = S3Endpoint.Trim(),
+            S3Region = string.IsNullOrWhiteSpace(S3Region) ? "auto" : S3Region.Trim(),
+            S3Bucket = S3Bucket.Trim(),
+            S3AccessKeyId = S3AccessKeyId.Trim(),
+            S3SecretAccessKey = S3SecretAccessKey.Trim(),
+            S3PublicUrlBase = S3PublicUrlBase.Trim(),
+            S3PathPrefix = S3PathPrefix.Trim(),
             Quality = Math.Clamp(Quality, MinQuality, MaxQuality),
             SaveDirectory = string.IsNullOrWhiteSpace(SaveDirectory) ? null : SaveDirectory.Trim(),
             FilenameTemplate = string.IsNullOrWhiteSpace(FilenameTemplate)

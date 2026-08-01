@@ -56,6 +56,14 @@ public sealed partial class ThumbnailWindow : Window
         PinDisc.Child = Glyph(ToolbarCommand.Pin);
         EditDisc.Child = Glyph(ToolbarCommand.OpenEditor);
 
+#if OFFLINE
+        // Hidden rather than left empty: an unlit disc in a corner that does nothing
+        // reads as a button that failed, and this build has nothing to upload with.
+        UploadDisc.Visibility = Visibility.Collapsed;
+#else
+        UploadDisc.Child = Glyph(ToolbarCommand.Upload);
+#endif
+
         _dismissTimer.Interval = TimeSpan.FromSeconds(_settings.Current.ThumbnailSeconds);
         _dismissTimer.Tick += (_, _) => Close();
     }
@@ -68,6 +76,11 @@ public sealed partial class ThumbnailWindow : Window
 
     /// <summary>Raised when the user wants the whole column gone, not just this one.</summary>
     public event EventHandler? CloseAllRequested;
+
+#if !OFFLINE
+    /// <summary>Raised with the capture the user wants sent, from the fourth disc.</summary>
+    public event EventHandler<CapturedFrame>? UploadRequested;
+#endif
 
     /// <summary>
     /// Where history put its copy of this capture, so Delete can take it back out. Null
@@ -250,6 +263,15 @@ public sealed partial class ThumbnailWindow : Window
 
     private void Edit_PointerPressed(object sender, PointerRoutedEventArgs e) => Handle(e, Edit);
 
+    private void Upload_PointerPressed(object sender, PointerRoutedEventArgs e) =>
+#if OFFLINE
+        // The disc is collapsed in this build; the handler stays so the markup, which is
+        // shared, still binds.
+        Handle(e, () => { });
+#else
+        Handle(e, UploadCapture);
+#endif
+
     private void Copy_PointerPressed(object sender, PointerRoutedEventArgs e) =>
         Handle(e, () => _ = CopyAsync());
 
@@ -298,6 +320,30 @@ public sealed partial class ThumbnailWindow : Window
         EditRequested?.Invoke(this, _frame);
         Close();
     }
+
+#if !OFFLINE
+    /// <summary>
+    /// Sends the capture, and takes the panel away — the toast reports the rest.
+    /// </summary>
+    /// <remarks>
+    /// The panel closes as it does for Pin and Edit, rather than staying up to show
+    /// progress. Two panels in two corners reporting one capture is worse than one, and
+    /// the toast outlives this window by design.
+    /// </remarks>
+    private void UploadCapture()
+    {
+        if (_settings.Current.UploadConfirm
+            && !Upload.UploadConfirm.Ask(
+                WinRT.Interop.WindowNative.GetWindowHandle(this),
+                _settings.Current.UploadProvider))
+        {
+            return;
+        }
+
+        UploadRequested?.Invoke(this, _frame);
+        Close();
+    }
+#endif
 
     private Task CopyAsync() =>
         RunAsync("Copy failed", () => ImageDelivery.CopyToClipboardAsync(_frame));

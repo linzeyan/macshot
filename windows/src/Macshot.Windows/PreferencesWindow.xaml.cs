@@ -5,6 +5,7 @@ using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Input;
 using Macshot.Windows.Core.Localization;
 using Macshot.Windows.Core.Output;
+using Macshot.Windows.Core.Upload;
 using Macshot.Windows.Services;
 using Macshot.Windows.Toolbar;
 using Microsoft.UI.Input;
@@ -160,6 +161,15 @@ public sealed partial class PreferencesWindow : Window
         {
             foreach (var action in actions)
             {
+#if OFFLINE
+                // The offline build draws no Upload button, so it offers no switch for
+                // one. The entry stays in Core's list, which both variants compile.
+                if (action.Command is ToolbarCommand.Upload)
+                {
+                    continue;
+                }
+#endif
+
                 var toggle = new CheckBox { Content = L(action.Label), MinWidth = 0, FontSize = 13 };
                 toggle.Checked += Setting_Changed;
                 toggle.Unchecked += Setting_Changed;
@@ -192,6 +202,16 @@ public sealed partial class PreferencesWindow : Window
 
         foreach (var shortcut in ToolShortcuts.All)
         {
+#if OFFLINE
+            // Core is compiled once for both variants, so its list carries Upload in
+            // either. A row here for a button this build does not draw would offer a key
+            // that appears to do nothing.
+            if (shortcut.Command is ToolbarCommand.Upload)
+            {
+                continue;
+            }
+#endif
+
             var field = new TextBlock
             {
                 Width = 80,
@@ -601,6 +621,17 @@ public sealed partial class PreferencesWindow : Window
             page.Visibility = tag == chosen ? Visibility.Visible : Visibility.Collapsed;
         }
 
+#if !OFFLINE
+        // Read again on the way in rather than bound, because both of these change from
+        // outside this window: uploads happen while it is open, and the sign-in finishes
+        // in a browser.
+        if (chosen == "uploads")
+        {
+            ShowDriveAccount(_settings.Current);
+            ShowUploadHistory(_settings.Current);
+        }
+#endif
+
         // The title says which page, as the macOS window's does. Six pages of settings
         // named only "Settings" is a window whose title bar stops meaning anything the
         // moment the user is looking for one of them in a screenshot or a taskbar. Taken
@@ -617,6 +648,7 @@ public sealed partial class PreferencesWindow : Window
         ("shortcuts", ShortcutsPage),
         ("tools", ToolsPage),
         ("recording", RecordingPage),
+        ("uploads", UploadsPage),
         ("about", AboutPage),
     ];
 
@@ -661,6 +693,7 @@ public sealed partial class PreferencesWindow : Window
 
     private void Fill(CaptureSettings settings)
     {
+        FillUploads(settings);
         FormatBox.ItemsSource = Enum.GetValues<CaptureImageFormat>().Select(format => format.ToString()).ToList();
         FormatBox.SelectedIndex = (int)settings.Format;
         QualitySlider.Value = settings.Quality;
@@ -842,6 +875,159 @@ public sealed partial class PreferencesWindow : Window
     private static AnnotationColor ToAnnotationColor(Color color) =>
         new(color.R, color.G, color.B, color.A);
 
+    /// <summary>
+    /// Fills the Uploads page, or takes it away.
+    /// </summary>
+    /// <remarks>
+    /// The markup is shared between the two build variants — one XAML file, compiled
+    /// once — so the offline build hides the tab and its page here rather than by not
+    /// having them. Everything that would talk to a service is behind the same condition
+    /// as the services themselves.
+    /// </remarks>
+    private void FillUploads(CaptureSettings settings)
+    {
+#if OFFLINE
+        UploadsTab.Visibility = Visibility.Collapsed;
+        UploadsPage.Visibility = Visibility.Collapsed;
+#else
+        UploadProviderBox.ItemsSource = Enum.GetValues<UploadProvider>()
+            .Select(provider => L(UploadProviders.Label(provider)))
+            .ToList();
+        UploadProviderBox.SelectedIndex = (int)settings.UploadProvider;
+        UploadConfirmBox.IsChecked = settings.UploadConfirm;
+
+        S3EndpointBox.Text = settings.S3Endpoint;
+        S3RegionBox.Text = settings.S3Region;
+        S3BucketBox.Text = settings.S3Bucket;
+        S3AccessKeyBox.Text = settings.S3AccessKeyId;
+        S3SecretKeyBox.Password = settings.S3SecretAccessKey;
+        S3PublicUrlBox.Text = settings.S3PublicUrlBase;
+        S3PathPrefixBox.Text = settings.S3PathPrefix;
+        ImgbbKeyBox.Text = settings.ImgbbApiKey;
+
+        ShowDriveAccount(settings);
+        ShowUploadHistory(settings);
+#endif
+    }
+
+#if !OFFLINE
+    /// <summary>Says which account is signed in, and what the button now does.</summary>
+    private void ShowDriveAccount(CaptureSettings settings)
+    {
+        var signedIn = Upload.GoogleDriveUploader.IsSignedIn;
+
+        DriveAccountText.Text = signedIn
+            ? (settings.GoogleDriveAccount.Length > 0 ? settings.GoogleDriveAccount : L("Signed in"))
+            : L("Not signed in");
+
+        DriveSignInButton.Content = signedIn ? L("Sign Out") : L("Sign In with Google");
+    }
+
+    /// <summary>
+    /// Lists what has been uploaded to imgbb, newest first, each with the link that takes
+    /// it down again.
+    /// </summary>
+    /// <remarks>
+    /// Newest first, where the record keeps them oldest first: the one worth acting on is
+    /// almost always the one just uploaded.
+    /// </remarks>
+    private void ShowUploadHistory(CaptureSettings settings)
+    {
+        UploadHistoryList.Children.Clear();
+        UploadHistoryEmpty.Visibility = settings.ImgbbUploads.Count == 0
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        foreach (var entry in settings.ImgbbUploads.Reverse())
+        {
+            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+
+            row.Children.Add(new TextBlock
+            {
+                Text = entry.Link,
+                FontSize = 12,
+                Width = 300,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+                VerticalAlignment = VerticalAlignment.Center,
+            });
+
+            var copy = new Button { Content = L("Copy"), FontSize = 12 };
+            copy.Click += (_, _) => CopyText(entry.Link);
+            row.Children.Add(copy);
+
+            var open = new Button { Content = L("Open"), FontSize = 12 };
+            open.Click += (_, _) => OpenLink(entry.Link);
+            row.Children.Add(open);
+
+            // imgbb's delete link is a page that asks for confirmation, so this opens it
+            // rather than deleting anything: taking the picture down is a decision made
+            // on their site, not a button in a settings window that cannot undo itself.
+            var delete = new Button { Content = L("Delete"), FontSize = 12 };
+            delete.Click += (_, _) => OpenLink(entry.DeleteLink);
+            row.Children.Add(delete);
+
+            UploadHistoryList.Children.Add(row);
+        }
+    }
+
+    private static void CopyText(string text)
+    {
+        var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
+        package.SetText(text);
+        Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
+    }
+
+    private static void OpenLink(string link)
+    {
+        if (!Uri.TryCreate(link, UriKind.Absolute, out var uri))
+        {
+            return;
+        }
+
+        try
+        {
+            System.Diagnostics.Process.Start(
+                new System.Diagnostics.ProcessStartInfo(uri.ToString()) { UseShellExecute = true })?.Dispose();
+        }
+        catch (Exception error) when (error is System.ComponentModel.Win32Exception or InvalidOperationException)
+        {
+        }
+    }
+#endif
+
+    /// <summary>Signs in to Google Drive, or forgets the account that is signed in.</summary>
+    private async void DriveSignIn_Click(object sender, RoutedEventArgs e)
+    {
+#if !OFFLINE
+        // Written straight away rather than through the delayed write: a sign-in is not a
+        // preference being adjusted, and the window may be closed while the browser is up.
+        Persist();
+
+        var uploads = new Upload.UploadService(_settings);
+        if (Upload.GoogleDriveUploader.IsSignedIn)
+        {
+            uploads.SignOutOfDrive();
+            ShowDriveAccount(_settings.Current);
+            return;
+        }
+
+        DriveSignInButton.IsEnabled = false;
+        StatusText.Text = L("Waiting for the browser...");
+        try
+        {
+            var signedIn = await uploads.SignInToDriveAsync(CancellationToken.None);
+            StatusText.Text = signedIn ? string.Empty : L("Sign-in was not completed.");
+        }
+        finally
+        {
+            DriveSignInButton.IsEnabled = true;
+            ShowDriveAccount(_settings.Current);
+        }
+#else
+        await Task.CompletedTask;
+#endif
+    }
+
     private CaptureSettings Collect()
     {
         // Built from what is stored rather than from nothing, because this window does
@@ -885,6 +1071,19 @@ public sealed partial class PreferencesWindow : Window
             CopyToClipboard = QuickCaptureBox.SelectedIndex is 1 or 2,
             QuickCaptureOpenEditor = QuickCaptureEditorCheck.IsChecked == true,
             ShowThumbnail = ThumbnailCheck.IsChecked == true,
+
+#if !OFFLINE
+            UploadProvider = (UploadProvider)Math.Max(UploadProviderBox.SelectedIndex, 0),
+            UploadConfirm = UploadConfirmBox.IsChecked == true,
+            S3Endpoint = S3EndpointBox.Text,
+            S3Region = S3RegionBox.Text,
+            S3Bucket = S3BucketBox.Text,
+            S3AccessKeyId = S3AccessKeyBox.Text,
+            S3SecretAccessKey = S3SecretKeyBox.Password,
+            S3PublicUrlBase = S3PublicUrlBox.Text,
+            S3PathPrefix = S3PathPrefixBox.Text,
+            ImgbbApiKey = ImgbbKeyBox.Text,
+#endif
 
             // NaN is what an emptied NumberBox reports, and casting that would give a
             // nonsense interval rather than an obviously wrong one.

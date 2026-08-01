@@ -119,6 +119,15 @@
                     <TextBlock Text="Recording" FontSize="12" HorizontalAlignment="Center" Margin="0,4,0,0" />
                 </StackPanel>
             </ListViewItem>
+            <!-- macshot's sixth tab, in macshot's place: after Recording and before
+                 About. Collapsed in the offline build, which has nothing to upload
+                 with. -->
+            <ListViewItem x:Name="UploadsTab" Tag="uploads">
+                <StackPanel Width="72" Padding="0,4">
+                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE898;" FontSize="22" />
+                    <TextBlock Text="Uploads" FontSize="12" HorizontalAlignment="Center" Margin="0,4,0,0" />
+                </StackPanel>
+            </ListViewItem>
             <ListViewItem Tag="about">
                 <StackPanel Width="72" Padding="0,4">
                     <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE946;" FontSize="22" />
@@ -680,6 +689,161 @@
                         </StackPanel>
                         <TextBlock
                             Text="The camera in a corner of the recorded region, 12 clear of its edges under a white ring. Unlike everything else macshot puts on screen while recording, this one is meant to be in the file. Off by default, and asked for again on the strip before each recording."
+                            Style="{StaticResource Caption}" />
+                    </StackPanel>
+                </StackPanel>
+            </ScrollViewer>
+
+            <!-- macshot's Uploads tab, section for section: Upload Provider, Google
+                 Drive, S3-Compatible Storage, imgbb, Upload History. Its captions are
+                 macshot's own sentences, which is what its translations are keyed by. -->
+            <ScrollViewer x:Name="UploadsPage" Visibility="Collapsed">
+                <StackPanel Spacing="20">
+                    <StackPanel Style="{StaticResource Section}">
+                        <TextBlock Text="Upload Provider" Style="{StaticResource SectionHeading}" />
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Provider:" Style="{StaticResource RowLabel}" />
+                            <ComboBox
+                                x:Name="UploadProviderBox"
+                                FontSize="13"
+                                Width="240"
+                                SelectionChanged="Setting_SelectionChanged" />
+                        </StackPanel>
+                        <CheckBox
+                            x:Name="UploadConfirmBox"
+                            Content="Confirm before upload"
+                            FontSize="13"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                    </StackPanel>
+
+                    <StackPanel Style="{StaticResource Section}">
+                        <TextBlock Text="Google Drive" Style="{StaticResource SectionHeading}" />
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Account:" Style="{StaticResource RowLabel}" />
+                            <TextBlock
+                                x:Name="DriveAccountText"
+                                FontSize="13"
+                                VerticalAlignment="Center"
+                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Style="{StaticResource RowLabel}" />
+                            <Button x:Name="DriveSignInButton" FontSize="13" Click="DriveSignIn_Click" />
+                        </StackPanel>
+                        <TextBlock
+                            Text="Files are uploaded to a &quot;macshot&quot; folder in your Google Drive. Everything stays private — nothing is shared publicly."
+                            Style="{StaticResource Caption}" />
+                    </StackPanel>
+
+                    <StackPanel Style="{StaticResource Section}">
+                        <TextBlock Text="S3-Compatible Storage" Style="{StaticResource SectionHeading}" />
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Endpoint:" Style="{StaticResource RowLabel}" />
+                            <TextBox
+                                x:Name="S3EndpointBox"
+                                FontSize="13"
+                                Width="300"
+                                FontFamily="Consolas"
+                                PlaceholderText="https://abc123.r2.cloudflarestorage.com"
+                                LostFocus="Setting_LostFocus" />
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Region:" Style="{StaticResource RowLabel}" />
+                            <TextBox
+                                x:Name="S3RegionBox"
+                                FontSize="13"
+                                Width="300"
+                                FontFamily="Consolas"
+                                PlaceholderText="auto"
+                                LostFocus="Setting_LostFocus" />
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Bucket:" Style="{StaticResource RowLabel}" />
+                            <TextBox
+                                x:Name="S3BucketBox"
+                                FontSize="13"
+                                Width="300"
+                                FontFamily="Consolas"
+                                PlaceholderText="my-bucket"
+                                LostFocus="Setting_LostFocus" />
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Access Key:" Style="{StaticResource RowLabel}" />
+                            <TextBox
+                                x:Name="S3AccessKeyBox"
+                                FontSize="13"
+                                Width="300"
+                                FontFamily="Consolas"
+                                PlaceholderText="AKIAIOSFODNN7EXAMPLE"
+                                LostFocus="Setting_LostFocus" />
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Secret Key:" Style="{StaticResource RowLabel}" />
+                            <!-- A password box, as macshot uses a secure field here. The
+                                 settings window is opened in front of other people often
+                                 enough that a secret in plain sight is a real leak. -->
+                            <PasswordBox
+                                x:Name="S3SecretKeyBox"
+                                FontSize="13"
+                                Width="300"
+                                FontFamily="Consolas"
+                                LostFocus="Setting_LostFocus" />
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Public URL:" Style="{StaticResource RowLabel}" />
+                            <TextBox
+                                x:Name="S3PublicUrlBox"
+                                FontSize="13"
+                                Width="300"
+                                FontFamily="Consolas"
+                                PlaceholderText="https://cdn.example.com"
+                                LostFocus="Setting_LostFocus" />
+                        </StackPanel>
+                        <TextBlock
+                            Text="Base URL for public access. If empty, the S3 endpoint URL is used (may not be publicly accessible)."
+                            Style="{StaticResource Caption}" />
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Path Prefix:" Style="{StaticResource RowLabel}" />
+                            <TextBox
+                                x:Name="S3PathPrefixBox"
+                                FontSize="13"
+                                Width="300"
+                                FontFamily="Consolas"
+                                PlaceholderText="screenshots/"
+                                LostFocus="Setting_LostFocus" />
+                        </StackPanel>
+                        <TextBlock
+                            Text="Works with AWS S3, Cloudflare R2, MinIO, DigitalOcean Spaces, Backblaze B2, and other S3-compatible services. Supports images and videos."
+                            Style="{StaticResource Caption}" />
+                    </StackPanel>
+
+                    <StackPanel Style="{StaticResource Section}">
+                        <TextBlock Text="imgbb" Style="{StaticResource SectionHeading}" />
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="API key:" Style="{StaticResource RowLabel}" />
+                            <TextBox
+                                x:Name="ImgbbKeyBox"
+                                FontSize="13"
+                                Width="300"
+                                FontFamily="Consolas"
+                                PlaceholderText="Leave empty to use default"
+                                LostFocus="Setting_LostFocus" />
+                        </StackPanel>
+                        <TextBlock
+                            Text="A shared key is included — get your own free key at imgbb.com/api if you hit rate limits. Images only (no video support)."
+                            Style="{StaticResource Caption}" />
+                    </StackPanel>
+
+                    <StackPanel Style="{StaticResource Section}">
+                        <TextBlock Text="Upload History" Style="{StaticResource SectionHeading}" />
+                        <!-- Rebuilt whenever the page is shown rather than bound: the list
+                             changes from outside this window, every time something is
+                             uploaded. -->
+                        <StackPanel x:Name="UploadHistoryList" Spacing="6" />
+                        <TextBlock
+                            x:Name="UploadHistoryEmpty"
+                            Text="Nothing has been uploaded yet."
                             Style="{StaticResource Caption}" />
                     </StackPanel>
                 </StackPanel>

@@ -31,8 +31,10 @@ public readonly record struct ToolbarCustomAction(string Id, string Label, Toolb
 /// headed "Right Toolbar Actions" would hide it from somewhere it never was.
 /// </para>
 /// <para>
-/// Remove Background is absent because this build cannot do it, and Upload because this
-/// build has nothing to upload with. Both come back with the feature.
+/// Remove Background is absent because this build cannot do it. It comes back with the
+/// feature. Upload is here, and is the one entry whose button the offline build does not
+/// draw at all — hiding something already absent costs nothing, and a settings file that
+/// crossed between the variants would otherwise mean different things in each.
 /// </para>
 /// </remarks>
 public static class ToolbarCustomActions
@@ -50,6 +52,7 @@ public static class ToolbarCustomActions
     public static IReadOnlyList<ToolbarCustomAction> Right { get; } =
     [
         new("share", "Share", ToolbarCommand.Share),
+        new("upload", "Upload", ToolbarCommand.Upload),
         new("pin", "Pin (floating window)", ToolbarCommand.Pin),
         new("ocr", "OCR & QR", ToolbarCommand.ReadText),
         new("translate", "Translate", ToolbarCommand.Translate),

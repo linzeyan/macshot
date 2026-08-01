@@ -35,6 +35,9 @@ public enum ToolbarCommand
     /// <summary>Hand it to another program through the system's share pane.</summary>
     Share,
 
+    /// <summary>Send it to the destination the preferences name, and copy the link.</summary>
+    Upload,
+
     /// <summary>Leave it on top of everything as a floating window.</summary>
     Pin,
 
@@ -235,6 +238,11 @@ public static class ToolbarActions
     /// False in the offline build, which contains no translator at all. A button for a
     /// feature compiled out of the binary would be a button that does nothing.
     /// </param>
+    /// <param name="upload">
+    /// False in the offline build, for the same reason and with more force: the whole
+    /// point of that variant is that nothing can leave the machine, so the button that
+    /// would send it must not be drawn at all.
+    /// </param>
     /// <param name="hiddenActions">
     /// The identifiers of the buttons the user has taken off — see
     /// <see cref="ToolbarCustomActions"/>. Null for none. Cancel, Copy and Save are not in
@@ -244,7 +252,8 @@ public static class ToolbarActions
     public static IReadOnlyList<ToolbarItem> Actions(
         bool editorMode,
         bool translation = true,
-        IReadOnlyCollection<string>? hiddenActions = null)
+        IReadOnlyCollection<string>? hiddenActions = null,
+        bool upload = true)
     {
         var items = new List<ToolbarItem>(8);
 
@@ -258,6 +267,14 @@ public static class ToolbarActions
         items.Add(new ToolbarItem(ToolbarCommand.Copy, "Copy"));
         items.Add(new ToolbarItem(ToolbarCommand.Save, "Save"));
         Offer(new ToolbarItem(ToolbarCommand.Share, "Share"));
+        if (upload)
+        {
+            // After Share and before Pin, which is where macshot's own right strip puts
+            // it — rightToolbarActions reads share, upload, pin, ocr, translate, scroll,
+            // record.
+            Offer(new ToolbarItem(ToolbarCommand.Upload, "Upload"));
+        }
+
         Offer(new ToolbarItem(ToolbarCommand.Pin, "Pin on top"));
         Offer(new ToolbarItem(ToolbarCommand.ReadText, "Read the text in it"));
         if (translation)

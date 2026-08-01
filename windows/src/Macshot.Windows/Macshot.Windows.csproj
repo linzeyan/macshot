@@ -41,6 +41,14 @@
     <AssemblyName>Macshot.Windows.Offline</AssemblyName>
   </PropertyGroup>
 
+  <!-- The upload toast's markup, not just its code. A #if around the code-behind is not
+       enough for a XAML window: the generated half is still compiled, and it wires up
+       event handlers that the removed half was supposed to declare. Removing the Page
+       stops the generation, which is what actually takes the window out of the build. -->
+  <ItemGroup Condition="'$(Variant)' == 'Offline'">
+    <Page Remove="UploadToastWindow.xaml" />
+  </ItemGroup>
+
   <!-- macshot has no window, so a copy of it left running from the last test is
        invisible: the only sign is the notification-area icon, and the only way out
        is its Quit entry. That copy holds the output assemblies, which turns the next

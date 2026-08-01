@@ -30,6 +30,13 @@ public enum CaptureOutcome
 
     /// <summary>A floating window on top of everything.</summary>
     Pin,
+
+    /// <summary>
+    /// The destination the preferences name, with the link it comes back with put on the
+    /// clipboard. Its own outcome rather than a variant of Copy, because what is copied
+    /// is a URL and not the picture — pasting it into an image editor gives text.
+    /// </summary>
+    Upload,
 }
 
 /// <summary>

@@ -39,6 +39,19 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+#if !OFFLINE
+        // Before the instance lock, and before anything else. A launch carrying a Google
+        // sign-in redirect is not a second macshot trying to run: it is the shell
+        // delivering a message to the one that is already running, and it hands the URL
+        // over and ends. Claiming the lock first would turn it into the notice below,
+        // losing the authorization code the user just approved.
+        if (Upload.GoogleOAuthRedirect.ForwardIfRedirect(Environment.GetCommandLineArgs()))
+        {
+            Exit();
+            return;
+        }
+#endif
+
         // A second macshot is never what was wanted, and it is easy to start one by
         // accident precisely because the first has no window to notice. Two of them
         // means two notification-area icons, and the second losing the fight for the

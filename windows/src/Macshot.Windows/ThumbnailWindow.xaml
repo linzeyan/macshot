@@ -85,9 +85,16 @@
                 VerticalAlignment="Bottom"
                 PointerPressed="Edit_PointerPressed" />
 
-            <!-- The fourth corner is macshot's upload button. It stays empty rather than
-                 being filled with something else: someone who knows where upload is on
-                 macOS must not find a different action in its place. -->
+            <!-- The fourth corner is macshot's upload button, and it is now that. The
+                 offline build hides it rather than filling it with something else:
+                 someone who knows where upload is on macOS must not find a different
+                 action in its place. -->
+            <Border
+                x:Name="UploadDisc"
+                Style="{StaticResource CornerDisc}"
+                HorizontalAlignment="Right"
+                VerticalAlignment="Bottom"
+                PointerPressed="Upload_PointerPressed" />
 
             <StackPanel HorizontalAlignment="Center" VerticalAlignment="Center" Spacing="8">
                 <Border Style="{StaticResource CentreAction}" PointerPressed="Copy_PointerPressed">

@@ -947,12 +947,13 @@ public sealed partial class AnnotationToolbarView : UserControl
             _inverted,
             !_effectsPicker.Options.IsIdentity,
             hidden)));
-        // The offline build has no translator compiled into it, so it is not offered a
-        // button for one.
+        // The offline build has neither a translator nor an uploader compiled into it, so
+        // it is not offered a button for either.
         _actions.SetItems(WithKeys(ToolbarActions.Actions(
             EditorMode,
             translation: !BuildVariant.IsOffline,
-            hiddenActions: hidden)));
+            hiddenActions: hidden,
+            upload: !BuildVariant.IsOffline)));
         _tools.ShowSwatch(ToUiColor(editor.Style.Color));
         ShowOptionsFor(editor.Tool);
 

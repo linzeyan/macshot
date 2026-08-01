@@ -100,6 +100,15 @@ public sealed class CaptureController : IDisposable
     private readonly ScreenCaptureService _screenCapture = new();
     private readonly ScreenRecorder _recorder = new();
     private readonly SettingsStore _settings = new();
+
+#if !OFFLINE
+    /// <summary>
+    /// The one uploader, shared by the overlay, the editor, the thumbnail and the video
+    /// editor. One instance because it owns the connection pool and the single toast; a
+    /// second would put two panels in the same place.
+    /// </summary>
+    private readonly Upload.UploadService _uploads;
+#endif
     private readonly DispatcherQueue _dispatcher;
     private readonly MessageWindow _messageWindow;
     private readonly GlobalHotkeyService _hotkeys;
@@ -145,6 +154,10 @@ public sealed class CaptureController : IDisposable
     {
         _dispatcher = DispatcherQueue.GetForCurrentThread()
             ?? throw new InvalidOperationException("The capture controller must be created on the UI thread.");
+
+#if !OFFLINE
+        _uploads = new Upload.UploadService(_settings);
+#endif
 
         // Before anything else that could be worth tracing, and re-read on every save
         // so turning it on does not need a restart — the fault being chased is often
@@ -691,6 +704,15 @@ public sealed class CaptureController : IDisposable
                 await ImageDelivery.SaveAsync(frame, settings, completion.WindowTitle);
                 break;
 
+#if !OFFLINE
+            case CaptureOutcome.Upload:
+                // Not awaited: an upload takes as long as the network does, and the
+                // history below is what makes the capture recoverable if it fails. The
+                // toast is the only thing waiting on it.
+                Post(() => _uploads.UploadAsync(frame));
+                break;
+#endif
+
             default:
                 break;
         }
@@ -786,6 +808,9 @@ public sealed class CaptureController : IDisposable
 
         var thumbnail = new ThumbnailWindow(frame, _settings, archived);
         thumbnail.PinRequested += (_, pinned) => Post(() => PinAsync(pinned));
+#if !OFFLINE
+        thumbnail.UploadRequested += (_, taken) => Post(() => _uploads.UploadAsync(taken));
+#endif
         thumbnail.EditRequested += (_, captured) => Post(() => ShowEditorAsync(captured));
         thumbnail.CloseAllRequested += (_, _) => CloseThumbnails();
         thumbnail.Closed += (_, _) =>
@@ -1570,6 +1595,9 @@ public sealed class CaptureController : IDisposable
 
         var editor = new EditorWindow(frame, _settings, annotations);
         editor.PinRequested += (_, pinned) => Post(() => PinAsync(pinned));
+#if !OFFLINE
+        editor.UploadRequested += (_, taken) => Post(() => _uploads.UploadAsync(taken));
+#endif
         editor.AddCaptureRequested += (_, _) => Post(() => AddCaptureAsync(editor));
 
         // Delivered exactly as a capture is, so the editor needs no opinion about
