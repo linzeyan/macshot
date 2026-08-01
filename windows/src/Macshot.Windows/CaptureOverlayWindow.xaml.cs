@@ -1901,6 +1901,18 @@ public sealed partial class CaptureOverlayWindow : Window
         return null;
     }
 
+    /// <summary>
+    /// Whether confirming the selection records it rather than takes a picture of it.
+    /// </summary>
+    /// <remarks>
+    /// macshot's <c>pendingRecordAreaMode</c>. "Record Area" in the menu opens the same
+    /// overlay "Capture Area" does and arms it, so the drag that would have taken a
+    /// screenshot starts a recording of that rectangle. Without it the menu item would
+    /// open an overlay indistinguishable from the capture one and leave the user to find
+    /// the Record button, which is not what the item says it does.
+    /// </remarks>
+    public bool ArmRecording { get; set; }
+
     /// <summary>Asks for the region to be recorded rather than captured.</summary>
     private void RequestRecording()
     {
@@ -2149,6 +2161,15 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         if (!IsAnnotating)
         {
+            return;
+        }
+
+        // Only the plain confirm: Copy, Save as and the rest still mean what they say
+        // while the overlay is armed, so an armed overlay is not a trap for someone who
+        // reached for Save.
+        if (ArmRecording && outcome == CaptureOutcome.Deliver)
+        {
+            RequestRecording();
             return;
         }
 

@@ -4,7 +4,14 @@ using System.Runtime.InteropServices;
 namespace Macshot.Windows.Services;
 
 /// <summary>One entry in a submenu, built at the moment the menu is opened.</summary>
-public readonly record struct TrayMenuEntry(int Id, string Text);
+/// <summary>One line of a tray submenu.</summary>
+/// <param name="Id">The command reported when it is chosen.</param>
+/// <param name="Text">What it says.</param>
+/// <param name="Checked">
+/// Whether it carries a tick. macshot's capture-delay submenu marks the delay in force,
+/// which is the only thing that says what a bare number of seconds is currently set to.
+/// </param>
+public readonly record struct TrayMenuEntry(int Id, string Text, bool Checked = false);
 
 /// <summary>
 /// The notification-area icon and its context menu, which is macshot's primary
@@ -29,6 +36,7 @@ public sealed class TrayIconService : IDisposable
     private const uint MenuSeparator = 0x00000800;
     private const uint MenuPopup = 0x00000010;
     private const uint MenuGrayed = 0x00000001;
+    private const uint MenuChecked = 0x00000008;
     private const uint TrackReturnCommand = 0x0100;
     private const uint TrackRightButton = 0x0002;
     private const uint TrackNoNotify = 0x0080;
@@ -89,11 +97,16 @@ public sealed class TrayIconService : IDisposable
     /// captures — change with every capture, and a menu built once in the constructor
     /// would go on offering whatever was there when macshot started.
     /// </remarks>
-    public void AddSubmenu(string text, Func<IReadOnlyList<TrayMenuEntry>> items)
+/// <param name="emptyText">
+    /// What the submenu says when there is nothing in it. Passed in rather than written
+    /// here so it goes through the same translation lookup as every other menu string.
+    /// </param>
+    public void AddSubmenu(string text, Func<IReadOnlyList<TrayMenuEntry>> items, string emptyText)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
         ArgumentNullException.ThrowIfNull(items);
-        _menuItems.Add(new MenuEntry(0, text, items));
+        ArgumentException.ThrowIfNullOrWhiteSpace(emptyText);
+        _menuItems.Add(new MenuEntry(0, text, items, emptyText));
     }
 
     /// <summary>
@@ -193,7 +206,11 @@ public sealed class TrayIconService : IDisposable
                 {
                     // Owned by the parent from here: DestroyMenu takes the submenus
                     // with it, so the popup below needs no cleanup of its own.
-                    AppendMenu(menu, MenuPopup, new UIntPtr((ulong)BuildSubmenu(items()).ToInt64()), entry.Text);
+                    AppendMenu(
+                        menu,
+                        MenuPopup,
+                        new UIntPtr((ulong)BuildSubmenu(items(), entry.EmptyText!).ToInt64()),
+                        entry.Text);
                 }
                 else
                 {
@@ -303,7 +320,7 @@ public sealed class TrayIconService : IDisposable
     /// none — an empty submenu opens as a blank rectangle, which reads as a defect
     /// rather than as "nothing here yet".
     /// </summary>
-    private static IntPtr BuildSubmenu(IReadOnlyList<TrayMenuEntry> entries)
+    private static IntPtr BuildSubmenu(IReadOnlyList<TrayMenuEntry> entries, string emptyText)
     {
         var submenu = CreatePopupMenu();
         if (submenu == IntPtr.Zero)
@@ -313,13 +330,17 @@ public sealed class TrayIconService : IDisposable
 
         if (entries.Count == 0)
         {
-            AppendMenu(submenu, MenuString | MenuGrayed, UIntPtr.Zero, "Nothing yet");
+            AppendMenu(submenu, MenuString | MenuGrayed, UIntPtr.Zero, emptyText);
             return submenu;
         }
 
         foreach (var entry in entries)
         {
-            AppendMenu(submenu, MenuString, new UIntPtr((uint)entry.Id), entry.Text);
+            AppendMenu(
+                submenu,
+                entry.Checked ? MenuString | MenuChecked : MenuString,
+                new UIntPtr((uint)entry.Id),
+                entry.Text);
         }
 
         return submenu;
@@ -329,7 +350,11 @@ public sealed class TrayIconService : IDisposable
     /// A menu line: a command, a separator (no text), or a submenu (a callback that
     /// produces the entries when the menu is opened).
     /// </summary>
-    private sealed record MenuEntry(int Id, string? Text, Func<IReadOnlyList<TrayMenuEntry>>? Submenu);
+    private sealed record MenuEntry(
+        int Id,
+        string? Text,
+        Func<IReadOnlyList<TrayMenuEntry>>? Submenu,
+        string? EmptyText = null);
 
     [DllImport("shell32.dll", EntryPoint = "Shell_NotifyIconW", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]

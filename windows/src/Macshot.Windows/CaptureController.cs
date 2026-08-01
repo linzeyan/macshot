@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
@@ -30,8 +31,14 @@ public sealed class CaptureController : IDisposable
     private const int CommandPreferences = 3;
     private const int CommandQuit = 4;
     private const int CommandRecordScreen = 5;
-    private const int CommandCaptureAfterDelay = 6;
     private const int CommandHistory = 7;
+    private const int CommandRecordArea = 8;
+
+    /// <summary>
+    /// The capture-delay submenu. One command per choice rather than one command
+    /// carrying a number, because a tray menu reports nothing but an id.
+    /// </summary>
+    private const int CommandDelayFirst = 50;
 
     /// <summary>
     /// Where the recent-capture entries start. They are numbered at the moment the
@@ -153,18 +160,26 @@ public sealed class CaptureController : IDisposable
         // The variant's own name, so someone running both can tell which icon is which
         // from the tooltip alone.
         _trayIcon = new TrayIconService(_messageWindow, BuildVariant.DisplayName);
-        _trayIcon.AddMenuItem(CommandCaptureArea, L("Capture area"));
-        _trayIcon.AddMenuItem(CommandCaptureAllScreens, L("Capture all screens"));
-        _trayIcon.AddMenuItem(CommandCaptureAfterDelay, L("Capture area after a delay"));
-        _trayIcon.AddMenuItem(CommandRecordScreen, L("Record screen"));
+
+        // macshot's own menu, item for item and in its order — AppDelegate.swift:707–805.
+        // The strings are macshot's source strings rather than paraphrases of them, which
+        // is what makes them resolve: the translations are keyed on the English macshot
+        // ships, so "Capture area" found nothing where "Capture Area" finds every
+        // language the Mac app has.
+        _trayIcon.AddMenuItem(CommandCaptureArea, L("Capture Area"));
+        _trayIcon.AddMenuItem(CommandCaptureAllScreens, L("Capture Screen"));
+        _trayIcon.AddSubmenu(L("Capture Delay"), DelayMenuEntries, L("None"));
         _trayIcon.AddSeparator();
-        _trayIcon.AddSubmenu(L("Recent captures"), RecentMenuEntries);
-        _trayIcon.AddMenuItem(CommandHistory, L("History..."));
+        _trayIcon.AddMenuItem(CommandRecordArea, L("Record Area"));
+        _trayIcon.AddMenuItem(CommandRecordScreen, L("Record Screen"));
         _trayIcon.AddSeparator();
-        _trayIcon.AddMenuItem(CommandPreferences, L("Preferences..."));
+        _trayIcon.AddSubmenu(L("Recent Captures"), RecentMenuEntries, L("No recent captures"));
+        _trayIcon.AddMenuItem(CommandHistory, L("Show History Panel"));
+        _trayIcon.AddSeparator();
+        _trayIcon.AddMenuItem(CommandPreferences, L("Settings..."));
         _trayIcon.AddMenuItem(CommandQuit, L("Quit macshot"));
         _trayIcon.CommandInvoked += OnTrayCommandInvoked;
-        _trayIcon.DefaultActionInvoked += (_, _) => Post(BeginAreaCaptureAsync);
+        _trayIcon.DefaultActionInvoked += (_, _) => Post(BeginAreaCaptureHonouringDelayAsync);
 
         // After the menu exists, because applying a shortcut also writes it into the
         // menu entry that names it.
@@ -190,14 +205,28 @@ public sealed class CaptureController : IDisposable
     {
         var refused = new List<HotkeyBinding>(3);
 
-        Bind(HotkeyCaptureArea, CommandCaptureArea, "Capture area", settings.CaptureAreaBinding, BeginAreaCaptureAsync);
+        // Through L, and through macshot's own strings. These rewrite the menu entries
+        // to append the shortcut, so an English literal here silently replaced whatever
+        // the constructor had translated — which is why the menu came up half in one
+        // language and half in the other.
+        Bind(
+            HotkeyCaptureArea,
+            CommandCaptureArea,
+            L("Capture Area"),
+            settings.CaptureAreaBinding,
+            BeginAreaCaptureHonouringDelayAsync);
         Bind(
             HotkeyCaptureAllScreens,
             CommandCaptureAllScreens,
-            "Capture all screens",
+            L("Capture Screen"),
             settings.CaptureAllScreensBinding,
             CaptureAllScreensAsync);
-        Bind(HotkeyRecordScreen, CommandRecordScreen, "Record screen", settings.RecordScreenBinding, ToggleRecordingAsync);
+        Bind(
+            HotkeyRecordScreen,
+            CommandRecordScreen,
+            L("Record Screen"),
+            settings.RecordScreenBinding,
+            ToggleRecordingAsync);
 
         if (refused.Count > 0)
         {
@@ -229,8 +258,32 @@ public sealed class CaptureController : IDisposable
         }
     }
 
+    /// <summary>
+    /// Takes an area, waiting first when a capture delay is set.
+    /// </summary>
+    /// <remarks>
+    /// macshot has no separate "capture after a delay" command: the delay is a setting,
+    /// chosen from the menu's own submenu, and every area capture honours it. A menu with
+    /// both a delay setting and a delayed-capture command would let the two disagree.
+    /// </remarks>
+    public Task BeginAreaCaptureHonouringDelayAsync() =>
+        _settings.Current.DelaySeconds > 0
+            ? BeginDelayedAreaCaptureAsync()
+            : BeginAreaCaptureAsync();
+
+    /// <summary>
+    /// Opens the selection overlay armed to record, so the drag that would have taken a
+    /// picture starts a recording of that rectangle instead.
+    /// </summary>
+    public Task BeginAreaRecordingAsync() =>
+        _recording is null ? BeginAreaCaptureAsync(armRecording: true) : Task.CompletedTask;
+
     /// <summary>Puts one selection overlay on every display.</summary>
-    public async Task BeginAreaCaptureAsync()
+    /// <param name="armRecording">
+    /// Whether confirming the selection records it rather than capturing it —
+    /// macshot's <c>pendingRecordAreaMode</c>.
+    /// </param>
+    public async Task BeginAreaCaptureAsync(bool armRecording = false)
     {
         if (_overlays.Count > 0)
         {
@@ -272,7 +325,10 @@ public sealed class CaptureController : IDisposable
                 monitor,
                 _settings,
                 snapCandidates,
-                _screenCapture.TryCaptureWindowAsync);
+                _screenCapture.TryCaptureWindowAsync)
+            {
+                ArmRecording = armRecording,
+            };
             overlay.CaptureCompleted += OnCaptureCompleted;
             overlay.SelectionCommitted += OnSelectionCommitted;
             overlay.Cancelled += OnCaptureCancelled;
@@ -440,16 +496,19 @@ public sealed class CaptureController : IDisposable
         switch (command)
         {
         case CommandCaptureArea:
-            Post(BeginAreaCaptureAsync);
+            Post(BeginAreaCaptureHonouringDelayAsync);
             break;
         case CommandCaptureAllScreens:
             Post(CaptureAllScreensAsync);
             break;
-        case CommandCaptureAfterDelay:
-            Post(BeginDelayedAreaCaptureAsync);
-            break;
         case CommandRecordScreen:
             Post(ToggleRecordingAsync);
+            break;
+        case CommandRecordArea:
+            Post(BeginAreaRecordingAsync);
+            break;
+        case >= CommandDelayFirst and < CommandDelayFirst + 16:
+            SetCaptureDelay(DelayChoices[command - CommandDelayFirst]);
             break;
         case CommandHistory:
             Post(ShowHistoryAsync);
@@ -691,6 +750,41 @@ public sealed class CaptureController : IDisposable
     /// <summary>
     /// The recent captures, numbered for the menu that is about to be drawn.
     /// </summary>
+    /// <summary>
+    /// The delays macshot offers — <c>AppDelegate.swift:723</c>. Zero is "None"; the
+    /// rest are read as seconds.
+    /// </summary>
+    private static readonly int[] DelayChoices = [0, 3, 5, 10, 30];
+
+    /// <summary>
+    /// The capture-delay submenu, rebuilt each time the menu opens so the tick follows
+    /// a delay changed in preferences rather than the one that was set at startup.
+    /// </summary>
+    private IReadOnlyList<TrayMenuEntry> DelayMenuEntries()
+    {
+        var current = _settings.Current.DelaySeconds;
+
+        return
+        [
+            .. DelayChoices.Select((seconds, index) => new TrayMenuEntry(
+                CommandDelayFirst + index,
+                seconds == 0
+                    ? L("None")
+
+                    // The translated string carries macshot's printf placeholder, which
+                    // no .NET formatter reads — so the number goes in by hand rather than
+                    // through string.Format, which would leave "%d seconds" on screen.
+                    : L("%d seconds").Replace(
+                        "%d",
+                        seconds.ToString(CultureInfo.CurrentCulture),
+                        StringComparison.Ordinal),
+                seconds == current)),
+        ];
+    }
+
+    private void SetCaptureDelay(int seconds) =>
+        _settings.Save(_settings.Current with { DelaySeconds = seconds });
+
     private IReadOnlyList<TrayMenuEntry> RecentMenuEntries()
     {
         _recent = ScreenshotHistory.Recent(RecentMenuCount);
