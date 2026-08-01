@@ -27,6 +27,40 @@ public sealed class BeautifyRendererTests
     }
 
     [TestMethod]
+    public void Swatch_IsTheBackgroundTheFramedImageActuallyGets()
+    {
+        // The reason it is rendered rather than drawn: the swatch a background is picked
+        // from is a promise, and the eighteen meshes are exactly where a drawn one would
+        // break it — their whole character is that they bulge rather than run in a line.
+        foreach (var styleIndex in new[] { 0, 20, BeautifyRenderer.Styles.Count - 1 })
+        {
+            var (width, _, framed) = BeautifyRenderer.Render(
+                10,
+                10,
+                Solid(10, 10, 40, 40, 40),
+                new BeautifyOptions(StyleIndex: styleIndex));
+
+            // Square in, square out, so the same relative position on both is the same
+            // place on the gradient. The corner is far enough from the capture that the
+            // shadow contributes nothing to it.
+            var (_, _, swatch) = BeautifyRenderer.Swatch(styleIndex, width);
+
+            Assert.AreEqual(At(framed, width, 0, 0), At(swatch, width, 0, 0), $"style {styleIndex}");
+        }
+    }
+
+    [TestMethod]
+    public void Swatch_ShowsTheStyleRatherThanOneFlatColour()
+    {
+        var (_, _, swatch) = BeautifyRenderer.Swatch(0, 28);
+
+        Assert.AreNotEqual(
+            At(swatch, 28, 0, 0),
+            At(swatch, 28, 27, 27),
+            "a 28-point square of one colour would tell the user nothing about the style");
+    }
+
+    [TestMethod]
     public void Render_GrowsTheFrameByThePaddingOnEverySide()
     {
         var (width, height, _) = BeautifyRenderer.Render(

@@ -4,6 +4,7 @@ using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Recognition;
 using Macshot.Windows.Rendering;
 using Macshot.Windows.Services;
+using Macshot.Windows.Toolbar;
 using Microsoft.UI.Input;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
@@ -333,17 +334,21 @@ public sealed partial class EditorWindow : Window
         flipMenu.Items.Add(MenuItem("Vertical", () => FlipImage(horizontal: false)));
         flip.Flyout = flipMenu;
 
+        // A grid of the backgrounds themselves rather than 48 rows of their names, which
+        // is how macshot offers them and the only way the choice can be made by eye.
         var frame = new Button { Content = "Frame" };
-        var frameMenu = new MenuFlyout { Placement = FlyoutPlacementMode.Bottom };
-        for (var index = 0; index < BeautifyRenderer.Styles.Count; index++)
+        var frames = new BeautifySwatchGrid();
+        var frameFlyout = new Flyout { Placement = FlyoutPlacementMode.Bottom, Content = frames };
+        frames.Picked += (_, index) =>
         {
-            // Captured by value: the loop variable would otherwise be read at click time,
-            // by which point it is past the end of the list.
-            var chosen = index;
-            frameMenu.Items.Add(MenuItem(BeautifyRenderer.Styles[index].Name, () => FrameImage(chosen)));
-        }
+            frameFlyout.Hide();
+            FrameImage(index);
+        };
 
-        frame.Flyout = frameMenu;
+        // Opened rather than built each time: painting 48 gradients is not free, and the
+        // only thing that changes between openings is which one is ringed.
+        frameFlyout.Opening += (_, _) => frames.Show(_settings.Current.ToBeautifyOptions().StyleIndex);
+        frame.Flyout = frameFlyout;
 
         // macshot's Add Capture: another capture, taken now, landing under this one. It
         // is what turns the editor from somewhere a screenshot is marked up into

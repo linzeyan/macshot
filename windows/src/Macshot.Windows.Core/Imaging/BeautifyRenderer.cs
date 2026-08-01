@@ -238,6 +238,42 @@ public static class BeautifyRenderer
     }
 
     /// <summary>
+    /// A square of one style's background, for the swatch it is picked by.
+    /// </summary>
+    /// <remarks>
+    /// Painted by the same sampler the framed image is, so what is picked from is what
+    /// arrives — the meshes especially, where the whole character of the style is that
+    /// it bulges rather than runs in a line, and a swatch drawn as a plain gradient
+    /// would be a promise the result does not keep.
+    /// </remarks>
+    public static (int Width, int Height, byte[] Pixels) Swatch(int styleIndex, int size)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(size);
+
+        var style = Styles[Math.Clamp(styleIndex, 0, Styles.Count - 1)];
+        var mesh = style.Mesh is { IsUsable: true } definition ? definition.CreateSampler() : null;
+        var pixels = new byte[size * size * 4];
+
+        for (var row = 0; row < size; row++)
+        {
+            for (var column = 0; column < size; column++)
+            {
+                var colour = mesh is null
+                    ? style.Sample(GradientProgress(style.Angle, column, row, size, size))
+                    : mesh.Sample((column + 0.5) / size, (row + 0.5) / size);
+
+                var offset = ((row * size) + column) * 4;
+                pixels[offset] = colour.Blue;
+                pixels[offset + 1] = colour.Green;
+                pixels[offset + 2] = colour.Red;
+                pixels[offset + 3] = byte.MaxValue;
+            }
+        }
+
+        return (size, size, pixels);
+    }
+
+    /// <summary>
     /// Frames <paramref name="bgraPixels"/> and returns the larger image.
     /// </summary>
     /// <remarks>
