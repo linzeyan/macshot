@@ -114,7 +114,7 @@ public sealed partial class PreferencesWindow : Window
 
     private readonly ColorChoice _toolbarBackground = new("Background");
     private readonly ColorChoice _toolbarAccent = new("Accent");
-    private readonly ColorChoice _toolbarIcon = new("Icons");
+    private readonly ColorChoice _toolbarIcon = new("Icon");
 
     public PreferencesWindow(SettingsStore settings)
     {
@@ -212,7 +212,8 @@ public sealed partial class PreferencesWindow : Window
             }
         }
 
-        foreach (var choice in new[] { _toolbarBackground, _toolbarAccent, _toolbarIcon })
+        // macshot's order — accent, icon, background (SettingsWindowController.swift:539).
+        foreach (var choice in new[] { _toolbarAccent, _toolbarIcon, _toolbarBackground })
         {
             choice.Changed += Setting_Changed;
             ToolbarColorRow.Children.Add(choice);
@@ -1505,6 +1506,7 @@ public sealed partial class PreferencesWindow : Window
     private void ShowAbout()
     {
         AboutNameText.Text = BuildVariant.DisplayName;
+        MadeByText.Text = $"{L("Made by")} sw33tLie";
 
         // macshot's own format string, filled in here rather than with string.Format:
         // the placeholders are Cocoa's %@, which .NET has no idea what to do with.

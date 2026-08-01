@@ -161,7 +161,7 @@
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
                         <TextBlock
-                            Text="Windows opened after this takes the new language. macshot's own translations are used, so a language contributed to the Mac app arrives here too."
+                            Text="Restart the app to fully apply the new language."
                             Style="{StaticResource Caption}" />
                     </StackPanel>
 
@@ -194,9 +194,6 @@
                             Style="{StaticResource Unlabelled}"
                             Checked="Setting_Toggled"
                             Unchecked="Setting_Toggled" />
-                        <TextBlock
-                            Text="This build has no updater in it yet, so nothing checks. What you choose here is kept and will be honoured by the first build that does."
-                            Style="{StaticResource Caption}" />
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
@@ -208,16 +205,10 @@
                                 Width="240"
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
-                        <TextBlock
-                            Text="Applies to macshot's own windows. The capture toolbar keeps its dark palette either way — it is drawn over a screenshot rather than inside a window, so following the system theme would make it disappear into half the captures anyone takes."
-                            Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Toolbar:" Style="{StaticResource RowLabel}" />
                             <StackPanel x:Name="ToolbarColorRow" Orientation="Horizontal" Spacing="8" />
                         </StackPanel>
-                        <TextBlock
-                            Text="The toolbar is drawn over a screenshot rather than inside a window, so it cannot follow the system theme without disappearing into half the captures anyone takes. Hover and press are worked out from the accent and the icon colour, so no combination can make the buttons unreadable."
-                            Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="" Style="{StaticResource RowLabel}" />
                             <Button Content="Back to macshot's colours" FontSize="13" Click="ResetToolbarColors_Click" />
@@ -233,9 +224,6 @@
                                 <Button Content="Import Settings…" FontSize="13" Click="ImportSettings_Click" />
                             </StackPanel>
                         </StackPanel>
-                        <TextBlock
-                            Text="Export your preferences to a file to move them to another PC or a clean install. Your save folder, the last selection, and screenshot history are not included."
-                            Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="" Style="{StaticResource RowLabel}" />
                             <Button Content="Show the settings file" FontSize="13" Click="ShowSettingsFile_Click" />
@@ -258,18 +246,12 @@
                             Style="{StaticResource Unlabelled}"
                             Checked="Setting_Toggled"
                             Unchecked="Setting_Toggled" />
-                        <TextBlock
-                            Text="The next capture draws the previous region on the display it was taken from, and Enter takes it again. Off by default, because a selection that reappears on its own is a surprise until you know the setting exists."
-                            Style="{StaticResource Caption}" />
                         <CheckBox
                             x:Name="HideInstructionsCheck"
                             Content="Hide capture instructions"
                             Style="{StaticResource Unlabelled}"
                             Checked="Setting_Toggled"
                             Unchecked="Setting_Toggled" />
-                        <TextBlock
-                            Text="Takes the standing instruction off the overlay for someone who has read it. What the overlay has to report — a sampled colour, a ruler's reading, a failure — still appears. Window snap keeps its Tab toggle; only the line that names it goes."
-                            Style="{StaticResource Caption}" />
                         <CheckBox
                             x:Name="ThumbnailCheck"
                             Content="Show floating thumbnail after capture"
@@ -313,9 +295,6 @@
                              control for one setting let the two disagree: the submenu offers
                              None, this box could not go below one second, and it could reach
                              values the submenu has no tick for. -->
-                        <TextBlock
-                            Text="On the overlay: scroll to zoom in on what you are capturing, middle-drag to pan, Ctrl+0 for actual size."
-                            Style="{StaticResource Caption}" />
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
@@ -339,7 +318,6 @@
                              setting whose effect is invisible until a file has already been
                              written under the wrong name. -->
                         <TextBlock x:Name="TemplatePreview" Style="{StaticResource Caption}" />
-                        <TextBlock Text="Tokens: {yyyy} {yy} {MM} {dd} {HH} {mm} {ss}" Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Image format:" Style="{StaticResource RowLabel}" />
                             <ComboBox x:Name="FormatBox" FontSize="13" Width="160" SelectionChanged="Format_SelectionChanged" />
@@ -371,9 +349,6 @@
                             Style="{StaticResource Unlabelled}"
                             Checked="Setting_Toggled"
                             Unchecked="Setting_Toggled" />
-                        <TextBlock
-                            Text="The toolbar's copy, save and pin buttons each mean one of these on their own, whatever is chosen here."
-                            Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="History size:" Style="{StaticResource RowLabel}" />
                             <NumberBox
@@ -392,9 +367,6 @@
                             Style="{StaticResource Unlabelled}"
                             Checked="HistoryUnlimited_Toggled"
                             Unchecked="HistoryUnlimited_Toggled" />
-                        <TextBlock
-                            Text="Kept under macshot's own data folder, separately from the save folder, and offered in the notification-area menu. Zero keeps none, and keeping every capture wins over a zero rather than deleting them all."
-                            Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="" Style="{StaticResource RowLabel}" />
                             <Button Content="Clear history now" FontSize="13" Click="ClearHistory_Click" />
@@ -425,16 +397,6 @@
                             <TextBlock Text="Record screen:" Style="{StaticResource RowLabel}" />
                             <local:HotkeyBox x:Name="RecordScreenHotkeyBox" />
                         </StackPanel>
-                        <TextBlock
-                            Text="Click a shortcut and press the keys. At least one of Ctrl, Alt, Shift or Win is required — a shortcut with no modifier would swallow that key in every program on the machine. The settings file stores them as text, written like Ctrl+Shift+X."
-                            Style="{StaticResource Caption}" />
-                    </StackPanel>
-
-                    <StackPanel Style="{StaticResource Section}">
-                        <TextBlock Text="Overlay Shortcuts" Style="{StaticResource SectionHeading}" />
-                        <TextBlock
-                            Text="Enter takes the capture • Esc gives it up • Tab turns window snap on and off • F takes the whole display • Ctrl+Z and Ctrl+Y undo and redo • Delete removes the selected mark • the arrow keys nudge the region, ten pixels at a time with Shift • right-click opens the colour ring."
-                            Style="{StaticResource Caption}" />
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
@@ -475,9 +437,6 @@
                                 Width="160"
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
-                        <TextBlock
-                            Text="What happens to a pencil or highlighter stroke once you let go. A path sampled from a mouse is a staircase: Smooth rounds its corners off, Refined evens out the shake along it as well, and None leaves the points exactly where the pointer went, for tracing something. The same choice sits under the pencil on the toolbar."
-                            Style="{StaticResource Caption}" />
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
@@ -521,9 +480,6 @@
                                 SelectionChanged="Setting_SelectionChanged" />
                             <TextBlock Text="fps" Style="{StaticResource RowText}" />
                         </StackPanel>
-                        <TextBlock
-                            Text="30 is what a screen recording is normally taken at. 60 and 120 are for showing something that moves quickly, and cost roughly their multiple of the file size."
-                            Style="{StaticResource Caption}" />
                         <!-- Kept, unlike the strip's switches: macshot has no second place
                              to choose a format or a GIF's frame rate, so removing these
                              would remove the settings rather than de-duplicate them. -->
@@ -531,9 +487,6 @@
                             <TextBlock Text="Format:" Style="{StaticResource RowLabel}" />
                             <ComboBox x:Name="RecordingFormatBox" FontSize="13" Width="160" SelectionChanged="RecordingFormat_SelectionChanged" />
                         </StackPanel>
-                        <TextBlock
-                            Text="GIF is written smaller and slower than MP4, because every GIF frame is a whole image."
-                            Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="GIF:" Style="{StaticResource RowLabel}" />
                             <NumberBox
@@ -546,9 +499,6 @@
                                 ValueChanged="Setting_NumberChanged" />
                             <TextBlock Text="fps" Style="{StaticResource RowText}" />
                         </StackPanel>
-                        <TextBlock
-                            Text="Kept separate because it answers a different question: not how smooth the recording should be, but how large a GIF may get before whatever it is being sent to refuses it."
-                            Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Save folder:" Style="{StaticResource RowLabel}" />
                             <TextBox
@@ -570,9 +520,6 @@
                                 LostFocus="Setting_LostFocus" />
                         </StackPanel>
                         <TextBlock x:Name="RecordingTemplatePreview" Style="{StaticResource Caption}" />
-                        <TextBlock
-                            Text="Its own template, so a folder of recordings and screenshots can still be told apart by name. The same tokens as above."
-                            Style="{StaticResource Caption}" />
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
@@ -584,9 +531,6 @@
                                 Width="240"
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
-                        <TextBlock
-                            Text="A recording always goes to a file — minutes of video do not belong on the clipboard — so this is what happens next. macshot's third choice is its video editor, which this build has not got yet."
-                            Style="{StaticResource Caption}" />
                         <CheckBox
                             x:Name="HideRecordingHudCheck"
                             Content="Hide recording controls"
@@ -594,7 +538,7 @@
                             Checked="Setting_Toggled"
                             Unchecked="Setting_Toggled" />
                         <TextBlock
-                            Text="Stop recording from the menu bar icon instead. Escape stops it too, and with the panel gone the choice above is the only thing that says where the recording went."
+                            Text="Stop recording from the menu bar icon instead."
                             Style="{StaticResource Caption}" />
                         <CheckBox
                             x:Name="RecordedRegionBorderCheck"
@@ -602,9 +546,6 @@
                             Style="{StaticResource Unlabelled}"
                             Checked="Setting_Toggled"
                             Unchecked="Setting_Toggled" />
-                        <TextBlock
-                            Text="A frame in the toolbar's accent colour, laid outside the recorded rectangle so it is never in the file. Once the recording panel has been dragged out of the way, it is the only thing left saying what is being recorded."
-                            Style="{StaticResource Caption}" />
                         <!-- The strip switches keystrokes on and off but cannot say which
                              kind, so the mode stays here. -->
                         <StackPanel Style="{StaticResource Row}">
@@ -614,9 +555,6 @@
                                 Width="240"
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
-                        <TextBlock
-                            Text="A dark pill at the foot of the recorded region, holding what was typed for a second and a half. Shortcuts only leaves ordinary typing alone, so a recording of somebody answering an email is not a transcript of the email."
-                            Style="{StaticResource Caption}" />
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
@@ -642,9 +580,6 @@
                                 Width="240"
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
-                        <TextBlock
-                            Text="The camera in a corner of the recorded region, 12 clear of its edges under a white ring. Unlike everything else macshot puts on screen while recording, this one is meant to be in the file. Off by default, and asked for again on the strip before each recording."
-                            Style="{StaticResource Caption}" />
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>
@@ -886,9 +821,6 @@
                             Style="{StaticResource Unlabelled}"
                             Checked="Setting_Toggled"
                             Unchecked="Setting_Toggled" />
-                        <TextBlock
-                            Text="Records each step — which display, which capture backend, what size, which branch — next to the settings file. Turn it on before reproducing a fault, then attach the log. It never contains the text that was recognized."
-                            Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="" Style="{StaticResource RowLabel}" />
                             <Button Content="Open the log folder" FontSize="13" Click="OpenLogFolder_Click" />
@@ -911,8 +843,10 @@
             ColumnSpacing="8"
             BorderBrush="{ThemeResource DividerStrokeColorDefaultBrush}"
             BorderThickness="0,1,0,0">
+            <!-- Filled in code: macshot translates "Made by" and leaves the name alone,
+                 so the line cannot be one literal without losing its translation. -->
             <TextBlock
-                Text="Made by sw33tLie"
+                x:Name="MadeByText"
                 VerticalAlignment="Center"
                 FontSize="11"
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
