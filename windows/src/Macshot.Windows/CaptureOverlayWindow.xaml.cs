@@ -2309,16 +2309,64 @@ public sealed partial class CaptureOverlayWindow : Window
             var codes = await TextRecognizer.ScanQrCodesAsync(frame);
             Hint(previousHint);
 
-            var window = new TextRecognitionWindow(
-                TextRecognizer.ToText(lines),
-                _settings,
-                frame,
-                codes);
+            var text = TextRecognizer.ToText(lines);
+            var action = _settings.Current.OcrAction;
+
+            if (action is OcrAction.ShowAndCopy or OcrAction.CopyOnly)
+            {
+                CopyRecognized(text, codes);
+            }
+
+            // Nothing to show, so nothing to open: the capture simply ends with the words
+            // on the clipboard, which is the whole of what this answer asks for.
+            if (action is OcrAction.CopyOnly)
+            {
+                Cancelled?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
+            var window = new TextRecognitionWindow(text, _settings, frame, codes);
 
             // The overlay is always on top, so the results window would open behind
             // it. Reading the text ends the capture, the same way it does on macOS.
             Cancelled?.Invoke(this, EventArgs.Empty);
             window.Activate();
+        }
+        catch (Exception exception)
+        {
+            Hint(exception.Message);
+        }
+    }
+
+    /// <summary>
+    /// Puts what was read on the clipboard, for the two answers that ask for it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The payloads when there were no words, which is macshot's <c>copyText</c>: a
+    /// region holding nothing but a QR code was read for the code, and copying an empty
+    /// string over whatever the user already had would be the worst possible answer.
+    /// </para>
+    /// <para>
+    /// A failure is reported in the pill rather than thrown. Another process can hold the
+    /// clipboard open, and the region has still been read — with the window coming up
+    /// the text is still there to copy by hand.
+    /// </para>
+    /// </remarks>
+    private void CopyRecognized(string text, IReadOnlyList<QrCode> codes)
+    {
+        var copied = string.IsNullOrWhiteSpace(text) && codes.Count > 0
+            ? string.Join(Environment.NewLine, codes.Select(code => code.Value))
+            : text;
+
+        if (string.IsNullOrWhiteSpace(copied))
+        {
+            return;
+        }
+
+        try
+        {
+            ClipboardText.Copy(copied);
         }
         catch (Exception exception)
         {

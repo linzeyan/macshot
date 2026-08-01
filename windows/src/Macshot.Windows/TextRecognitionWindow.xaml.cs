@@ -4,7 +4,6 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
-using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
 using Windows.System;
 using static Macshot.Windows.Services.Localization;
@@ -241,16 +240,9 @@ public sealed partial class TextRecognitionWindow : Window
 
     private void CopyText(string text, string done)
     {
-        var package = new DataPackage { RequestedOperation = DataPackageOperation.Copy };
-        package.SetText(text);
-
         try
         {
-            Clipboard.SetContent(package);
-
-            // macshot is a background tool the user will quit, and without this the
-            // text would go with it.
-            Clipboard.Flush();
+            ClipboardText.Copy(text);
             StatusText.Text = done;
         }
         catch (Exception exception)

@@ -267,6 +267,13 @@
                             Style="{StaticResource Unlabelled}"
                             Checked="Setting_Toggled"
                             Unchecked="Setting_Toggled" />
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="OCR &amp; QR Capture:" Style="{StaticResource RowLabel}" />
+                            <ComboBox
+                                x:Name="OcrActionBox"
+                                Width="240"
+                                SelectionChanged="Setting_SelectionChanged" />
+                        </StackPanel>
                         <CheckBox
                             x:Name="CaptureSoundCheck"
                             Content="Play sound on capture"

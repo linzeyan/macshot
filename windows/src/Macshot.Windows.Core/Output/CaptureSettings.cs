@@ -685,6 +685,15 @@ public sealed record CaptureSettings
     public string TranslateTargetLanguage { get; init; } = TranslationLanguages.DefaultCode;
 
     /// <summary>
+    /// What reading a region does with what it read — macshot's <c>ocrAction</c>.
+    /// </summary>
+    /// <remarks>
+    /// Both by default. The window is where a misread word is corrected before it is
+    /// pasted somewhere it matters, and the clipboard is what the reading was for.
+    /// </remarks>
+    public OcrAction OcrAction { get; init; } = OcrAction.ShowAndCopy;
+
+    /// <summary>
     /// The tools taken off the toolbar, by name. Empty means all of them are there.
     /// </summary>
     /// <remarks>

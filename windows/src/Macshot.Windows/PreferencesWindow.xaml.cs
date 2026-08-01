@@ -5,6 +5,7 @@ using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Input;
 using Macshot.Windows.Core.Localization;
 using Macshot.Windows.Core.Output;
+using Macshot.Windows.Core.Recognition;
 using Macshot.Windows.Core.Upload;
 using Macshot.Windows.Services;
 using Macshot.Windows.Toolbar;
@@ -885,6 +886,16 @@ public sealed partial class PreferencesWindow : Window
         };
 
         QuickCaptureEditorCheck.IsChecked = settings.QuickCaptureOpenEditor;
+
+        // macshot's three, in its order, so both is the first and the default.
+        OcrActionBox.ItemsSource = new List<string>
+        {
+            L("Show window + copy to clipboard"),
+            L("Show window only"),
+            L("Copy to clipboard only"),
+        };
+        OcrActionBox.SelectedIndex = (int)settings.OcrAction;
+
         CaptureSoundCheck.IsChecked = settings.PlayCaptureSound;
         RememberToolCheck.IsChecked = settings.RememberLastTool;
         ThumbnailCheck.IsChecked = settings.ShowThumbnail;
@@ -1252,6 +1263,7 @@ public sealed partial class PreferencesWindow : Window
             AutoSave = QuickCaptureBox.SelectedIndex is 0 or 2,
             CopyToClipboard = QuickCaptureBox.SelectedIndex is 1 or 2,
             QuickCaptureOpenEditor = QuickCaptureEditorCheck.IsChecked == true,
+            OcrAction = (OcrAction)Math.Max(OcrActionBox.SelectedIndex, 0),
             PlayCaptureSound = CaptureSoundCheck.IsChecked == true,
             RememberLastTool = RememberToolCheck.IsChecked == true,
             // No LastTool. The toolbar writes it as a capture ends, and this record is
