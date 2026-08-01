@@ -927,6 +927,30 @@ public sealed class CaptureController : IDisposable
         await ShowEditorAsync(await ImageLoader.LoadAsync(entry.Path));
     }
 
+    /// <summary>
+    /// Carries out the two things the history panel cannot do for itself, because both
+    /// need a window this keeps: the editor, and the pins.
+    /// </summary>
+    private async Task RunHistoryAsync(HistoryRequest request)
+    {
+        try
+        {
+            if (request.Action is HistoryAction.Open)
+            {
+                await ReopenAsync(request.Entry);
+                return;
+            }
+
+            await PinAsync(await ImageLoader.LoadAsync(request.Entry.Path));
+        }
+        catch (Exception exception)
+        {
+            // The panel drew this capture a moment ago, so a failure here is the file
+            // going away underneath it. Nothing to ask the user about.
+            DiagnosticLog.Write($"Could not reopen '{request.Entry.Path}': {exception.Message}");
+        }
+    }
+
     private static void OpenWithShell(string path)
     {
         try
@@ -954,8 +978,8 @@ public sealed class CaptureController : IDisposable
             return;
         }
 
-        var history = new HistoryWindow(_settings.Current.Theme);
-        history.OpenRequested += (_, entry) => Post(() => ReopenAsync(entry));
+        var history = new HistoryWindow(_settings);
+        history.ActionRequested += (_, request) => Post(() => RunHistoryAsync(request));
 
         history.Closed += (_, _) =>
         {
