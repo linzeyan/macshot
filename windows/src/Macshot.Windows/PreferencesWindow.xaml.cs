@@ -93,6 +93,16 @@ public sealed partial class PreferencesWindow : Window
     /// <summary>One tick box per tool, in the order the toolbar keeps them.</summary>
     private readonly Dictionary<AnnotationTool, CheckBox> _toolToggles = [];
 
+    /// <summary>
+    /// The capture commands in the order the tray menu will offer them.
+    /// </summary>
+    /// <remarks>
+    /// Held rather than read back off the rows, because the rows say "Capture Area" in
+    /// whatever language the window is in and turning those back into commands would mean
+    /// parsing this window's own display text.
+    /// </remarks>
+    private IReadOnlyList<CaptureMenuItem> _menuOrder = CaptureMenuItems.DefaultOrder;
+
     /// <summary>One tick box per hideable toolbar button, by identifier.</summary>
     private readonly Dictionary<string, CheckBox> _actionToggles = new(StringComparer.Ordinal);
 
@@ -579,6 +589,96 @@ public sealed partial class PreferencesWindow : Window
     private void Setting_LostFocus(object sender, RoutedEventArgs e) => Apply();
 
     /// <summary>Notes that something changed, and starts the wait before it is written.</summary>
+    /// <summary>
+    /// Draws the capture commands in their current order, one row each, with the arrows
+    /// that move them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Rebuilt from scratch on every move rather than swapping two rows in place. Six
+    /// rows are nothing to build, and the alternative is keeping the buttons' indices and
+    /// the two ends' greying in step with a list that has just changed underneath them.
+    /// </para>
+    /// <para>
+    /// Arrows rather than dragging, which is what macshot uses
+    /// (<c>SettingsWindowController.swift:1097</c>). A six-item list is quicker to
+    /// rearrange with two buttons than with a drag that has to be aimed, and it stays
+    /// usable for someone who is not using a mouse.
+    /// </para>
+    /// </remarks>
+    private void ShowMenuOrder()
+    {
+        MenuOrderRows.Children.Clear();
+
+        for (var index = 0; index < _menuOrder.Count; index++)
+        {
+            var row = new StackPanel
+            {
+                Orientation = Orientation.Horizontal,
+                Spacing = 8,
+                Height = 30,
+                VerticalAlignment = VerticalAlignment.Center,
+            };
+
+            row.Children.Add(new TextBlock
+            {
+                Text = L(CaptureMenuItems.Label(_menuOrder[index])),
+                FontSize = 13,
+                VerticalAlignment = VerticalAlignment.Center,
+                Width = 200,
+                TextTrimming = TextTrimming.CharacterEllipsis,
+            });
+
+            row.Children.Add(MoveButton("\uE70E", index, -1, L("Move up")));
+            row.Children.Add(MoveButton("\uE70D", index, 1, L("Move down")));
+            MenuOrderRows.Children.Add(row);
+        }
+    }
+
+    /// <summary>
+    /// One of the two arrows on a row, disabled at the end it cannot go past.
+    /// </summary>
+    /// <param name="glyph">
+    /// A Segoe Fluent Icons chevron, which is where WinUI keeps the arrows that mean
+    /// this. The tool strip's own icons are drawn for a dark toolbar rather than for a
+    /// settings page, so they are the wrong things to reuse here.
+    /// </param>
+    private Button MoveButton(string glyph, int index, int by, string tooltip)
+    {
+        var button = new Button
+        {
+            Content = new FontIcon { Glyph = glyph, FontSize = 12 },
+            IsEnabled = index + by >= 0 && index + by < _menuOrder.Count,
+            Padding = new Thickness(6, 2, 6, 2),
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        ToolTipService.SetToolTip(button, tooltip);
+        button.Click += (_, _) =>
+        {
+            _menuOrder = CaptureMenuItems.Move(_menuOrder, index, by);
+            ShowMenuOrder();
+            Apply();
+        };
+
+        return button;
+    }
+
+    /// <summary>
+    /// Puts the capture commands back in macshot's own order.
+    /// </summary>
+    /// <remarks>
+    /// The stored order is emptied rather than written out as the default, so a build
+    /// that adds a seventh command puts it where macshot puts it instead of at the end
+    /// of a list this window froze.
+    /// </remarks>
+    private void ResetMenuOrder_Click(object sender, RoutedEventArgs e)
+    {
+        _menuOrder = CaptureMenuItems.DefaultOrder;
+        ShowMenuOrder();
+        Apply();
+    }
+
     private void Apply()
     {
         if (_loading)
@@ -904,6 +1004,9 @@ public sealed partial class PreferencesWindow : Window
         };
         SaveActionBox.SelectedIndex = (int)settings.SaveAction;
         StandardResolutionCheck.IsChecked = settings.SaveAtStandardResolution;
+
+        _menuOrder = CaptureMenuItems.Resolve(settings.CaptureMenuOrder);
+        ShowMenuOrder();
 
         CaptureSoundCheck.IsChecked = settings.PlayCaptureSound;
         RememberToolCheck.IsChecked = settings.RememberLastTool;
@@ -1275,6 +1378,7 @@ public sealed partial class PreferencesWindow : Window
             OcrAction = (OcrAction)Math.Max(OcrActionBox.SelectedIndex, 0),
             SaveAction = (SaveAction)Math.Max(SaveActionBox.SelectedIndex, 0),
             SaveAtStandardResolution = StandardResolutionCheck.IsChecked == true,
+            CaptureMenuOrder = CaptureMenuItems.Store(_menuOrder),
             PlayCaptureSound = CaptureSoundCheck.IsChecked == true,
             RememberLastTool = RememberToolCheck.IsChecked == true,
             // No LastTool. The toolbar writes it as a capture ends, and this record is

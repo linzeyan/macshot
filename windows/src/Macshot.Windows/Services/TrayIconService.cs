@@ -142,6 +142,50 @@ public sealed class TrayIconService : IDisposable
         }
     }
 
+    /// <summary>
+    /// Puts the entries named by <paramref name="ids"/> into that order, in the places
+    /// they already occupy.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The slots stay where they are and only their contents are dealt out again, so
+    /// nothing else in the menu moves and no separator can end up in the wrong half. An
+    /// id that is not in the menu is ignored, and an entry not named keeps its own slot.
+    /// </para>
+    /// <para>
+    /// Rearranged rather than rebuilt because the entries carry their keyboard shortcuts
+    /// in their text by then — rebuilding the menu would either lose those or need every
+    /// shortcut applied again afterwards, in the right order, every time the order
+    /// changed.
+    /// </para>
+    /// </remarks>
+    public void SetMenuItemOrder(IReadOnlyList<int> ids)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+
+        var slots = new List<int>(ids.Count);
+        foreach (var id in ids)
+        {
+            var index = _menuItems.FindIndex(entry =>
+                entry.Text is not null && entry.Submenu is null && entry.Id == id);
+
+            if (index >= 0)
+            {
+                slots.Add(index);
+            }
+        }
+
+        // The slots in the order they appear in the menu, so the first named entry lands
+        // in the topmost of them however the ids were given.
+        var ordered = slots.Select(slot => _menuItems[slot]).ToList();
+        slots.Sort();
+
+        for (var position = 0; position < slots.Count; position++)
+        {
+            _menuItems[slots[position]] = ordered[position];
+        }
+    }
+
     public void AddSeparator() => _menuItems.Add(new MenuEntry(0, null, null));
 
     public void Dispose()

@@ -555,6 +555,16 @@ public sealed record CaptureSettings
     /// </remarks>
     public bool CaptureDelayChosen { get; init; }
 
+    /// <summary>
+    /// The order the six capture commands stand in at the top of the tray menu.
+    /// </summary>
+    /// <remarks>
+    /// Empty until someone rearranges them, and then it is the whole list rather than the
+    /// part that moved — see <see cref="CaptureMenuItems.Resolve"/>, which repairs
+    /// whatever it is given. macshot's <c>captureMenuItemOrder</c>.
+    /// </remarks>
+    public IReadOnlyList<string> CaptureMenuOrder { get; init; } = [];
+
     /// <summary>How many past captures are kept. Zero turns history off entirely.</summary>
     public int HistorySize { get; init; } = 20;
 

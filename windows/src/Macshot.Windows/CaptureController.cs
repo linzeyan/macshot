@@ -243,6 +243,11 @@ public sealed class CaptureController : IDisposable
         _trayIcon.CommandInvoked += OnTrayCommandInvoked;
         _trayIcon.DefaultActionInvoked += (_, _) => Post(BeginAreaCaptureHonouringDelayAsync);
 
+        // The six above are macshot's default order; this deals them out again in
+        // whatever order the user has since put them in.
+        ApplyCaptureMenuOrder(_settings.Current);
+        _settings.Changed += (_, settings) => ApplyCaptureMenuOrder(settings);
+
         // After the menu exists, because applying a shortcut also writes it into the
         // menu entry that names it.
         ApplyHotkeys(_settings.Current);
@@ -252,6 +257,28 @@ public sealed class CaptureController : IDisposable
         // window, is something the user would have to be told how to do.
         _settings.Changed += (_, settings) => ApplyHotkeys(settings);
     }
+
+    /// <summary>
+    /// Puts the capture commands at the top of the menu in the order the settings say.
+    /// </summary>
+    /// <remarks>
+    /// Re-applied on every save rather than read once, so the settings page's Up and Down
+    /// change the menu while it is still open — which is the only way to see what was
+    /// changed, a tray menu having no preview.
+    /// </remarks>
+    private void ApplyCaptureMenuOrder(CaptureSettings settings) =>
+        _trayIcon.SetMenuItemOrder(
+            [.. CaptureMenuItems.Resolve(settings.CaptureMenuOrder).Select(CommandOf)]);
+
+    private static int CommandOf(CaptureMenuItem item) => item switch
+    {
+        CaptureMenuItem.CaptureArea => CommandCaptureArea,
+        CaptureMenuItem.CaptureScreen => CommandCaptureAllScreens,
+        CaptureMenuItem.CaptureOcr => CommandCaptureText,
+        CaptureMenuItem.QuickCapture => CommandQuickCapture,
+        CaptureMenuItem.CaptureLastArea => CommandCaptureLastArea,
+        _ => CommandScrollCapture,
+    };
 
     /// <summary>
     /// Claims the configured shortcuts, and says so once when Windows refuses any of

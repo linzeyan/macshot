@@ -440,6 +440,32 @@
                         </StackPanel>
                     </StackPanel>
 
+                    <!-- macshot's own section, after Output and before nothing: it is the
+                         last thing on its Capture tab (SettingsWindowController.swift:1024).
+                         The rows are built in code from the same list the tray menu is
+                         dealt from, so a command added later appears here without this
+                         markup being touched. -->
+                    <StackPanel Style="{StaticResource Section}">
+                        <TextBlock Text="Menu Bar Order" Style="{StaticResource SectionHeading}" />
+                        <TextBlock
+                            Text="Choose the order of capture actions in the macshot menu bar menu."
+                            Style="{StaticResource Caption}" />
+                        <Border
+                            x:Name="MenuOrderBox"
+                            BorderThickness="1"
+                            BorderBrush="{ThemeResource CardStrokeColorDefaultBrush}"
+                            CornerRadius="6"
+                            Padding="8,6,8,6"
+                            HorizontalAlignment="Left"
+                            MinWidth="300">
+                            <StackPanel x:Name="MenuOrderRows" Spacing="0" />
+                        </Border>
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="" Style="{StaticResource RowLabel}" />
+                            <Button Content="Reset to default" FontSize="13" Click="ResetMenuOrder_Click" />
+                        </StackPanel>
+                    </StackPanel>
+
                     <!-- No translation section. macshot only builds one when Apple's
                          on-device translation is available, and its only control is the
                          choice between that and Google (SettingsWindowController.swift:994).
