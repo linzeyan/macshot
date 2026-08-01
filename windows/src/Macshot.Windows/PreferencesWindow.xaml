@@ -347,6 +347,13 @@
                     <StackPanel Style="{StaticResource Section}">
                         <TextBlock Text="Output" Style="{StaticResource SectionHeading}" />
                         <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Save action:" Style="{StaticResource RowLabel}" />
+                            <ComboBox
+                                x:Name="SaveActionBox"
+                                Width="240"
+                                SelectionChanged="Setting_SelectionChanged" />
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Save folder:" Style="{StaticResource RowLabel}" />
                             <TextBox x:Name="DirectoryBox" FontSize="13" Width="240" PlaceholderText="Pictures\Macshot" IsReadOnly="True" />
                             <Button Content="Browse…" FontSize="13" Click="Browse_Click" />

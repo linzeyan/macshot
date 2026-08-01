@@ -244,8 +244,12 @@ public sealed partial class PinWindow : Window
     {
         await RunAsync("Save failed", async () =>
         {
-            var path = await ImageDelivery.SaveAsync(_frame, _settings.Current);
-            await ShowMessageAsync("Saved", path);
+            // Null means the user dismissed the dialog they asked for, which is not a
+            // failure and not a save: nothing to report either way.
+            if (await SavePrompt.SaveAsync(this, _frame, _settings.Current) is { } path)
+            {
+                await ShowMessageAsync("Saved", path);
+            }
         });
     }
 

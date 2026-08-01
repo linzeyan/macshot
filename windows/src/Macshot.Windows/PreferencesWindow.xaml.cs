@@ -896,6 +896,14 @@ public sealed partial class PreferencesWindow : Window
         };
         OcrActionBox.SelectedIndex = (int)settings.OcrAction;
 
+        // macshot's two, in its order, so the folder is the first and the default.
+        SaveActionBox.ItemsSource = new List<string>
+        {
+            L("Save to default folder"),
+            L("Ask where to save"),
+        };
+        SaveActionBox.SelectedIndex = (int)settings.SaveAction;
+
         CaptureSoundCheck.IsChecked = settings.PlayCaptureSound;
         RememberToolCheck.IsChecked = settings.RememberLastTool;
         ThumbnailCheck.IsChecked = settings.ShowThumbnail;
@@ -1264,6 +1272,7 @@ public sealed partial class PreferencesWindow : Window
             CopyToClipboard = QuickCaptureBox.SelectedIndex is 1 or 2,
             QuickCaptureOpenEditor = QuickCaptureEditorCheck.IsChecked == true,
             OcrAction = (OcrAction)Math.Max(OcrActionBox.SelectedIndex, 0),
+            SaveAction = (SaveAction)Math.Max(SaveActionBox.SelectedIndex, 0),
             PlayCaptureSound = CaptureSoundCheck.IsChecked == true,
             RememberLastTool = RememberToolCheck.IsChecked == true,
             // No LastTool. The toolbar writes it as a capture ends, and this record is

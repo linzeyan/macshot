@@ -27,16 +27,67 @@ namespace Macshot.Windows.Services;
 internal static class SavePrompt
 {
     /// <summary>
-    /// Asks where to put it and writes it there. Answers the path, or null if the
-    /// dialog was dismissed — which means the capture is still in hand, not thrown away.
+    /// Saves the way the preferences say to: into the folder they name, or wherever the
+    /// user picks. Answers the path, or null when the dialog was dismissed — which means
+    /// the capture is still in hand, not thrown away.
     /// </summary>
-    public static async Task<string?> WriteAsync(
+    /// <remarks>
+    /// Every Save in the app comes through here, so macshot's <c>saveAction</c> cannot be
+    /// honoured by some of the buttons and ignored by the rest. The Save As beside them
+    /// calls <see cref="WriteAsync(Window, CapturedFrame, CaptureSettings, string?)"/>
+    /// directly, because that one asks whatever the setting says.
+    /// </remarks>
+    public static Task<string?> SaveAsync(
         Window owner,
         CapturedFrame frame,
         CaptureSettings settings,
         string? windowTitle = null)
     {
         ArgumentNullException.ThrowIfNull(owner);
+        return SaveAsync(WindowNative.GetWindowHandle(owner), frame, settings, windowTitle);
+    }
+
+    /// <param name="owner">
+    /// The window the dialog belongs to. A capture delivered straight from the hotkey has
+    /// none — the overlay is dismissed before delivery — so the controller passes its
+    /// message window, which is a real handle even though nothing is drawn in it.
+    /// </param>
+    /// <inheritdoc cref="SaveAsync(Window, CapturedFrame, CaptureSettings, string?)"/>
+    public static async Task<string?> SaveAsync(
+        IntPtr owner,
+        CapturedFrame frame,
+        CaptureSettings settings,
+        string? windowTitle = null)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+        ArgumentNullException.ThrowIfNull(settings);
+
+        return settings.SaveAction is SaveAction.AskWhereToSave
+            ? await WriteAsync(owner, frame, settings, windowTitle)
+            : await ImageDelivery.SaveAsync(frame, settings, windowTitle);
+    }
+
+    /// <summary>
+    /// Asks where to put it and writes it there. Answers the path, or null if the
+    /// dialog was dismissed — which means the capture is still in hand, not thrown away.
+    /// </summary>
+    public static Task<string?> WriteAsync(
+        Window owner,
+        CapturedFrame frame,
+        CaptureSettings settings,
+        string? windowTitle = null)
+    {
+        ArgumentNullException.ThrowIfNull(owner);
+        return WriteAsync(WindowNative.GetWindowHandle(owner), frame, settings, windowTitle);
+    }
+
+    /// <inheritdoc cref="WriteAsync(Window, CapturedFrame, CaptureSettings, string?)"/>
+    public static async Task<string?> WriteAsync(
+        IntPtr owner,
+        CapturedFrame frame,
+        CaptureSettings settings,
+        string? windowTitle = null)
+    {
         ArgumentNullException.ThrowIfNull(frame);
         ArgumentNullException.ThrowIfNull(settings);
 
@@ -48,7 +99,7 @@ internal static class SavePrompt
 
         // A desktop app has no CoreWindow for the picker to belong to, so it is given the
         // window it was opened from. Without this the call throws rather than opening.
-        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(owner));
+        InitializeWithWindow.Initialize(picker, owner);
 
         // The preference's format first, so the top entry is the one the session is
         // already set to.

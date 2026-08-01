@@ -1113,8 +1113,12 @@ public sealed partial class EditorWindow : Window
             await AnnotationCanvas.FlushAsync();
             if (AnnotationCanvas.ToFrame() is { } finished)
             {
-                var path = await ImageDelivery.SaveAsync(finished, _settings.Current);
-                HintText.Text = $"Saved to {path}";
+                // Null means the user dismissed the dialog they asked for, which is not a
+                // failure and not a save: the hint is left saying whatever it said.
+                if (await SavePrompt.SaveAsync(this, finished, _settings.Current) is { } path)
+                {
+                    HintText.Text = $"Saved to {path}";
+                }
             }
         }
         catch (Exception exception)

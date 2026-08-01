@@ -63,6 +63,17 @@ public sealed record CaptureSettings
     /// </summary>
     public string? SaveDirectory { get; init; }
 
+    /// <summary>
+    /// Whether Save writes into <see cref="SaveDirectory"/> or asks where to put it.
+    /// </summary>
+    /// <remarks>
+    /// macshot's <c>saveAction</c>. It governs every Save in the app — the one delivery
+    /// performs with nobody pressing anything, the toolbar's, the preview panel's, the
+    /// pin's and the editor's — because a setting half the buttons honoured would be
+    /// worse than none. The Save As beside them still asks whatever this says.
+    /// </remarks>
+    public SaveAction SaveAction { get; init; } = SaveAction.SaveToFolder;
+
     public string FilenameTemplate { get; init; } = Output.FilenameTemplate.Default;
 
     /// <summary>

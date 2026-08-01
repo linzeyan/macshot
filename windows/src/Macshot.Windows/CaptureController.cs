@@ -805,7 +805,11 @@ public sealed class CaptureController : IDisposable
                 break;
 
             case CaptureOutcome.Save:
-                await ImageDelivery.SaveAsync(frame, settings, completion.WindowTitle);
+                await SavePrompt.SaveAsync(
+                    _messageWindow.Handle,
+                    frame,
+                    settings,
+                    completion.WindowTitle);
                 break;
 
 #if !OFFLINE
@@ -863,7 +867,10 @@ public sealed class CaptureController : IDisposable
 
         if (settings.AutoSave)
         {
-            await ImageDelivery.SaveAsync(frame, settings, windowTitle);
+            // Through the prompt rather than straight to the folder, because "Ask where
+            // to save" has to reach the capture that is saved without anyone pressing
+            // Save — which is most of them.
+            await SavePrompt.SaveAsync(_messageWindow.Handle, frame, settings, windowTitle);
         }
 
         // Once for the capture rather than once per destination: saving and copying the
