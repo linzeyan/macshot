@@ -3,21 +3,38 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     Title="Macshot Scroll Capture">
-    <Grid Background="#EE202020" Padding="12" ColumnDefinitions="*,Auto" ColumnSpacing="12">
-        <StackPanel VerticalAlignment="Center" Spacing="2">
+    <!-- macshot's bar: 8 of padding round a 36-tall row — ScrollCaptureHUDView.swift:18. -->
+    <Grid Background="#EE202020" Padding="8" ColumnDefinitions="*,Auto" ColumnSpacing="8">
+        <StackPanel VerticalAlignment="Center" Spacing="1">
             <!-- Foreground is set rather than inherited: the panel is dark whatever
-                 the system theme is, so a light-theme default would be invisible. -->
-            <TextBlock x:Name="ProgressText" Foreground="#FFFFFF" Text="Scrolling..." />
+                 the system theme is, so a light-theme default would be invisible.
+                 12 medium, which is macshot's info line — :46. -->
+            <TextBlock
+                x:Name="ProgressText"
+                Foreground="#FFFFFF"
+                FontSize="12"
+                FontWeight="Medium"
+                Text="Scrolling..." />
             <TextBlock
                 x:Name="StopHintText"
                 Foreground="#B0B0B0"
-                FontSize="12"
+                FontSize="10"
                 Text="Esc or Stop keeps what has been captured so far" />
         </StackPanel>
 
+        <!-- 56 × 24 at corner 12 in 12 semibold — :86–102. There is deliberately no
+             auto-scroll toggle beside it: macshot offers one because its capture can
+             also be scrolled by hand, and this port always drives the wheel itself. -->
         <Button
             Grid.Column="1"
             Content="Stop"
+            Width="56"
+            Height="24"
+            Padding="0"
+            MinWidth="0"
+            CornerRadius="12"
+            FontSize="12"
+            FontWeight="SemiBold"
             VerticalAlignment="Center"
             Click="Stop_Click" />
     </Grid>

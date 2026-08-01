@@ -1,12 +1,15 @@
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
+using Macshot.Windows.Core.Output;
 using Macshot.Windows.Rendering;
 using Macshot.Windows.Services;
 using Macshot.Windows.Toolbar;
+using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
+using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Media;
 
 // Imported rather than written out at each use site: inside namespace Macshot.Windows
@@ -46,24 +49,57 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// </summary>
     private const double OptionsRowHeight = 34;
 
+    /// <summary>
+    /// The gap between two controls on the row. macshot's 4 — <c>ToolOptionsRowView.swift:305</c>
+    /// and everywhere else it advances past a control. WinUI's own comfortable spacing is
+    /// two and a half times that, and on a row this dense it is most of why the port's
+    /// options bar was wider than the same bar on macOS.
+    /// </summary>
+    private const double OptionGap = 4;
+
+    /// <summary>The name in front of a slider — 9.5 medium at the icon colour's 0.4, <c>:298–300</c>.</summary>
+    private const double OptionLabelSize = 9.5;
+
+    /// <summary>The number after a slider — 10 medium at 0.6, <c>:325–328</c>.</summary>
+    private const double OptionValueSize = 10;
+
+    /// <summary>What the width slider spans when it is a stroke rather than a font size.</summary>
+    private const double MinStroke = 1;
+
+    private const double MaxStroke = 32;
+
     private readonly Canvas _surface = new();
     private readonly ToolbarStrip _tools = new(Orientation.Horizontal);
     private readonly ToolbarStrip _actions = new(Orientation.Vertical);
     private readonly Border _optionsRow;
     private readonly StackPanel _optionsContent;
 
-    private readonly ColorPicker _colorPicker = new() { IsAlphaEnabled = true, RequestedTheme = ElementTheme.Dark };
+    private readonly ColorPickerView _colorPicker = new();
     private readonly EffectsPickerView _effectsPicker = new();
-    private readonly TextBlock _sizeLabel = new() { VerticalAlignment = VerticalAlignment.Center };
-    private readonly Slider _size = new() { Width = 120, Minimum = 1, Maximum = 32, StepFrequency = 1 };
-    private readonly ComboBox _lineStyle = new() { VerticalAlignment = VerticalAlignment.Center };
-    private readonly TextBlock _cornerLabel = new() { Text = "Corners", VerticalAlignment = VerticalAlignment.Center };
-    private readonly Slider _cornerRadius = new() { Width = 90, Minimum = 0, Maximum = 64, StepFrequency = 1 };
-    private readonly ComboBox _arrowStyle = new() { VerticalAlignment = VerticalAlignment.Center };
-    private readonly ComboBox _smoothing = new() { VerticalAlignment = VerticalAlignment.Center };
-    private readonly ComboBox _censorMode = new() { VerticalAlignment = VerticalAlignment.Center };
+    private readonly TextBlock _sizeLabel = OptionLabel();
+    private readonly Slider _size = OptionSlider(100, MinStroke, MaxStroke);
+    private readonly TextBlock _sizeValue = OptionValue(28);
+    private readonly StyleSegments _lineStyle = new();
+    private readonly TextBlock _cornerLabel = OptionLabel("Corners");
+    private readonly Slider _cornerRadius = OptionSlider(84, 0, 64);
+    private readonly TextBlock _cornerValue = OptionValue(28);
+    private readonly StyleSegments _arrowStyle = new();
+    private readonly StyleSegments _smoothing = new();
+    private readonly StyleSegments _censorMode = new();
+    private readonly Button _font = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 10, Padding = new Thickness(8, 2, 8, 2) };
+    private readonly FontPickerView _fontChoices = new();
+    private readonly StyleSegments _weight = new();
+    private readonly ToggleSwatch _textFill = new("Fill");
+    private readonly ToggleSwatch _textOutline = new("Outline");
     private readonly Button _stamp = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly GridView _stampChoices = new() { MaxWidth = 240, SelectionMode = ListViewSelectionMode.Single, RequestedTheme = ElementTheme.Dark };
+
+    /// <summary>
+    /// The hairlines between groups of controls, each paired with the group it introduces
+    /// so it can go when that group does. macshot's separator — 1 wide, 6 clear either
+    /// side, at the icon colour's tenth — <c>ToolOptionsRowView.swift:288–293</c>.
+    /// </summary>
+    private readonly List<(Border Rule, FrameworkElement[] Group)> _optionGroups = [];
 
     private AnnotationEditor? _editor;
     private SettingsStore? _settings;
@@ -98,7 +134,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         _optionsContent = new StackPanel
         {
             Orientation = Orientation.Horizontal,
-            Spacing = 10,
+            Spacing = OptionGap,
             VerticalAlignment = VerticalAlignment.Center,
         };
 
@@ -223,7 +259,11 @@ public sealed partial class AnnotationToolbarView : UserControl
         RepaintChrome();
 
         LoadStyle();
+        _colorPicker.LoadCustomColors(settings.Current.CustomColors);
         RefreshStrips();
+
+        _colorPicker.CustomColorsChanged += (_, saved) => Remember(
+            current => current with { CustomColors = saved });
 
         _colorPicker.ColorChanged += (_, _) => ApplyStyle();
         _effectsPicker.Changed += (_, options) =>
@@ -233,17 +273,27 @@ public sealed partial class AnnotationToolbarView : UserControl
             RefreshStrips();
             EffectsChanged?.Invoke(this, options);
         };
-        _size.ValueChanged += (_, _) => ApplyStyle();
+        _size.ValueChanged += (_, _) =>
+        {
+            ShowSliderValue(_size, _sizeValue);
+            ApplyStyle();
+        };
+
+        _cornerRadius.ValueChanged += (_, _) =>
+        {
+            ShowSliderValue(_cornerRadius, _cornerValue);
+            ApplyStyle();
+        };
+
         _censorMode.SelectionChanged += (_, _) => ApplyStyle();
         _lineStyle.SelectionChanged += (_, _) => ApplyStyle();
         _arrowStyle.SelectionChanged += (_, _) => ApplyStyle();
-        _cornerRadius.ValueChanged += (_, _) => ApplyStyle();
         _stampChoices.SelectionChanged += StampChoice_Changed;
-        _smoothing.SelectionChanged += (_, _) =>
+        _smoothing.SelectionChanged += (_, index) =>
         {
-            if (!_isLoadingStyle && _smoothing.SelectedIndex >= 0 && _editor is { } bound)
+            if (!_isLoadingStyle && index >= 0 && _editor is { } bound)
             {
-                bound.Smoothing = (PencilSmoothing)_smoothing.SelectedIndex;
+                bound.Smoothing = (PencilSmoothing)index;
             }
         };
     }
@@ -327,11 +377,19 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// Opacity is a property of the mark rather than of the pixel, and the pixel has no
     /// opinion about it: a screenshot is opaque everywhere.
     /// </remarks>
-    public void ApplyPickedColor(AnnotationColor sampled) => _colorPicker.Color = Color.FromArgb(
-        _colorPicker.Color.A,
-        sampled.Red,
-        sampled.Green,
-        sampled.Blue);
+    public void ApplyPickedColor(AnnotationColor sampled)
+    {
+        _colorPicker.Color = Color.FromArgb(
+            _colorPicker.Color.A,
+            sampled.Red,
+            sampled.Green,
+            sampled.Blue);
+
+        // Setting the picker's colour is deliberately silent — that is what lets
+        // LoadStyle fill it without writing a half-built style back — so the one place
+        // that sets it and does mean a change says so itself.
+        ApplyStyle();
+    }
 
     /// <summary>
     /// Remembers what the options row was left set to, for next time. A failure is
@@ -516,11 +574,38 @@ public sealed partial class AnnotationToolbarView : UserControl
             return;
         }
 
-        var flyout = new Flyout { Content = _colorPicker };
+        // Chromeless: the picker paints its own dark slab at macshot's exact size, and
+        // the presenter's own 12 of padding and light background would sit around it as
+        // a second popover.
+        var bare = new Style(typeof(FlyoutPresenter));
+        bare.Setters.Add(new Setter(FlyoutPresenter.PaddingProperty, new Thickness(0)));
+        bare.Setters.Add(new Setter(FlyoutPresenter.MinWidthProperty, 0d));
+        bare.Setters.Add(new Setter(FlyoutPresenter.BackgroundProperty, ToolbarPalette.BackgroundBrush));
 
         // Detached from any previous anchor first: a Flyout can only be shown from one
         // place at a time, and the strip rebuilds its buttons.
-        flyout.ShowAt(anchor);
+        new Flyout { Content = _colorPicker, FlyoutPresenterStyle = bare }.ShowAt(anchor);
+    }
+
+    /// <summary>
+    /// Writes a change back to the settings file. A failure is swallowed for the reason
+    /// every other write from the toolbar is: the user is mid-capture, there is no window
+    /// to report into, and the cost is that the change comes back next time.
+    /// </summary>
+    private void Remember(Func<CaptureSettings, CaptureSettings> change)
+    {
+        if (_settings is not { } settings)
+        {
+            return;
+        }
+
+        try
+        {
+            settings.Save(change(settings.Current).Normalized());
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+        }
     }
 
     /// <summary>
@@ -625,9 +710,19 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// </remarks>
     private void ShowOptionsFor(AnnotationTool tool)
     {
-        _sizeLabel.Visibility = Show(AnnotationToolOptions.UsesSize(tool));
-        _size.Visibility = _sizeLabel.Visibility;
+        var sizes = Show(AnnotationToolOptions.UsesSize(tool));
+        _sizeLabel.Visibility = sizes;
+        _size.Visibility = sizes;
+        _sizeValue.Visibility = sizes;
         _sizeLabel.Text = SizeLabelFor(tool);
+
+        // A stroke is measured in pixels; an extent is a number of its own, which is what
+        // macshot shows for the loupe. The wider box is that number's — it can reach three
+        // digits where a stroke cannot.
+        var extent = AnnotationToolOptions.SizeMeaning(tool) == AnnotationSizeMeaning.Extent;
+        _sizeValue.Width = extent ? 32 : 28;
+        _sizeValue.Tag = extent ? string.Empty : "px";
+        SyncSizeSlider(tool);
 
         _lineStyle.Visibility = Show(AnnotationToolOptions.UsesLineStyle(tool));
         _arrowStyle.Visibility = Show(AnnotationToolOptions.UsesArrowStyle(tool));
@@ -635,17 +730,85 @@ public sealed partial class AnnotationToolbarView : UserControl
         var rounds = Show(AnnotationToolOptions.UsesCornerRadius(tool));
         _cornerLabel.Visibility = rounds;
         _cornerRadius.Visibility = rounds;
+        _cornerValue.Visibility = rounds;
         _stamp.Visibility = Show(AnnotationToolOptions.UsesStamp(tool));
         _smoothing.Visibility = Show(AnnotationEditor.IsFreeform(tool));
         _censorMode.Visibility = Show(AnnotationToolOptions.UsesCensorMode(tool));
 
+        var typesetting = Show(tool == AnnotationTool.Text);
+        _font.Visibility = typesetting;
+        _weight.Visibility = typesetting;
+        _textFill.Visibility = typesetting;
+        _textOutline.Visibility = typesetting;
+
+        // A group's hairline follows the group, and the first one showing loses its rule
+        // so the row never opens with a line hanging off its left edge.
+        var seen = false;
+        foreach (var (rule, group) in _optionGroups)
+        {
+            var showing = group.Any(control => control.Visibility == Visibility.Visible);
+            rule.Visibility = Show(showing && seen);
+            seen |= showing;
+        }
+
         // The row itself goes when it would be empty, rather than sitting under the
         // tools as a bar of nothing.
-        var anyOption = _optionsContent.Children
-            .OfType<FrameworkElement>()
-            .Any(child => child.Visibility == Visibility.Visible);
+        _optionsRow.Visibility = Show(seen);
+    }
 
-        _optionsRow.Visibility = Show(anyOption);
+    /// <summary>
+    /// Writes a slider's number into the box after it, in whatever unit that box carries.
+    /// </summary>
+    /// <remarks>
+    /// The readout is the difference between a width that can be set and a width that can
+    /// be *restored*: without it a stroke is dragged until it looks right and there is no
+    /// way back to the one used on the last capture.
+    /// </remarks>
+    private static void ShowSliderValue(Slider slider, TextBlock readout) =>
+        readout.Text = $"{(int)Math.Round(slider.Value)}{readout.Tag as string}";
+
+    /// <summary>
+    /// Points the one size slider at whichever number the tool in hand is sized by.
+    /// </summary>
+    /// <remarks>
+    /// The text tool is sized by <see cref="AnnotationStyle.FontSize"/> and everything
+    /// else by its stroke width, which is the whole reason the two are separate: a label
+    /// set to 42 must not leave the next arrow 42 pixels thick. Reloading rather than
+    /// rescaling, so switching to the text tool and back returns both to what they were.
+    /// </remarks>
+    private void SyncSizeSlider(AnnotationTool tool)
+    {
+        if (_editor is not { } editor)
+        {
+            return;
+        }
+
+        var wasLoading = _isLoadingStyle;
+        _isLoadingStyle = true;
+        try
+        {
+            if (tool == AnnotationTool.Text)
+            {
+                _size.Minimum = AnnotationStyle.MinFontSize;
+                _size.Maximum = AnnotationStyle.MaxFontSize;
+                _size.Value = Math.Clamp(
+                    editor.Style.FontSize,
+                    AnnotationStyle.MinFontSize,
+                    AnnotationStyle.MaxFontSize);
+            }
+            else
+            {
+                _size.Minimum = MinStroke;
+                _size.Maximum = MaxStroke;
+                _size.Value = Math.Clamp(editor.Style.StrokeWidth, MinStroke, MaxStroke);
+            }
+        }
+        finally
+        {
+            _isLoadingStyle = wasLoading;
+        }
+
+        ShowSliderValue(_size, _sizeValue);
     }
 
     /// <summary>
@@ -655,28 +818,84 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// </summary>
     private void RepaintChrome()
     {
-        _sizeLabel.Foreground = ToolbarPalette.IconBrush();
-        _cornerLabel.Foreground = ToolbarPalette.IconBrush();
+        _sizeLabel.Foreground = ToolbarPalette.IconBrush(0.4);
+        _cornerLabel.Foreground = ToolbarPalette.IconBrush(0.4);
+        _sizeValue.Foreground = ToolbarPalette.IconBrush(0.6);
+        _cornerValue.Foreground = ToolbarPalette.IconBrush(0.6);
     }
+
+    /// <summary>The name in front of a slider, at macshot's size, weight and opacity.</summary>
+    private static TextBlock OptionLabel(string text = "") => new()
+    {
+        Text = text,
+        FontSize = OptionLabelSize,
+        FontWeight = FontWeights.Medium,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
+    /// <summary>
+    /// The number after a slider: right-aligned in a fixed box with tabular figures, so
+    /// the controls after it do not shuffle sideways as the slider is dragged.
+    /// </summary>
+    private static TextBlock OptionValue(double width, string unit = "px")
+    {
+        var value = new TextBlock
+        {
+            Width = width,
+            Tag = unit,
+            FontSize = OptionValueSize,
+            FontWeight = FontWeights.Medium,
+            TextAlignment = TextAlignment.Right,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        Typography.SetNumeralAlignment(value, FontNumeralAlignment.Tabular);
+        return value;
+    }
+
+    private static Slider OptionSlider(double width, double minimum, double maximum) => new()
+    {
+        Width = width,
+        Height = 20,
+        Minimum = minimum,
+        Maximum = maximum,
+        StepFrequency = 1,
+        VerticalAlignment = VerticalAlignment.Center,
+
+        // The number lives in its own box after the slider, at macshot's size and weight.
+        // WinUI's own tooltip appears only while the thumb is held, which is exactly when
+        // the value is least needed.
+        IsThumbToolTipEnabled = false,
+    };
 
     private void BuildOptionsRow()
     {
         RepaintChrome();
-        _size.VerticalAlignment = VerticalAlignment.Center;
-        _cornerRadius.VerticalAlignment = VerticalAlignment.Center;
 
         ToolTipService.SetToolTip(_arrowStyle, "Arrow ends");
         ToolTipService.SetToolTip(_stamp, "Stamp");
 
+        // Drawn rather than named: macshot's segments carry a picture of the mark you are
+        // about to make, which is both quicker to read than "Dashed" and one click rather
+        // than a combo's two.
+        _lineStyle.SetSegments([.. Enum.GetValues<LineStyle>().Select(style =>
+            new StyleSegment(StylePreviews.Line(style), null, StylePreviews.LineSegmentWidth))]);
+
+        _arrowStyle.SetSegments([.. Enum.GetValues<ArrowStyle>().Select(style =>
+            new StyleSegment(StylePreviews.Arrow(style), null, StylePreviews.ArrowSegmentWidth))]);
+
         // On the toolbar as well as in Preferences, because it is a choice made while
-        // drawing — macshot puts it here, next to the pencil, and nowhere else.
+        // drawing — macshot puts it here, next to the pencil, and nowhere else. Worded,
+        // as macshot's is: the difference between two smoothings is invisible at 22 points.
         ToolTipService.SetToolTip(_smoothing, "Freehand smoothing");
-        _smoothing.ItemsSource = Enum.GetValues<PencilSmoothing>().Select(mode => mode.ToString()).ToList();
+        _smoothing.SetSegments([.. Enum.GetValues<PencilSmoothing>().Select(mode =>
+            new StyleSegment(null, mode.ToString(), 0))]);
 
         // The censor tool's only option. There is deliberately no strength beside it:
         // how much of a redaction survives is not a thing to leave to a slider.
         ToolTipService.SetToolTip(_censorMode, "How the region is covered");
-        _censorMode.ItemsSource = Enum.GetValues<CensorMode>().Select(mode => mode.ToString()).ToList();
+        _censorMode.SetSegments([.. Enum.GetValues<CensorMode>().Select(mode =>
+            new StyleSegment(null, mode.ToString(), 0))]);
 
         // Populated from StampGlyph.Choices so the picker and the renderer cannot offer
         // different sets.
@@ -684,15 +903,94 @@ public sealed partial class AnnotationToolbarView : UserControl
         _stamp.Content = StampEmoji;
         _stamp.Flyout = new Flyout { Content = _stampChoices };
 
-        _optionsContent.Children.Add(_sizeLabel);
-        _optionsContent.Children.Add(_size);
-        _optionsContent.Children.Add(_lineStyle);
-        _optionsContent.Children.Add(_cornerLabel);
-        _optionsContent.Children.Add(_cornerRadius);
-        _optionsContent.Children.Add(_arrowStyle);
-        _optionsContent.Children.Add(_smoothing);
-        _optionsContent.Children.Add(_censorMode);
-        _optionsContent.Children.Add(_stamp);
+        // The label's own four controls. macshot puts them on this row and nowhere else,
+        // which is right: a face and a fill are chosen while looking at the label, not in
+        // a settings window opened afterwards.
+        ToolTipService.SetToolTip(_font, "Typeface");
+        _font.Flyout = new Flyout { Content = _fontChoices };
+        _fontChoices.SelectionChanged += FontChoice_Changed;
+        _weight.SetSegments([new StyleSegment(null, "Regular", 0), new StyleSegment(null, "Bold", 0)]);
+        _weight.SelectionChanged += (_, _) => ApplyStyle();
+        _textFill.Toggled += (_, _) => ApplyStyle();
+        _textOutline.Toggled += (_, _) => ApplyStyle();
+        _textFill.SwatchPressed += (_, _) => PickSwatchColor(_textFill);
+        _textOutline.SwatchPressed += (_, _) => PickSwatchColor(_textOutline);
+
+        AddGroup(_sizeLabel, _size, _sizeValue);
+        AddGroup(_lineStyle);
+        AddGroup(_arrowStyle);
+        AddGroup(_cornerLabel, _cornerRadius, _cornerValue);
+        AddGroup(_smoothing);
+        AddGroup(_censorMode);
+        AddGroup(_font, _weight);
+        AddGroup(_textFill, _textOutline);
+        AddGroup(_stamp);
+    }
+
+    private void FontChoice_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_fontChoices.SelectedItem is null)
+        {
+            return;
+        }
+
+        _font.Content = FontPickerView.FamilyOf(_fontChoices.SelectedItem) is { Length: > 0 } family
+            ? family
+            : FontPickerView.SystemFace;
+
+        _font.Flyout?.Hide();
+        ApplyStyle();
+    }
+
+    /// <summary>
+    /// Opens the colour picker over a fill or outline swatch, and hands what is chosen
+    /// back to that swatch rather than to the mark's own colour.
+    /// </summary>
+    /// <remarks>
+    /// The same picker the toolbar's colour button opens, borrowed for the length of the
+    /// popover. A second instance would be a second set of custom slots, and the slots
+    /// are the point of it.
+    /// </remarks>
+    private void PickSwatchColor(ToggleSwatch swatch)
+    {
+        var picker = new ColorPickerView { Color = swatch.Color };
+        picker.LoadCustomColors(_settings?.Current.CustomColors ?? []);
+        picker.ColorChanged += (_, chosen) => swatch.Pick(chosen);
+
+        var bare = new Style(typeof(FlyoutPresenter));
+        bare.Setters.Add(new Setter(FlyoutPresenter.PaddingProperty, new Thickness(0)));
+        bare.Setters.Add(new Setter(FlyoutPresenter.MinWidthProperty, 0d));
+        bare.Setters.Add(new Setter(FlyoutPresenter.BackgroundProperty, ToolbarPalette.BackgroundBrush));
+
+        new Flyout { Content = picker, FlyoutPresenterStyle = bare }.ShowAt(swatch.Anchor);
+    }
+
+    /// <summary>
+    /// Adds one group of controls behind a hairline. The hairline belongs to the group
+    /// rather than sitting between two of them, so hiding a group takes its rule with it
+    /// and the row cannot end up starting with a line or showing two in a row.
+    /// </summary>
+    private void AddGroup(params FrameworkElement[] group)
+    {
+        var rule = new Border
+        {
+            Width = 1,
+            Height = OptionsRowHeight - 16,
+            VerticalAlignment = VerticalAlignment.Center,
+
+            // 6 either side of the 1: with the row's own 4 that is macshot's 13 from one
+            // group's last control to the next group's first.
+            Margin = new Thickness(2, 0, 2, 0),
+            Background = ToolbarPalette.IconBrush(0.1),
+        };
+
+        _optionsContent.Children.Add(rule);
+        foreach (var control in group)
+        {
+            _optionsContent.Children.Add(control);
+        }
+
+        _optionGroups.Add((rule, group));
     }
 
     /// <summary>
@@ -714,12 +1012,12 @@ public sealed partial class AnnotationToolbarView : UserControl
             _loadedStyle = settings.Current.ToAnnotationStyle();
             editor.Style = _loadedStyle;
 
-            _lineStyle.ItemsSource = Enum.GetValues<LineStyle>().Select(style => style.ToString()).ToList();
             _lineStyle.SelectedIndex = (int)_loadedStyle.LineStyle;
-            _arrowStyle.ItemsSource = Enum.GetValues<ArrowStyle>().Select(style => style.ToString()).ToList();
             _arrowStyle.SelectedIndex = (int)_loadedStyle.ArrowStyle;
             _size.Value = _loadedStyle.StrokeWidth;
             _cornerRadius.Value = _loadedStyle.CornerRadius;
+            ShowSliderValue(_size, _sizeValue);
+            ShowSliderValue(_cornerRadius, _cornerValue);
             _colorPicker.Color = ToUiColor(_loadedStyle.Color);
 
             // Read here rather than by the editor itself, so Core stays free of the
@@ -727,6 +1025,19 @@ public sealed partial class AnnotationToolbarView : UserControl
             editor.Smoothing = settings.Current.PencilSmoothing;
             _smoothing.SelectedIndex = (int)editor.Smoothing;
             _censorMode.SelectedIndex = (int)_loadedStyle.CensorMode;
+
+            _fontChoices.Show(_loadedStyle.FontFamily);
+            _font.Content = string.IsNullOrWhiteSpace(_loadedStyle.FontFamily)
+                ? FontPickerView.SystemFace
+                : _loadedStyle.FontFamily;
+            _weight.SelectedIndex = _loadedStyle.Bold ? 1 : 0;
+
+            // A fill or an outline that is switched off still has a colour, so turning it
+            // back on gives back the one that was there rather than an arbitrary black.
+            _textFill.Show(_loadedStyle.TextBackground is not null, ToUiColor(
+                _loadedStyle.TextBackground ?? new AnnotationColor(0, 0, 0, 160)));
+            _textOutline.Show(_loadedStyle.TextOutline is not null, ToUiColor(
+                _loadedStyle.TextOutline ?? new AnnotationColor(255, 255, 255)));
         }
         finally
         {
@@ -762,9 +1073,15 @@ public sealed partial class AnnotationToolbarView : UserControl
         }
 
         var color = _colorPicker.Color;
+        var previous = editor.Style;
+
+        // The one slider is the label's size while the text tool is in hand and a stroke
+        // width otherwise, so the other number is carried across untouched.
+        var typesetting = editor.Tool == AnnotationTool.Text;
+
         editor.Style = new AnnotationStyle(
             new AnnotationColor(color.R, color.G, color.B, color.A),
-            Math.Max(1, _size.Value),
+            typesetting ? previous.StrokeWidth : Math.Max(MinStroke, _size.Value),
             _lineStyle.SelectedIndex >= 0 ? (LineStyle)_lineStyle.SelectedIndex : LineStyle.Solid,
             ArrowStyle: _arrowStyle.SelectedIndex >= 0
                 ? (ArrowStyle)_arrowStyle.SelectedIndex
@@ -772,7 +1089,22 @@ public sealed partial class AnnotationToolbarView : UserControl
             CornerRadius: Math.Max(0, _cornerRadius.Value),
             CensorMode: _censorMode.SelectedIndex >= 0
                 ? (CensorMode)_censorMode.SelectedIndex
-                : CensorMode.Pixelate);
+                : CensorMode.Pixelate)
+        {
+            FontSize = typesetting
+                ? Math.Clamp(_size.Value, AnnotationStyle.MinFontSize, AnnotationStyle.MaxFontSize)
+                : previous.FontSize,
+
+            // Kept rather than cleared when the picker has no row for it: a family this
+            // machine does not have still names the face the file asked for, and
+            // dropping it would silently rewrite the setting on the first capture.
+            FontFamily = _fontChoices.SelectedItem is null
+                ? previous.FontFamily
+                : FontPickerView.FamilyOf(_fontChoices.SelectedItem),
+            Bold = _weight.SelectedIndex == 1,
+            TextBackground = _textFill.IsOn ? ToAnnotationColor(_textFill.Color) : null,
+            TextOutline = _textOutline.IsOn ? ToAnnotationColor(_textOutline.Color) : null,
+        };
 
         _tools.ShowSwatch(ToUiColor(editor.Style.Color));
     }
@@ -792,4 +1124,7 @@ public sealed partial class AnnotationToolbarView : UserControl
 
     private static Color ToUiColor(AnnotationColor color) =>
         new() { A = color.Alpha, R = color.Red, G = color.Green, B = color.Blue };
+
+    private static AnnotationColor ToAnnotationColor(Color color) =>
+        new(color.R, color.G, color.B, color.A);
 }

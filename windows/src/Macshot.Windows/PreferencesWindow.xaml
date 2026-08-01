@@ -468,6 +468,28 @@
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
+                        <TextBlock Text="BEHAVIOR" Style="{StaticResource SectionHeading}" />
+                        <CheckBox
+                            x:Name="RecordedRegionBorderCheck"
+                            Content="Outline what is being recorded"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <TextBlock
+                            Text="A frame in the toolbar's accent colour, laid outside the recorded rectangle so it is never in the file. Once the recording panel has been dragged out of the way, it is the only thing left saying what is being recorded."
+                            Style="{StaticResource Caption}" />
+                        <CheckBox
+                            x:Name="ClickHighlightCheck"
+                            Content="Show a ring where you click"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <TextBlock
+                            Text="A yellow ring blooms out of every click and fades in a third of a second. Unlike the outline this one is inside the recording, which is the point — a viewer otherwise sees the pointer move and something happen, with nothing in between."
+                            Style="{StaticResource Caption}" />
+                    </StackPanel>
+
+                    <StackPanel Style="{StaticResource Section}">
                         <TextBlock Text="SOUND" Style="{StaticResource SectionHeading}" />
                         <CheckBox
                             x:Name="RecordSystemAudioCheck"

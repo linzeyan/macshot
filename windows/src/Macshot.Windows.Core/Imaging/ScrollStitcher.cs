@@ -138,6 +138,53 @@ public sealed class ScrollStitcher
     }
 
     /// <summary>
+    /// The stitched image so far, shrunk to <paramref name="targetWidth"/> across.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// For the panel that shows a scroll capture as it lengthens. Composed straight into
+    /// the small buffer rather than by scaling the output of <see cref="ToImage"/>: a
+    /// page eight thousand rows tall is a thirty-megabyte copy, and this runs every few
+    /// frames while the capture is in flight.
+    /// </para>
+    /// <para>
+    /// Nearest neighbour, which is what a 200-wide thumbnail of a screenshot wants — the
+    /// panel is read for "has it drifted or stitched the same rows twice", and averaging
+    /// is exactly what would hide a one-row seam.
+    /// </para>
+    /// </remarks>
+    /// <returns>Top-down BGRA, <paramref name="targetWidth"/> across, and how tall it is.</returns>
+    public (byte[] Pixels, int Width, int Height) ToPreview(int targetWidth)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(targetWidth);
+
+        if (_rows.Count == 0)
+        {
+            return ([], 0, 0);
+        }
+
+        var width = Math.Min(targetWidth, Width);
+        var height = Math.Max(1, (int)Math.Round((double)_rows.Count * width / Width));
+        var preview = new byte[checked(width * height * 4)];
+
+        for (var row = 0; row < height; row++)
+        {
+            var source = _rows[Math.Min(_rows.Count - 1, row * _rows.Count / height)];
+            var target = row * width * 4;
+            for (var column = 0; column < width; column++)
+            {
+                var from = Math.Min(Width - 1, column * Width / width) * 4;
+                preview[target + (column * 4)] = source[from];
+                preview[target + (column * 4) + 1] = source[from + 1];
+                preview[target + (column * 4) + 2] = source[from + 2];
+                preview[target + (column * 4) + 3] = source[from + 3];
+            }
+        }
+
+        return (preview, width, height);
+    }
+
+    /// <summary>
     /// The stitched row the frame's top band matches, or null when nothing matches
     /// well enough.
     /// </summary>

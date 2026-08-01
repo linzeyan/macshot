@@ -24,7 +24,14 @@ namespace Macshot.Windows;
 public sealed partial class ScrollCaptureHudWindow : Window
 {
     private const double WidthDips = 340;
-    private const double HeightDips = 76;
+
+    /// <summary>
+    /// macshot's 36-tall bar with its 8 of padding, plus the second line this port
+    /// carries and macshot does not — it has an auto-scroll toggle where this says how
+    /// to stop, because this port scrolls by itself.
+    /// </summary>
+    private const double HeightDips = 52;
+
     private const double MarginDips = 24;
 
     public ScrollCaptureHudWindow()

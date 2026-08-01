@@ -911,8 +911,15 @@ public sealed class CaptureController : IDisposable
             VirtualKeyEscape,
             cancellation.Cancel);
 
+        // Beside the window being captured rather than on the HUD: the panel is read
+        // against the thing it is a picture of, and the HUD sits at the bottom of the
+        // screen so it is not under the pointer driving the wheel.
+        var preview = new ScrollCapturePreviewWindow();
+        preview.ShowBeside(request.Region ?? request.Window.Bounds);
+
         var session = new ScrollCaptureSession(_screenCapture.TryCaptureWindowAsync);
         session.Progressed += (_, progress) => hud.Report(progress.Frames, progress.Rows);
+        session.Previewed += (_, picture) => preview.ShowStitched(picture);
 
         ScrollCaptureResult result;
         try
@@ -926,9 +933,10 @@ public sealed class CaptureController : IDisposable
                 _hotkeys.Unregister(HotkeyStopScrollCapture);
             }
 
-            // Before delivery, so the panel is not still claiming to be scrolling
-            // while the thumbnail for the finished capture appears next to it.
+            // Before delivery, so the panels are not still claiming to be scrolling
+            // while the thumbnail for the finished capture appears next to them.
             hud.Close();
+            preview.Close();
         }
 
         DiagnosticLog.Verbose(
@@ -1032,6 +1040,24 @@ public sealed class CaptureController : IDisposable
         // region — or against the whole display, when that is what is being recorded.
         hud.ShowHud(request.Region ?? monitor.Bounds, monitor);
 
+        // And a frame round the same rectangle, which is what still says where the
+        // recording is once that panel has been dragged out of the way.
+        RecordedRegionWindow? border = null;
+        if (_settings.Current.ShowRecordedRegionBorder)
+        {
+            border = new RecordedRegionWindow();
+            border.ShowAround(request.Region ?? monitor.Bounds, monitor.Scale);
+        }
+
+        // And a ring out of every click, which unlike the frame is meant to be in the
+        // file: it is the only thing that tells a viewer a press happened at all.
+        ClickHighlightOverlay? clicks = null;
+        if (_settings.Current.ShowClickHighlight)
+        {
+            clicks = new ClickHighlightOverlay(monitor.Scale);
+            clicks.Start();
+        }
+
         var holdsEscape = _hotkeys.TryRegisterBareKey(
             HotkeyStopRecording,
             VirtualKeyEscape,
@@ -1088,6 +1114,15 @@ public sealed class CaptureController : IDisposable
         finally
         {
             _recording = null;
+
+            // With the recording rather than with the panel: the panel stays a few
+            // seconds to name the file, and a frame still standing round nothing would
+            // say a recording was running that had already finished. The click hook goes
+            // with it — leaving a low-level mouse hook installed after the recording has
+            // ended would put macshot in the path of every mouse event on the machine.
+            border?.Close();
+            clicks?.Dispose();
+
             if (holdsEscape)
             {
                 _hotkeys.Unregister(HotkeyStopRecording);

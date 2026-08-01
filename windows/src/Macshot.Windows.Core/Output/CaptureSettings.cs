@@ -114,6 +114,30 @@ public sealed record CaptureSettings
     public bool RecordSystemAudio { get; init; }
 
     /// <summary>
+    /// Whether a frame is drawn round the part of the screen a recording is taking.
+    /// </summary>
+    /// <remarks>
+    /// macshot's <c>showSelectionBorder</c>, and on for the same reason: once the
+    /// recording panel has been dragged clear of the region, the frame is the only thing
+    /// left saying what is being recorded. It is laid outside the recorded rectangle, so
+    /// turning it on cannot put a purple line in the file.
+    /// </remarks>
+    public bool ShowRecordedRegionBorder { get; init; } = true;
+
+    /// <summary>
+    /// Whether a ring blooms out of every click while a recording is running.
+    /// </summary>
+    /// <remarks>
+    /// macshot's <c>recordMouseHighlight</c>, and off by default as macshot's is. Unlike
+    /// the region frame this one is <em>inside</em> the recording — that is the whole
+    /// point, since a viewer otherwise sees the pointer move and something happen with
+    /// nothing in between — so it cannot be on without having been asked for. macOS also
+    /// gates it on the Input Monitoring permission; Windows asks for nothing to install a
+    /// low-level mouse hook, so there is no permission gate on this side.
+    /// </remarks>
+    public bool ShowClickHighlight { get; init; }
+
+    /// <summary>
     /// Whether a recording carries the microphone. macshot's <c>recordMicAudio</c>,
     /// off by default for the same reason.
     /// </summary>
@@ -136,6 +160,26 @@ public sealed record CaptureSettings
 
     /// <summary>How far the rectangle tool rounds its corners, in frame pixels.</summary>
     public double AnnotationCornerRadius { get; init; }
+
+    /// <summary>How big the text tool sets a label, in frame pixels.</summary>
+    /// <remarks>
+    /// Remembered apart from the stroke width because it is set apart from it: the two
+    /// shared one number until the text tool grew its own controls, which meant sizing a
+    /// label also resized the next arrow.
+    /// </remarks>
+    public double AnnotationFontSize { get; init; } = AnnotationStyle.DefaultFontSize;
+
+    /// <summary>The face the text tool sets a label in, or empty for the system font.</summary>
+    public string AnnotationFontFamily { get; init; } = string.Empty;
+
+    /// <summary>Whether the text tool sets a label bold.</summary>
+    public bool AnnotationBold { get; init; }
+
+    /// <summary>The pill behind a label as <c>#AARRGGBB</c>, or empty for none.</summary>
+    public string AnnotationTextBackground { get; init; } = string.Empty;
+
+    /// <summary>The line around that pill as <c>#AARRGGBB</c>, or empty for none.</summary>
+    public string AnnotationTextOutline { get; init; } = string.Empty;
 
     /// <summary>
     /// How much a freehand stroke is rounded off once it is finished. Smoothed by
@@ -319,6 +363,20 @@ public sealed record CaptureSettings
     /// </remarks>
     public IReadOnlyList<string> HiddenTools { get; init; } = [];
 
+    /// <summary>How many colours the picker keeps for the user's own. macshot's seven.</summary>
+    public const int CustomColorSlots = 7;
+
+    /// <summary>
+    /// The user's own colours, as <c>#AARRGGBB</c>, in the order the picker shows them.
+    /// </summary>
+    /// <remarks>
+    /// macshot's saveable slots, which are how a brand colour or a colour sampled off a
+    /// screenshot survives past the capture it was picked on. Fewer than
+    /// <see cref="CustomColorSlots"/> entries means the rest are empty; a longer list is
+    /// trimmed on read, so a hand-edited file cannot grow the picker.
+    /// </remarks>
+    public IReadOnlyList<string> CustomColors { get; init; } = [];
+
     /// <summary>The toolbar's own colours, as <c>#AARRGGBB</c>.</summary>
     /// <remarks>
     /// The toolbar sits over a screenshot rather than in a window, so it cannot follow the
@@ -361,6 +419,28 @@ public sealed record CaptureSettings
 
     private static AnnotationColor Color(string hex, AnnotationColor fallback) =>
         Annotations.AnnotationColor.TryParseHex(hex, out var parsed) ? parsed : fallback;
+
+    /// <summary>
+    /// The saved colours, at the picker's own length: an unreadable one becomes an empty
+    /// slot rather than being dropped, so the colours after it stay in their squares.
+    /// </summary>
+    private IReadOnlyList<string> SaneCustomColors()
+    {
+        if (CustomColors.Count == 0)
+        {
+            return [];
+        }
+
+        var slots = new string[Math.Min(CustomColors.Count, CustomColorSlots)];
+        for (var index = 0; index < slots.Length; index++)
+        {
+            slots[index] = Annotations.AnnotationColor.TryParseHex(CustomColors[index], out var parsed)
+                ? parsed.ToHex()
+                : string.Empty;
+        }
+
+        return slots;
+    }
 
     /// <summary>Which of <see cref="BeautifyRenderer.Styles"/> the Beautify action uses.</summary>
     public int BeautifyStyleIndex { get; init; }
@@ -430,7 +510,21 @@ public sealed record CaptureSettings
             AnnotationLineStyle,
             ArrowStyle: AnnotationArrowStyle,
             CornerRadius: Math.Clamp(AnnotationCornerRadius, 0, MaxCornerRadius),
-            CensorMode: CensorMode);
+            CensorMode: CensorMode)
+        {
+            FontSize = Math.Clamp(
+                AnnotationFontSize,
+                AnnotationStyle.MinFontSize,
+                AnnotationStyle.MaxFontSize),
+            FontFamily = AnnotationFontFamily,
+            Bold = AnnotationBold,
+            TextBackground = Annotations.AnnotationColor.TryParseHex(AnnotationTextBackground, out var fill)
+                ? fill
+                : null,
+            TextOutline = Annotations.AnnotationColor.TryParseHex(AnnotationTextOutline, out var edge)
+                ? edge
+                : null,
+        };
     }
 
     public CaptureSettings WithAnnotationStyle(AnnotationStyle style)
@@ -445,6 +539,11 @@ public sealed record CaptureSettings
             AnnotationArrowStyle = style.ArrowStyle,
             AnnotationCornerRadius = style.CornerRadius,
             CensorMode = style.CensorMode,
+            AnnotationFontSize = style.FontSize,
+            AnnotationFontFamily = style.FontFamily,
+            AnnotationBold = style.Bold,
+            AnnotationTextBackground = style.TextBackground?.ToHex() ?? string.Empty,
+            AnnotationTextOutline = style.TextOutline?.ToHex() ?? string.Empty,
         };
     }
 
@@ -485,6 +584,20 @@ public sealed record CaptureSettings
             AnnotationStrokeWidth = double.IsFinite(AnnotationStrokeWidth)
                 ? Math.Clamp(AnnotationStrokeWidth, MinStrokeWidth, MaxStrokeWidth)
                 : AnnotationStyle.Default.StrokeWidth,
+            AnnotationFontSize = double.IsFinite(AnnotationFontSize)
+                ? Math.Clamp(AnnotationFontSize, AnnotationStyle.MinFontSize, AnnotationStyle.MaxFontSize)
+                : AnnotationStyle.DefaultFontSize,
+            AnnotationFontFamily = AnnotationFontFamily.Trim(),
+
+            // Empty means "no pill" and "no line round it", so an unreadable colour is
+            // turned off rather than defaulted — a label that silently grew a background
+            // nobody asked for is worse than one that lost the one they did.
+            AnnotationTextBackground = Annotations.AnnotationColor.TryParseHex(AnnotationTextBackground, out var pill)
+                ? pill.ToHex()
+                : string.Empty,
+            AnnotationTextOutline = Annotations.AnnotationColor.TryParseHex(AnnotationTextOutline, out var rim)
+                ? rim.ToHex()
+                : string.Empty,
             AnnotationLineStyle = Enum.IsDefined(AnnotationLineStyle) ? AnnotationLineStyle : LineStyle.Solid,
             AnnotationArrowStyle = Enum.IsDefined(AnnotationArrowStyle) ? AnnotationArrowStyle : ArrowStyle.Filled,
             AnnotationCornerRadius = double.IsFinite(AnnotationCornerRadius)
@@ -525,6 +638,11 @@ public sealed record CaptureSettings
             // A file that hides every tool is treated as hiding none — a toolbar with no
             // tools on it is not a preference, it is a broken window.
             HiddenTools = SaneHiddenTools(),
+
+            // Trimmed to the slots the picker has and to the entries it can draw. An
+            // empty string is a slot nobody has filled yet and is kept as one, because
+            // dropping it would shuffle every later colour into a different square.
+            CustomColors = SaneCustomColors(),
 
             // Round-tripped through the parser so an unreadable colour becomes the default
             // here rather than silently wherever the toolbar is drawn.

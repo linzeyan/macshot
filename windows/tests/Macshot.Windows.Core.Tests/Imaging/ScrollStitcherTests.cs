@@ -30,6 +30,46 @@ public sealed class ScrollStitcherTests
     }
 
     [TestMethod]
+    public void ToPreview_KeepsTheShapeOfWhatHasBeenStitched()
+    {
+        var stitcher = new ScrollStitcher(Width, FrameHeight);
+        var page = Page();
+        stitcher.Add(FrameAt(page, 0));
+        stitcher.Add(FrameAt(page, 40));
+
+        var (pixels, width, height) = stitcher.ToPreview(16);
+
+        // Half the width, so half the rows: the panel this feeds is a picture of the
+        // capture, and a preview with the wrong aspect would look like a drift the
+        // stitcher had not made.
+        Assert.AreEqual(16, width);
+        Assert.AreEqual(stitcher.Height / 2, height);
+        Assert.AreEqual(width * height * 4, pixels.Length);
+    }
+
+    [TestMethod]
+    public void ToPreview_NeverEnlargesANarrowCapture()
+    {
+        var stitcher = new ScrollStitcher(Width, FrameHeight);
+        stitcher.Add(FrameAt(Page(), 0));
+
+        var (_, width, height) = stitcher.ToPreview(Width * 4);
+
+        Assert.AreEqual(Width, width);
+        Assert.AreEqual(stitcher.Height, height);
+    }
+
+    [TestMethod]
+    public void ToPreview_OfNothingIsEmptyRatherThanAThrow()
+    {
+        var (pixels, width, height) = new ScrollStitcher(Width, FrameHeight).ToPreview(200);
+
+        Assert.AreEqual(0, pixels.Length);
+        Assert.AreEqual(0, width);
+        Assert.AreEqual(0, height);
+    }
+
+    [TestMethod]
     public void Add_FirstFrameSeedsTheImage()
     {
         var stitcher = new ScrollStitcher(Width, FrameHeight);

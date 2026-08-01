@@ -115,6 +115,12 @@ public static class AnnotationFile
             Opacity = annotation.Style.Opacity,
             ArrowStyle = annotation.Style.ArrowStyle.ToString(),
             CornerRadius = annotation.Style.CornerRadius,
+            CensorMode = annotation.Style.CensorMode.ToString(),
+            FontSize = annotation.Style.FontSize,
+            FontFamily = annotation.Style.FontFamily,
+            Bold = annotation.Style.Bold,
+            TextBackground = annotation.Style.TextBackground?.ToHex(),
+            TextOutline = annotation.Style.TextOutline?.ToHex(),
 
             // Flattened rather than an array of objects: a smoothed pencil stroke runs
             // to hundreds of samples, and {"x":1,"y":2} costs four times what 1,2 does
@@ -157,7 +163,25 @@ public static class AnnotationFile
             Enum.TryParse<ArrowStyle>(stored.ArrowStyle, out var arrowStyle) && Enum.IsDefined(arrowStyle)
                 ? arrowStyle
                 : Annotations.ArrowStyle.Filled,
-            Math.Max(0, stored.CornerRadius));
+            Math.Max(0, stored.CornerRadius),
+
+            // Absent from files written before the censor tool had one, and from every
+            // file written while this was missing here — which is why the fallback is the
+            // enum's own first mode rather than a throw.
+            Enum.TryParse<CensorMode>(stored.CensorMode, out var censor) && Enum.IsDefined(censor)
+                ? censor
+                : Annotations.CensorMode.Pixelate)
+        {
+            FontSize = stored.FontSize > 0 ? stored.FontSize : AnnotationStyle.DefaultFontSize,
+            FontFamily = stored.FontFamily ?? string.Empty,
+            Bold = stored.Bold,
+            TextBackground = AnnotationColor.TryParseHex(stored.TextBackground ?? string.Empty, out var fill)
+                ? fill
+                : null,
+            TextOutline = AnnotationColor.TryParseHex(stored.TextOutline ?? string.Empty, out var edge)
+                ? edge
+                : null,
+        };
 
         var sprite = Unpack(stored.Sprite);
 
@@ -286,6 +310,22 @@ public static class AnnotationFile
         public string ArrowStyle { get; init; } = string.Empty;
 
         public double CornerRadius { get; init; }
+
+        /// <summary>
+        /// How a censored region is covered. Written since the tool grew four modes;
+        /// a file from before that reads back as the first of them.
+        /// </summary>
+        public string CensorMode { get; init; } = string.Empty;
+
+        public double FontSize { get; init; }
+
+        public string? FontFamily { get; init; }
+
+        public bool Bold { get; init; }
+
+        public string? TextBackground { get; init; }
+
+        public string? TextOutline { get; init; }
 
         public double[]? Points { get; init; }
 

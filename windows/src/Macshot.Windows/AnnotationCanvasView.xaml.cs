@@ -519,6 +519,8 @@ public sealed partial class AnnotationCanvasView : UserControl
             // from it by whatever the theme's padding happens to be.
             Padding = new Thickness(0),
             FontSize = TextGlyphs.FontSizeFor(editor.Style, SpriteScale),
+            FontFamily = TextGlyphs.FamilyFor(editor.Style),
+            FontWeight = TextGlyphs.WeightFor(editor.Style),
             Foreground = new SolidColorBrush(GlyphSpriteFactory.ToBrushColor(editor.Style)),
             // Return has to be accepted for Shift+Enter to be able to insert one; plain
             // Enter is taken below before the box ever sees it.

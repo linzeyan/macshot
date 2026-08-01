@@ -1,0 +1,18 @@
+<Window
+    x:Class="Macshot.Windows.ScrollCapturePreviewWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="Macshot Scroll Capture Preview">
+    <!-- Opaque, because a WinUI window has no per-pixel transparency: a translucent
+         panel would show the desktop through its own square corners. -->
+    <Border Background="#EE202020" Padding="4">
+        <!-- Top-anchored so the newest rows are the ones on screen once the capture is
+             longer than the panel: a scroll capture is watched at its bottom edge, which
+             is where a drift or a doubled band first shows. -->
+        <Image
+            x:Name="Stitched"
+            Stretch="UniformToFill"
+            VerticalAlignment="Top"
+            HorizontalAlignment="Center" />
+    </Border>
+</Window>

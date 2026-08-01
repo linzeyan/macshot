@@ -10,6 +10,17 @@ public sealed record ScrollCaptureResult(CapturedFrame Frame, ScrollCaptureStop 
 public sealed record ScrollCaptureProgress(int Frames, int Rows);
 
 /// <summary>
+/// The capture so far, shrunk to panel width. Top-down BGRA.
+/// </summary>
+/// <remarks>
+/// Its own event rather than a field on <see cref="ScrollCaptureProgress"/>, because it
+/// is produced every few frames rather than every one: composing it walks every row that
+/// has been stitched, and a page eight thousand rows tall would be walked ten times a
+/// second for a panel nobody can see change that fast.
+/// </remarks>
+public sealed record ScrollCapturePreview(byte[] Pixels, int Width, int Height);
+
+/// <summary>
 /// Captures a window taller than the screen, by taking frames of it while scrolling
 /// it and stitching what each one reveals.
 /// </summary>
@@ -58,6 +69,22 @@ public sealed class ScrollCaptureSession
     /// running on, which for the only caller is the UI thread.
     /// </summary>
     public event EventHandler<ScrollCaptureProgress>? Progressed;
+
+    /// <summary>
+    /// Raised with a small picture of the capture as it lengthens, for the panel beside
+    /// the region. Every <see cref="PreviewEveryFrames"/> frames rather than every one.
+    /// </summary>
+    public event EventHandler<ScrollCapturePreview>? Previewed;
+
+    /// <summary>
+    /// How often the preview is rebuilt. Three is about twice a second at the settle
+    /// delay a scroll capture runs at — often enough to watch, rare enough that the walk
+    /// over every stitched row is not what the capture is spending its time on.
+    /// </summary>
+    private const int PreviewEveryFrames = 3;
+
+    /// <summary>How wide the panel draws it — macshot's 200, <c>ScrollCapturePreviewPanel.swift:11</c>.</summary>
+    public const int PreviewWidth = 200;
 
     /// <summary>
     /// Scrolls <paramref name="window"/> to its end, or until
@@ -135,6 +162,19 @@ public sealed class ScrollCaptureSession
                 : ScrollStitchOutcome.Rejected;
 
             Progressed?.Invoke(this, new ScrollCaptureProgress(frames, stitcher.Height));
+
+            // Only when something was added: a frame that matched what is already there
+            // would redraw the same picture, and the run is mostly those.
+            if (Previewed is { } watcher
+                && outcome is ScrollStitchOutcome.Seeded or ScrollStitchOutcome.Advanced
+                && (frames == 1 || frames % PreviewEveryFrames == 0))
+            {
+                var (preview, width, height) = stitcher.ToPreview(PreviewWidth);
+                if (height > 0)
+                {
+                    watcher(this, new ScrollCapturePreview(preview, width, height));
+                }
+            }
 
             var stop = policy.Observe(outcome, stitcher.Height);
             if (stop != ScrollCaptureStop.None)

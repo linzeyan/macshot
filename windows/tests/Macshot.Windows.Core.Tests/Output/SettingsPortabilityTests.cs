@@ -91,6 +91,8 @@ public sealed class SettingsPortabilityTests
             RecordingFormat = RecordingFormat.Gif,
             RecordSystemAudio = true,
             RecordMicAudio = true,
+            ShowRecordedRegionBorder = false,
+            ShowClickHighlight = true,
             FilenameTemplate = "{window} {date}",
             RecordingFilenameTemplate = "Clip {time}",
             AnnotationColor = "#FF2200",

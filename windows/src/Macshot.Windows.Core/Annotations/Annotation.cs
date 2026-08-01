@@ -46,12 +46,56 @@ public sealed record AnnotationStyle(
     double CornerRadius = 0,
     CensorMode CensorMode = CensorMode.Pixelate)
 {
+    /// <summary>macshot's own starting size for a label — <c>Annotation.swift:159</c>.</summary>
+    public const double DefaultFontSize = 20;
+
+    /// <summary>The smallest and largest a label can be set to from the toolbar.</summary>
+    public const double MinFontSize = 8;
+
+    public const double MaxFontSize = 144;
+
     public static AnnotationStyle Default { get; } = new(new AnnotationColor(76, 194, 255), 3);
+
+    /// <summary>
+    /// How big a label's text is, in frame pixels, independent of the stroke width.
+    /// </summary>
+    /// <remarks>
+    /// Its own number rather than a multiple of <see cref="StrokeWidth"/>, which is what
+    /// it used to be: one slider for both meant a label could not be sized without also
+    /// resizing the next arrow drawn. macshot keeps <c>fontSize</c> apart from the stroke
+    /// for the same reason.
+    /// </remarks>
+    public double FontSize { get; init; } = DefaultFontSize;
+
+    /// <summary>
+    /// The face a label is set in, or empty for the system font. A family this machine
+    /// does not have falls back to the system font where the text is rendered rather
+    /// than being refused here — a settings file moved between machines is expected to
+    /// name a font one of them lacks.
+    /// </summary>
+    public string FontFamily { get; init; } = string.Empty;
+
+    /// <summary>Whether a label is set bold.</summary>
+    public bool Bold { get; init; }
+
+    /// <summary>
+    /// The pill drawn behind a label, or null for none. macshot's <c>textBgColor</c>,
+    /// with its 4 of padding and its 4 corner — <c>Annotation.swift:1646–1655</c>.
+    /// </summary>
+    public AnnotationColor? TextBackground { get; init; }
+
+    /// <summary>
+    /// The 2-wide line around that pill, or null for none. macshot's
+    /// <c>textOutlineColor</c>, which is what makes a label readable over a screenshot
+    /// whose colours the fill happens to match.
+    /// </summary>
+    public AnnotationColor? TextOutline { get; init; }
 
     public void Validate()
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(StrokeWidth);
         ArgumentOutOfRangeException.ThrowIfNegative(CornerRadius);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(FontSize);
         if (Opacity is < 0 or > 1)
         {
             throw new ArgumentOutOfRangeException(nameof(Opacity));

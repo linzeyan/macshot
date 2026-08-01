@@ -142,6 +142,32 @@ public sealed class CaptureSettingsTests
     }
 
     [TestMethod]
+    public void ASavedColourThatCannotBeReadEmptiesItsSlotRatherThanShiftingTheRest()
+    {
+        // Dropping the bad entry would move every later colour into a different square,
+        // so the one the user reaches for by position would no longer be there.
+        var settings = (CaptureSettings.Default with
+        {
+            CustomColors = ["#FFFF0000", "not a colour", "#FF00FF00"],
+        }).Normalized();
+
+        Assert.AreEqual(3, settings.CustomColors.Count);
+        Assert.AreEqual(string.Empty, settings.CustomColors[1]);
+        Assert.AreEqual("#FF00FF00", settings.CustomColors[2]);
+    }
+
+    [TestMethod]
+    public void AHandEditedFileCannotGrowTheColourPicker()
+    {
+        var settings = (CaptureSettings.Default with
+        {
+            CustomColors = [.. Enumerable.Repeat("#FFFF0000", CaptureSettings.CustomColorSlots + 4)],
+        }).Normalized();
+
+        Assert.AreEqual(CaptureSettings.CustomColorSlots, settings.CustomColors.Count);
+    }
+
+    [TestMethod]
     public void AnUnreadableToolbarColourComesBackAsTheDefault()
     {
         var settings = (CaptureSettings.Default with { ToolbarAccentColor = "rhubarb" }).Normalized();

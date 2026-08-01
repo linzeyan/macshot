@@ -31,7 +31,15 @@ public sealed class AnnotationFileTests
                 LineStyle.Dashed,
                 0.5,
                 ArrowStyle.Double,
-                12)) with
+                12,
+                CensorMode.Erase)
+            {
+                FontSize = 42,
+                FontFamily = "Cascadia Code",
+                Bold = true,
+                TextBackground = new AnnotationColor(1, 2, 3, 200),
+                TextOutline = new AnnotationColor(4, 5, 6, 210),
+            }) with
         {
             Rotation = 0.75,
             Bend = -0.25,
@@ -56,6 +64,12 @@ public sealed class AnnotationFileTests
         Assert.AreEqual(original.Style.Opacity, restored[0].Style.Opacity);
         Assert.AreEqual(original.Style.ArrowStyle, restored[0].Style.ArrowStyle);
         Assert.AreEqual(original.Style.CornerRadius, restored[0].Style.CornerRadius);
+        Assert.AreEqual(original.Style.CensorMode, restored[0].Style.CensorMode);
+        Assert.AreEqual(original.Style.FontSize, restored[0].Style.FontSize);
+        Assert.AreEqual(original.Style.FontFamily, restored[0].Style.FontFamily);
+        Assert.AreEqual(original.Style.Bold, restored[0].Style.Bold);
+        Assert.AreEqual(original.Style.TextBackground, restored[0].Style.TextBackground);
+        Assert.AreEqual(original.Style.TextOutline, restored[0].Style.TextOutline);
         Assert.AreEqual(original.Rotation, restored[0].Rotation);
         Assert.AreEqual(original.Bend, restored[0].Bend);
         Assert.AreEqual(group, restored[0].GroupId);

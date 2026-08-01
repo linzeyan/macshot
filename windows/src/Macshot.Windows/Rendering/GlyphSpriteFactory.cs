@@ -85,8 +85,17 @@ internal static class GlyphSpriteFactory
     {
         ArgumentNullException.ThrowIfNull(style);
 
-        var alpha = (byte)Math.Clamp(Math.Round(style.Color.Alpha * style.Opacity), 0, byte.MaxValue);
-        return Color.FromArgb(alpha, style.Color.Red, style.Color.Green, style.Color.Blue);
+        return ToBrushColor(style.Color, style.Opacity);
+    }
+
+    /// <summary>
+    /// The same fold, for a colour that belongs to the mark but is not its own — a
+    /// label's pill and the line round it.
+    /// </summary>
+    public static Color ToBrushColor(AnnotationColor color, double opacity)
+    {
+        var alpha = (byte)Math.Clamp(Math.Round(color.Alpha * opacity), 0, byte.MaxValue);
+        return Color.FromArgb(alpha, color.Red, color.Green, color.Blue);
     }
 
     /// <summary>
