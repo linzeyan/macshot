@@ -251,18 +251,6 @@ public sealed record CaptureSettings
     public string TranslateTargetLanguage { get; init; } = TranslationLanguages.DefaultCode;
 
     /// <summary>
-    /// The user's own Google Cloud Translation key. Empty until they supply one, and
-    /// translation is simply not offered until then.
-    /// </summary>
-    /// <remarks>
-    /// In the settings file in plain text, which is what the macOS product does with
-    /// <c>imgbbAPIKey</c> as well. It is the user's key for their own project, the file
-    /// is under their profile, and a credential store would put a Windows-only
-    /// dependency under Core for a secret that is already theirs to read.
-    /// </remarks>
-    public string TranslateApiKey { get; init; } = string.Empty;
-
-    /// <summary>
     /// The tools taken off the toolbar, by name. Empty means all of them are there.
     /// </summary>
     /// <remarks>
@@ -451,7 +439,6 @@ public sealed record CaptureSettings
             // would be sent to the service and refused, so the capture would come back
             // with an error where a translation was asked for.
             TranslateTargetLanguage = TranslationLanguages.Normalize(TranslateTargetLanguage),
-            TranslateApiKey = TranslateApiKey?.Trim() ?? string.Empty,
 
             CaptureAreaHotkey = CaptureAreaBinding.ToString(),
             CaptureAllScreensHotkey = CaptureAllScreensBinding.ToString(),

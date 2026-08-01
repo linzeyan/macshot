@@ -39,7 +39,6 @@ internal static class TranslationPlacement
         var outcome = await TranslationService.TranslateAsync(
             request,
             settings.TranslateTargetLanguage,
-            settings.TranslateApiKey,
             cancellation);
 
         if (outcome.Text is not { } answer)

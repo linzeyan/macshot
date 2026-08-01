@@ -292,18 +292,11 @@
                         </StackPanel>
                     </StackPanel>
 
-                    <!-- Collapsed in the offline build, which contains no translator to
-                         give a key to. See TranslationService. -->
-                    <StackPanel x:Name="TranslationSection" Style="{StaticResource Section}">
-                        <TextBlock Text="TRANSLATION" Style="{StaticResource SectionHeading}" />
-                        <StackPanel Style="{StaticResource Row}">
-                            <TextBlock Text="Google API key:" Style="{StaticResource RowLabel}" />
-                            <PasswordBox x:Name="TranslateKeyBox" FontSize="13" Width="240" LostFocus="Setting_LostFocus" />
-                        </StackPanel>
-                        <TextBlock
-                            Text="Your own key, for your own project. Recognized text is sent to Google only when Translate is pressed. Without a key, Translate says so and sends nothing."
-                            Style="{StaticResource Caption}" />
-                    </StackPanel>
+                    <!-- No translation section. macshot only builds one when Apple's
+                         on-device translation is available, and its only control is the
+                         choice between that and Google (SettingsWindowController.swift:994).
+                         Windows has no on-device translator, so there is no choice to
+                         offer and nothing to configure. -->
                 </StackPanel>
             </ScrollViewer>
 
@@ -396,7 +389,7 @@
                             Checked="Setting_Toggled"
                             Unchecked="Setting_Toggled" />
                         <TextBlock
-                            Text="Records each step — which display, which capture backend, what size, which branch — next to the settings file. Turn it on before reproducing a fault, then attach the log. It never contains your API key or the text that was recognized."
+                            Text="Records each step — which display, which capture backend, what size, which branch — next to the settings file. Turn it on before reproducing a fault, then attach the log. It never contains the text that was recognized."
                             Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="" Style="{StaticResource RowLabel}" />

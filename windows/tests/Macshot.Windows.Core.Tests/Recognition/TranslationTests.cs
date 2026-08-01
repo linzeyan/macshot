@@ -6,45 +6,12 @@ namespace Macshot.Windows.Core.Tests.Recognition;
 public sealed class TranslationTests
 {
     [TestMethod]
-    public void Read_TakesTheTranslationOutOfTheBody()
-    {
-        var outcome = TranslationResponse.Read(
-            """{"data":{"translations":[{"translatedText":"Hello"}]}}""");
-
-        Assert.IsTrue(outcome.Succeeded);
-        Assert.AreEqual("Hello", outcome.Text);
-    }
-
-    [TestMethod]
-    public void Read_DecodesTheEntitiesTheServiceEscapes()
-    {
-        // The v2 endpoint escapes quotes and ampersands even when asked for plain
-        // text, so a line with an apostrophe in it arrives carrying &#39; and would
-        // otherwise be pasted that way.
-        var outcome = TranslationResponse.Read(
-            """{"data":{"translations":[{"translatedText":"it&#39;s Tom &amp; Jerry"}]}}""");
-
-        Assert.AreEqual("it's Tom & Jerry", outcome.Text);
-    }
-
-    [TestMethod]
-    public void Read_PassesTheServiceSOwnMessageOn()
-    {
-        // Worth quoting verbatim: "API key not valid" sends the user to the right
-        // place, where a generic failure would send them to the network settings.
-        var outcome = TranslationResponse.Read(
-            """{"error":{"code":400,"message":"API key not valid. Please pass a valid API key."}}""");
-
-        Assert.IsFalse(outcome.Succeeded);
-        Assert.AreEqual("API key not valid. Please pass a valid API key.", outcome.Failure);
-    }
-
-    [TestMethod]
     public void Read_SurvivesABodyThatIsNotTheResponseAtAll()
     {
-        // An HTML error page from a proxy is the ordinary case here, and it must not
-        // end as an exception over a capture the user already has.
-        foreach (var body in new[] { null, "", "   ", "<html>gateway timeout</html>", "{}", """{"data":{"translations":[]}}""" })
+        // An HTML page is the ordinary way this endpoint refuses a caller it thinks is
+        // asking too often, and it must not end as an exception over a capture the user
+        // already has.
+        foreach (var body in new[] { null, "", "   ", "<html>gateway timeout</html>", "{}", "[]" })
         {
             var outcome = TranslationResponse.Read(body);
 
@@ -87,7 +54,7 @@ public sealed class TranslationTests
     }
 
     [TestMethod]
-    public void ReadFree_JoinsEverySentenceTheServiceSplitTheTextInto()
+    public void Read_JoinsEverySentenceTheServiceSplitTheTextInto()
     {
         // The keyless endpoint breaks a paragraph into sentences and answers with one
         // entry each. Taking only the first would truncate anything past a line, and
@@ -96,38 +63,38 @@ public sealed class TranslationTests
             [[["Hello there. ","Hallo da. ",null,null,10],["How are you?","Wie geht es dir?",null,null,3]],null,"de"]
             """;
 
-        var outcome = TranslationResponse.ReadFree(Body);
+        var outcome = TranslationResponse.Read(Body);
 
         Assert.IsTrue(outcome.Succeeded);
         Assert.AreEqual("Hello there. How are you?", outcome.Text);
     }
 
     [TestMethod]
-    public void ReadFree_SkipsTheTrailingEntriesThatAreNotTheTranslation()
+    public void Read_SkipsTheTrailingEntriesThatAreNotTheTranslation()
     {
         const string Body = """
             [[["Cat","Katze",null,null,10],[null,null,null,null,null]],null,"de",null,null,[["Katze"]]]
             """;
 
-        Assert.AreEqual("Cat", TranslationResponse.ReadFree(Body).Text);
+        Assert.AreEqual("Cat", TranslationResponse.Read(Body).Text);
     }
 
     [TestMethod]
-    public void ReadFree_TurnsAnHtmlRefusalIntoASentence()
+    public void Read_TurnsAnHtmlRefusalIntoASentence()
     {
         // What a rate-limited caller gets back from an undocumented endpoint: a page,
         // not JSON. It has to end as a message in the window rather than as a throw
         // over recognized text the user already has.
-        var outcome = TranslationResponse.ReadFree("<html><body>429</body></html>");
+        var outcome = TranslationResponse.Read("<html><body>429</body></html>");
 
         Assert.IsFalse(outcome.Succeeded);
         Assert.IsNotNull(outcome.Failure);
     }
 
     [TestMethod]
-    public void ReadFree_AnswersFailureForAnEmptyTranslation()
+    public void Read_AnswersFailureForAnEmptyTranslation()
     {
-        Assert.IsFalse(TranslationResponse.ReadFree("[[],null,\"de\"]").Succeeded);
-        Assert.IsFalse(TranslationResponse.ReadFree(null).Succeeded);
+        Assert.IsFalse(TranslationResponse.Read("[[],null,\"de\"]").Succeeded);
+        Assert.IsFalse(TranslationResponse.Read(null).Succeeded);
     }
 }

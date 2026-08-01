@@ -1,4 +1,3 @@
-using System.Net;
 using System.Text.Json;
 
 namespace Macshot.Windows.Core.Recognition;
@@ -16,7 +15,7 @@ public sealed record TranslationOutcome(string? Text, string? Failure)
 }
 
 /// <summary>
-/// Reads the Google Translate v2 response body.
+/// Reads the response body of the endpoint macshot translates through.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -34,8 +33,9 @@ public sealed record TranslationOutcome(string? Text, string? Failure)
 public static class TranslationResponse
 {
     /// <summary>
-    /// Reads the body of the keyless <c>translate_a/single</c> endpoint, which is what
-    /// macshot uses — <c>TranslationService.swift:161, 208</c>.
+    /// Reads the body of the <c>translate_a/single</c> endpoint, which is what macshot
+    /// uses — <c>TranslationService.swift:161, 208</c>. It is the only endpoint either
+    /// product talks to: macshot has no API key setting, so neither does this.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -51,7 +51,7 @@ public static class TranslationResponse
     /// transliterations that have nothing to do with the text asked for.
     /// </para>
     /// </remarks>
-    public static TranslationOutcome ReadFree(string? json)
+    public static TranslationOutcome Read(string? json)
     {
         if (string.IsNullOrWhiteSpace(json))
         {
@@ -90,52 +90,6 @@ public static class TranslationResponse
         {
             // The keyless endpoint answers a rate-limited caller with an HTML page, so
             // this is the ordinary way it says no rather than an exceptional one.
-            return TranslationOutcome.Failed("The translation service returned something unreadable.");
-        }
-    }
-
-    public static TranslationOutcome Read(string? json)
-    {
-        if (string.IsNullOrWhiteSpace(json))
-        {
-            return TranslationOutcome.Failed("The translation service returned nothing.");
-        }
-
-        try
-        {
-            using var document = JsonDocument.Parse(json);
-            var root = document.RootElement;
-
-            // The service's own message first: it says things worth passing on verbatim,
-            // like an invalid key or an unsupported target language, and a generic
-            // failure would send the user looking in the wrong place.
-            if (root.TryGetProperty("error", out var error))
-            {
-                return TranslationOutcome.Failed(
-                    error.TryGetProperty("message", out var message) && message.GetString() is { } text
-                        ? text
-                        : "The translation service refused the request.");
-            }
-
-            if (!root.TryGetProperty("data", out var data)
-                || !data.TryGetProperty("translations", out var translations)
-                || translations.ValueKind != JsonValueKind.Array
-                || translations.GetArrayLength() == 0
-                || !translations[0].TryGetProperty("translatedText", out var translated)
-                || translated.GetString() is not { } result)
-            {
-                return TranslationOutcome.Failed("The translation service returned no translation.");
-            }
-
-            // HTML-decoded even though the request asks for plain text: the v2 endpoint
-            // still escapes quotes and ampersands, so a line with an apostrophe in it
-            // comes back carrying &#39; and would be pasted that way.
-            return TranslationOutcome.Translated(WebUtility.HtmlDecode(result));
-        }
-        catch (JsonException)
-        {
-            // An HTML error page from a proxy, most often. Quoting it into the window
-            // would fill the text box with markup, so it is named rather than shown.
             return TranslationOutcome.Failed("The translation service returned something unreadable.");
         }
     }

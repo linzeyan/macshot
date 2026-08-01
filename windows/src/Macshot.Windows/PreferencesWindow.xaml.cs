@@ -308,13 +308,6 @@ public sealed partial class PreferencesWindow : Window
         SmoothPencilCheck.IsChecked = settings.SmoothPencilStrokes;
         VerboseLoggingCheck.IsChecked = settings.VerboseLogging;
 
-#if OFFLINE
-        // No translator in this build, so nothing to give a key to.
-        TranslationSection.Visibility = Visibility.Collapsed;
-#else
-        TranslateKeyBox.Password = settings.TranslateApiKey;
-#endif
-
         CaptureAreaHotkeyBox.Binding = settings.CaptureAreaHotkey;
         CaptureAllScreensHotkeyBox.Binding = settings.CaptureAllScreensHotkey;
         RecordScreenHotkeyBox.Binding = settings.RecordScreenHotkey;
@@ -387,9 +380,6 @@ public sealed partial class PreferencesWindow : Window
             HideCaptureInstructions = HideInstructionsCheck.IsChecked == true,
             SmoothPencilStrokes = SmoothPencilCheck.IsChecked == true,
             VerboseLogging = VerboseLoggingCheck.IsChecked == true,
-#if !OFFLINE
-            TranslateApiKey = TranslateKeyBox.Password,
-#endif
             CaptureAreaHotkey = CaptureAreaHotkeyBox.Binding,
             CaptureAllScreensHotkey = CaptureAllScreensHotkeyBox.Binding,
             RecordScreenHotkey = RecordScreenHotkeyBox.Binding,

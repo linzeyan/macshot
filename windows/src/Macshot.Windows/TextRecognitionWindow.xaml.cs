@@ -192,17 +192,14 @@ public sealed partial class TextRecognitionWindow : Window
             TranslateButton.IsEnabled = false;
             StatusText.Text = "Translating...";
 
-            // The language and the length, never the key and never the text: a trace
-            // file is something a user attaches to a bug report, and both of those are
-            // theirs. The length is enough to tell an empty box from a refused request.
-            DiagnosticLog.Verbose(
-                $"translating {RecognizedTextBox.Text.Length} characters into {target}, "
-                    + $"key {(string.IsNullOrWhiteSpace(settings.TranslateApiKey) ? "absent" : "present")}");
+            // The language and the length, never the text: a trace file is something a
+            // user attaches to a bug report, and the text is theirs. The length is
+            // enough to tell an empty box from a refused request.
+            DiagnosticLog.Verbose($"translating {RecognizedTextBox.Text.Length} characters into {target}");
 
             var outcome = await TranslationService.TranslateAsync(
                 RecognizedTextBox.Text,
                 target,
-                settings.TranslateApiKey,
                 _closing.Token);
 
             DiagnosticLog.Verbose(
