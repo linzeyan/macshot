@@ -581,24 +581,29 @@ public static class AnnotationRasterizer
         var shaft = BuildShaftPath(annotation);
         var style = annotation.Style.ArrowStyle;
 
+        // Which end the head is on. A double-headed arrow has one at each end, so
+        // reversing it changes nothing — and the tail bar follows the head, or the arrow
+        // would come out with a bar through its point.
+        var pointing = !annotation.Style.ArrowReversed;
+
         var strokes = new List<CapturePoint[]> { shaft };
         var fills = new List<CapturePoint[]>();
 
         if (style == ArrowStyle.Open)
         {
             // Drawn rather than solid: the two sides of the same triangle, left open.
-            var head = ArrowHead(annotation, shaft, atEnd: true);
+            var head = ArrowHead(annotation, shaft, atEnd: pointing);
             strokes.Add([head[0], head[1]]);
             strokes.Add([head[0], head[2]]);
         }
         else
         {
-            fills.Add(ArrowHead(annotation, shaft, atEnd: true));
+            fills.Add(ArrowHead(annotation, shaft, atEnd: pointing));
         }
 
         if (style == ArrowStyle.Double)
         {
-            fills.Add(ArrowHead(annotation, shaft, atEnd: false));
+            fills.Add(ArrowHead(annotation, shaft, atEnd: !pointing));
         }
         else if (style == ArrowStyle.Tail)
         {
@@ -644,10 +649,12 @@ public static class AnnotationRasterizer
     /// </summary>
     private static CapturePoint[] TailBar(Annotation annotation, CapturePoint[] shaft)
     {
-        var leaving = shaft.Length >= 2 ? shaft[1] : annotation.End;
-        var angle = Math.Atan2(
-            leaving.Y - annotation.Start.Y,
-            leaving.X - annotation.Start.X) + (Math.PI / 2);
+        // The end the head is not on: a reversed arrow has its point at the start, so
+        // the bar has to move to the other end or it would sit across the point.
+        var reversed = annotation.Style.ArrowReversed;
+        var root = reversed ? annotation.End : annotation.Start;
+        var leaving = shaft.Length >= 2 ? (reversed ? shaft[^2] : shaft[1]) : (reversed ? annotation.Start : annotation.End);
+        var angle = Math.Atan2(leaving.Y - root.Y, leaving.X - root.X) + (Math.PI / 2);
 
         // Half a head's length either side: wide enough to read as a deliberate end,
         // narrow enough that it cannot be mistaken for a head of its own.
@@ -655,12 +662,8 @@ public static class AnnotationRasterizer
 
         return
         [
-            new CapturePoint(
-                annotation.Start.X - reach * Math.Cos(angle),
-                annotation.Start.Y - reach * Math.Sin(angle)),
-            new CapturePoint(
-                annotation.Start.X + reach * Math.Cos(angle),
-                annotation.Start.Y + reach * Math.Sin(angle)),
+            new CapturePoint(root.X - reach * Math.Cos(angle), root.Y - reach * Math.Sin(angle)),
+            new CapturePoint(root.X + reach * Math.Cos(angle), root.Y + reach * Math.Sin(angle)),
         ];
     }
 

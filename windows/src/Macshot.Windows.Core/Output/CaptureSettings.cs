@@ -186,6 +186,13 @@ public sealed record CaptureSettings
     /// <summary>How far the rectangle tool rounds its corners, in frame pixels.</summary>
     public double AnnotationCornerRadius { get; init; }
 
+    /// <summary>
+    /// Whether new arrows point back the way they are drawn. macshot's
+    /// <c>arrowReversed</c>, which it remembers between captures as it does every other
+    /// tool setting.
+    /// </summary>
+    public bool AnnotationArrowReversed { get; init; }
+
     /// <summary>How big the text tool sets a label, in frame pixels.</summary>
     /// <remarks>
     /// Remembered apart from the stroke width because it is set apart from it: the two
@@ -543,6 +550,7 @@ public sealed record CaptureSettings
                 AnnotationStyle.MaxFontSize),
             FontFamily = AnnotationFontFamily,
             Bold = AnnotationBold,
+            ArrowReversed = AnnotationArrowReversed,
             TextBackground = Annotations.AnnotationColor.TryParseHex(AnnotationTextBackground, out var fill)
                 ? fill
                 : null,
@@ -567,6 +575,7 @@ public sealed record CaptureSettings
             AnnotationFontSize = style.FontSize,
             AnnotationFontFamily = style.FontFamily,
             AnnotationBold = style.Bold,
+            AnnotationArrowReversed = style.ArrowReversed,
             AnnotationTextBackground = style.TextBackground?.ToHex() ?? string.Empty,
             AnnotationTextOutline = style.TextOutline?.ToHex() ?? string.Empty,
         };

@@ -99,6 +99,7 @@ public sealed class SettingsPortabilityTests
             AnnotationStrokeWidth = 7,
             AnnotationLineStyle = LineStyle.Dashed,
             AnnotationArrowStyle = ArrowStyle.Open,
+            AnnotationArrowReversed = true,
             AnnotationCornerRadius = 12,
             PencilSmoothing = PencilSmoothing.Refined,
             CensorMode = CensorMode.Erase,

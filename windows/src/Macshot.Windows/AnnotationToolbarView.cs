@@ -85,6 +85,19 @@ public sealed partial class AnnotationToolbarView : UserControl
     private readonly Slider _cornerRadius = OptionSlider(84, 0, 64);
     private readonly TextBlock _cornerValue = OptionValue(28);
     private readonly StyleSegments _arrowStyle = new();
+
+    /// <summary>
+    /// macshot's Flip, which turns an arrow round without redrawing it — an arrow is
+    /// drawn from where the hand starts to where it stops, and what it should point at is
+    /// often where the hand started.
+    /// </summary>
+    private readonly CheckBox _flipArrow = new()
+    {
+        Content = L("Flip"),
+        FontSize = OptionValueSize,
+        MinWidth = 0,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
     private readonly StyleSegments _smoothing = new();
     private readonly StyleSegments _censorMode = new();
     private readonly Button _font = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 10, Padding = new Thickness(8, 2, 8, 2) };
@@ -289,6 +302,8 @@ public sealed partial class AnnotationToolbarView : UserControl
         _censorMode.SelectionChanged += (_, _) => ApplyStyle();
         _lineStyle.SelectionChanged += (_, _) => ApplyStyle();
         _arrowStyle.SelectionChanged += (_, _) => ApplyStyle();
+        _flipArrow.Checked += (_, _) => ApplyStyle();
+        _flipArrow.Unchecked += (_, _) => ApplyStyle();
         _stampChoices.SelectionChanged += StampChoice_Changed;
         _smoothing.SelectionChanged += (_, index) =>
         {
@@ -727,6 +742,7 @@ public sealed partial class AnnotationToolbarView : UserControl
 
         _lineStyle.Visibility = Show(AnnotationToolOptions.UsesLineStyle(tool));
         _arrowStyle.Visibility = Show(AnnotationToolOptions.UsesArrowStyle(tool));
+        _flipArrow.Visibility = _arrowStyle.Visibility;
 
         var rounds = Show(AnnotationToolOptions.UsesCornerRadius(tool));
         _cornerLabel.Visibility = rounds;
@@ -923,7 +939,7 @@ public sealed partial class AnnotationToolbarView : UserControl
 
         AddGroup(_sizeLabel, _size, _sizeValue);
         AddGroup(_lineStyle);
-        AddGroup(_arrowStyle);
+        AddGroup(_arrowStyle, _flipArrow);
         AddGroup(_cornerLabel, _cornerRadius, _cornerValue);
         AddGroup(_smoothing);
         AddGroup(_censorMode);
@@ -1019,6 +1035,7 @@ public sealed partial class AnnotationToolbarView : UserControl
 
             _lineStyle.SelectedIndex = (int)_loadedStyle.LineStyle;
             _arrowStyle.SelectedIndex = (int)_loadedStyle.ArrowStyle;
+            _flipArrow.IsChecked = _loadedStyle.ArrowReversed;
             _size.Value = _loadedStyle.StrokeWidth;
             _cornerRadius.Value = _loadedStyle.CornerRadius;
             ShowSliderValue(_size, _sizeValue);
@@ -1107,6 +1124,7 @@ public sealed partial class AnnotationToolbarView : UserControl
                 ? previous.FontFamily
                 : FontPickerView.FamilyOf(_fontChoices.SelectedItem),
             Bold = _weight.SelectedIndex == 1,
+            ArrowReversed = _flipArrow.IsChecked == true,
             TextBackground = _textFill.IsOn ? ToAnnotationColor(_textFill.Color) : null,
             TextOutline = _textOutline.IsOn ? ToAnnotationColor(_textOutline.Color) : null,
         };

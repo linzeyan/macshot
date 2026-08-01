@@ -91,6 +91,17 @@ public sealed record AnnotationStyle(
     /// </summary>
     public AnnotationColor? TextOutline { get; init; }
 
+    /// <summary>
+    /// Whether an arrow points back the way it was drawn.
+    /// </summary>
+    /// <remarks>
+    /// macshot's <c>arrowReversed</c>. It exists because an arrow is drawn from where the
+    /// hand starts to where the hand stops, and what it should point at is often where the
+    /// hand started — pointing at a menu item means dragging out of the menu, which is
+    /// exactly the drag that is hardest to aim.
+    /// </remarks>
+    public bool ArrowReversed { get; init; }
+
     public void Validate()
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(StrokeWidth);
