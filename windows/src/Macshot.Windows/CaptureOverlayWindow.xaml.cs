@@ -15,6 +15,7 @@ using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Microsoft.UI.Xaml.Shapes;
+using static Macshot.Windows.Services.Localization;
 
 // Imported rather than written out at each use site: inside namespace Macshot.Windows
 // the name "Windows" binds to Macshot.Windows, so a qualified Point
@@ -287,6 +288,9 @@ public sealed partial class CaptureOverlayWindow : Window
         _monitorFrame = NativeScreenCaptureService.Crop(desktopFrame, layout.FrameRegionOf(monitor));
         _placement = new MonitorFramePlacement(layout, monitor);
         InitializeComponent();
+        // Every string in the XAML is already the English text macshot keys by,
+        // so the page is translated in place rather than written twice.
+        this.Localize();
     }
 
     /// <summary>
@@ -895,7 +899,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
             if (captured is null)
             {
-                Hint("Captured from the screen, so anything over the window is included");
+                Hint(L("Captured from the screen, so anything over the window is included"));
             }
         }
         catch (Exception exception)
@@ -1864,7 +1868,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         if (WindowBehind(region) is not { } window)
         {
-            Hint("There is no window behind that region to scroll");
+            Hint(L("There is no window behind that region to scroll"));
             return;
         }
 
@@ -1963,7 +1967,7 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         var previousHint = HintText.Text;
-        Hint("Reading text...");
+        Hint(L("Reading text..."));
         try
         {
             var lines = await AnnotationCanvas.RecognizeAsync();
@@ -2001,7 +2005,7 @@ public sealed partial class CaptureOverlayWindow : Window
                 // Silence here would be indistinguishable from a broken button, and
                 // "nothing found" is a useful answer on a screenshot about to be
                 // shared.
-                Hint("No personal data found in the selection");
+                Hint(L("No personal data found in the selection"));
                 return;
             }
 
@@ -2096,7 +2100,7 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
 
-        Hint("Translating...");
+        Hint(L("Translating..."));
         try
         {
             Hint(await TranslationPlacement.RunAsync(AnnotationCanvas, _settings.Current, CancellationToken.None));
@@ -2122,7 +2126,7 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         var previousHint = HintText.Text;
-        Hint("Reading text...");
+        Hint(L("Reading text..."));
         try
         {
             var lines = await AnnotationCanvas.RecognizeAsync();

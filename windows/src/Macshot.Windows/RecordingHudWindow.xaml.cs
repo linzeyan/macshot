@@ -8,6 +8,7 @@ using Microsoft.UI.Xaml.Media;
 using Windows.Graphics;
 using Windows.UI;
 using WinRT.Interop;
+using Macshot.Windows.Services;
 
 namespace Macshot.Windows;
 
@@ -84,6 +85,9 @@ public sealed partial class RecordingHudWindow : Window
     public RecordingHudWindow()
     {
         InitializeComponent();
+        // Every string in the XAML is already the English text macshot keys by,
+        // so the page is translated in place rather than written twice.
+        this.Localize();
 
         _ticker = DispatcherQueue.CreateTimer();
         _ticker.Interval = TimeSpan.FromSeconds(1);

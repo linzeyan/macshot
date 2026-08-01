@@ -74,6 +74,9 @@ public sealed partial class AnnotationCanvasView : UserControl
     public AnnotationCanvasView()
     {
         InitializeComponent();
+        // Every string in the XAML is already the English text macshot keys by,
+        // so the page is translated in place rather than written twice.
+        this.Localize();
     }
 
     /// <summary>The stamp tool's emoji, read from the toolbar when one is placed.</summary>

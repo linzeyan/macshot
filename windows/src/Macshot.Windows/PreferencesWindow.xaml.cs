@@ -12,6 +12,7 @@ using Windows.Graphics;
 using Windows.Storage.Pickers;
 using Windows.UI;
 using WinRT.Interop;
+using static Macshot.Windows.Services.Localization;
 
 namespace Macshot.Windows;
 
@@ -75,6 +76,9 @@ public sealed partial class PreferencesWindow : Window
     {
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         InitializeComponent();
+        // Every string in the XAML is already the English text macshot keys by,
+        // so the page is translated in place rather than written twice.
+        this.Localize();
 
         // The markup selects the first item, which happens while the pages it switches
         // between are still being built — so the handler that would have shown it declined
@@ -563,12 +567,12 @@ public sealed partial class PreferencesWindow : Window
         var confirm = new ContentDialog
         {
             XamlRoot = Content.XamlRoot,
-            Title = "Replace your current settings?",
+            Title = L("Replace your current settings?"),
             Content = "Importing replaces your preferences with the ones in this file. "
                 + "Your save folder, the last selection, and screenshot history are kept. "
                 + "This cannot be undone.",
-            PrimaryButtonText = "Import",
-            CloseButtonText = "Cancel",
+            PrimaryButtonText = L("Import"),
+            CloseButtonText = L("Cancel"),
             DefaultButton = ContentDialogButton.Close,
         };
 
@@ -649,6 +653,6 @@ public sealed partial class PreferencesWindow : Window
     private void ClearHistory_Click(object sender, RoutedEventArgs e)
     {
         ScreenshotHistory.Clear();
-        StatusText.Text = "History cleared.";
+        StatusText.Text = L("History cleared.");
     }
 }

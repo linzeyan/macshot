@@ -3,6 +3,7 @@ using Macshot.Windows.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
+using static Macshot.Windows.Services.Localization;
 
 using Windows.Graphics;
 
@@ -57,6 +58,9 @@ public sealed partial class HistoryWindow : Window
     public HistoryWindow()
     {
         InitializeComponent();
+        // Every string in the XAML is already the English text macshot keys by,
+        // so the page is translated in place rather than written twice.
+        this.Localize();
         this.GetAppWindow().UseAppIcon();
     }
 
@@ -162,6 +166,6 @@ public sealed partial class HistoryWindow : Window
     {
         ScreenshotHistory.Clear();
         await ReloadAsync();
-        StatusText.Text = "History cleared.";
+        StatusText.Text = L("History cleared.");
     }
 }

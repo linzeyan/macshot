@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
 using Windows.System;
+using static Macshot.Windows.Services.Localization;
 
 namespace Macshot.Windows;
 
@@ -76,10 +77,13 @@ public sealed partial class TextRecognitionWindow : Window
 #endif
 
         InitializeComponent();
+        // Every string in the XAML is already the English text macshot keys by,
+        // so the page is translated in place rather than written twice.
+        this.Localize();
         _qrCodes = qrCodes ?? [];
         RecognizedTextBox.Text = text ?? string.Empty;
         StatusText.Text = string.IsNullOrWhiteSpace(text) && _qrCodes.Count == 0
-            ? "No text was recognized."
+            ? L("No text was recognized.")
             : string.Empty;
         ShowCount(text ?? string.Empty);
         ShowQrCodes();
@@ -173,7 +177,7 @@ public sealed partial class TextRecognitionWindow : Window
     {
         // macshot's titles: the window says what it holds, and it does not always hold
         // the same thing.
-        Title = _qrCodes.Count == 0 ? "Text Recognition" : "Text & QR Recognition";
+        Title = L(_qrCodes.Count == 0 ? "Text Recognition" : "Text & QR Recognition");
 
         if (_qrCodes.Count == 0)
         {
@@ -181,7 +185,7 @@ public sealed partial class TextRecognitionWindow : Window
         }
 
         QrSection.Visibility = Visibility.Visible;
-        QrHeading.Text = _qrCodes.Count == 1 ? "QR Code" : "QR Codes";
+        QrHeading.Text = L(_qrCodes.Count == 1 ? "QR Code" : "QR Codes");
 
         foreach (var code in _qrCodes)
         {
@@ -204,8 +208,8 @@ public sealed partial class TextRecognitionWindow : Window
             ToolTipService.SetToolTip(value, code.Value);
             row.Children.Add(value);
 
-            var copy = new Button { Content = "Copy", FontSize = 12, Padding = new Thickness(10, 2, 10, 2) };
-            copy.Click += (_, _) => CopyText(code.Value, "QR code copied.");
+            var copy = new Button { Content = L("Copy"), FontSize = 12, Padding = new Thickness(10, 2, 10, 2) };
+            copy.Click += (_, _) => CopyText(code.Value, L("QR code copied."));
             Grid.SetColumn(copy, 1);
             row.Children.Add(copy);
 
@@ -213,7 +217,7 @@ public sealed partial class TextRecognitionWindow : Window
             // disabled one: a Wi-Fi or vCard code is not a broken link.
             if (code.Url is { } url)
             {
-                var open = new Button { Content = "Open", FontSize = 12, Padding = new Thickness(10, 2, 10, 2) };
+                var open = new Button { Content = L("Open"), FontSize = 12, Padding = new Thickness(10, 2, 10, 2) };
                 open.Click += async (_, _) => await Launcher.LaunchUriAsync(url);
                 Grid.SetColumn(open, 2);
                 row.Children.Add(open);
@@ -231,7 +235,7 @@ public sealed partial class TextRecognitionWindow : Window
             ? string.Join(Environment.NewLine, _qrCodes.Select(code => code.Value))
             : RecognizedTextBox.Text;
 
-        CopyText(text, "Copied.");
+        CopyText(text, L("Copied."));
     }
 
     private void CopyText(string text, string done)
@@ -282,7 +286,7 @@ public sealed partial class TextRecognitionWindow : Window
             var target = SelectedLanguageCode();
 
             TranslateButton.IsEnabled = false;
-            StatusText.Text = "Translating...";
+            StatusText.Text = L("Translating...");
 
             // The language and the length, never the text: a trace file is something a
             // user attaches to a bug report, and the text is theirs. The length is

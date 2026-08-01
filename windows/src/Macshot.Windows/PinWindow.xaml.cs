@@ -11,6 +11,7 @@ using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Graphics;
 using Windows.System;
 using WinRT.Interop;
+using static Macshot.Windows.Services.Localization;
 
 namespace Macshot.Windows;
 
@@ -50,6 +51,9 @@ public sealed partial class PinWindow : Window
         _frame = frame ?? throw new ArgumentNullException(nameof(frame));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         InitializeComponent();
+        // Every string in the XAML is already the English text macshot keys by,
+        // so the page is translated in place rather than written twice.
+        this.Localize();
 
         EditButton.Child = Glyph(ToolbarCommand.OpenEditor);
         CloseButton.Child = Glyph(ToolbarCommand.Cancel);
@@ -270,7 +274,7 @@ public sealed partial class PinWindow : Window
         {
             Title = title,
             Content = message,
-            CloseButtonText = "OK",
+            CloseButtonText = L("OK"),
             XamlRoot = root,
         };
         await dialog.ShowAsync();

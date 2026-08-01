@@ -7,6 +7,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Graphics;
+using static Macshot.Windows.Services.Localization;
 
 namespace Macshot.Windows;
 
@@ -49,6 +50,9 @@ public sealed partial class ThumbnailWindow : Window
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         HistoryPath = historyPath;
         InitializeComponent();
+        // Every string in the XAML is already the English text macshot keys by,
+        // so the page is translated in place rather than written twice.
+        this.Localize();
 
         CloseDisc.Child = Glyph(ToolbarCommand.Cancel);
         PinDisc.Child = Glyph(ToolbarCommand.Pin);
@@ -280,7 +284,7 @@ public sealed partial class ThumbnailWindow : Window
         {
             Title = title,
             Content = message,
-            CloseButtonText = "OK",
+            CloseButtonText = L("OK"),
             XamlRoot = root,
         };
         await dialog.ShowAsync();

@@ -8,6 +8,7 @@ using Macshot.Windows.Core.Output;
 using Macshot.Windows.Services;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
+using static Macshot.Windows.Services.Localization;
 
 namespace Macshot.Windows;
 
@@ -152,16 +153,16 @@ public sealed class CaptureController : IDisposable
         // The variant's own name, so someone running both can tell which icon is which
         // from the tooltip alone.
         _trayIcon = new TrayIconService(_messageWindow, BuildVariant.DisplayName);
-        _trayIcon.AddMenuItem(CommandCaptureArea, "Capture area");
-        _trayIcon.AddMenuItem(CommandCaptureAllScreens, "Capture all screens");
-        _trayIcon.AddMenuItem(CommandCaptureAfterDelay, "Capture area after a delay");
-        _trayIcon.AddMenuItem(CommandRecordScreen, "Record screen");
+        _trayIcon.AddMenuItem(CommandCaptureArea, L("Capture area"));
+        _trayIcon.AddMenuItem(CommandCaptureAllScreens, L("Capture all screens"));
+        _trayIcon.AddMenuItem(CommandCaptureAfterDelay, L("Capture area after a delay"));
+        _trayIcon.AddMenuItem(CommandRecordScreen, L("Record screen"));
         _trayIcon.AddSeparator();
-        _trayIcon.AddSubmenu("Recent captures", RecentMenuEntries);
-        _trayIcon.AddMenuItem(CommandHistory, "History...");
+        _trayIcon.AddSubmenu(L("Recent captures"), RecentMenuEntries);
+        _trayIcon.AddMenuItem(CommandHistory, L("History..."));
         _trayIcon.AddSeparator();
-        _trayIcon.AddMenuItem(CommandPreferences, "Preferences...");
-        _trayIcon.AddMenuItem(CommandQuit, "Quit macshot");
+        _trayIcon.AddMenuItem(CommandPreferences, L("Preferences..."));
+        _trayIcon.AddMenuItem(CommandQuit, L("Quit macshot"));
         _trayIcon.CommandInvoked += OnTrayCommandInvoked;
         _trayIcon.DefaultActionInvoked += (_, _) => Post(BeginAreaCaptureAsync);
 

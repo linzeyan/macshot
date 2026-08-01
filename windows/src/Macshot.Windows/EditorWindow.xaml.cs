@@ -11,6 +11,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Input;
+using static Macshot.Windows.Services.Localization;
 
 // Imported rather than written out at each use site: inside namespace Macshot.Windows
 // the name "Windows" binds to Macshot.Windows, so a qualified Point resolves to
@@ -115,6 +116,9 @@ public sealed partial class EditorWindow : Window
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _opensWith = annotations;
         InitializeComponent();
+        // Every string in the XAML is already the English text macshot keys by,
+        // so the page is translated in place rather than written twice.
+        this.Localize();
         this.GetAppWindow().UseAppIcon();
     }
 
@@ -904,7 +908,7 @@ public sealed partial class EditorWindow : Window
     private async Task ReadTextAsync()
     {
         var previousHint = HintText.Text;
-        HintText.Text = "Reading text...";
+        HintText.Text = L("Reading text...");
         try
         {
             var lines = await AnnotationCanvas.RecognizeAsync();
@@ -927,7 +931,7 @@ public sealed partial class EditorWindow : Window
             var annotations = AutoRedactor.Redact(lines);
             if (annotations.Count == 0)
             {
-                HintText.Text = "No personal data found in the image";
+                HintText.Text = L("No personal data found in the image");
                 return;
             }
 
@@ -944,7 +948,7 @@ public sealed partial class EditorWindow : Window
     /// </summary>
     private async Task TranslateAsync()
     {
-        HintText.Text = "Translating...";
+        HintText.Text = L("Translating...");
         try
         {
             HintText.Text =
@@ -960,7 +964,7 @@ public sealed partial class EditorWindow : Window
     private async Task RunRecognitionAsync(Action<IReadOnlyList<RecognizedLine>> handle)
     {
         var previousHint = HintText.Text;
-        HintText.Text = "Reading text...";
+        HintText.Text = L("Reading text...");
         try
         {
             var lines = await AnnotationCanvas.RecognizeAsync();
@@ -981,7 +985,7 @@ public sealed partial class EditorWindow : Window
             if (AnnotationCanvas.ToFrame() is { } finished)
             {
                 await ImageDelivery.CopyToClipboardAsync(finished);
-                HintText.Text = "Copied to the clipboard";
+                HintText.Text = L("Copied to the clipboard");
             }
         }
         catch (Exception exception)
