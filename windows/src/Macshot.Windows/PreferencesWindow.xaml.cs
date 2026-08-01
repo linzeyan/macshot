@@ -1013,10 +1013,16 @@ public sealed partial class PreferencesWindow : Window
     /// a private method nobody calls, which is a warning, which that build treats as an
     /// error.
     /// </remarks>
-    private static Brush StatusBrush(string key, Color fallback) =>
-        Application.Current.Resources.TryGetValue(key, out var found) && found is Brush themed
+    private static Brush StatusBrush(string key, Color fallback)
+    {
+        // ContainsKey and the indexer, not TryGetValue: ResourceDictionary reaches C#
+        // through the WinRT projection, where the IDictionary members are explicit
+        // implementations and are not callable on the type itself.
+        var resources = Application.Current.Resources;
+        return resources.ContainsKey(key) && resources[key] is Brush themed
             ? themed
             : new SolidColorBrush(fallback);
+    }
 #endif
 
     /// <summary>Writes one small object to the bucket and says what came back.</summary>
