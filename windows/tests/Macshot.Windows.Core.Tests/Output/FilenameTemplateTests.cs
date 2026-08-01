@@ -160,10 +160,45 @@ public sealed class FilenameTemplateTests
     [TestMethod]
     public void ResolveUnique_SuffixesUntilTheNameIsFree()
     {
-        var taken = new HashSet<string> { "shot.png", "shot-2.png" };
+        // "name (2)", which is macshot's suffix and the shell's on both platforms —
+        // not "name-2", which reads as part of the name the user typed.
+        var taken = new HashSet<string> { "shot.png", "shot (2).png" };
 
         var name = FilenameTemplate.ResolveUnique("shot", Timestamp, ".png", taken.Contains);
 
-        Assert.AreEqual("shot-3.png", name);
+        Assert.AreEqual("shot (3).png", name);
+    }
+
+    [TestMethod]
+    public void Resolve_DropsAControlCharacterRatherThanLeavingAMarkWhereItWas()
+    {
+        // macshot strips them (FilenameFormatter.swift:87). A window title with a stray
+        // newline should not produce a name with a dash in the middle of a word.
+        Assert.AreEqual("abcd", FilenameTemplate.Resolve("abc\nd", Timestamp));
+    }
+
+    [TestMethod]
+    public void Resolve_CapsTheNameInBytesRatherThanCharacters()
+    {
+        // macshot caps at 200 UTF-8 bytes. Counting characters would let a title in
+        // Chinese through at three times the length of the same title in English.
+        var chinese = new string('圖', 200);
+
+        var name = FilenameTemplate.Resolve(chinese, Timestamp);
+
+        Assert.IsTrue(
+            System.Text.Encoding.UTF8.GetByteCount(name) <= 200,
+            $"{System.Text.Encoding.UTF8.GetByteCount(name)} bytes");
+
+        // Cut on a character boundary, never mid-sequence.
+        Assert.AreEqual(new string('圖', 66), name);
+    }
+
+    [TestMethod]
+    public void Resolve_KeepsAnAsciiNameAsLongAsMacshotDoes()
+    {
+        var name = FilenameTemplate.Resolve(new string('a', 250), Timestamp);
+
+        Assert.AreEqual(200, name.Length);
     }
 }

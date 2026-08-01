@@ -52,7 +52,8 @@ public static class FilenameTemplate
     /// <summary>Used when a template resolves to nothing usable, so a capture is never lost.</summary>
     private const string Fallback = "Macshot";
 
-    private const int MaxLength = 120;
+    /// <summary>macshot's cap, and in macshot's unit — UTF-8 bytes, not characters.</summary>
+    private const int MaxBytes = 200;
 
     /// <summary>How long a <c>{random}</c> run is. macshot's eight.</summary>
     private const int RandomLength = 8;
@@ -84,9 +85,14 @@ public static class FilenameTemplate
 
         var stem = Resolve(template, timestamp, context);
         var candidate = stem + extension;
+
+        // "name (2).png", which is macshot's suffix (ImageSaveService.swift:212–225)
+        // and the shell's on both platforms. macshot gives up at 999 and returns a name
+        // that already exists, overwriting it; this does not, because a save that
+        // silently replaces a capture is worse than a long loop nobody will reach.
         for (var attempt = 2; exists(candidate); attempt++)
         {
-            candidate = $"{stem}-{attempt.ToString(CultureInfo.InvariantCulture)}{extension}";
+            candidate = $"{stem} ({attempt.ToString(CultureInfo.InvariantCulture)}){extension}";
         }
 
         return candidate;
@@ -166,20 +172,57 @@ public static class FilenameTemplate
         var builder = new StringBuilder(name.Length);
         foreach (var character in name)
         {
-            builder.Append(
-                char.IsControl(character) || Array.IndexOf(InvalidCharacters, character) >= 0
-                    ? '-'
-                    : character);
+            // Control characters are dropped rather than replaced, which is macshot's
+            // rule (FilenameFormatter.swift:87). A window title with a stray newline in
+            // it should not become a name with a dash where nothing was.
+            if (char.IsControl(character))
+            {
+                continue;
+            }
+
+            builder.Append(Array.IndexOf(InvalidCharacters, character) >= 0 ? '-' : character);
         }
 
         // Windows silently drops trailing dots and spaces, so a name ending in one
         // would not round-trip: what came back would not be what was asked for.
         var trimmed = builder.ToString().Trim().TrimEnd('.', ' ');
-        if (trimmed.Length > MaxLength)
-        {
-            trimmed = trimmed[..MaxLength].TrimEnd('.', ' ');
-        }
+        trimmed = CapBytes(trimmed).TrimEnd('.', ' ').Trim();
 
         return trimmed.Length == 0 ? Fallback : trimmed;
+    }
+
+    /// <summary>
+    /// Cuts the name to <see cref="MaxBytes"/> UTF-8 bytes, never mid-character.
+    /// </summary>
+    /// <remarks>
+    /// Bytes rather than characters, which is macshot's cap
+    /// (<c>FilenameFormatter.swift:capToByteLength</c>) and the one that matches what a
+    /// file system actually limits. Counting characters would let a title in Chinese or
+    /// Japanese through at three times the length of the same title in English.
+    /// </remarks>
+    private static string CapBytes(string name)
+    {
+        if (Encoding.UTF8.GetByteCount(name) <= MaxBytes)
+        {
+            return name;
+        }
+
+        var bytes = 0;
+        var enumerator = StringInfo.GetTextElementEnumerator(name);
+        var kept = new StringBuilder(name.Length);
+        while (enumerator.MoveNext())
+        {
+            var element = (string)enumerator.Current;
+            var cost = Encoding.UTF8.GetByteCount(element);
+            if (bytes + cost > MaxBytes)
+            {
+                break;
+            }
+
+            bytes += cost;
+            kept.Append(element);
+        }
+
+        return kept.ToString();
     }
 }
