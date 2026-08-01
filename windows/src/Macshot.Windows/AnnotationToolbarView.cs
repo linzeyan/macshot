@@ -147,6 +147,8 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// </summary>
     private AnnotationTool _toolBeforeSampling = AnnotationTool.Arrow;
 
+    private bool _recordingSetup;
+
     private bool _beautified;
 
     private bool _inverted;
@@ -218,6 +220,28 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// strips at fixed corners rather than around a selection.
     /// </summary>
     public bool EditorMode { get; set; }
+
+    /// <summary>
+    /// Whether the strip is the one shown after a region has been chosen to record:
+    /// Start, Cancel and the five switches that decide what ends up in the file.
+    /// </summary>
+    /// <remarks>
+    /// macshot replaces the whole action strip here and empties the tool strip, because
+    /// there is nothing to draw on yet — and because every one of those switches has to
+    /// be decided before the recording starts rather than after.
+    /// </remarks>
+    public bool RecordingSetup
+    {
+        get => _recordingSetup;
+        set
+        {
+            if (_recordingSetup != value)
+            {
+                _recordingSetup = value;
+                RefreshStrips();
+            }
+        }
+    }
 
     /// <summary>
     /// Whether the capture is set to be framed, which lights the Beautify button.
@@ -340,7 +364,10 @@ public sealed partial class AnnotationToolbarView : UserControl
 
         var hasOptions = _optionsRow.Visibility == Visibility.Visible;
         var sizes = new ToolbarSizes(
-            _tools.Size,
+            // Zero rather than the strip's own size while it is hidden: an empty strip
+            // still reports a slab's worth of padding, and the action strip would be
+            // placed clear of something that is not on screen.
+            _tools.Visibility == Visibility.Visible ? _tools.Size : default,
             _actions.Size,
             hasOptions ? new CaptureRegion(0, 0, 0, OptionsRowHeight) : default);
 
@@ -372,9 +399,19 @@ public sealed partial class AnnotationToolbarView : UserControl
                 return [];
             }
 
-            return _optionsRow.Visibility == Visibility.Visible
-                ? [layout.Tools, layout.Actions, layout.OptionsRow]
-                : [layout.Tools, layout.Actions];
+            var occupied = new List<CaptureRegion>(3) { layout.Actions };
+
+            if (_tools.Visibility == Visibility.Visible)
+            {
+                occupied.Add(layout.Tools);
+            }
+
+            if (_optionsRow.Visibility == Visibility.Visible)
+            {
+                occupied.Add(layout.OptionsRow);
+            }
+
+            return occupied;
         }
     }
 
@@ -513,10 +550,49 @@ public sealed partial class AnnotationToolbarView : UserControl
             ShowEffectsPicker();
             return;
 
+        // The five recording switches are settings, and settings are this control's to
+        // write: the host would only be handing them straight back. Everything else on
+        // that strip — start, cancel, the preferences, the region handle — is the
+        // host's, and goes out with the rest.
+        case ToolbarCommand.MouseHighlight:
+            Toggle(current => current with { ShowClickHighlight = !current.ShowClickHighlight });
+            return;
+
+        case ToolbarCommand.ShowKeystrokes:
+            Toggle(current => current with { ShowKeystrokes = !current.ShowKeystrokes });
+            return;
+
+        case ToolbarCommand.SystemAudio:
+            Toggle(current => current with { RecordSystemAudio = !current.RecordSystemAudio });
+            return;
+
+        case ToolbarCommand.MicAudio:
+            Toggle(current => current with { RecordMicAudio = !current.RecordMicAudio });
+            return;
+
+        case ToolbarCommand.Webcam:
+            Toggle(current => current with { RecordWebcam = !current.RecordWebcam });
+            CommandInvoked?.Invoke(this, item.Command);
+            return;
+
         default:
             CommandInvoked?.Invoke(this, item.Command);
             return;
         }
+    }
+
+    /// <summary>
+    /// Writes a recording switch and relights its button.
+    /// </summary>
+    /// <remarks>
+    /// The strip is rebuilt from the settings rather than the button toggling itself, so
+    /// the light is the setting rather than a second copy of it — the preferences window
+    /// can be open at the same time, showing the same switch.
+    /// </remarks>
+    private void Toggle(Func<CaptureSettings, CaptureSettings> change)
+    {
+        Remember(change);
+        RefreshStrips();
     }
 
     /// <summary>
@@ -758,11 +834,33 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// </summary>
     private void RefreshStrips()
     {
+        if (_recordingSetup)
+        {
+            var current = _settings?.Current ?? CaptureSettings.Default;
+
+            _tools.Visibility = Visibility.Collapsed;
+            _optionsRow.Visibility = Visibility.Collapsed;
+            _actions.SetItems(ToolbarActions.Recording(
+                current.ShowClickHighlight,
+                current.ShowKeystrokes,
+                current.RecordSystemAudio,
+                current.RecordMicAudio,
+                current.RecordWebcam));
+
+            if (_placedAround is { } placed)
+            {
+                Reposition(placed.Selection, placed.Screen, placed.Avoid);
+            }
+
+            return;
+        }
+
         if (_editor is not { } editor)
         {
             return;
         }
 
+        _tools.Visibility = Visibility.Visible;
         _tools.SetItems(ToolbarActions.Tools(
             editor.Tool,
             _settings?.Current.EnabledTools(),

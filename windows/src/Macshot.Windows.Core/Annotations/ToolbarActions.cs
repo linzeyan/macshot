@@ -61,6 +61,30 @@ public enum ToolbarCommand
 
     /// <summary>Record the region as video rather than taking a still of it.</summary>
     Record,
+
+    /// <summary>Begin recording the region that has been chosen.</summary>
+    StartRecording,
+
+    /// <summary>Leave recording setup without having recorded anything.</summary>
+    CancelRecording,
+
+    /// <summary>Ring every click while the recording runs.</summary>
+    MouseHighlight,
+
+    /// <summary>Show what is being typed while the recording runs.</summary>
+    ShowKeystrokes,
+
+    /// <summary>Take what the machine is playing into the recording.</summary>
+    SystemAudio,
+
+    /// <summary>Take what the microphone hears into the recording.</summary>
+    MicAudio,
+
+    /// <summary>Put the camera in a corner of the recording.</summary>
+    Webcam,
+
+    /// <summary>Open the recording preferences.</summary>
+    RecordingSettings,
 }
 
 /// <summary>One button on a toolbar strip.</summary>
@@ -223,6 +247,47 @@ public static class ToolbarActions
 
         return items;
     }
+
+    /// <summary>
+    /// The strip shown once a region has been chosen to record, before anything is
+    /// being recorded.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// macshot's <c>rightButtons(isRecording:)</c>, which returns early and replaces the
+    /// whole action strip: Start and Cancel, then the five switches that decide what ends
+    /// up in the file, then the preferences and the handle for nudging the region. The
+    /// tool strip is empty here — macshot's <c>bottomButtons</c> returns nothing while
+    /// recording is being set up, because there is nothing to draw on yet.
+    /// </para>
+    /// <para>
+    /// A setup step rather than an immediate start, because every one of those five
+    /// switches has to be decided <em>before</em> the recording begins and cannot be
+    /// changed after: whether the microphone was on is not something a recording can be
+    /// asked afterwards.
+    /// </para>
+    /// <para>
+    /// The tooltips are macshot's own English, which is what its translations are keyed
+    /// by — a paraphrase would resolve against nothing and ship untranslated.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<ToolbarItem> Recording(
+        bool mouseHighlight,
+        bool keystrokes,
+        bool systemAudio,
+        bool micAudio,
+        bool webcam) =>
+    [
+        new ToolbarItem(ToolbarCommand.StartRecording, "Start Recording"),
+        new ToolbarItem(ToolbarCommand.CancelRecording, "Cancel Recording"),
+        new ToolbarItem(ToolbarCommand.MouseHighlight, "Highlight Mouse Clicks", IsSelected: mouseHighlight),
+        new ToolbarItem(ToolbarCommand.ShowKeystrokes, "Show Keystrokes", IsSelected: keystrokes),
+        new ToolbarItem(ToolbarCommand.SystemAudio, "Record System Audio", IsSelected: systemAudio),
+        new ToolbarItem(ToolbarCommand.MicAudio, "Record Microphone", IsSelected: micAudio),
+        new ToolbarItem(ToolbarCommand.Webcam, "Webcam Overlay", IsSelected: webcam),
+        new ToolbarItem(ToolbarCommand.RecordingSettings, "Recording Settings"),
+        new ToolbarItem(ToolbarCommand.MoveSelection, "Move Selection"),
+    ];
 
     /// <summary>The name shown when the pointer rests on a tool's button.</summary>
     public static string Tooltip(AnnotationTool tool) => tool switch

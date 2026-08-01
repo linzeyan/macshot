@@ -216,4 +216,63 @@ public sealed class ToolbarActionsTests
                 $"{item.Command} {item.Tool} has no tooltip, and an icon with no name is a guess");
         }
     }
+
+    [TestMethod]
+    public void RecordingSetupOffersStartFirstAndCancelBesideIt()
+    {
+        var items = ToolbarActions.Recording(false, false, false, false, false)
+            .Select(item => item.Command)
+            .ToArray();
+
+        Assert.AreEqual(ToolbarCommand.StartRecording, items[0]);
+        Assert.AreEqual(ToolbarCommand.CancelRecording, items[1]);
+    }
+
+    /// <summary>
+    /// The five that decide what ends up in the file, all of them switches, all of them
+    /// unanswerable once the recording has started.
+    /// </summary>
+    [TestMethod]
+    public void RecordingSetupCarriesTheFiveSwitchesAndLightsTheOnesThatAreOn()
+    {
+        var items = ToolbarActions.Recording(
+            mouseHighlight: true,
+            keystrokes: false,
+            systemAudio: true,
+            micAudio: false,
+            webcam: true);
+
+        var lit = items.Where(item => item.IsSelected).Select(item => item.Command).ToArray();
+
+        CollectionAssert.AreEquivalent(
+            new[] { ToolbarCommand.MouseHighlight, ToolbarCommand.SystemAudio, ToolbarCommand.Webcam },
+            lit);
+    }
+
+    [TestMethod]
+    public void RecordingSetupIsNotTheOrdinaryStrip()
+    {
+        var recording = ToolbarActions.Recording(false, false, false, false, false)
+            .Select(item => item.Command)
+            .ToArray();
+
+        // Nothing that finishes a still capture: there is no still capture to finish.
+        CollectionAssert.DoesNotContain(recording, ToolbarCommand.Copy);
+        CollectionAssert.DoesNotContain(recording, ToolbarCommand.Save);
+        CollectionAssert.DoesNotContain(recording, ToolbarCommand.Record);
+
+        // The region can still be nudged before it is committed to.
+        CollectionAssert.Contains(recording, ToolbarCommand.MoveSelection);
+    }
+
+    [TestMethod]
+    public void EveryRecordingButtonSaysWhatItIs()
+    {
+        foreach (var item in ToolbarActions.Recording(false, false, false, false, false))
+        {
+            Assert.IsFalse(
+                string.IsNullOrWhiteSpace(item.Tooltip),
+                $"{item.Command} has no tooltip, and an icon with no name is a guess");
+        }
+    }
 }

@@ -157,8 +157,27 @@ public sealed partial class PreferencesWindow : Window
         Apply();
     }
 
-    private void ShowThumbnailScale() =>
-        ThumbnailScaleReading.Text = $"{ThumbnailScaleSlider.Value:0}%";
+    /// <summary>
+    /// Writes the reading beside the slider, if there is one yet.
+    /// </summary>
+    /// <remarks>
+    /// The guard is not defensive padding. A slider whose markup gives it a minimum of 50
+    /// has its value coerced from WinUI's default of 0 the moment that attribute is
+    /// applied, which raises ValueChanged <em>while the page is still being parsed</em> —
+    /// and the reading beside it is the next element in the markup, so it does not exist
+    /// yet. Dereferencing it there threw inside <c>InitializeComponent</c>, which is a
+    /// constructor, on the UI thread: the settings window did not open and the app went
+    /// with it.
+    /// </remarks>
+    private void ShowThumbnailScale()
+    {
+        if (ThumbnailScaleReading is not { } reading)
+        {
+            return;
+        }
+
+        reading.Text = $"{ThumbnailScaleSlider.Value:0}%";
+    }
 
     /// <summary>
     /// Takes what a text box holds when the focus leaves it, rather than as it is typed.
@@ -410,6 +429,30 @@ public sealed partial class PreferencesWindow : Window
         KeystrokeModeBox.SelectedIndex = settings.ShowEveryKeystroke ? 1 : 0;
         RecordSystemAudioCheck.IsChecked = settings.RecordSystemAudio;
         RecordMicAudioCheck.IsChecked = settings.RecordMicAudio;
+        WebcamCheck.IsChecked = settings.RecordWebcam;
+
+        // macshot's own four corners, four sizes and two shapes, in its order, so every
+        // entry is a string its translations are keyed by.
+        WebcamCornerBox.ItemsSource = new List<string>
+        {
+            L("Bottom Right"),
+            L("Bottom Left"),
+            L("Top Right"),
+            L("Top Left"),
+        };
+        WebcamCornerBox.SelectedIndex = (int)settings.WebcamCorner;
+
+        WebcamSizeBox.ItemsSource = new List<string>
+        {
+            L("Webcam Size Small"),
+            L("Webcam Size Medium"),
+            L("Webcam Size Large"),
+            L("Webcam Size Extra Large"),
+        };
+        WebcamSizeBox.SelectedIndex = (int)settings.WebcamSize;
+
+        WebcamShapeBox.ItemsSource = new List<string> { L("Circle"), L("Rounded Rectangle") };
+        WebcamShapeBox.SelectedIndex = (int)settings.WebcamShape;
         ClipboardCheck.IsChecked = settings.CopyToClipboard;
         AutoSaveCheck.IsChecked = settings.AutoSave;
         ThumbnailCheck.IsChecked = settings.ShowThumbnail;
@@ -528,6 +571,10 @@ public sealed partial class PreferencesWindow : Window
             ShowEveryKeystroke = KeystrokeModeBox.SelectedIndex == 1,
             RecordSystemAudio = RecordSystemAudioCheck.IsChecked == true,
             RecordMicAudio = RecordMicAudioCheck.IsChecked == true,
+            RecordWebcam = WebcamCheck.IsChecked == true,
+            WebcamCorner = (WebcamCorner)Math.Max(WebcamCornerBox.SelectedIndex, 0),
+            WebcamSize = (WebcamSize)Math.Max(WebcamSizeBox.SelectedIndex, 0),
+            WebcamShape = (WebcamShape)Math.Max(WebcamShapeBox.SelectedIndex, 0),
             CopyToClipboard = ClipboardCheck.IsChecked == true,
             AutoSave = AutoSaveCheck.IsChecked == true,
             ShowThumbnail = ThumbnailCheck.IsChecked == true,

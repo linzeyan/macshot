@@ -211,6 +211,97 @@ internal static class ToolbarIcons
             canvas.Children.Add(Ring(0.5, 15, 0.55));
             break;
 
+        case ToolbarCommand.StartRecording:
+            // macshot's record.circle: the same dot as Record, ringed, because this is
+            // the press that actually starts it.
+            canvas.Children.Add(new Ellipse
+            {
+                Width = 7,
+                Height = 7,
+                Fill = ToolbarPalette.IconBrush(),
+                Margin = new Thickness(4.5, 4.5, 0, 0),
+            });
+            canvas.Children.Add(Ring(1, 13, 1));
+            break;
+
+        case ToolbarCommand.CancelRecording:
+            canvas.Children.Add(Stroke(4, 4, 12, 12, thickness: 1.8));
+            canvas.Children.Add(Stroke(12, 4, 4, 12, thickness: 1.8));
+            break;
+
+        case ToolbarCommand.MouseHighlight:
+            // A pointer with the two marks that say it was clicked, which is what the
+            // recording draws round each click.
+            canvas.Children.Add(Stroke(6, 4, 6, 12));
+            canvas.Children.Add(Stroke(6, 4, 11.5, 9.5));
+            canvas.Children.Add(Stroke(6, 12, 11.5, 9.5));
+            canvas.Children.Add(Stroke(2.5, 3, 4, 4.5, opacity: 0.7));
+            canvas.Children.Add(Stroke(2.5, 8, 4.5, 8, opacity: 0.7));
+            break;
+
+        case ToolbarCommand.ShowKeystrokes:
+            // A keyboard: the outline, two rows of keys, and the space bar.
+            canvas.Children.Add(Frame(1.5, 4, 13, 9));
+            canvas.Children.Add(Stroke(4, 6.5, 12, 6.5, thickness: 1.2, opacity: 0.7));
+            canvas.Children.Add(Stroke(4, 8.8, 12, 8.8, thickness: 1.2, opacity: 0.7));
+            canvas.Children.Add(Stroke(5.5, 11, 10.5, 11, thickness: 1.2));
+            break;
+
+        case ToolbarCommand.SystemAudio:
+            // A speaker with its waves. Both waves are drawn whatever the state — the
+            // button lights when it is on, and the drawing does not have to say so twice.
+            canvas.Children.Add(Block(2, 6, 3, 4));
+            canvas.Children.Add(Stroke(5, 6, 8, 3.5));
+            canvas.Children.Add(Stroke(5, 10, 8, 12.5));
+            canvas.Children.Add(Stroke(8, 3.5, 8, 12.5));
+            canvas.Children.Add(Stroke(10.5, 6, 10.5, 10, opacity: 0.75));
+            canvas.Children.Add(Stroke(13, 4, 13, 12, opacity: 0.5));
+            break;
+
+        case ToolbarCommand.MicAudio:
+            // A microphone: the capsule, the cradle under it, and the stand.
+            canvas.Children.Add(new Rectangle
+            {
+                Width = 4.5,
+                Height = 8,
+                RadiusX = 2.25,
+                RadiusY = 2.25,
+                Stroke = ToolbarPalette.IconBrush(),
+                StrokeThickness = 1.5,
+                Margin = new Thickness(5.75, 1.5, 0, 0),
+            });
+            canvas.Children.Add(Stroke(3.5, 8, 3.5, 9.5));
+            canvas.Children.Add(Stroke(12.5, 8, 12.5, 9.5));
+            canvas.Children.Add(Stroke(3.5, 9.5, 12.5, 9.5));
+            canvas.Children.Add(Stroke(8, 11.5, 8, 14.5));
+            break;
+
+        case ToolbarCommand.Webcam:
+            // A camera body with its lens, which is what the button puts in the corner
+            // of the recording.
+            canvas.Children.Add(new Rectangle
+            {
+                Width = 13,
+                Height = 9,
+                RadiusX = 2,
+                RadiusY = 2,
+                Stroke = ToolbarPalette.IconBrush(),
+                StrokeThickness = 1.5,
+                Margin = new Thickness(1.5, 3.5, 0, 0),
+            });
+            canvas.Children.Add(Ring(4.5, 6, 1));
+            break;
+
+        case ToolbarCommand.RecordingSettings:
+            // macshot's gearshape: a ring with four teeth, which is as much of a gear as
+            // survives being drawn 16 across.
+            canvas.Children.Add(Ring(3.5, 8, 1));
+            canvas.Children.Add(Stroke(8, 1.5, 8, 3.5));
+            canvas.Children.Add(Stroke(8, 12.5, 8, 14.5));
+            canvas.Children.Add(Stroke(1.5, 8, 3.5, 8));
+            canvas.Children.Add(Stroke(12.5, 8, 14.5, 8));
+            break;
+
         default:
             return new TextBlock
             {

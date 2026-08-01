@@ -571,6 +571,40 @@
                             Text="Both off by default, because sound nobody asked for is a surprise in a file that gets shared. Turning both on mixes them into one soundtrack. GIF has nowhere to put sound and ignores this."
                             Style="{StaticResource Caption}" />
                     </StackPanel>
+
+                    <StackPanel Style="{StaticResource Section}">
+                        <TextBlock Text="WEBCAM" Style="{StaticResource SectionHeading}" />
+                        <CheckBox
+                            x:Name="WebcamCheck"
+                            Content="Webcam Overlay"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Position:" Style="{StaticResource RowLabel}" />
+                            <ComboBox
+                                x:Name="WebcamCornerBox"
+                                Width="240"
+                                SelectionChanged="Setting_SelectionChanged" />
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Size:" Style="{StaticResource RowLabel}" />
+                            <ComboBox
+                                x:Name="WebcamSizeBox"
+                                Width="240"
+                                SelectionChanged="Setting_SelectionChanged" />
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Shape:" Style="{StaticResource RowLabel}" />
+                            <ComboBox
+                                x:Name="WebcamShapeBox"
+                                Width="240"
+                                SelectionChanged="Setting_SelectionChanged" />
+                        </StackPanel>
+                        <TextBlock
+                            Text="The camera in a corner of the recorded region, 12 clear of its edges under a white ring. Unlike everything else macshot puts on screen while recording, this one is meant to be in the file. Off by default, and asked for again on the strip before each recording."
+                            Style="{StaticResource Caption}" />
+                    </StackPanel>
                 </StackPanel>
             </ScrollViewer>
 

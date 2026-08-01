@@ -173,6 +173,26 @@ public sealed record CaptureSettings
     public bool ShowEveryKeystroke { get; init; }
 
     /// <summary>
+    /// Whether the camera appears in a corner of the recording. macshot's
+    /// <c>recordWebcam</c>, off by default as macshot's is.
+    /// </summary>
+    /// <remarks>
+    /// Off by default and asked for each time on the strip, because this is the one
+    /// recording overlay that puts the person at the keyboard into the file. A camera
+    /// that came on because it was left on last month is the wrong kind of surprise.
+    /// </remarks>
+    public bool RecordWebcam { get; init; }
+
+    /// <summary>Which corner of the recorded region the camera sits in.</summary>
+    public WebcamCorner WebcamCorner { get; init; } = WebcamCorner.BottomRight;
+
+    /// <summary>How big the camera bubble is. macshot's <c>webcamSize</c>.</summary>
+    public WebcamSize WebcamSize { get; init; } = WebcamSize.Medium;
+
+    /// <summary>Whether the camera is a circle or a rounded rectangle.</summary>
+    public WebcamShape WebcamShape { get; init; } = WebcamShape.Circle;
+
+    /// <summary>
     /// Whether macshot starts with Windows. macshot's <c>launchAtLogin</c>.
     /// </summary>
     /// <remarks>

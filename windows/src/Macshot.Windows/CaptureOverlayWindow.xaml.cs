@@ -159,6 +159,12 @@ public sealed partial class CaptureOverlayWindow : Window
     private CaptureRegion? _selection;
 
     /// <summary>
+    /// The camera bubble shown while a recording is being set up, so what it covers can
+    /// be seen before the recording rather than in the finished video.
+    /// </summary>
+    private WebcamWindow? _webcam;
+
+    /// <summary>
     /// Whether the delivered capture is mounted on a gradient background. Held here
     /// rather than applied when the button is pressed, because the frame is bigger than
     /// the region and there is nowhere in the overlay to show it.
@@ -337,6 +343,12 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     public event EventHandler? WindowSnapToggled;
 
+    /// <summary>
+    /// Raised by the gear on the recording strip. The preferences window belongs to the
+    /// owner, and it has to outlive the overlay that asked for it.
+    /// </summary>
+    public event EventHandler? PreferencesRequested;
+
     public CaptureMonitor Monitor => _monitor;
 
     /// <summary>True once a region is chosen and the window is accepting annotations.</summary>
@@ -356,7 +368,14 @@ public sealed partial class CaptureOverlayWindow : Window
 
         // Covers both finishing and cancelling: the owner closes every overlay either
         // way, and a colour picked but not used is still the colour the user wants.
-        Closed += (_, _) => AnnotationToolbar.PersistStyle();
+        Closed += (_, _) =>
+        {
+            AnnotationToolbar.PersistStyle();
+
+            // A camera left running behind a closed window is the one failure here
+            // nobody would forgive: the light beside the lens would stay on.
+            HideWebcamPreview();
+        };
 
         var appWindow = this.GetAppWindow();
         var presenter = appWindow.MakeChromeless();
@@ -944,17 +963,21 @@ public sealed partial class CaptureOverlayWindow : Window
         // the marquee is the finished image rather than a tinted approximation of it.
         AnnotationCanvas.Present(PixelsFor(region), region, _placement);
 
-        // macshot's auto modes. A region chosen for recording, for its text, for a scroll
-        // or for a quick capture is not a region to draw on, so the toolbar never appears
-        // — putting one up for the one frame before the intent takes over would be a bar
-        // that flickers past. A scroll with nothing behind it is the one intent that can
-        // fail before it starts, and that one falls back to the toolbar rather than to
-        // nothing.
-        var automatic = Intent is not CaptureIntent.Capture
-            && (Intent is not CaptureIntent.Scroll || WindowBehind(region) is not null);
+        // macshot's auto modes. A region chosen for its text, for a scroll or for a quick
+        // capture is not a region to draw on, so the toolbar never appears — putting one
+        // up for the one frame before the intent takes over would be a bar that flickers
+        // past. A scroll with nothing behind it is the one intent that can fail before it
+        // starts, and that one falls back to the toolbar rather than to nothing.
+        //
+        // Recording is deliberately not one of them: it gets a strip of its own, because
+        // whether the microphone was on is not something a recording can be asked
+        // afterwards.
+        var automatic = Intent is CaptureIntent.Recognize or CaptureIntent.Quick
+            || (Intent is CaptureIntent.Scroll && WindowBehind(region) is not null);
 
         if (!automatic)
         {
+            AnnotationToolbar.RecordingSetup = Intent is CaptureIntent.Record;
             AnnotationToolbar.ShowToolbar(true);
             _sizeBox.Visibility = Visibility.Visible;
             RepositionChrome(region);
@@ -984,7 +1007,10 @@ public sealed partial class CaptureOverlayWindow : Window
         switch (intent)
         {
         case CaptureIntent.Record:
-            RequestRecording();
+            // Nothing to start: the strip is already the recording one, and Start is the
+            // user's press. What this does is put the camera up, so the bubble can be
+            // seen and dragged before it is in the file rather than after.
+            ShowWebcamPreview();
             break;
         case CaptureIntent.Recognize:
             _ = ReadTextAsync();
@@ -1756,7 +1782,23 @@ public sealed partial class CaptureOverlayWindow : Window
                 return;
 
             case ToolbarCommand.Record:
+                EnterRecordingSetup();
+                return;
+
+            case ToolbarCommand.StartRecording:
                 RequestRecording();
+                return;
+
+            case ToolbarCommand.CancelRecording:
+                LeaveRecordingSetup();
+                return;
+
+            case ToolbarCommand.Webcam:
+                ShowWebcamPreview();
+                return;
+
+            case ToolbarCommand.RecordingSettings:
+                PreferencesRequested?.Invoke(this, EventArgs.Empty);
                 return;
 
             case ToolbarCommand.Copy:
@@ -2009,7 +2051,93 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
 
+        // Before the request, because the recording opens a bubble of its own and this
+        // one is over the same corner of the same region.
+        HideWebcamPreview();
+
         RecordingRequested?.Invoke(this, new RecordingRequest(_monitor, _layout.FrameToVirtual(region)));
+    }
+
+    /// <summary>
+    /// Turns the action strip into the recording one, which is what the Record button
+    /// does rather than starting anything.
+    /// </summary>
+    private void EnterRecordingSetup()
+    {
+        AnnotationToolbar.RecordingSetup = true;
+        ShowWebcamPreview();
+    }
+
+    /// <summary>Goes back to the ordinary strip, having recorded nothing.</summary>
+    private void LeaveRecordingSetup()
+    {
+        AnnotationToolbar.RecordingSetup = false;
+        HideWebcamPreview();
+    }
+
+    /// <summary>
+    /// Puts the camera bubble up, or takes it down, to match what the switch now says.
+    /// </summary>
+    /// <remarks>
+    /// Up during setup rather than only once recording starts, because what the bubble
+    /// covers has to be seen before the recording — a face over the thing being
+    /// demonstrated is not something to discover in the finished video.
+    /// </remarks>
+    private void ShowWebcamPreview()
+    {
+        if (!AnnotationToolbar.RecordingSetup
+            || !_settings.Current.RecordWebcam
+            || _selection is not { } region)
+        {
+            HideWebcamPreview();
+            return;
+        }
+
+        if (_webcam is not null)
+        {
+            return;
+        }
+
+        _ = OpenWebcamPreviewAsync(region);
+    }
+
+    private async Task OpenWebcamPreviewAsync(CaptureRegion region)
+    {
+        var bubble = new WebcamWindow();
+        _webcam = bubble;
+
+        var settings = _settings.Current;
+        var started = await bubble.ShowInAsync(
+            _layout.FrameToVirtual(region),
+            settings.WebcamCorner,
+            settings.WebcamSize,
+            settings.WebcamShape,
+            _monitor.Scale);
+
+        // Closed rather than left as a black circle over the region. The switch stays on:
+        // it is a preference about recordings, and this is one machine's camera failing
+        // to open, which the log already says.
+        if (!started || !ReferenceEquals(_webcam, bubble))
+        {
+            if (ReferenceEquals(_webcam, bubble))
+            {
+                _webcam = null;
+            }
+
+            await bubble.StopAsync();
+        }
+    }
+
+    /// <summary>Takes the camera bubble down and releases the camera with it.</summary>
+    private void HideWebcamPreview()
+    {
+        if (_webcam is not { } bubble)
+        {
+            return;
+        }
+
+        _webcam = null;
+        _ = bubble.StopAsync();
     }
 
     /// <summary>

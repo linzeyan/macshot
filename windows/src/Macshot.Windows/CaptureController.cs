@@ -370,6 +370,15 @@ public sealed class CaptureController : IDisposable
             overlay.RecordingRequested += OnRecordingRequested;
             overlay.EditorRequested += OnEditorRequested;
             overlay.WindowSnapToggled += OnWindowSnapToggled;
+
+            // The overlay is dismissed first: the preferences window is titled and would
+            // otherwise open underneath a full-screen always-on-top overlay.
+            overlay.PreferencesRequested += (_, _) =>
+            {
+                DismissOverlays();
+                ShowPreferences();
+            };
+
             _overlays.Add(overlay);
         }
 
@@ -1257,6 +1266,31 @@ public sealed class CaptureController : IDisposable
             keystrokes.Start();
         }
 
+        // And the camera, in a corner of the same rectangle. The one overlay here that is
+        // meant to be in the file rather than kept out of it.
+        WebcamWindow? webcam = null;
+        if (_settings.Current.RecordWebcam)
+        {
+            var bubble = new WebcamWindow();
+            var current = _settings.Current;
+
+            webcam = await bubble.ShowInAsync(
+                request.Region ?? monitor.Bounds,
+                current.WebcamCorner,
+                current.WebcamSize,
+                current.WebcamShape,
+                monitor.Scale)
+                ? bubble
+                : null;
+
+            if (webcam is null)
+            {
+                // No camera, or Windows says no. Closed rather than left showing a black
+                // circle over the recording, and the recording goes ahead without it.
+                await bubble.StopAsync();
+            }
+        }
+
         var holdsEscape = _hotkeys.TryRegisterBareKey(
             HotkeyStopRecording,
             VirtualKeyEscape,
@@ -1322,6 +1356,13 @@ public sealed class CaptureController : IDisposable
             border?.Close();
             clicks?.Dispose();
             keystrokes?.Dispose();
+
+            // Awaited nowhere, but the camera is released inside it before the window
+            // goes: the light beside the lens has to go out when the bubble does.
+            if (webcam is { } bubble)
+            {
+                _ = bubble.StopAsync();
+            }
 
             if (holdsEscape)
             {
