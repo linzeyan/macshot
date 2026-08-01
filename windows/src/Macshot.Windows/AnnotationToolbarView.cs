@@ -1153,18 +1153,22 @@ public sealed partial class AnnotationToolbarView : UserControl
         _arrowStyle.SetSegments([.. Enum.GetValues<ArrowStyle>().Select(style =>
             new StyleSegment(StylePreviews.Arrow(style), null, StylePreviews.ArrowSegmentWidth))]);
 
-        // On the toolbar as well as in Preferences, because it is a choice made while
-        // drawing — macshot puts it here, next to the pencil, and nowhere else. Worded,
-        // as macshot's is: the difference between two smoothings is invisible at 22 points.
+        // Here and nowhere else, because it is a choice made while drawing — which is
+        // where macshot puts it, next to the pencil. Worded, as macshot's is: the
+        // difference between two smoothings is invisible at 22 points.
+        //
+        // The words are the enum's names on purpose. None, Smooth and Refined are strings
+        // macshot ships, so naming the segments after the enum is what gets them
+        // translated; a name invented here would read English in every language.
         ToolTipService.SetToolTip(_smoothing, "Freehand smoothing");
         _smoothing.SetSegments([.. Enum.GetValues<PencilSmoothing>().Select(mode =>
-            new StyleSegment(null, mode.ToString(), 0))]);
+            new StyleSegment(null, L(mode.ToString()), 0))]);
 
         // The censor tool's only option. There is deliberately no strength beside it:
         // how much of a redaction survives is not a thing to leave to a slider.
         ToolTipService.SetToolTip(_censorMode, "How the region is covered");
         _censorMode.SetSegments([.. Enum.GetValues<CensorMode>().Select(mode =>
-            new StyleSegment(null, mode.ToString(), 0))]);
+            new StyleSegment(null, L(mode.ToString()), 0))]);
 
         // Populated from StampGlyph.Choices so the picker and the renderer cannot offer
         // different sets.

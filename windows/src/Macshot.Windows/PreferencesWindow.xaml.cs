@@ -907,8 +907,6 @@ public sealed partial class PreferencesWindow : Window
         HistorySizeBox.IsEnabled = !settings.HistoryUnlimited;
         RememberSelectionCheck.IsChecked = settings.RememberLastSelection;
         HideInstructionsCheck.IsChecked = settings.HideCaptureInstructions;
-        PencilSmoothingBox.ItemsSource = Enum.GetValues<PencilSmoothing>().Select(mode => mode.ToString()).ToList();
-        PencilSmoothingBox.SelectedIndex = (int)settings.PencilSmoothing;
         VerboseLoggingCheck.IsChecked = settings.VerboseLogging;
         AutomaticUpdatesCheck.IsChecked = settings.AutomaticUpdateChecks;
         BetaUpdatesCheck.IsChecked = settings.BetaUpdates;
@@ -1268,9 +1266,9 @@ public sealed partial class PreferencesWindow : Window
             HistoryUnlimited = HistoryUnlimitedCheck.IsChecked == true,
             RememberLastSelection = RememberSelectionCheck.IsChecked == true,
             HideCaptureInstructions = HideInstructionsCheck.IsChecked == true,
-            PencilSmoothing = PencilSmoothingBox.SelectedIndex >= 0
-                ? (PencilSmoothing)PencilSmoothingBox.SelectedIndex
-                : PencilSmoothing.Smooth,
+            // No PencilSmoothing here. It is set from the tool options row while drawing,
+            // and this record is built with "with", so leaving it out carries the stored
+            // choice through rather than overwriting it with a control that is gone.
             VerboseLogging = VerboseLoggingCheck.IsChecked == true,
             AutomaticUpdateChecks = AutomaticUpdatesCheck.IsChecked == true,
             BetaUpdates = BetaUpdatesCheck.IsChecked == true,

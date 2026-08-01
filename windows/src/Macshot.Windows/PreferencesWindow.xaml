@@ -206,7 +206,10 @@
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
                         <StackPanel Style="{StaticResource Row}">
-                            <TextBlock Text="Toolbar:" Style="{StaticResource RowLabel}" />
+                            <!-- No label, because macshot's colour wells have none: they
+                                 sit indented under Theme, and each one is named by the
+                                 caption beneath it (SettingsWindowController.swift:543). -->
+                            <TextBlock Text="" Style="{StaticResource RowLabel}" />
                             <StackPanel x:Name="ToolbarColorRow" Orientation="Horizontal" Spacing="8" />
                         </StackPanel>
                         <StackPanel Style="{StaticResource Row}">
@@ -363,13 +366,13 @@
                         </StackPanel>
                         <CheckBox
                             x:Name="HistoryUnlimitedCheck"
-                            Content="Keep every capture"
+                            Content="Unlimited"
                             Style="{StaticResource Unlabelled}"
                             Checked="HistoryUnlimited_Toggled"
                             Unchecked="HistoryUnlimited_Toggled" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="" Style="{StaticResource RowLabel}" />
-                            <Button Content="Clear history now" FontSize="13" Click="ClearHistory_Click" />
+                            <Button Content="Clear History" FontSize="13" Click="ClearHistory_Click" />
                         </StackPanel>
                     </StackPanel>
 
@@ -423,14 +426,10 @@
                         <!-- Filled in code from the toolbar's own list, so a tool added
                              later appears here without this page being edited. -->
                         <Grid x:Name="ToolToggles" Margin="188,4,0,0" ColumnDefinitions="*,*" RowSpacing="2" ColumnSpacing="12" />
-                        <StackPanel Style="{StaticResource Row}">
-                            <TextBlock Text="Freehand:" Style="{StaticResource RowLabel}" />
-                            <ComboBox
-                                x:Name="PencilSmoothingBox"
-                                FontSize="13"
-                                Width="160"
-                                SelectionChanged="Setting_SelectionChanged" />
-                        </StackPanel>
+                        <!-- No freehand smoothing row. macshot puts that choice on the
+                             tool options row beside the pencil and nowhere else, which is
+                             where this build already draws it, and a second copy here is
+                             a second place for the same setting to be changed from. -->
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
