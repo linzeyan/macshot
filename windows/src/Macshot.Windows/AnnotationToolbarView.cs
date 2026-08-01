@@ -312,6 +312,18 @@ public sealed partial class AnnotationToolbarView : UserControl
         RepaintChrome();
 
         LoadStyle();
+
+        // macshot's rememberLastTool. Here rather than in LoadStyle, which runs again
+        // whenever the style is reloaded: putting a tool in the user's hand is right
+        // once, at the start of a capture, and an imposition at any later moment.
+        // A tool that has since been hidden from the strip is not restored — the strip
+        // would show nothing selected while the next drag drew with it.
+        if (settings.Current.RememberLastTool
+            && settings.Current.EnabledTools().Contains(settings.Current.LastTool))
+        {
+            editor.Tool = settings.Current.LastTool;
+        }
+
         _colorPicker.LoadCustomColors(settings.Current.CustomColors);
         RefreshStrips();
 
@@ -460,10 +472,10 @@ public sealed partial class AnnotationToolbarView : UserControl
     }
 
     /// <summary>
-    /// Remembers what the options row was left set to, for next time. A failure is
-    /// swallowed on purpose: this runs while the host is being torn down, there is no
-    /// window left to report into, and the cost of losing it is that the next capture
-    /// starts from the previous colour.
+    /// Remembers what the options row and the strip were left set to, for next time. A
+    /// failure is swallowed on purpose: this runs while the host is being torn down,
+    /// there is no window left to report into, and the cost of losing it is that the
+    /// next capture starts from the previous colour.
     /// </summary>
     public void PersistStyle()
     {
@@ -477,6 +489,11 @@ public sealed partial class AnnotationToolbarView : UserControl
         if (editor.Smoothing != current.PencilSmoothing)
         {
             updated = updated with { PencilSmoothing = editor.Smoothing };
+        }
+
+        if (current.RememberLastTool && IsRemembered(editor.Tool) && editor.Tool != current.LastTool)
+        {
+            updated = updated with { LastTool = editor.Tool };
         }
 
         // Reference equality on purpose: the settings are a record holding a list, so
@@ -874,6 +891,19 @@ public sealed partial class AnnotationToolbarView : UserControl
 
         return ToolShortcuts.Unbound;
     }
+
+    /// <summary>
+    /// Whether a tool is one worth starting the next capture in.
+    /// </summary>
+    /// <remarks>
+    /// The four that are not are things done to a capture rather than marks made on one.
+    /// Restored, each would start the next capture in a mode the user has to leave
+    /// before they can draw — and the sampler would start it holding a pipette over a
+    /// screenshot nobody asked to sample.
+    /// </remarks>
+    private static bool IsRemembered(AnnotationTool tool) => tool
+        is not (AnnotationTool.Select or AnnotationTool.Loupe
+            or AnnotationTool.ColorSampler or AnnotationTool.Crop);
 
     /// <summary>Makes <paramref name="tool"/> the active one, as clicking its button would.</summary>
     private void SelectTool(AnnotationTool tool)

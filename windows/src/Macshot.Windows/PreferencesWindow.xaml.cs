@@ -886,6 +886,7 @@ public sealed partial class PreferencesWindow : Window
 
         QuickCaptureEditorCheck.IsChecked = settings.QuickCaptureOpenEditor;
         CaptureSoundCheck.IsChecked = settings.PlayCaptureSound;
+        RememberToolCheck.IsChecked = settings.RememberLastTool;
         ThumbnailCheck.IsChecked = settings.ShowThumbnail;
         ThumbnailSecondsBox.Value = settings.ThumbnailSeconds;
 
@@ -1243,6 +1244,9 @@ public sealed partial class PreferencesWindow : Window
             CopyToClipboard = QuickCaptureBox.SelectedIndex is 1 or 2,
             QuickCaptureOpenEditor = QuickCaptureEditorCheck.IsChecked == true,
             PlayCaptureSound = CaptureSoundCheck.IsChecked == true,
+            RememberLastTool = RememberToolCheck.IsChecked == true,
+            // No LastTool. The toolbar writes it as a capture ends, and this record is
+            // built with "with", so leaving it out carries that choice through.
             ShowThumbnail = ThumbnailCheck.IsChecked == true,
 
 #if !OFFLINE

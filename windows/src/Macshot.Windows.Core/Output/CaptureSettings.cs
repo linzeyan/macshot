@@ -398,6 +398,29 @@ public sealed record CaptureSettings
     public bool WindowSnapEnabled { get; init; } = true;
 
     /// <summary>
+    /// Whether the next capture starts with the tool the last one ended with.
+    /// </summary>
+    /// <remarks>
+    /// On by default, as macshot's <c>rememberLastTool</c> is. Someone numbering the
+    /// steps of a process takes twenty captures with the same tool; off, it is the arrow
+    /// every time, which is the right answer for the person whose captures have nothing
+    /// to do with each other.
+    /// </remarks>
+    public bool RememberLastTool { get; init; } = true;
+
+    /// <summary>
+    /// The tool the last capture was left holding, for <see cref="RememberLastTool"/>.
+    /// </summary>
+    /// <remarks>
+    /// Only the tools that draw are ever stored here. Select, the loupe, the colour
+    /// sampler and the crop are things done to a capture rather than marks made on one,
+    /// and starting the next capture in one of them would be starting it in a mode the
+    /// user has to leave before they can draw — macshot skips the same ones,
+    /// <c>OverlayView.swift:257</c>.
+    /// </remarks>
+    public AnnotationTool LastTool { get; init; } = AnnotationTool.Arrow;
+
+    /// <summary>
     /// Whether two quick clicks inside the region finish the capture.
     /// </summary>
     /// <remarks>

@@ -274,6 +274,12 @@
                             Checked="Setting_Toggled"
                             Unchecked="Setting_Toggled" />
                         <CheckBox
+                            x:Name="RememberToolCheck"
+                            Content="Remember last selected tool"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <CheckBox
                             x:Name="ThumbnailCheck"
                             Content="Show floating thumbnail after capture"
                             Style="{StaticResource Unlabelled}"
