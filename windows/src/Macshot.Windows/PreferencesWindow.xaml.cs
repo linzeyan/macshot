@@ -307,6 +307,8 @@ public sealed partial class PreferencesWindow : Window
         HideInstructionsCheck.IsChecked = settings.HideCaptureInstructions;
         SmoothPencilCheck.IsChecked = settings.SmoothPencilStrokes;
         VerboseLoggingCheck.IsChecked = settings.VerboseLogging;
+        AutomaticUpdatesCheck.IsChecked = settings.AutomaticUpdateChecks;
+        BetaUpdatesCheck.IsChecked = settings.BetaUpdates;
 
         CaptureAreaHotkeyBox.Binding = settings.CaptureAreaHotkey;
         CaptureAllScreensHotkeyBox.Binding = settings.CaptureAllScreensHotkey;
@@ -380,6 +382,8 @@ public sealed partial class PreferencesWindow : Window
             HideCaptureInstructions = HideInstructionsCheck.IsChecked == true,
             SmoothPencilStrokes = SmoothPencilCheck.IsChecked == true,
             VerboseLogging = VerboseLoggingCheck.IsChecked == true,
+            AutomaticUpdateChecks = AutomaticUpdatesCheck.IsChecked == true,
+            BetaUpdates = BetaUpdatesCheck.IsChecked == true,
             CaptureAreaHotkey = CaptureAreaHotkeyBox.Binding,
             CaptureAllScreensHotkey = CaptureAllScreensHotkeyBox.Binding,
             RecordScreenHotkey = RecordScreenHotkeyBox.Binding,

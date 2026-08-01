@@ -247,6 +247,33 @@ public sealed record CaptureSettings
     /// </remarks>
     public bool VerboseLogging { get; init; }
 
+    /// <summary>
+    /// Whether macshot looks for a new version on its own.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// On by default, which is macshot's default for Sparkle's
+    /// <c>SUEnableAutomaticChecks</c>: a screenshot tool that never mentions an update
+    /// is one that stays on a version with a bug in it.
+    /// </para>
+    /// <para>
+    /// ⚠️ **Nothing reads this yet.** The port is not distributed, so there is no feed
+    /// for an updater to check. The setting exists now so that the preferences window
+    /// does not have to be rearranged when the updater arrives, and so a user who turns
+    /// it off before then stays turned off.
+    /// </para>
+    /// </remarks>
+    public bool AutomaticUpdateChecks { get; init; } = true;
+
+    /// <summary>
+    /// Whether those checks include beta releases.
+    /// </summary>
+    /// <remarks>
+    /// macshot's <c>betaUpdatesEnabled</c>, which selects Sparkle's <c>beta</c> channel.
+    /// Off by default: a beta is something a user opts into.
+    /// </remarks>
+    public bool BetaUpdates { get; init; }
+
     /// <summary>What recognized text is translated into, as an ISO-639-1 code.</summary>
     public string TranslateTargetLanguage { get; init; } = TranslationLanguages.DefaultCode;
 

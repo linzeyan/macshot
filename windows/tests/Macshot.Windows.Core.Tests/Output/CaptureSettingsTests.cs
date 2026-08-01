@@ -205,4 +205,22 @@ public sealed class CaptureSettingsTests
         Assert.AreEqual(int.MaxValue, unlimited.EffectiveHistorySize);
         Assert.AreEqual(0, (unlimited with { HistoryUnlimited = false }).EffectiveHistorySize);
     }
+    [TestMethod]
+    public void Default_LooksForUpdatesButNotForBetas()
+    {
+        // macshot's defaults: SUEnableAutomaticChecks on, betaUpdatesEnabled off. A tool
+        // that never mentions an update stays on the version with the bug in it; a beta
+        // is something a user opts into.
+        Assert.IsTrue(CaptureSettings.Default.AutomaticUpdateChecks);
+        Assert.IsFalse(CaptureSettings.Default.BetaUpdates);
+    }
+
+    [TestMethod]
+    public void UpdateChoicesTravelToAnotherMachine()
+    {
+        // They are preferences, not machine state, so an export carries them.
+        Assert.IsTrue(SettingsPortability.IsPortable("automaticUpdateChecks"));
+        Assert.IsTrue(SettingsPortability.IsPortable("betaUpdates"));
+    }
+
 }

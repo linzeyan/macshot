@@ -135,6 +135,27 @@
                  to launch at login and no updater to point at a channel. -->
             <ScrollViewer x:Name="GeneralPage">
                 <StackPanel Spacing="20">
+                    <!-- Above Appearance, which is macshot's order on the same tab
+                         (SettingsWindowController.swift:500–508). -->
+                    <StackPanel Style="{StaticResource Section}">
+                        <TextBlock Text="UPDATES" Style="{StaticResource SectionHeading}" />
+                        <CheckBox
+                            x:Name="AutomaticUpdatesCheck"
+                            Content="Check for updates automatically"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <CheckBox
+                            x:Name="BetaUpdatesCheck"
+                            Content="Check for beta updates"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <TextBlock
+                            Text="This build has no updater in it yet, so nothing checks. What you choose here is kept and will be honoured by the first build that does."
+                            Style="{StaticResource Caption}" />
+                    </StackPanel>
+
                     <StackPanel Style="{StaticResource Section}">
                         <TextBlock Text="APPEARANCE" Style="{StaticResource SectionHeading}" />
                         <StackPanel Style="{StaticResource Row}">
