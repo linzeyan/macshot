@@ -40,7 +40,7 @@ namespace Macshot.Windows.Toolbar;
 /// </remarks>
 internal sealed class ColorPickerView : UserControl
 {
-    private const double Padding = 6;
+    private const double Inset = 6;
     private const double SwatchSize = 24;
     private const int Columns = 6;
     private const double CustomSlotSize = 20;
@@ -50,8 +50,8 @@ internal sealed class ColorPickerView : UserControl
     private const double BrightnessBarHeight = 16;
     private const double HexRowHeight = 22;
 
-    private const double PickerWidth = (Columns * (SwatchSize + Padding)) + Padding;
-    private const double ContentWidth = PickerWidth - (Padding * 2);
+    private const double PickerWidth = (Columns * (SwatchSize + Inset)) + Inset;
+    private const double ContentWidth = PickerWidth - (Inset * 2);
 
     /// <summary>
     /// The twelve macshot offers, in its order — <c>ColorPickerView.swift:37–40</c>. The
@@ -107,8 +107,8 @@ internal sealed class ColorPickerView : UserControl
         var stack = new StackPanel
         {
             Width = PickerWidth,
-            Padding = new Thickness(Padding),
-            Spacing = Padding,
+            Padding = new Thickness(Inset),
+            Spacing = Inset,
             RequestedTheme = ElementTheme.Dark,
             Background = ToolbarPalette.BackgroundBrush,
         };
@@ -176,11 +176,11 @@ internal sealed class ColorPickerView : UserControl
 
     private FrameworkElement BuildPresets()
     {
-        var rows = new StackPanel { Spacing = Padding };
+        var rows = new StackPanel { Spacing = Inset };
 
         for (var row = 0; row * Columns < Presets.Length; row++)
         {
-            var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Padding };
+            var line = new StackPanel { Orientation = Orientation.Horizontal, Spacing = Inset };
             for (var column = 0; column < Columns; column++)
             {
                 var index = (row * Columns) + column;
@@ -324,7 +324,7 @@ internal sealed class ColorPickerView : UserControl
             Changed();
         });
 
-        return Clip(_square, bordered: false);
+        return Rounded(_square, bordered: false);
     }
 
     private FrameworkElement BuildBrightnessBar()
@@ -387,7 +387,7 @@ internal sealed class ColorPickerView : UserControl
             Changed();
         });
 
-        return Clip(_opacity);
+        return Rounded(_opacity);
     }
 
     private FrameworkElement BuildHexRow()
@@ -423,7 +423,7 @@ internal sealed class ColorPickerView : UserControl
     /// Rounds a canvas's corners the way macshot clips its bars and square. The opacity
     /// bar is the one with a hairline round it — the square is edge to edge.
     /// </summary>
-    private static Border Clip(FrameworkElement content, bool bordered = true) => new()
+    private static Border Rounded(FrameworkElement content, bool bordered = true) => new()
     {
         CornerRadius = new CornerRadius(4),
         BorderThickness = new Thickness(bordered ? 0.5 : 0),

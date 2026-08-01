@@ -121,7 +121,9 @@ internal static class InstalledFonts
 
     private delegate int EnumFontFamiliesCallback(ref EnumLogFont font, IntPtr metric, uint type, IntPtr context);
 
-    [StructLayout(LayoutKind.Sequential, CharSet = CharSet.Unicode)]
+    // Qualified, because inside LogFont the bare name CharSet is the struct's own
+    // field rather than the marshalling enum.
+    [StructLayout(LayoutKind.Sequential, CharSet = System.Runtime.InteropServices.CharSet.Unicode)]
     private struct LogFont
     {
         public int Height;

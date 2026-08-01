@@ -26,7 +26,7 @@ internal readonly record struct StyleSegment(FrameworkElement? Face, string? Lab
 /// follows a colour change with everything else.
 /// </para>
 /// </remarks>
-internal sealed class StyleSegments : Border
+internal sealed class StyleSegments : UserControl
 {
     /// <summary>macshot's segmented control height — <c>ToolOptionsRowView.swift:447</c>.</summary>
     public const double Height22 = 22;
@@ -40,14 +40,23 @@ internal sealed class StyleSegments : Border
 
     public StyleSegments()
     {
-        Height = Height22;
-        CornerRadius = new CornerRadius(Radius);
+        // The track is held rather than inherited: WinUI seals Border, so a control that
+        // *is* a rounded slab is not a thing that can be written. A UserControl around
+        // one draws identically and keeps the corner radius honest, where a bare
+        // ContentControl would depend on whatever its default template happens to bind.
+        Content = new Border
+        {
+            Height = Height22,
+            CornerRadius = new CornerRadius(Radius),
 
-        // The unselected track: the icon colour at a tenth, which is what separates the
-        // row from the slab behind it without drawing a border around every choice.
-        Background = ToolbarPalette.IconBrush(0.1);
+            // The unselected track: the icon colour at a tenth, which is what separates
+            // the row from the slab behind it without drawing a border around every
+            // choice.
+            Background = ToolbarPalette.IconBrush(0.1),
+            Child = _row,
+        };
+
         VerticalAlignment = VerticalAlignment.Center;
-        Child = _row;
     }
 
     /// <summary>Raised when a choice is picked, with its index. Not raised by code.</summary>
