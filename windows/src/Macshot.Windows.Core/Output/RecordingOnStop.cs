@@ -10,10 +10,11 @@ namespace Macshot.Windows.Core.Output;
 /// about what happens <em>next</em>, not about where it went.
 /// </para>
 /// <para>
-/// macshot's default is its video editor. The port has none yet, so
-/// <see cref="ShowInFolder"/> is the default here: a recording nobody can find is a
-/// recording that did not happen, and pointing at the file is the answer that needs no
-/// window.
+/// The order here is not macshot's — the settings menu lists macshot's three in
+/// macshot's order, and maps them onto these — because these values are written into the
+/// settings file by name. Renumbering them is free; renaming or removing one is not,
+/// since a value the file has and this enum has not resets every other preference with
+/// it.
 /// </para>
 /// </remarks>
 public enum RecordingOnStop
@@ -32,9 +33,16 @@ public enum RecordingOnStop
 
     /// <summary>Leave it alone; the panel already says where it went.</summary>
     /// <remarks>
-    /// Not one of macshot's three, and here because the port's third is missing: macshot
-    /// offers its video editor and this build has none. Doing nothing is the honest
-    /// version of that, rather than a menu entry that opens nothing.
+    /// Not one of macshot's three, and no longer offered: it stood in for the video
+    /// editor while the port had none. Kept because settings written while it was on
+    /// offer name it, and a name this enum does not know takes every other preference in
+    /// the file down with it.
     /// </remarks>
     DoNothing,
+
+    /// <summary>
+    /// Open the recording in the video editor, which is macshot's own default: a
+    /// recording is trimmed far more often than it is used whole.
+    /// </summary>
+    OpenEditor,
 }

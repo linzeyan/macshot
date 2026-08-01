@@ -4,8 +4,9 @@ A native Windows port of [macshot](https://github.com/sw33tLie/macshot), on the
 `windows` branch. C#, .NET 8, WinUI 3 (Windows App SDK). `main` stays the macOS
 product; this tree is not built from it.
 
-Still in progress. Capture, annotation, editing, recognition, recording and
-delivery work; uploads, HEIC and WebP encoding, and an installer do not. None of
+Still in progress. Capture, annotation, editing, recognition, recording,
+delivery, uploads and video trimming work; the video editor's effects band, HEIC
+and WebP encoding, and an installer do not. None of
 it has been run on Windows hardware yet — CI compiles the WinUI half and the
 portable half is unit-tested, which is not the same thing. See
 `docs/windows-port/` in the repository for the roadmap and the feature-parity

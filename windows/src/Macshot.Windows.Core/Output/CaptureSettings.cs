@@ -205,7 +205,7 @@ public sealed record CaptureSettings
     public string RecordingDirectory { get; init; } = string.Empty;
 
     /// <summary>What happens the moment a recording stops. macshot's <c>recordingOnStop</c>.</summary>
-    public RecordingOnStop RecordingOnStop { get; init; } = RecordingOnStop.ShowInFolder;
+    public RecordingOnStop RecordingOnStop { get; init; } = RecordingOnStop.OpenEditor;
 
     /// <summary>
     /// Whether the recording panel is left off the screen. macshot's

@@ -1,0 +1,85 @@
+<Window
+    x:Class="Macshot.Windows.VideoEditorWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    Title="macshot Video Editor">
+    <!-- macshot's window: the picture above, 172 of controls below, dark whatever the
+         system theme is like the rest of this port's chrome. Dark is requested on the
+         root rather than painted on, so the combo boxes and buttons inside come out
+         light-on-dark too. -->
+    <Grid Background="#FF1F1F1F" RequestedTheme="Dark">
+        <Grid.RowDefinitions>
+            <RowDefinition Height="*" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <MediaPlayerElement
+            x:Name="Player"
+            Grid.Row="0"
+            AreTransportControlsEnabled="False"
+            Stretch="Uniform" />
+
+        <!-- A GIF is not a video to Windows any more than it is to AVFoundation: nothing
+             will play it but an image control, which is what macshot falls back to as
+             well. Shown in place of the player, and only for a GIF. -->
+        <Image
+            x:Name="GifView"
+            Grid.Row="0"
+            Stretch="Uniform"
+            Visibility="Collapsed" />
+
+        <StackPanel Grid.Row="1" Padding="16,10,16,12" Spacing="8">
+            <StackPanel x:Name="TrimPanel" Spacing="8">
+                <!-- The timeline: the whole recording as a track, the kept piece lit, a
+                     handle at each end and the playhead over it. Drawn rather than
+                     assembled from controls because macshot draws it, and because a
+                     Slider cannot have two thumbs. -->
+                <Canvas
+                    x:Name="Timeline"
+                    Height="56"
+                    Background="Transparent"
+                    PointerPressed="Timeline_PointerPressed"
+                    PointerMoved="Timeline_PointerMoved"
+                    PointerReleased="Timeline_PointerReleased"
+                    PointerCaptureLost="Timeline_PointerCaptureLost">
+                    <Rectangle x:Name="TimelineTrack" Height="40" Canvas.Top="8" RadiusX="6" RadiusY="6" Fill="#26FFFFFF" />
+                    <Rectangle x:Name="TimelineKept" Height="40" Canvas.Top="8" Fill="#332F7CF6" />
+                    <Rectangle x:Name="TrimStartHandle" Width="10" Height="40" Canvas.Top="8" RadiusX="3" RadiusY="3" Fill="#FF2F7CF6" />
+                    <Rectangle x:Name="TrimEndHandle" Width="10" Height="40" Canvas.Top="8" RadiusX="3" RadiusY="3" Fill="#FF2F7CF6" />
+                    <Rectangle x:Name="Playhead" Width="2" Height="48" Canvas.Top="4" Fill="#FFFFFFFF" />
+                </Canvas>
+
+                <Grid>
+                    <TextBlock x:Name="ElapsedText" FontSize="11" Foreground="#8CFFFFFF" HorizontalAlignment="Left" />
+                    <TextBlock x:Name="SelectionText" FontSize="11" Foreground="#8CFFFFFF" HorizontalAlignment="Center" />
+                    <TextBlock x:Name="DurationText" FontSize="11" Foreground="#8CFFFFFF" HorizontalAlignment="Right" />
+                </Grid>
+            </StackPanel>
+
+            <Grid>
+                <!-- Left: play, mute, the format toggle, and everything the file is.
+                     Right: what to do with it. macshot's two groups, in its order. -->
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left" VerticalAlignment="Center">
+                    <Button x:Name="PlayButton" Width="34" Height="28" Padding="0" Click="Play_Click" Content="▶" />
+                    <Button x:Name="MuteButton" Width="34" Height="28" Padding="0" Click="Mute_Click" Content="🔊" />
+                    <ComboBox x:Name="FormatBox" Width="86" FontSize="12" SelectionChanged="Export_Changed" />
+                    <TextBlock x:Name="SourceInfoText" FontSize="11" Foreground="#66FFFFFF" VerticalAlignment="Center" />
+                    <ComboBox x:Name="DimensionsBox" Width="170" FontSize="12" SelectionChanged="Export_Changed" />
+                    <ComboBox x:Name="QualityBox" Width="96" FontSize="12" SelectionChanged="Export_Changed" />
+                    <ComboBox x:Name="GifFrameRateBox" Width="90" FontSize="12" SelectionChanged="Export_Changed" />
+                    <TextBlock x:Name="EstimateText" FontSize="11" Foreground="#59FFFFFF" VerticalAlignment="Center" />
+                </StackPanel>
+
+                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Center">
+                    <Button x:Name="SaveButton" MinWidth="100" Height="28" Click="Save_Click" Content="Save" />
+                    <Button x:Name="SaveAsButton" Height="28" Click="SaveAs_Click" Content="Save As..." />
+                    <Button x:Name="UploadButton" MinWidth="100" Height="28" Click="Upload_Click" Content="Upload" />
+                    <Button x:Name="FolderButton" Width="34" Height="28" Padding="0" Click="Folder_Click" Content="📁" />
+                    <Button x:Name="CopyButton" MinWidth="100" Height="28" Click="Copy_Click" Content="Copy Path" />
+                </StackPanel>
+            </Grid>
+
+            <TextBlock x:Name="StatusText" FontSize="11" Foreground="#A6FFFFFF" />
+        </StackPanel>
+    </Grid>
+</Window>

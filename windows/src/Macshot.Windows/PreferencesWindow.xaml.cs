@@ -64,6 +64,17 @@ public sealed partial class PreferencesWindow : Window
     /// </remarks>
     private static readonly TimeSpan WriteDelay = TimeSpan.FromMilliseconds(250);
 
+    /// <summary>
+    /// The three the "When done" menu offers, in macshot's order.
+    /// </summary>
+    /// <remarks>
+    /// A list rather than a cast from the selected index, because the enum's order is not
+    /// this one: its values are written into the settings file by name, so they may be
+    /// added to but not reshuffled to suit a menu.
+    /// </remarks>
+    private static readonly RecordingOnStop[] OnStopOrder =
+        [RecordingOnStop.OpenEditor, RecordingOnStop.ShowInFolder, RecordingOnStop.CopyToClipboard];
+
     private readonly SettingsStore _settings;
 
     /// <summary>Collects a burst of changes into one write. See <see cref="WriteDelay"/>.</summary>
@@ -722,15 +733,17 @@ public sealed partial class PreferencesWindow : Window
         // "Show in Explorer" rather than macshot's "Show in Finder", and untranslated
         // because of it: the translated string names a macOS app, and a Chinese reader on
         // Windows being told to look in the Finder is worse off than one reading English.
-        // The third is the port's own — macshot's is its video editor, which this build
-        // has not got, and a menu entry that opens nothing is not the answer.
         RecordingOnStopBox.ItemsSource = new List<string>
         {
+            L("Open editor"),
             "Show in Explorer",
             L("Copy to clipboard"),
-            "Do nothing",
         };
-        RecordingOnStopBox.SelectedIndex = (int)settings.RecordingOnStop;
+
+        // -1 for a settings file that still says "do nothing", which was offered while
+        // the port had no video editor. Nothing is selected rather than something the
+        // file does not say, and the next save writes whichever of the three is chosen.
+        RecordingOnStopBox.SelectedIndex = Array.IndexOf(OnStopOrder, settings.RecordingOnStop);
         HideRecordingHudCheck.IsChecked = settings.HideRecordingHud;
 
         WebcamCheck.IsChecked = settings.RecordWebcam;
@@ -1061,7 +1074,7 @@ public sealed partial class PreferencesWindow : Window
             RecordSystemAudio = RecordSystemAudioCheck.IsChecked == true,
             RecordMicAudio = RecordMicAudioCheck.IsChecked == true,
             RecordingDirectory = RecordingDirectoryBox.Text.Trim(),
-            RecordingOnStop = (RecordingOnStop)Math.Max(RecordingOnStopBox.SelectedIndex, 0),
+            RecordingOnStop = OnStopOrder[Math.Max(RecordingOnStopBox.SelectedIndex, 0)],
             HideRecordingHud = HideRecordingHudCheck.IsChecked == true,
             RecordWebcam = WebcamCheck.IsChecked == true,
             WebcamCorner = (WebcamCorner)Math.Max(WebcamCornerBox.SelectedIndex, 0),

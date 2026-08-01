@@ -13,6 +13,8 @@ using static Macshot.Windows.Services.Localization;
 
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Storage;
+using Windows.Storage.Pickers;
+using WinRT.Interop;
 
 namespace Macshot.Windows;
 
@@ -43,6 +45,7 @@ public sealed class CaptureController : IDisposable
     private const int CommandOpenImage = 13;
     private const int CommandOpenFromClipboard = 14;
     private const int CommandPinFromClipboard = 15;
+    private const int CommandOpenVideo = 16;
 
     /// <summary>
     /// The capture-delay submenu. One command per choice rather than one command
@@ -211,10 +214,7 @@ public sealed class CaptureController : IDisposable
         _trayIcon.AddMenuItem(CommandHistory, L("Show History Panel"));
         _trayIcon.AddSeparator();
         _trayIcon.AddMenuItem(CommandOpenImage, L("Open Image..."));
-
-        // macshot's "Open Video..." belongs between these two. It opens the video editor,
-        // which this port has not got yet, and a menu item that opens nothing is worse
-        // than one that is not there.
+        _trayIcon.AddMenuItem(CommandOpenVideo, L("Open Video..."));
         _trayIcon.AddMenuItem(CommandOpenFromClipboard, L("Open from Clipboard"));
         _trayIcon.AddMenuItem(CommandPinFromClipboard, L("Pin from Clipboard"));
         _trayIcon.AddSeparator();
@@ -595,6 +595,9 @@ public sealed class CaptureController : IDisposable
         case CommandOpenImage:
             Post(OpenImageAsync);
             break;
+        case CommandOpenVideo:
+            Post(OpenVideoAsync);
+            break;
         case CommandOpenFromClipboard:
             Post(OpenFromClipboardAsync);
             break;
@@ -870,6 +873,12 @@ public sealed class CaptureController : IDisposable
     /// rest are read as seconds.
     /// </summary>
     private static readonly int[] DelayChoices = [0, 3, 5, 10, 30];
+
+    /// <summary>
+    /// What "Open Video..." offers, which is what Windows can play: macshot's list less
+    /// the QuickTime movie only its own platform reads.
+    /// </summary>
+    private static readonly string[] VideoExtensions = [".mp4", ".mov", ".m4v", ".gif"];
 
     /// <summary>
     /// The capture-delay submenu, rebuilt each time the menu opens so the tick follows
@@ -1423,8 +1432,8 @@ public sealed class CaptureController : IDisposable
     /// </summary>
     /// <remarks>
     /// A recording is always saved, whatever <see cref="CaptureSettings.AutoSave"/>
-    /// says, because there is nowhere else for it to go: minutes of video do not
-    /// belong on the clipboard and there is no editor to hand it to yet.
+    /// says, because there is nowhere else for it to go: minutes of video do not belong
+    /// on the clipboard, and the editor that opens next is an editor of a file on disk.
     /// </remarks>
     /// <summary>
     /// Does whatever the preferences say happens once a recording stops.
@@ -1451,6 +1460,12 @@ public sealed class CaptureController : IDisposable
 
                 case RecordingOnStop.CopyToClipboard:
                     await CopyRecordingAsync(path);
+                    break;
+
+                case RecordingOnStop.OpenEditor:
+                    // On the dispatcher, because a window is being made: the recording
+                    // stops on whichever thread the encoder finished on.
+                    _dispatcher.TryEnqueue(() => ShowVideoEditor(path));
                     break;
 
                 default:
@@ -1550,6 +1565,50 @@ public sealed class CaptureController : IDisposable
                 _messageWindow.Handle,
                 $"macshot could not open that image: {exception.Message}");
         }
+    }
+
+    /// <summary>
+    /// Opens a recording in the video editor — macshot's "Open Video...".
+    /// </summary>
+    /// <remarks>
+    /// Any file, not only one macshot made: the editor trims and re-encodes whatever
+    /// Windows can read, which is the same offer macshot makes.
+    /// </remarks>
+    private async Task OpenVideoAsync()
+    {
+        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.VideosLibrary };
+
+        // A desktop app has no CoreWindow for the picker to belong to, so it is given a
+        // window handle instead. Without this the call throws rather than opening.
+        InitializeWithWindow.Initialize(picker, _messageWindow.Handle);
+
+        foreach (var extension in VideoExtensions)
+        {
+            picker.FileTypeFilter.Add(extension);
+        }
+
+        if (await picker.PickSingleFileAsync() is { } file)
+        {
+            ShowVideoEditor(file.Path);
+        }
+    }
+
+    /// <summary>
+    /// Opens <paramref name="path"/> in the video editor, wired to send what it exports.
+    /// </summary>
+    private void ShowVideoEditor(string path)
+    {
+#if OFFLINE
+        VideoEditorWindow.Show(path, _settings);
+#else
+        // Subscribed through the callback rather than after the call, because a second
+        // "Open Video..." on a file already open hands back the window that is there —
+        // and subscribing to it twice would send the next export twice.
+        VideoEditorWindow.Show(
+            path,
+            _settings,
+            editor => editor.UploadRequested += (_, exported) => Post(() => _uploads.UploadFileAsync(exported)));
+#endif
     }
 
     /// <summary>Opens the picture on the clipboard in the editor.</summary>
