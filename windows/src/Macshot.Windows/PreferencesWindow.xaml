@@ -470,6 +470,17 @@
                             Text="GIF is written smaller and slower than MP4, because every GIF frame is a whole image."
                             Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Save folder:" Style="{StaticResource RowLabel}" />
+                            <TextBox
+                                x:Name="RecordingDirectoryBox"
+                                FontSize="13"
+                                Width="240"
+                                PlaceholderText="Same as screenshots"
+                                IsReadOnly="True" />
+                            <Button Content="Browse" FontSize="13" Click="BrowseRecordings_Click" />
+                            <Button Content="Clear" FontSize="13" Click="ClearRecordingDirectory_Click" />
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="File name:" Style="{StaticResource RowLabel}" />
                             <TextBox
                                 x:Name="RecordingTemplateBox"
@@ -569,6 +580,29 @@
                             Unchecked="Setting_Toggled" />
                         <TextBlock
                             Text="Both off by default, because sound nobody asked for is a surprise in a file that gets shared. Turning both on mixes them into one soundtrack. GIF has nowhere to put sound and ignores this."
+                            Style="{StaticResource Caption}" />
+                    </StackPanel>
+
+                    <StackPanel Style="{StaticResource Section}">
+                        <TextBlock Text="WHEN DONE" Style="{StaticResource SectionHeading}" />
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="When done:" Style="{StaticResource RowLabel}" />
+                            <ComboBox
+                                x:Name="RecordingOnStopBox"
+                                Width="240"
+                                SelectionChanged="Setting_SelectionChanged" />
+                        </StackPanel>
+                        <TextBlock
+                            Text="A recording always goes to a file — minutes of video do not belong on the clipboard — so this is what happens next. macshot's third choice is its video editor, which this build has not got yet."
+                            Style="{StaticResource Caption}" />
+                        <CheckBox
+                            x:Name="HideRecordingHudCheck"
+                            Content="Hide recording controls"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <TextBlock
+                            Text="Stop recording from the menu bar icon instead. Escape stops it too, and with the panel gone the choice above is the only thing that says where the recording went."
                             Style="{StaticResource Caption}" />
                     </StackPanel>
 

@@ -11,6 +11,9 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using static Macshot.Windows.Services.Localization;
 
+using Windows.ApplicationModel.DataTransfer;
+using Windows.Storage;
+
 namespace Macshot.Windows;
 
 /// <summary>
@@ -1228,13 +1231,21 @@ public sealed class CaptureController : IDisposable
         }
 
         using var cancellation = new CancellationTokenSource();
-        var hud = new RecordingHudWindow();
-        hud.StopRequested += (_, _) => cancellation.Cancel();
-        hud.PauseToggled += (_, held) => _recorder.SetPaused(held);
+        // Not built at all when it is not wanted, rather than built and hidden: it would
+        // otherwise appear at the end to name the saved file, which is a panel arriving
+        // from nowhere over whatever was being recorded. Escape and the notification icon
+        // still stop the recording, and the on-stop action still says where it went.
+        RecordingHudWindow? hud = null;
+        if (!_settings.Current.HideRecordingHud)
+        {
+            hud = new RecordingHudWindow();
+            hud.StopRequested += (_, _) => cancellation.Cancel();
+            hud.PauseToggled += (_, held) => _recorder.SetPaused(held);
 
-        // The panel belongs to what is being recorded, so it is placed against the
-        // region — or against the whole display, when that is what is being recorded.
-        hud.ShowHud(request.Region ?? monitor.Bounds, monitor);
+            // The panel belongs to what is being recorded, so it is placed against the
+            // region — or against the whole display, when that is what is being recorded.
+            hud.ShowHud(request.Region ?? monitor.Bounds, monitor);
+        }
 
         // And a frame round the same rectangle, which is what still says where the
         // recording is once that panel has been dragged out of the way.
@@ -1336,12 +1347,14 @@ public sealed class CaptureController : IDisposable
             // The panel outlives the recording by a few seconds to say where the file
             // went. Video has no thumbnail and no clipboard to land in, so this is
             // the only thing that says the recording exists.
-            hud.ShowSaved(Path.GetFileName(result.Path));
+            hud?.ShowSaved(Path.GetFileName(result.Path));
+
+            await DeliverRecordingAsync(result.Path);
         }
         catch (Exception)
         {
             // A failure has nothing to report there; the message box reports it.
-            hud.Close();
+            hud?.Close();
             throw;
         }
         finally
@@ -1379,10 +1392,73 @@ public sealed class CaptureController : IDisposable
     /// says, because there is nowhere else for it to go: minutes of video do not
     /// belong on the clipboard and there is no editor to hand it to yet.
     /// </remarks>
+    /// <summary>
+    /// Does whatever the preferences say happens once a recording stops.
+    /// </summary>
+    /// <remarks>
+    /// Best effort throughout: the recording is already on disk and the panel already
+    /// says so, and interrupting the user to report that the folder would not open would
+    /// be reporting a problem they do not have.
+    /// </remarks>
+    private async Task DeliverRecordingAsync(string path)
+    {
+        try
+        {
+            switch (_settings.Current.RecordingOnStop)
+            {
+                case RecordingOnStop.ShowInFolder:
+                    // Selected rather than merely opened, because a folder of thirty
+                    // recordings does not answer "where did the one I just made go".
+                    using (Process.Start(new ProcessStartInfo("explorer.exe", $"/select,\"{path}\"")))
+                    {
+                    }
+
+                    break;
+
+                case RecordingOnStop.CopyToClipboard:
+                    await CopyRecordingAsync(path);
+                    break;
+
+                default:
+                    break;
+            }
+        }
+        catch (Exception exception)
+        {
+            DiagnosticLog.Write($"Could not deliver the recording at '{path}': {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Puts the recording's file on the clipboard.
+    /// </summary>
+    /// <remarks>
+    /// The file rather than its pixels: a video has no single frame to paste, and what
+    /// takes a video is something that takes an attachment.
+    /// </remarks>
+    private static async Task CopyRecordingAsync(string path)
+    {
+        var package = new DataPackage { RequestedOperation = DataPackageOperation.Copy };
+        package.SetStorageItems([await StorageFile.GetFileFromPathAsync(path)]);
+
+        Clipboard.SetContent(package);
+
+        // Flushed, so the recording survives macshot being quit — the same reason a
+        // copied capture is flushed.
+        Clipboard.Flush();
+    }
+
     private string ResolveRecordingPath(RecordingFormat format)
     {
         var settings = _settings.Current;
-        var directory = ImageDelivery.ResolveDirectory(settings);
+
+        // A folder of its own if one is named, and otherwise wherever captures go — so
+        // that moving the capture folder moves recordings with it, which is what someone
+        // who never set this expects.
+        var directory = string.IsNullOrWhiteSpace(settings.RecordingDirectory)
+            ? ImageDelivery.ResolveDirectory(settings)
+            : settings.RecordingDirectory;
+
         Directory.CreateDirectory(directory);
 
         var name = FilenameTemplate.ResolveUnique(

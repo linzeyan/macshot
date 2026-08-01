@@ -72,6 +72,11 @@ public static class SettingsPortability
         // A path, and on the macOS side a security-scoped bookmark with it.
         "saveDirectory",
 
+        // The same, for recordings. Excluded for the same reason and not because it is
+        // less important: a folder that exists on the machine the file was written on is
+        // a folder that does not exist here.
+        "recordingDirectory",
+
         // Where the last selection was, in the coordinates of a display this machine has.
         "lastSelection",
         "lastSelectionDisplay",

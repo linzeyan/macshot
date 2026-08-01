@@ -193,6 +193,32 @@ public sealed record CaptureSettings
     public WebcamShape WebcamShape { get; init; } = WebcamShape.Circle;
 
     /// <summary>
+    /// Where recordings go, or empty to put them wherever captures go. macshot's
+    /// <c>recordingSavePath</c>.
+    /// </summary>
+    /// <remarks>
+    /// Empty rather than defaulted to the capture folder, so that someone who changes
+    /// where captures go moves their recordings with them without having to change this
+    /// too. Only a folder named here overrides that.
+    /// </remarks>
+    public string RecordingDirectory { get; init; } = string.Empty;
+
+    /// <summary>What happens the moment a recording stops. macshot's <c>recordingOnStop</c>.</summary>
+    public RecordingOnStop RecordingOnStop { get; init; } = RecordingOnStop.ShowInFolder;
+
+    /// <summary>
+    /// Whether the recording panel is left off the screen. macshot's
+    /// <c>hideRecordingHUD</c>.
+    /// </summary>
+    /// <remarks>
+    /// For recording something the panel would be sitting on top of. Escape and the
+    /// notification icon both still stop the recording, which is what makes hiding it
+    /// safe — a recording that cannot be stopped is the one thing worse than a panel in
+    /// the way.
+    /// </remarks>
+    public bool HideRecordingHud { get; init; }
+
+    /// <summary>
     /// Whether macshot starts with Windows. macshot's <c>launchAtLogin</c>.
     /// </summary>
     /// <remarks>

@@ -429,6 +429,22 @@ public sealed partial class PreferencesWindow : Window
         KeystrokeModeBox.SelectedIndex = settings.ShowEveryKeystroke ? 1 : 0;
         RecordSystemAudioCheck.IsChecked = settings.RecordSystemAudio;
         RecordMicAudioCheck.IsChecked = settings.RecordMicAudio;
+        RecordingDirectoryBox.Text = settings.RecordingDirectory;
+
+        // "Show in Explorer" rather than macshot's "Show in Finder", and untranslated
+        // because of it: the translated string names a macOS app, and a Chinese reader on
+        // Windows being told to look in the Finder is worse off than one reading English.
+        // The third is the port's own — macshot's is its video editor, which this build
+        // has not got, and a menu entry that opens nothing is not the answer.
+        RecordingOnStopBox.ItemsSource = new List<string>
+        {
+            "Show in Explorer",
+            L("Copy to clipboard"),
+            "Do nothing",
+        };
+        RecordingOnStopBox.SelectedIndex = (int)settings.RecordingOnStop;
+        HideRecordingHudCheck.IsChecked = settings.HideRecordingHud;
+
         WebcamCheck.IsChecked = settings.RecordWebcam;
 
         // macshot's own four corners, four sizes and two shapes, in its order, so every
@@ -571,6 +587,9 @@ public sealed partial class PreferencesWindow : Window
             ShowEveryKeystroke = KeystrokeModeBox.SelectedIndex == 1,
             RecordSystemAudio = RecordSystemAudioCheck.IsChecked == true,
             RecordMicAudio = RecordMicAudioCheck.IsChecked == true,
+            RecordingDirectory = RecordingDirectoryBox.Text.Trim(),
+            RecordingOnStop = (RecordingOnStop)Math.Max(RecordingOnStopBox.SelectedIndex, 0),
+            HideRecordingHud = HideRecordingHudCheck.IsChecked == true,
             RecordWebcam = WebcamCheck.IsChecked == true,
             WebcamCorner = (WebcamCorner)Math.Max(WebcamCornerBox.SelectedIndex, 0),
             WebcamSize = (WebcamSize)Math.Max(WebcamSizeBox.SelectedIndex, 0),
@@ -832,6 +851,36 @@ public sealed partial class PreferencesWindow : Window
     private void ResetDirectory_Click(object sender, RoutedEventArgs e)
     {
         DirectoryBox.Text = string.Empty;
+        Apply();
+    }
+
+    /// <summary>
+    /// Picks a folder for recordings alone.
+    /// </summary>
+    /// <remarks>
+    /// Separate from the capture folder because a recording is a different kind of file:
+    /// large, few, and usually on its way somewhere. Left empty it follows the captures,
+    /// which is what someone who never opens this expects.
+    /// </remarks>
+    private async void BrowseRecordings_Click(object sender, RoutedEventArgs e)
+    {
+        var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.VideosLibrary };
+        picker.FileTypeFilter.Add("*");
+
+        // An unpackaged app has no implicit window for the picker to parent itself
+        // to, so it has to be told which one to use or the call fails outright.
+        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
+
+        if (await picker.PickSingleFolderAsync() is { } folder)
+        {
+            RecordingDirectoryBox.Text = folder.Path;
+            Apply();
+        }
+    }
+
+    private void ClearRecordingDirectory_Click(object sender, RoutedEventArgs e)
+    {
+        RecordingDirectoryBox.Text = string.Empty;
         Apply();
     }
 

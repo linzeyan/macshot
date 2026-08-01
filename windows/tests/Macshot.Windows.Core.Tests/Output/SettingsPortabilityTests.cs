@@ -19,6 +19,7 @@ public sealed class SettingsPortabilityTests
         var settings = CaptureSettings.Default with
         {
             SaveDirectory = @"C:\Users\ricky\Pictures\Macshot",
+            RecordingDirectory = @"D:\Screencasts",
             LastSelection = new CaptureRegion(10, 20, 300, 200),
             LastSelectionDisplay = @"\\.\DISPLAY1",
         };
@@ -26,6 +27,7 @@ public sealed class SettingsPortabilityTests
         var written = Settings(SettingsPortability.Export(settings, "1.0", ExportedAt));
 
         Assert.IsFalse(written.ContainsKey("saveDirectory"));
+        Assert.IsFalse(written.ContainsKey("recordingDirectory"));
         Assert.IsFalse(written.ContainsKey("lastSelection"));
         Assert.IsFalse(written.ContainsKey("lastSelectionDisplay"));
     }
@@ -97,6 +99,8 @@ public sealed class SettingsPortabilityTests
             ShowClickHighlight = true,
             ShowKeystrokes = true,
             ShowEveryKeystroke = true,
+            RecordingOnStop = RecordingOnStop.CopyToClipboard,
+            HideRecordingHud = true,
             RecordWebcam = true,
             WebcamCorner = WebcamCorner.TopLeft,
             WebcamSize = WebcamSize.ExtraLarge,
