@@ -759,6 +759,8 @@ public sealed partial class VideoEditorWindow : Window
                 Path.GetFileName(destination),
                 CreationCollisionOption.ReplaceExisting);
 
+            string? note = null;
+
             if (SourceIsGif)
             {
                 // Nothing to re-encode and nothing that could have been changed, so the
@@ -767,7 +769,7 @@ public sealed partial class VideoEditorWindow : Window
             }
             else if (ExportsGif)
             {
-                await WriteGifAsync(source, file);
+                note = await WriteGifAsync(source, file);
             }
             else
             {
@@ -775,7 +777,8 @@ public sealed partial class VideoEditorWindow : Window
             }
 
             _exported = file.Path;
-            StatusText.Text = L("Saved to %@").Replace("%@", file.Path, StringComparison.Ordinal);
+            StatusText.Text = L("Saved to %@").Replace("%@", file.Path, StringComparison.Ordinal)
+                + (note is null ? string.Empty : "  ·  " + note);
             return true;
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException
@@ -790,7 +793,11 @@ public sealed partial class VideoEditorWindow : Window
         }
     }
 
-    private async Task WriteGifAsync(StorageFile source, StorageFile destination)
+    /// <summary>
+    /// Writes the GIF, and returns whatever the caller has to say about it beyond where
+    /// it went — or null when there is nothing to add.
+    /// </summary>
+    private async Task<string?> WriteGifAsync(StorageFile source, StorageFile destination)
     {
         var (width, height) = SizeForExport();
         if (width <= 0 || height <= 0)
@@ -812,15 +819,13 @@ public sealed partial class VideoEditorWindow : Window
             GifFrameRate,
             progress);
 
-        if (result.Truncated)
-        {
-            // Said rather than left to be noticed: the GIF ends before the piece that was
-            // asked for does, and a file that quietly stops early is worse than one that
-            // says why it did. Not through L, since macshot has no string for a limit it
-            // does not have.
-            StatusText.Text =
-                $"Stopped after {result.Frames} frames — that is as long as a GIF goes here.";
-        }
+        // Said rather than left to be noticed: a truncated GIF ends before the piece that
+        // was asked for does, and a file that quietly stops early is worse than one that
+        // says why it did. Not through L, since macshot has no string for a limit it does
+        // not have.
+        return result.Truncated
+            ? $"stopped after {result.Frames} frames, which is as long as a GIF goes here"
+            : null;
     }
 
     private async Task WriteMp4Async(StorageFile source, StorageFile destination)
