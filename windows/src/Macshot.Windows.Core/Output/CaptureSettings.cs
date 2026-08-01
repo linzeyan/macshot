@@ -398,6 +398,19 @@ public sealed record CaptureSettings
     public bool WindowSnapEnabled { get; init; } = true;
 
     /// <summary>
+    /// Whether the pointer is in the picture.
+    /// </summary>
+    /// <remarks>
+    /// Off by default, as macshot's <c>captureCursor</c> is: a screenshot with an arrow
+    /// left in the middle of it is almost never what was wanted. It is on for the person
+    /// documenting <em>where to click</em>, which is the one case where the pointer is
+    /// the subject. Only the desktop capture honours it — a window captured through its
+    /// own item, and every frame a scroll capture stitches, are taken while the overlay
+    /// is on screen, so the pointer they would draw is the one hovering over macshot.
+    /// </remarks>
+    public bool CaptureCursor { get; init; }
+
+    /// <summary>
     /// Takes the instruction pill off the overlay, leaving what the overlay has to
     /// <em>report</em> — a sampled colour, a ruler's reading, a failure.
     /// </summary>

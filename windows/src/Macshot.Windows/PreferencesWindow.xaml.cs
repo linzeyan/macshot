@@ -906,6 +906,7 @@ public sealed partial class PreferencesWindow : Window
         HistoryUnlimitedCheck.IsChecked = settings.HistoryUnlimited;
         HistorySizeBox.IsEnabled = !settings.HistoryUnlimited;
         RememberSelectionCheck.IsChecked = settings.RememberLastSelection;
+        CaptureCursorCheck.IsChecked = settings.CaptureCursor;
         HideInstructionsCheck.IsChecked = settings.HideCaptureInstructions;
         VerboseLoggingCheck.IsChecked = settings.VerboseLogging;
         AutomaticUpdatesCheck.IsChecked = settings.AutomaticUpdateChecks;
@@ -1265,6 +1266,7 @@ public sealed partial class PreferencesWindow : Window
                 : (int)HistorySizeBox.Value,
             HistoryUnlimited = HistoryUnlimitedCheck.IsChecked == true,
             RememberLastSelection = RememberSelectionCheck.IsChecked == true,
+            CaptureCursor = CaptureCursorCheck.IsChecked == true,
             HideCaptureInstructions = HideInstructionsCheck.IsChecked == true,
             // No PencilSmoothing here. It is set from the tool options row while drawing,
             // and this record is built with "with", so leaving it out carries the stored

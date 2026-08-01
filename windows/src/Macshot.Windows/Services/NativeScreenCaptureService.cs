@@ -14,7 +14,17 @@ public sealed class NativeScreenCaptureService
     private const uint Srccopy = 0x00CC0020;
     private const uint CaptureBlt = 0x40000000;
 
-    public CapturedFrame CaptureVirtualDesktop()
+    /// <summary>CURSORINFO.flags: the pointer is on screen rather than hidden.</summary>
+    private const uint CursorShowing = 0x00000001;
+
+    /// <summary>DI_NORMAL: draw the image through its mask, which is what a pointer is.</summary>
+    private const uint DrawIconNormal = 0x0003;
+
+    /// <param name="includeCursor">
+    /// Whether the pointer is drawn into the frame. <c>BitBlt</c> never brings one, so
+    /// unlike the Graphics Capture path this has to composite it by hand.
+    /// </param>
+    public CapturedFrame CaptureVirtualDesktop(bool includeCursor = false)
     {
         var virtualX = GetSystemMetrics(SmXVirtualScreen);
         var virtualY = GetSystemMetrics(SmYVirtualScreen);
@@ -60,6 +70,11 @@ public sealed class NativeScreenCaptureService
                 throw new InvalidOperationException("Windows rejected the screen capture request.");
             }
 
+            if (includeCursor)
+            {
+                DrawCursor(memoryDc, virtualX, virtualY);
+            }
+
             var bytes = new byte[checked(width * height * 4)];
             Marshal.Copy(pixels, bytes, 0, bytes.Length);
             return new CapturedFrame(virtualX, virtualY, width, height, bytes);
@@ -82,6 +97,64 @@ public sealed class NativeScreenCaptureService
             }
 
             ReleaseDC(IntPtr.Zero, screenDc);
+        }
+    }
+
+    /// <summary>
+    /// Draws the pointer where it stands, in the frame's own coordinates.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Silent on every failure. The pointer is a detail of the screenshot; a capture
+    /// delivered without it beats no capture at all, and there is nothing the user could
+    /// do about a cursor Windows would not hand over.
+    /// </para>
+    /// <para>
+    /// The hotspot is taken off the position, because <c>GetCursorPos</c> reports the
+    /// point the pointer is <em>aiming at</em> and <c>DrawIconEx</c> is given the corner
+    /// it is drawn from. Without that the arrow lands down and to the right of whatever
+    /// it was pointing at, which is exactly what the setting is turned on to show.
+    /// </para>
+    /// </remarks>
+    private static void DrawCursor(IntPtr deviceContext, int virtualX, int virtualY)
+    {
+        var cursor = new CursorInfo { Size = (uint)Marshal.SizeOf<CursorInfo>() };
+        if (!GetCursorInfo(ref cursor) || cursor.Flags != CursorShowing || cursor.Handle == IntPtr.Zero)
+        {
+            return;
+        }
+
+        if (!GetIconInfo(cursor.Handle, out var icon))
+        {
+            return;
+        }
+
+        try
+        {
+            DrawIconEx(
+                deviceContext,
+                cursor.ScreenX - (int)icon.HotspotX - virtualX,
+                cursor.ScreenY - (int)icon.HotspotY - virtualY,
+                cursor.Handle,
+                0,
+                0,
+                0,
+                IntPtr.Zero,
+                DrawIconNormal);
+        }
+        finally
+        {
+            // GetIconInfo hands over two bitmaps the caller owns. Left undeleted they
+            // leak a GDI object per capture, and GDI handles are a per-process quota.
+            if (icon.MaskBitmap != IntPtr.Zero)
+            {
+                DeleteObject(icon.MaskBitmap);
+            }
+
+            if (icon.ColorBitmap != IntPtr.Zero)
+            {
+                DeleteObject(icon.ColorBitmap);
+            }
         }
     }
 
@@ -159,6 +232,49 @@ public sealed class NativeScreenCaptureService
     [DllImport("gdi32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool DeleteObject(IntPtr graphicsObject);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetCursorInfo(ref CursorInfo info);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool GetIconInfo(IntPtr icon, out IconInfo info);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DrawIconEx(
+        IntPtr deviceContext,
+        int x,
+        int y,
+        IntPtr icon,
+        int width,
+        int height,
+        uint step,
+        IntPtr brush,
+        uint flags);
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct CursorInfo
+    {
+        public uint Size;
+        public uint Flags;
+        public IntPtr Handle;
+        public int ScreenX;
+        public int ScreenY;
+    }
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct IconInfo
+    {
+        [MarshalAs(UnmanagedType.Bool)]
+        public bool IsIcon;
+
+        public uint HotspotX;
+        public uint HotspotY;
+        public IntPtr MaskBitmap;
+        public IntPtr ColorBitmap;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct BitmapInfoHeader

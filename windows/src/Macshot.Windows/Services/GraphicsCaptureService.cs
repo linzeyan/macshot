@@ -77,7 +77,12 @@ public sealed class GraphicsCaptureService : IDisposable
     /// </summary>
     public static bool IsSupported => GraphicsCaptureSession.IsSupported();
 
-    public async Task<CapturedFrame> CaptureVirtualDesktopAsync(DisplaySet displays)
+    /// <param name="includeCursor">
+    /// Whether the pointer is drawn into the frame. The capture session decides it, so
+    /// the pointer is composited by Windows at the position it held when the frame was
+    /// taken rather than the one it has drifted to by the time this returns.
+    /// </param>
+    public async Task<CapturedFrame> CaptureVirtualDesktopAsync(DisplaySet displays, bool includeCursor = false)
     {
         ArgumentNullException.ThrowIfNull(displays);
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -94,7 +99,7 @@ public sealed class GraphicsCaptureService : IDisposable
                 throw new InvalidOperationException($"No display handle for '{monitor.DeviceName}'.");
             }
 
-            var (width, height, pixels) = await CaptureDisplayAsync(device, handle);
+            var (width, height, pixels) = await CaptureDisplayAsync(device, handle, includeCursor);
             composer.Draw(monitor, width, height, pixels);
         }
 
@@ -180,9 +185,10 @@ public sealed class GraphicsCaptureService : IDisposable
 
     private static Task<(int Width, int Height, byte[] Pixels)> CaptureDisplayAsync(
         IDirect3DDevice device,
-        nint monitorHandle)
+        nint monitorHandle,
+        bool includeCursor)
     {
-        return CaptureItemAsync(device, OpenDisplay(monitorHandle));
+        return CaptureItemAsync(device, OpenDisplay(monitorHandle), includeCursor);
     }
 
     /// <summary>
@@ -192,7 +198,8 @@ public sealed class GraphicsCaptureService : IDisposable
     /// </summary>
     private static async Task<(int Width, int Height, byte[] Pixels)> CaptureItemAsync(
         IDirect3DDevice device,
-        GraphicsCaptureItem item)
+        GraphicsCaptureItem item,
+        bool includeCursor = false)
     {
         var arrival = new TaskCompletionSource<Direct3D11CaptureFrame>(
             TaskCreationOptions.RunContinuationsAsynchronously);
@@ -215,9 +222,9 @@ public sealed class GraphicsCaptureService : IDisposable
 
         using var session = pool.CreateCaptureSession(item);
 
-        // A screenshot of the pointer is almost never what was wanted, and the BitBlt
-        // path does not include one either.
-        session.IsCursorCaptureEnabled = false;
+        // A screenshot of the pointer is almost never what was wanted, so this is off
+        // unless the setting asks for it — macshot's captureCursor.
+        session.IsCursorCaptureEnabled = includeCursor;
         session.StartCapture();
 
         using var captured = await arrival.Task.WaitAsync(FrameTimeout);

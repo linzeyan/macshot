@@ -51,7 +51,12 @@ public sealed class ScreenCaptureService : IDisposable
     /// </summary>
     public bool FellBackUnexpectedly { get; private set; }
 
-    public async Task<CapturedFrame> CaptureVirtualDesktopAsync(DisplaySet displays)
+    /// <param name="includeCursor">
+    /// Whether the pointer is in the picture — macshot's <c>captureCursor</c>. Honoured
+    /// by both backends, so turning it on does not quietly stop working on the machines
+    /// that fall back.
+    /// </param>
+    public async Task<CapturedFrame> CaptureVirtualDesktopAsync(DisplaySet displays, bool includeCursor = false)
     {
         ArgumentNullException.ThrowIfNull(displays);
         ObjectDisposedException.ThrowIf(_disposed, this);
@@ -60,12 +65,12 @@ public sealed class ScreenCaptureService : IDisposable
         {
             FallbackReason = "This build of Windows does not offer Windows.Graphics.Capture.";
             FellBackUnexpectedly = false;
-            return UseBitBlt();
+            return UseBitBlt(includeCursor);
         }
 
         try
         {
-            var frame = await _graphics.CaptureVirtualDesktopAsync(displays);
+            var frame = await _graphics.CaptureVirtualDesktopAsync(displays, includeCursor);
             Backend = CaptureBackend.WindowsGraphicsCapture;
             FallbackReason = null;
             FellBackUnexpectedly = false;
@@ -78,7 +83,7 @@ public sealed class ScreenCaptureService : IDisposable
             // same right answer: take the screenshot the old way.
             FallbackReason = exception.Message;
             FellBackUnexpectedly = true;
-            return UseBitBlt();
+            return UseBitBlt(includeCursor);
         }
     }
 
@@ -136,9 +141,9 @@ public sealed class ScreenCaptureService : IDisposable
         _graphics.Dispose();
     }
 
-    private CapturedFrame UseBitBlt()
+    private CapturedFrame UseBitBlt(bool includeCursor)
     {
         Backend = CaptureBackend.BitBlt;
-        return _bitBlt.CaptureVirtualDesktop();
+        return _bitBlt.CaptureVirtualDesktop(includeCursor);
     }
 }

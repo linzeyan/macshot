@@ -292,6 +292,12 @@
                                 ValueChanged="ThumbnailScale_Changed" />
                             <TextBlock x:Name="ThumbnailScaleReading" Style="{StaticResource RowText}" />
                         </StackPanel>
+                        <CheckBox
+                            x:Name="CaptureCursorCheck"
+                            Content="Capture mouse cursor in screenshot"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
                         <!-- No delay row. macshot sets the capture delay from the menu bar's
                              "Capture Delay" submenu and nowhere else (AppDelegate.swift:717),
                              and the tray menu here offers the same five choices. A second

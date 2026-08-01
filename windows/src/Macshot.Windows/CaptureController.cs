@@ -605,7 +605,9 @@ public sealed class CaptureController : IDisposable
     /// </remarks>
     private async Task<CapturedFrame> CaptureDesktopAsync(DisplaySet displays)
     {
-        var frame = await _screenCapture.CaptureVirtualDesktopAsync(displays);
+        var frame = await _screenCapture.CaptureVirtualDesktopAsync(
+            displays,
+            _settings.Current.CaptureCursor);
 
         // Which backend actually ran is otherwise only knowable from the absence of a
         // message box, which is the weakest kind of evidence there is.
