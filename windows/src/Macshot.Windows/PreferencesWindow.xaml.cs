@@ -1036,7 +1036,7 @@ public sealed partial class PreferencesWindow : Window
 
         S3TestButton.IsEnabled = false;
         S3TestStatus.Text = L("Testing...");
-        S3TestStatus.Foreground = StatusBrush("TextFillColorSecondaryBrush", Colors.Gray);
+        S3TestStatus.Foreground = StatusBrush("TextFillColorSecondaryBrush", Microsoft.UI.Colors.Gray);
         try
         {
             var failure = await new Upload.UploadService(_settings).TestS3Async(CancellationToken.None);
@@ -1046,8 +1046,8 @@ public sealed partial class PreferencesWindow : Window
             // for everything else: a failure here is a line of prose about which of six
             // fields is wrong, and it has to look like something meant to be read.
             S3TestStatus.Foreground = failure is null
-                ? StatusBrush("SystemFillColorSuccessBrush", Colors.SeaGreen)
-                : StatusBrush("SystemFillColorCriticalBrush", Colors.IndianRed);
+                ? StatusBrush("SystemFillColorSuccessBrush", Microsoft.UI.Colors.SeaGreen)
+                : StatusBrush("SystemFillColorCriticalBrush", Microsoft.UI.Colors.IndianRed);
         }
         finally
         {
