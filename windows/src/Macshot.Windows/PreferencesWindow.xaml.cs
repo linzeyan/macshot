@@ -1568,9 +1568,11 @@ public sealed partial class PreferencesWindow : Window
             report.Append("Could not enumerate displays: ").AppendLine(error.Message);
         }
 
-        var package = new Windows.ApplicationModel.DataTransfer.DataPackage();
+        // global::, because this file's own namespace is Macshot.Windows and a bare
+        // "Windows." binds to that first.
+        var package = new global::Windows.ApplicationModel.DataTransfer.DataPackage();
         package.SetText(report.ToString());
-        Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
+        global::Windows.ApplicationModel.DataTransfer.Clipboard.SetContent(package);
         // The button says what happened and then goes back to saying what it does, as
         // macshot's does. Nothing else on this page reports, so a status line elsewhere
         // would be looked for in the wrong place.
