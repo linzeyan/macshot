@@ -332,8 +332,14 @@
                                 ValueChanged="Setting_NumberChanged" />
                             <TextBlock Text="captures" Style="{StaticResource RowText}" />
                         </StackPanel>
+                        <CheckBox
+                            x:Name="HistoryUnlimitedCheck"
+                            Content="Keep every capture"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="HistoryUnlimited_Toggled"
+                            Unchecked="HistoryUnlimited_Toggled" />
                         <TextBlock
-                            Text="Kept under macshot's own data folder, separately from the save folder, and offered in the notification-area menu. Zero keeps none."
+                            Text="Kept under macshot's own data folder, separately from the save folder, and offered in the notification-area menu. Zero keeps none, and keeping every capture wins over a zero rather than deleting them all."
                             Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="" Style="{StaticResource RowLabel}" />
@@ -410,10 +416,54 @@
                         <TextBlock Text="OUTPUT" Style="{StaticResource SectionHeading}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Format:" Style="{StaticResource RowLabel}" />
-                            <ComboBox x:Name="RecordingFormatBox" FontSize="13" Width="160" SelectionChanged="Setting_SelectionChanged" />
+                            <ComboBox x:Name="RecordingFormatBox" FontSize="13" Width="160" SelectionChanged="RecordingFormat_SelectionChanged" />
                         </StackPanel>
                         <TextBlock
                             Text="GIF is written smaller and slower than MP4, because every GIF frame is a whole image."
+                            Style="{StaticResource Caption}" />
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="File name:" Style="{StaticResource RowLabel}" />
+                            <TextBox
+                                x:Name="RecordingTemplateBox"
+                                FontSize="13"
+                                Width="240"
+                                TextChanged="RecordingTemplate_TextChanged"
+                                LostFocus="Setting_LostFocus" />
+                        </StackPanel>
+                        <TextBlock x:Name="RecordingTemplatePreview" Style="{StaticResource Caption}" />
+                        <TextBlock
+                            Text="Its own template, so a folder of recordings and screenshots can still be told apart by name. The same tokens as above."
+                            Style="{StaticResource Caption}" />
+                    </StackPanel>
+
+                    <StackPanel Style="{StaticResource Section}">
+                        <TextBlock Text="FRAME RATE" Style="{StaticResource SectionHeading}" />
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Video:" Style="{StaticResource RowLabel}" />
+                            <ComboBox
+                                x:Name="RecordingFrameRateBox"
+                                FontSize="13"
+                                Width="160"
+                                SelectionChanged="Setting_SelectionChanged" />
+                            <TextBlock Text="fps" Style="{StaticResource RowText}" />
+                        </StackPanel>
+                        <TextBlock
+                            Text="30 is what a screen recording is normally taken at. 60 and 120 are for showing something that moves quickly, and cost roughly their multiple of the file size."
+                            Style="{StaticResource Caption}" />
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="GIF:" Style="{StaticResource RowLabel}" />
+                            <NumberBox
+                                x:Name="GifFrameRateBox"
+                                Width="120"
+                                FontSize="13"
+                                Minimum="2"
+                                Maximum="30"
+                                SpinButtonPlacementMode="Compact"
+                                ValueChanged="Setting_NumberChanged" />
+                            <TextBlock Text="fps" Style="{StaticResource RowText}" />
+                        </StackPanel>
+                        <TextBlock
+                            Text="Kept separate because it answers a different question: not how smooth the recording should be, but how large a GIF may get before whatever it is being sent to refuses it."
                             Style="{StaticResource Caption}" />
                     </StackPanel>
                 </StackPanel>

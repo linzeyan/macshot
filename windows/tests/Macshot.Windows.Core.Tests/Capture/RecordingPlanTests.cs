@@ -6,6 +6,36 @@ namespace Macshot.Windows.Core.Tests.Capture;
 public sealed class RecordingPlanTests
 {
     [TestMethod]
+    public void FrameRateChoices_OffersMacshotSFive()
+    {
+        CollectionAssert.AreEqual(
+            new[] { 15, 24, 30, 60, 120 },
+            RecordingPlan.FrameRateChoices(RecordingPlan.DefaultFrameRate).ToArray());
+    }
+
+    [TestMethod]
+    public void FrameRateChoices_KeepsARateTheFileNamesAndTheMenuDoesNot()
+    {
+        // The settings file is meant to be hand-editable and takes any rate in range. A
+        // menu with nothing to select for 45 would land on its first entry and write 15
+        // back, which is a settings window that changes settings by being opened.
+        CollectionAssert.AreEqual(
+            new[] { 15, 24, 30, 45, 60, 120 },
+            RecordingPlan.FrameRateChoices(45).ToArray());
+    }
+
+    [TestMethod]
+    public void FrameRateChoices_DoesNotOfferARateTheRecorderCannotRun()
+    {
+        CollectionAssert.AreEqual(
+            new[] { 15, 24, 30, 60, 120 },
+            RecordingPlan.FrameRateChoices(10_000).ToArray(),
+            "clamped to the ceiling, which is already on the menu");
+
+        CollectionAssert.Contains(RecordingPlan.FrameRateChoices(0).ToArray(), RecordingPlan.MinFrameRate);
+    }
+
+    [TestMethod]
     public void Resolve_KeepsASizeTheEncoderCanTake()
     {
         // An odd dimension has no whole chroma sample to go in, and H.264 refuses

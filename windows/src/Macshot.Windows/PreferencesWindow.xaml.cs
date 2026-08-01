@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using Macshot.Windows.Core.Annotations;
+using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Input;
 using Macshot.Windows.Core.Localization;
 using Macshot.Windows.Core.Output;
@@ -302,12 +303,21 @@ public sealed partial class PreferencesWindow : Window
         RecordingFormatBox.SelectedIndex = (int)settings.RecordingFormat;
         DirectoryBox.Text = settings.SaveDirectory ?? string.Empty;
         TemplateBox.Text = settings.FilenameTemplate;
+        RecordingTemplateBox.Text = settings.RecordingFilenameTemplate;
+        // Through Core rather than a list here, so a rate the file names and the menu
+        // does not offer still selects instead of being written back as 15.
+        var rates = RecordingPlan.FrameRateChoices(settings.RecordingFrameRate).ToList();
+        RecordingFrameRateBox.ItemsSource = rates;
+        RecordingFrameRateBox.SelectedIndex = rates.IndexOf(settings.RecordingFrameRate);
+        GifFrameRateBox.Value = settings.GifFrameRate;
         ClipboardCheck.IsChecked = settings.CopyToClipboard;
         AutoSaveCheck.IsChecked = settings.AutoSave;
         ThumbnailCheck.IsChecked = settings.ShowThumbnail;
         ThumbnailSecondsBox.Value = settings.ThumbnailSeconds;
         DelaySecondsBox.Value = settings.DelaySeconds;
         HistorySizeBox.Value = settings.HistorySize;
+        HistoryUnlimitedCheck.IsChecked = settings.HistoryUnlimited;
+        HistorySizeBox.IsEnabled = !settings.HistoryUnlimited;
         RememberSelectionCheck.IsChecked = settings.RememberLastSelection;
         HideInstructionsCheck.IsChecked = settings.HideCaptureInstructions;
         PencilSmoothingBox.ItemsSource = Enum.GetValues<PencilSmoothing>().Select(mode => mode.ToString()).ToList();
@@ -380,6 +390,13 @@ public sealed partial class PreferencesWindow : Window
                 : RecordingFormat.Mp4,
             SaveDirectory = DirectoryBox.Text,
             FilenameTemplate = TemplateBox.Text,
+            RecordingFilenameTemplate = RecordingTemplateBox.Text,
+            RecordingFrameRate = RecordingFrameRateBox.SelectedItem is int rate
+                ? rate
+                : _settings.Current.RecordingFrameRate,
+            GifFrameRate = double.IsNaN(GifFrameRateBox.Value)
+                ? CaptureSettings.Default.GifFrameRate
+                : (int)GifFrameRateBox.Value,
             CopyToClipboard = ClipboardCheck.IsChecked == true,
             AutoSave = AutoSaveCheck.IsChecked == true,
             ShowThumbnail = ThumbnailCheck.IsChecked == true,
@@ -395,6 +412,7 @@ public sealed partial class PreferencesWindow : Window
             HistorySize = double.IsNaN(HistorySizeBox.Value)
                 ? CaptureSettings.Default.HistorySize
                 : (int)HistorySizeBox.Value,
+            HistoryUnlimited = HistoryUnlimitedCheck.IsChecked == true,
             RememberLastSelection = RememberSelectionCheck.IsChecked == true,
             HideCaptureInstructions = HideInstructionsCheck.IsChecked == true,
             PencilSmoothing = PencilSmoothingBox.SelectedIndex >= 0
@@ -432,11 +450,31 @@ public sealed partial class PreferencesWindow : Window
         Apply();
     }
 
+    private void RecordingFormat_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        // The preview carries the extension, and MP4 and GIF do not share one.
+        UpdateRecordingTemplatePreview();
+        Apply();
+    }
+
     /// <summary>
     /// Keeps the preview in step as the template is typed. What is typed is not stored
     /// until the focus leaves the box — see <see cref="Setting_LostFocus"/>.
     /// </summary>
     private void Template_TextChanged(object sender, TextChangedEventArgs e) => UpdateTemplatePreview();
+
+    private void RecordingTemplate_TextChanged(object sender, TextChangedEventArgs e) =>
+        UpdateRecordingTemplatePreview();
+
+    /// <summary>
+    /// Keeping everything overrides the count, so the count is greyed out rather than
+    /// left looking like it still decides something.
+    /// </summary>
+    private void HistoryUnlimited_Toggled(object sender, RoutedEventArgs e)
+    {
+        HistorySizeBox.IsEnabled = HistoryUnlimitedCheck.IsChecked != true;
+        Apply();
+    }
 
     /// <summary>Quality has no meaning for a lossless format, so it is not offered for one.</summary>
     private void UpdateQualityVisibility()
@@ -465,6 +503,19 @@ public sealed partial class PreferencesWindow : Window
 
         TemplatePreview.Text = FilenameTemplate.Resolve(TemplateBox.Text, DateTimeOffset.Now)
             + SelectedFormat().FileExtension();
+    }
+
+    /// <summary>The same, for the template a recording is named with.</summary>
+    private void UpdateRecordingTemplatePreview()
+    {
+        if (RecordingTemplatePreview is null || RecordingTemplateBox is null)
+        {
+            return;
+        }
+
+        var extension = RecordingFormatBox?.SelectedIndex == (int)RecordingFormat.Gif ? ".gif" : ".mp4";
+        RecordingTemplatePreview.Text =
+            FilenameTemplate.Resolve(RecordingTemplateBox.Text, DateTimeOffset.Now) + extension;
     }
 
     private async void Browse_Click(object sender, RoutedEventArgs e)

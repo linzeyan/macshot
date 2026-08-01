@@ -36,6 +36,28 @@ public sealed record RecordingPlan
     public const uint MinBitrate = 10_000_000;
     public const uint MaxBitrate = 80_000_000;
 
+    /// <summary>The five rates macshot's menu offers, lowest first.</summary>
+    public static IReadOnlyList<int> OfferedFrameRates { get; } = [15, 24, 30, 60, 120];
+
+    /// <summary>
+    /// What a frame-rate menu should hold given what the settings file currently says:
+    /// macshot's five, plus <paramref name="current"/> if it is not one of them.
+    /// </summary>
+    /// <remarks>
+    /// The file takes any rate between <see cref="MinFrameRate"/> and
+    /// <see cref="MaxFrameRate"/> and is meant to be edited by hand. A menu holding only
+    /// the five would have nothing to select for a file that says 45, land on the first
+    /// entry, and write 15 back — a settings window that changes settings by being
+    /// opened.
+    /// </remarks>
+    public static IReadOnlyList<int> FrameRateChoices(int current)
+    {
+        var rate = Math.Clamp(current, MinFrameRate, MaxFrameRate);
+        return OfferedFrameRates.Contains(rate)
+            ? OfferedFrameRates
+            : [.. OfferedFrameRates.Append(rate).Order()];
+    }
+
     /// <summary>
     /// Bits spent per pixel per frame, and the number this file used to get wrong.
     /// </summary>
