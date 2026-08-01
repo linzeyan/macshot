@@ -62,4 +62,53 @@
   <ItemGroup>
     <ProjectReference Include="..\Macshot.Windows.Core\Macshot.Windows.Core.csproj" />
   </ItemGroup>
+
+  <!--
+    macshot's own translations, linked rather than copied. They live beside the Mac app
+    because that is where they are contributed and reviewed; a copy under windows/ would
+    fork forty files and go stale one language at a time. LogicalName is what
+    Localization asks the assembly for.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="..\..\..\macshot\ar.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.ar.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\bg.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.bg.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\bn.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.bn.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\ca.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.ca.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\cs.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.cs.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\da.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.da.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\de.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.de.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\el.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.el.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\en.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.en.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\es.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.es.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\fa.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.fa.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\fi.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.fi.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\fil.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.fil.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\fr.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.fr.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\he.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.he.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\hi.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.hi.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\hr.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.hr.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\hu.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.hu.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\id.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.id.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\it.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.it.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\ja.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.ja.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\ko.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.ko.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\ms.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.ms.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\nb.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.nb.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\nl.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.nl.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\pl.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.pl.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\pt.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.pt.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\pt-BR.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.pt-BR.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\ro.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.ro.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\ru.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.ru.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\sk.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.sk.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\sr.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.sr.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\sv.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.sv.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\ta.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.ta.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\th.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.th.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\tr.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.tr.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\uk.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.uk.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\vi.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.vi.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\zh-Hans.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.zh-Hans.strings" />
+    <EmbeddedResource Include="..\..\..\macshot\zh-Hant.lproj\Localizable.strings" LogicalName="Macshot.Windows.Strings.zh-Hant.strings" />
+  </ItemGroup>
 </Project>

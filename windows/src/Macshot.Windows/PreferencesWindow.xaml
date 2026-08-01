@@ -157,6 +157,20 @@
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
+                        <TextBlock Text="LANGUAGE" Style="{StaticResource SectionHeading}" />
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Language:" Style="{StaticResource RowLabel}" />
+                            <ComboBox
+                                x:Name="LanguageBox"
+                                Width="240"
+                                SelectionChanged="Setting_SelectionChanged" />
+                        </StackPanel>
+                        <TextBlock
+                            Text="Windows opened after this takes the new language. macshot's own translations are used, so a language contributed to the Mac app arrives here too."
+                            Style="{StaticResource Caption}" />
+                    </StackPanel>
+
+                    <StackPanel Style="{StaticResource Section}">
                         <TextBlock Text="APPEARANCE" Style="{StaticResource SectionHeading}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Toolbar:" Style="{StaticResource RowLabel}" />

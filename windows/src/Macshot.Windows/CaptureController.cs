@@ -134,6 +134,14 @@ public sealed class CaptureController : IDisposable
         DiagnosticLog.IsVerbose = _settings.Current.VerboseLogging;
         _settings.Changed += (_, settings) => DiagnosticLog.IsVerbose = settings.VerboseLogging;
 
+        // Before the first string is asked for — the tray menu below is built from
+        // literals that go through the lookup. Re-resolved on every save so choosing a
+        // language reaches the next window opened, which is where this falls short of
+        // macshot: it swaps its bundle and redraws, where a XAML page has already been
+        // built by the time the setting changes.
+        Localization.Use(_settings.Current.Language);
+        _settings.Changed += (_, settings) => Localization.Use(settings.Language);
+
         DiagnosticLog.Verbose(
             $"macshot starting: {BuildVariant.DisplayName}, settings at {_settings.Path}");
 

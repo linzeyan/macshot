@@ -2,6 +2,7 @@ using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Input;
+using Macshot.Windows.Core.Localization;
 using Macshot.Windows.Core.Recognition;
 
 namespace Macshot.Windows.Core.Output;
@@ -274,6 +275,16 @@ public sealed record CaptureSettings
     /// </remarks>
     public bool BetaUpdates { get; init; }
 
+    /// <summary>
+    /// What language macshot itself is shown in, or <c>"system"</c> to follow Windows.
+    /// </summary>
+    /// <remarks>
+    /// macshot's <c>appLanguage</c>, with macshot's default. A code this build has no
+    /// strings for resolves to English rather than being refused, so a settings file
+    /// from a newer version cannot leave the interface blank.
+    /// </remarks>
+    public string Language { get; init; } = AppLanguages.System;
+
     /// <summary>What recognized text is translated into, as an ISO-639-1 code.</summary>
     public string TranslateTargetLanguage { get; init; } = TranslationLanguages.DefaultCode;
 
@@ -465,6 +476,11 @@ public sealed record CaptureSettings
             // Normalized rather than passed through: a code the table does not hold
             // would be sent to the service and refused, so the capture would come back
             // with an error where a translation was asked for.
+            // Not resolved here, only tidied: "system" has to survive into the file, or
+            // a user who follows Windows would be pinned to whatever they had the day
+            // they last saved.
+            Language = string.IsNullOrWhiteSpace(Language) ? AppLanguages.System : Language.Trim(),
+
             TranslateTargetLanguage = TranslationLanguages.Normalize(TranslateTargetLanguage),
 
             CaptureAreaHotkey = CaptureAreaBinding.ToString(),

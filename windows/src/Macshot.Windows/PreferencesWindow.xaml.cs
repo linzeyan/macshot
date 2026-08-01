@@ -1,6 +1,7 @@
 using System.Diagnostics;
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Input;
+using Macshot.Windows.Core.Localization;
 using Macshot.Windows.Core.Output;
 using Macshot.Windows.Services;
 using Macshot.Windows.Toolbar;
@@ -310,6 +311,17 @@ public sealed partial class PreferencesWindow : Window
         AutomaticUpdatesCheck.IsChecked = settings.AutomaticUpdateChecks;
         BetaUpdatesCheck.IsChecked = settings.BetaUpdates;
 
+        // Each language named in itself, macshot's list in macshot's order: a reader
+        // looking for their own language scans endonyms, not English names.
+        LanguageBox.ItemsSource = AppLanguages.All.Select(language => language.Name).ToList();
+        var chosen = AppLanguages.All
+            .Select((language, index) => (language, index))
+            .FirstOrDefault(entry => string.Equals(
+                entry.language.Code,
+                settings.Language,
+                StringComparison.OrdinalIgnoreCase));
+        LanguageBox.SelectedIndex = chosen.language.Code is null ? 0 : chosen.index;
+
         CaptureAreaHotkeyBox.Binding = settings.CaptureAreaHotkey;
         CaptureAllScreensHotkeyBox.Binding = settings.CaptureAllScreensHotkey;
         RecordScreenHotkeyBox.Binding = settings.RecordScreenHotkey;
@@ -384,6 +396,9 @@ public sealed partial class PreferencesWindow : Window
             VerboseLogging = VerboseLoggingCheck.IsChecked == true,
             AutomaticUpdateChecks = AutomaticUpdatesCheck.IsChecked == true,
             BetaUpdates = BetaUpdatesCheck.IsChecked == true,
+            Language = LanguageBox.SelectedIndex >= 0 && LanguageBox.SelectedIndex < AppLanguages.All.Count
+                ? AppLanguages.All[LanguageBox.SelectedIndex].Code
+                : AppLanguages.System,
             CaptureAreaHotkey = CaptureAreaHotkeyBox.Binding,
             CaptureAllScreensHotkey = CaptureAllScreensHotkeyBox.Binding,
             RecordScreenHotkey = RecordScreenHotkeyBox.Binding,
