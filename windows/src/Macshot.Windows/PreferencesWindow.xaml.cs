@@ -720,14 +720,10 @@ public sealed partial class PreferencesWindow : Window
         RecordingFrameRateBox.SelectedIndex = rates.IndexOf(settings.RecordingFrameRate);
         GifFrameRateBox.Value = settings.GifFrameRate;
         RecordedRegionBorderCheck.IsChecked = settings.ShowRecordedRegionBorder;
-        ClickHighlightCheck.IsChecked = settings.ShowClickHighlight;
-        KeystrokeCheck.IsChecked = settings.ShowKeystrokes;
 
         // macshot's two words for the same two choices, so the entries translate.
         KeystrokeModeBox.ItemsSource = new List<string> { L("Shortcuts Only"), L("All Keystrokes") };
         KeystrokeModeBox.SelectedIndex = settings.ShowEveryKeystroke ? 1 : 0;
-        RecordSystemAudioCheck.IsChecked = settings.RecordSystemAudio;
-        RecordMicAudioCheck.IsChecked = settings.RecordMicAudio;
         RecordingDirectoryBox.Text = settings.RecordingDirectory;
 
         // "Show in Explorer" rather than macshot's "Show in Finder", and untranslated
@@ -745,8 +741,6 @@ public sealed partial class PreferencesWindow : Window
         // file does not say, and the next save writes whichever of the three is chosen.
         RecordingOnStopBox.SelectedIndex = Array.IndexOf(OnStopOrder, settings.RecordingOnStop);
         HideRecordingHudCheck.IsChecked = settings.HideRecordingHud;
-
-        WebcamCheck.IsChecked = settings.RecordWebcam;
 
         // macshot's own four corners, four sizes and two shapes, in its order, so every
         // entry is a string its translations are keyed by.
@@ -1067,15 +1061,13 @@ public sealed partial class PreferencesWindow : Window
             ShowRecordedRegionBorder = RecordedRegionBorderCheck.IsChecked == true,
             ThumbnailCorner = (ThumbnailCorner)Math.Max(ThumbnailCornerBox.SelectedIndex, 0),
             ThumbnailScale = ThumbnailScaleSlider.Value / 100,
-            ShowClickHighlight = ClickHighlightCheck.IsChecked == true,
-            ShowKeystrokes = KeystrokeCheck.IsChecked == true,
+            // No ShowClickHighlight, ShowKeystrokes, RecordSystemAudio, RecordMicAudio or
+            // RecordWebcam. The recording strip owns those five, as it does on macOS, and
+            // the with-expression carries whatever it last wrote straight through.
             ShowEveryKeystroke = KeystrokeModeBox.SelectedIndex == 1,
-            RecordSystemAudio = RecordSystemAudioCheck.IsChecked == true,
-            RecordMicAudio = RecordMicAudioCheck.IsChecked == true,
             RecordingDirectory = RecordingDirectoryBox.Text.Trim(),
             RecordingOnStop = OnStopOrder[Math.Max(RecordingOnStopBox.SelectedIndex, 0)],
             HideRecordingHud = HideRecordingHudCheck.IsChecked == true,
-            RecordWebcam = WebcamCheck.IsChecked == true,
             WebcamCorner = (WebcamCorner)Math.Max(WebcamCornerBox.SelectedIndex, 0),
             WebcamSize = (WebcamSize)Math.Max(WebcamSizeBox.SelectedIndex, 0),
             WebcamShape = (WebcamShape)Math.Max(WebcamShapeBox.SelectedIndex, 0),

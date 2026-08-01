@@ -503,14 +503,51 @@
 
             <ScrollViewer x:Name="RecordingPage" Visibility="Collapsed">
                 <StackPanel Spacing="20">
+                    <!-- macshot's three sections in macshot's order: Output, Behavior,
+                         Webcam (SettingsWindowController.swift:1547–1646). The frame rate
+                         sits at the top of Output there rather than under a heading of its
+                         own, and what macshot puts on the recording strip — the click ring,
+                         the audio pair, the webcam switch — is not repeated here. The strip
+                         offers all of them (ToolbarActions.RecordingItems), and a setting
+                         with two homes is a setting that can disagree with itself. -->
                     <StackPanel Style="{StaticResource Section}">
                         <TextBlock Text="Output" Style="{StaticResource SectionHeading}" />
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Frame rate:" Style="{StaticResource RowLabel}" />
+                            <ComboBox
+                                x:Name="RecordingFrameRateBox"
+                                FontSize="13"
+                                Width="160"
+                                SelectionChanged="Setting_SelectionChanged" />
+                            <TextBlock Text="fps" Style="{StaticResource RowText}" />
+                        </StackPanel>
+                        <TextBlock
+                            Text="30 is what a screen recording is normally taken at. 60 and 120 are for showing something that moves quickly, and cost roughly their multiple of the file size."
+                            Style="{StaticResource Caption}" />
+                        <!-- Kept, unlike the strip's switches: macshot has no second place
+                             to choose a format or a GIF's frame rate, so removing these
+                             would remove the settings rather than de-duplicate them. -->
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Format:" Style="{StaticResource RowLabel}" />
                             <ComboBox x:Name="RecordingFormatBox" FontSize="13" Width="160" SelectionChanged="RecordingFormat_SelectionChanged" />
                         </StackPanel>
                         <TextBlock
                             Text="GIF is written smaller and slower than MP4, because every GIF frame is a whole image."
+                            Style="{StaticResource Caption}" />
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="GIF:" Style="{StaticResource RowLabel}" />
+                            <NumberBox
+                                x:Name="GifFrameRateBox"
+                                Width="120"
+                                FontSize="13"
+                                Minimum="2"
+                                Maximum="30"
+                                SpinButtonPlacementMode="Compact"
+                                ValueChanged="Setting_NumberChanged" />
+                            <TextBlock Text="fps" Style="{StaticResource RowText}" />
+                        </StackPanel>
+                        <TextBlock
+                            Text="Kept separate because it answers a different question: not how smooth the recording should be, but how large a GIF may get before whatever it is being sent to refuses it."
                             Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Save folder:" Style="{StaticResource RowLabel}" />
@@ -539,95 +576,7 @@
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
-                        <TextBlock Text="Frame Rate" Style="{StaticResource SectionHeading}" />
-                        <StackPanel Style="{StaticResource Row}">
-                            <TextBlock Text="Frame rate:" Style="{StaticResource RowLabel}" />
-                            <ComboBox
-                                x:Name="RecordingFrameRateBox"
-                                FontSize="13"
-                                Width="160"
-                                SelectionChanged="Setting_SelectionChanged" />
-                            <TextBlock Text="fps" Style="{StaticResource RowText}" />
-                        </StackPanel>
-                        <TextBlock
-                            Text="30 is what a screen recording is normally taken at. 60 and 120 are for showing something that moves quickly, and cost roughly their multiple of the file size."
-                            Style="{StaticResource Caption}" />
-                        <StackPanel Style="{StaticResource Row}">
-                            <TextBlock Text="GIF:" Style="{StaticResource RowLabel}" />
-                            <NumberBox
-                                x:Name="GifFrameRateBox"
-                                Width="120"
-                                FontSize="13"
-                                Minimum="2"
-                                Maximum="30"
-                                SpinButtonPlacementMode="Compact"
-                                ValueChanged="Setting_NumberChanged" />
-                            <TextBlock Text="fps" Style="{StaticResource RowText}" />
-                        </StackPanel>
-                        <TextBlock
-                            Text="Kept separate because it answers a different question: not how smooth the recording should be, but how large a GIF may get before whatever it is being sent to refuses it."
-                            Style="{StaticResource Caption}" />
-                    </StackPanel>
-
-                    <StackPanel Style="{StaticResource Section}">
                         <TextBlock Text="Behavior" Style="{StaticResource SectionHeading}" />
-                        <CheckBox
-                            x:Name="RecordedRegionBorderCheck"
-                            Content="Outline what is being recorded"
-                            Style="{StaticResource Unlabelled}"
-                            Checked="Setting_Toggled"
-                            Unchecked="Setting_Toggled" />
-                        <TextBlock
-                            Text="A frame in the toolbar's accent colour, laid outside the recorded rectangle so it is never in the file. Once the recording panel has been dragged out of the way, it is the only thing left saying what is being recorded."
-                            Style="{StaticResource Caption}" />
-                        <CheckBox
-                            x:Name="ClickHighlightCheck"
-                            Content="Show a ring where you click"
-                            Style="{StaticResource Unlabelled}"
-                            Checked="Setting_Toggled"
-                            Unchecked="Setting_Toggled" />
-                        <TextBlock
-                            Text="A yellow ring blooms out of every click and fades in a third of a second. Unlike the outline this one is inside the recording, which is the point — a viewer otherwise sees the pointer move and something happen, with nothing in between."
-                            Style="{StaticResource Caption}" />
-                        <CheckBox
-                            x:Name="KeystrokeCheck"
-                            Content="Show Keystrokes"
-                            Style="{StaticResource Unlabelled}"
-                            Checked="Setting_Toggled"
-                            Unchecked="Setting_Toggled" />
-                        <StackPanel Style="{StaticResource Row}">
-                            <TextBlock Text="Keystrokes:" Style="{StaticResource RowLabel}" />
-                            <ComboBox
-                                x:Name="KeystrokeModeBox"
-                                Width="240"
-                                SelectionChanged="Setting_SelectionChanged" />
-                        </StackPanel>
-                        <TextBlock
-                            Text="A dark pill at the foot of the recorded region, holding what was typed for a second and a half. Shortcuts only leaves ordinary typing alone, so a recording of somebody answering an email is not a transcript of the email."
-                            Style="{StaticResource Caption}" />
-                    </StackPanel>
-
-                    <StackPanel Style="{StaticResource Section}">
-                        <TextBlock Text="Sound" Style="{StaticResource SectionHeading}" />
-                        <CheckBox
-                            x:Name="RecordSystemAudioCheck"
-                            Content="Record system audio"
-                            Style="{StaticResource Unlabelled}"
-                            Checked="Setting_Toggled"
-                            Unchecked="Setting_Toggled" />
-                        <CheckBox
-                            x:Name="RecordMicAudioCheck"
-                            Content="Record microphone"
-                            Style="{StaticResource Unlabelled}"
-                            Checked="Setting_Toggled"
-                            Unchecked="Setting_Toggled" />
-                        <TextBlock
-                            Text="Both off by default, because sound nobody asked for is a surprise in a file that gets shared. Turning both on mixes them into one soundtrack. GIF has nowhere to put sound and ignores this."
-                            Style="{StaticResource Caption}" />
-                    </StackPanel>
-
-                    <StackPanel Style="{StaticResource Section}">
-                        <TextBlock Text="When Done" Style="{StaticResource SectionHeading}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="When done:" Style="{StaticResource RowLabel}" />
                             <ComboBox
@@ -647,16 +596,31 @@
                         <TextBlock
                             Text="Stop recording from the menu bar icon instead. Escape stops it too, and with the panel gone the choice above is the only thing that says where the recording went."
                             Style="{StaticResource Caption}" />
+                        <CheckBox
+                            x:Name="RecordedRegionBorderCheck"
+                            Content="Outline what is being recorded"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <TextBlock
+                            Text="A frame in the toolbar's accent colour, laid outside the recorded rectangle so it is never in the file. Once the recording panel has been dragged out of the way, it is the only thing left saying what is being recorded."
+                            Style="{StaticResource Caption}" />
+                        <!-- The strip switches keystrokes on and off but cannot say which
+                             kind, so the mode stays here. -->
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Keystrokes:" Style="{StaticResource RowLabel}" />
+                            <ComboBox
+                                x:Name="KeystrokeModeBox"
+                                Width="240"
+                                SelectionChanged="Setting_SelectionChanged" />
+                        </StackPanel>
+                        <TextBlock
+                            Text="A dark pill at the foot of the recorded region, holding what was typed for a second and a half. Shortcuts only leaves ordinary typing alone, so a recording of somebody answering an email is not a transcript of the email."
+                            Style="{StaticResource Caption}" />
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
                         <TextBlock Text="Webcam" Style="{StaticResource SectionHeading}" />
-                        <CheckBox
-                            x:Name="WebcamCheck"
-                            Content="Webcam Overlay"
-                            Style="{StaticResource Unlabelled}"
-                            Checked="Setting_Toggled"
-                            Unchecked="Setting_Toggled" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Position:" Style="{StaticResource RowLabel}" />
                             <ComboBox
