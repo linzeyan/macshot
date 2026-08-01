@@ -724,8 +724,27 @@ public sealed partial class PreferencesWindow : Window
 
         WebcamShapeBox.ItemsSource = new List<string> { L("Circle"), L("Rounded Rectangle") };
         WebcamShapeBox.SelectedIndex = (int)settings.WebcamShape;
-        ClipboardCheck.IsChecked = settings.CopyToClipboard;
-        AutoSaveCheck.IsChecked = settings.AutoSave;
+        QuickCaptureBox.ItemsSource = new List<string>
+        {
+            L("Save to file"),
+            L("Copy to clipboard"),
+
+            // Not a macshot string: macshot ships "Save + copy to clipboard" with no
+            // translation of its own, so there is nothing to look up and nothing lost by
+            // writing it here as it is written there.
+            "Save + copy to clipboard",
+            L("Do nothing"),
+        };
+
+        QuickCaptureBox.SelectedIndex = (settings.AutoSave, settings.CopyToClipboard) switch
+        {
+            (true, false) => 0,
+            (false, true) => 1,
+            (true, true) => 2,
+            _ => 3,
+        };
+
+        QuickCaptureEditorCheck.IsChecked = settings.QuickCaptureOpenEditor;
         ThumbnailCheck.IsChecked = settings.ShowThumbnail;
         ThumbnailSecondsBox.Value = settings.ThumbnailSeconds;
 
@@ -860,8 +879,11 @@ public sealed partial class PreferencesWindow : Window
             WebcamCorner = (WebcamCorner)Math.Max(WebcamCornerBox.SelectedIndex, 0),
             WebcamSize = (WebcamSize)Math.Max(WebcamSizeBox.SelectedIndex, 0),
             WebcamShape = (WebcamShape)Math.Max(WebcamShapeBox.SelectedIndex, 0),
-            CopyToClipboard = ClipboardCheck.IsChecked == true,
-            AutoSave = AutoSaveCheck.IsChecked == true,
+            // macshot's four: save, copy, both, neither. The port already had both
+            // switches; this is the one list that spells out what each pair means.
+            AutoSave = QuickCaptureBox.SelectedIndex is 0 or 2,
+            CopyToClipboard = QuickCaptureBox.SelectedIndex is 1 or 2,
+            QuickCaptureOpenEditor = QuickCaptureEditorCheck.IsChecked == true,
             ShowThumbnail = ThumbnailCheck.IsChecked == true,
 
             // NaN is what an emptied NumberBox reports, and casting that would give a

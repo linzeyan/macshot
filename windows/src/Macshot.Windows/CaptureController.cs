@@ -738,6 +738,15 @@ public sealed class CaptureController : IDisposable
         // and it is written whether or not the capture was saved anywhere else.
         var archived = await ScreenshotHistory.RecordAsync(frame, settings, editable);
 
+        // Alongside whatever else was done with it, not instead: someone who wants every
+        // capture annotated still wants it copied, and an editor that swallowed the copy
+        // would make the setting cost something. macshot's quickCaptureOpenEditor.
+        if (settings.QuickCaptureOpenEditor)
+        {
+            await ShowEditorAsync(frame);
+            return;
+        }
+
         if (settings.ShowThumbnail)
         {
             // The archive copy travels with the panel, so its Delete can take this

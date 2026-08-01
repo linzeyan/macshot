@@ -354,20 +354,25 @@
                                 StepFrequency="1"
                                 ValueChanged="Setting_SliderChanged" />
                         </StackPanel>
+                        <!-- One list rather than the two tick boxes this page used to
+                             have. They said the same four things, but a pair of boxes
+                             asks the reader to work out what both of them off means. -->
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Enter / Quick Capture:" Style="{StaticResource RowLabel}" />
+                            <ComboBox
+                                x:Name="QuickCaptureBox"
+                                FontSize="13"
+                                Width="240"
+                                SelectionChanged="Setting_SelectionChanged" />
+                        </StackPanel>
                         <CheckBox
-                            x:Name="ClipboardCheck"
-                            Content="Copy to the clipboard"
-                            Style="{StaticResource Unlabelled}"
-                            Checked="Setting_Toggled"
-                            Unchecked="Setting_Toggled" />
-                        <CheckBox
-                            x:Name="AutoSaveCheck"
-                            Content="Save to the save folder"
+                            x:Name="QuickCaptureEditorCheck"
+                            Content="Also open in Editor"
                             Style="{StaticResource Unlabelled}"
                             Checked="Setting_Toggled"
                             Unchecked="Setting_Toggled" />
                         <TextBlock
-                            Text="The toolbar's copy, save and pin buttons each mean one of these on their own, whatever is ticked here."
+                            Text="The toolbar's copy, save and pin buttons each mean one of these on their own, whatever is chosen here."
                             Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Keep the last:" Style="{StaticResource RowLabel}" />

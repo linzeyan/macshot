@@ -264,6 +264,17 @@ public sealed record CaptureSettings
     public bool ResolutionUnitIsPoints { get; init; }
 
     /// <summary>
+    /// Whether taking a capture the usual way also opens it in the editor.
+    /// macshot's <c>quickCaptureOpenEditor</c>.
+    /// </summary>
+    /// <remarks>
+    /// Alongside whatever else is being done with it rather than instead: someone who
+    /// wants every capture annotated still wants it copied, and an editor that swallowed
+    /// the copy would make the setting cost something.
+    /// </remarks>
+    public bool QuickCaptureOpenEditor { get; init; }
+
+    /// <summary>
     /// Whether macshot starts with Windows. macshot's <c>launchAtLogin</c>.
     /// </summary>
     /// <remarks>
