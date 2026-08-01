@@ -903,6 +903,7 @@ public sealed partial class PreferencesWindow : Window
             L("Ask where to save"),
         };
         SaveActionBox.SelectedIndex = (int)settings.SaveAction;
+        StandardResolutionCheck.IsChecked = settings.SaveAtStandardResolution;
 
         CaptureSoundCheck.IsChecked = settings.PlayCaptureSound;
         RememberToolCheck.IsChecked = settings.RememberLastTool;
@@ -1273,6 +1274,7 @@ public sealed partial class PreferencesWindow : Window
             QuickCaptureOpenEditor = QuickCaptureEditorCheck.IsChecked == true,
             OcrAction = (OcrAction)Math.Max(OcrActionBox.SelectedIndex, 0),
             SaveAction = (SaveAction)Math.Max(SaveActionBox.SelectedIndex, 0),
+            SaveAtStandardResolution = StandardResolutionCheck.IsChecked == true,
             PlayCaptureSound = CaptureSoundCheck.IsChecked == true,
             RememberLastTool = RememberToolCheck.IsChecked == true,
             // No LastTool. The toolbar writes it as a capture ends, and this record is

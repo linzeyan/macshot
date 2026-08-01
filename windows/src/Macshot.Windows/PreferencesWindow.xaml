@@ -386,6 +386,19 @@
                                 StepFrequency="1"
                                 ValueChanged="Setting_SliderChanged" />
                         </StackPanel>
+                        <CheckBox
+                            x:Name="StandardResolutionCheck"
+                            Content="Save at standard resolution (1x)"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <!-- Not macshot's caption. Its own says "Halves dimensions on
+                             Retina displays", and Windows scales by 125, 150 or 175 as
+                             readily as by 200 — a sentence promising half would be wrong
+                             on most of the displays this runs on. -->
+                        <TextBlock
+                            Text="Saves at the size the display shows them, for much smaller files"
+                            Style="{StaticResource Caption}" />
                         <!-- One list rather than the two tick boxes this page used to
                              have. They said the same four things, but a pair of boxes
                              asks the reader to work out what both of them off means. -->

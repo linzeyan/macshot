@@ -1,3 +1,5 @@
+using Macshot.Windows.Core.Capture;
+using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Output;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Foundation;
@@ -64,10 +66,80 @@ public static class ImageDelivery
             candidate => File.Exists(Path.Combine(directory, candidate)),
             new FilenameContext(windowTitle));
 
-        var bytes = await EncodeAsync(frame, settings.Format, settings.Quality);
+        var bytes = await EncodeAsync(ForSaving(frame, settings), settings.Format, settings.Quality);
         var path = Path.Combine(directory, name);
         await File.WriteAllBytesAsync(path, bytes);
         return path;
+    }
+
+    /// <summary>
+    /// The frame as it should be written to a file: its own pixels, or the picture at the
+    /// size the display was showing it when the setting asks for that.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// macshot's <c>downscaleRetina</c>. A capture is taken in physical pixels, so on a
+    /// display at 150% every screenshot is half again the size it looked, and a page of
+    /// them is a folder several times larger than anyone expected. This hands back the
+    /// picture at the size it appeared on screen.
+    /// </para>
+    /// <para>
+    /// Files only. The clipboard and the history are deliberately left at full size: the
+    /// clipboard is a paste target that may land in something printed, and the history is
+    /// the net under a capture nobody saved — the same reason it is always PNG at full
+    /// quality whatever the save format is. macshot draws the line in the same place.
+    /// </para>
+    /// <para>
+    /// The scale is the one belonging to the display the capture came from, found by its
+    /// own top-left corner, falling back to the primary display for a frame whose origin
+    /// is on no display at all. Enumerating for every save is a handful of Win32 calls;
+    /// carrying the scale on every <see cref="CapturedFrame"/> through every crop,
+    /// stitch and composite it passes through would be a field to keep true in a dozen
+    /// places.
+    /// </para>
+    /// </remarks>
+    public static CapturedFrame ForSaving(CapturedFrame frame, CaptureSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(frame);
+        ArgumentNullException.ThrowIfNull(settings);
+
+        if (!settings.SaveAtStandardResolution)
+        {
+            return frame;
+        }
+
+        double scale;
+        try
+        {
+            var layout = MonitorEnumerator.Enumerate().Layout;
+            var origin = new CapturePoint(frame.VirtualX, frame.VirtualY);
+            scale = (layout.MonitorAt(origin) ?? layout.Primary).Scale;
+        }
+        catch (Exception exception)
+        {
+            // The capture is in hand and the user asked for it to be saved. Writing it at
+            // the size it was taken is a worse answer than the one they chose, and a far
+            // better one than an error where a file should be.
+            DiagnosticLog.Write($"Could not read the display scale; saving at full size: {exception.Message}");
+            return frame;
+        }
+
+        var width = (int)Math.Round(frame.Width / scale);
+        var height = (int)Math.Round(frame.Height / scale);
+
+        // Nothing to do at 100%, and nothing to do for a capture so small that the
+        // reduction would round it away.
+        if (scale <= 1 || width < 1 || height < 1 || (width == frame.Width && height == frame.Height))
+        {
+            return frame;
+        }
+
+        return new CapturedFrame(
+            frame.VirtualX,
+            frame.VirtualY,
+            width,
+            height,
+            FrameScaler.Downscale(frame.BgraPixels, frame.Width, frame.Height, width, height));
     }
 
     /// <summary>

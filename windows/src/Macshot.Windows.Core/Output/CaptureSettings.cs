@@ -57,6 +57,18 @@ public sealed record CaptureSettings
     public int Quality { get; init; } = 90;
 
     /// <summary>
+    /// Writes files at the size the display was showing them rather than in the pixels
+    /// they were captured in.
+    /// </summary>
+    /// <remarks>
+    /// macshot's <c>downscaleRetina</c>, off by default. A capture is taken in physical
+    /// pixels, so on a display at 150% or 200% every screenshot is larger than it looked
+    /// and a folder of them is several times the size anyone expected. Off, because the
+    /// pixels that were captured are the ones that were asked for.
+    /// </remarks>
+    public bool SaveAtStandardResolution { get; init; }
+
+    /// <summary>
     /// Where captures are written. Null means "wherever the app decides", which is
     /// Pictures\Macshot; storing null rather than that resolved path keeps the file
     /// portable between machines whose Pictures folder is redirected differently.

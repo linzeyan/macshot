@@ -114,7 +114,16 @@ internal static class SavePrompt
         }
 
         var chosen = FormatOf(file.FileType) ?? settings.Format;
-        await FileIO.WriteBytesAsync(file, await ImageDelivery.EncodeAsync(frame, chosen, settings.Quality));
+
+        // Through ForSaving like the folder path, or the resolution setting would hold
+        // for the captures saved without being asked about and not for the ones the user
+        // named by hand.
+        await FileIO.WriteBytesAsync(
+            file,
+            await ImageDelivery.EncodeAsync(
+                ImageDelivery.ForSaving(frame, settings),
+                chosen,
+                settings.Quality));
         return file.Path;
     }
 
