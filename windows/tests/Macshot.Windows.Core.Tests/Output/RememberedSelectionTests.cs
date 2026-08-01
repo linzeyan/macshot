@@ -113,12 +113,35 @@ public sealed class RememberedSelectionTests
     [TestMethod]
     public void Normalized_PullsTheDelayAndHistoryIntoRange()
     {
-        var normalized = (CaptureSettings.Default with { DelaySeconds = -4, HistorySize = 9999 }).Normalized();
+        var normalized = (CaptureSettings.Default with
+        {
+            CaptureDelayChosen = true,
+            DelaySeconds = -4,
+            HistorySize = 9999,
+        }).Normalized();
 
-        // Not zero: a countdown of no seconds is the same as having no delayed
-        // capture at all, and the menu entry that runs it would then do nothing.
+        // Zero, which is macshot's None: a delay is off until someone turns it on, and
+        // the menu ticks None to say so.
         Assert.AreEqual(CaptureSettings.MinDelaySeconds, normalized.DelaySeconds);
+        Assert.AreEqual(0, CaptureSettings.MinDelaySeconds);
         Assert.AreEqual(CaptureSettings.MaxHistorySize, normalized.HistorySize);
+    }
+
+    [TestMethod]
+    public void Normalized_TakesBackADelayNobodyAskedFor()
+    {
+        // What every settings file written before the flag existed looks like: five
+        // seconds, put there by a default that could not be turned off. It goes.
+        var inherited = (CaptureSettings.Default with { DelaySeconds = 5 }).Normalized();
+
+        Assert.AreEqual(0, inherited.DelaySeconds);
+        Assert.IsTrue(inherited.CaptureDelayChosen, "and it is only taken back once");
+
+        // The same five, chosen from the menu once the flag is set, stays. Otherwise the
+        // migration would be a setting nobody could ever hold.
+        var chosen = (inherited with { DelaySeconds = 5 }).Normalized();
+
+        Assert.AreEqual(5, chosen.DelaySeconds);
     }
 
     [TestMethod]

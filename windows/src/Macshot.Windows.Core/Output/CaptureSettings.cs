@@ -437,6 +437,22 @@ public sealed record CaptureSettings
     /// </remarks>
     public int DelaySeconds { get; init; }
 
+    /// <summary>
+    /// Whether the delay above has been chosen by someone rather than left where a build
+    /// put it.
+    /// </summary>
+    /// <remarks>
+    /// One migration, wearing a flag because it cannot be done by inspection. Builds up to
+    /// this one shipped a five-second delay as the default and clamped it to a minimum of
+    /// one, so every settings file written by them says five and no interface could say
+    /// otherwise — every capture counted down and nothing offered to stop it. A five in a
+    /// file is therefore almost certainly that bug rather than a choice, but it is not
+    /// distinguishable from a real choice of five, so the file is asked instead of guessed
+    /// at: absent flag, delay back to none, flag set. A five chosen afterwards is kept,
+    /// because by then the flag is there.
+    /// </remarks>
+    public bool CaptureDelayChosen { get; init; }
+
     /// <summary>How many past captures are kept. Zero turns history off entirely.</summary>
     public int HistorySize { get; init; } = 20;
 
@@ -928,7 +944,8 @@ public sealed record CaptureSettings
                 ? PencilSmoothing
                 : Annotations.PencilSmoothing.Smooth,
             CensorMode = Enum.IsDefined(CensorMode) ? CensorMode : Annotations.CensorMode.Pixelate,
-            DelaySeconds = Math.Clamp(DelaySeconds, MinDelaySeconds, MaxDelaySeconds),
+            DelaySeconds = CaptureDelayChosen ? Math.Clamp(DelaySeconds, MinDelaySeconds, MaxDelaySeconds) : 0,
+            CaptureDelayChosen = true,
             HistorySize = Math.Clamp(HistorySize, 0, MaxHistorySize),
 
             // Round-tripped through the parser, so a shortcut the file cannot express
