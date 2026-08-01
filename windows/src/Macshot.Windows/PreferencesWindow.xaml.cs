@@ -808,7 +808,6 @@ public sealed partial class PreferencesWindow : Window
         // itself is the multiplier macshot stores.
         ThumbnailScaleSlider.Value = settings.ThumbnailScale * 100;
         ShowThumbnailScale();
-        DelaySecondsBox.Value = settings.DelaySeconds;
         HistorySizeBox.Value = settings.HistorySize;
         HistoryUnlimitedCheck.IsChecked = settings.HistoryUnlimited;
         HistorySizeBox.IsEnabled = !settings.HistoryUnlimited;
@@ -1105,9 +1104,8 @@ public sealed partial class PreferencesWindow : Window
             ThumbnailSeconds = double.IsNaN(ThumbnailSecondsBox.Value)
                 ? CaptureSettings.Default.ThumbnailSeconds
                 : (int)ThumbnailSecondsBox.Value,
-            DelaySeconds = double.IsNaN(DelaySecondsBox.Value)
-                ? CaptureSettings.Default.DelaySeconds
-                : (int)DelaySecondsBox.Value,
+            // No DelaySeconds. The with-expression carries the stored value through, which
+            // is what leaves the menu bar's Capture Delay submenu the one thing that sets it.
             HistorySize = double.IsNaN(HistorySizeBox.Value)
                 ? CaptureSettings.Default.HistorySize
                 : (int)HistorySizeBox.Value,

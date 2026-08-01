@@ -33,7 +33,13 @@ public sealed record CaptureSettings
     /// anyway, so a larger number would only look like it did nothing.
     /// </summary>
     public const double MaxCornerRadius = 64;
-    public const int MinDelaySeconds = 1;
+    /// <summary>
+    /// Zero, because zero is the delay macshot starts with and the one its menu ticks as
+    /// "None" (<c>AppDelegate.swift:723</c>). Clamping it up to one second put a
+    /// second-long countdown in front of every capture with no way in the interface to
+    /// take it off again.
+    /// </summary>
+    public const int MinDelaySeconds = 0;
     public const int MaxDelaySeconds = 60;
     public const int MaxHistorySize = 200;
 
@@ -424,12 +430,12 @@ public sealed record CaptureSettings
     /// can be opened first.
     /// </summary>
     /// <remarks>
-    /// This is the length of the wait, not whether there is one. A delay in front of
-    /// every capture would make the shortcut useless for the ordinary case, so the
-    /// delay is asked for by name from the notification-area menu and the shortcut
-    /// stays immediate — which is also why there is no "off" value.
+    /// Zero is no delay, which is what macshot starts with: a countdown in front of every
+    /// capture would make the shortcut useless for the ordinary case. The menu bar's
+    /// Capture Delay submenu is the only thing that sets this, and it offers the same
+    /// five choices macshot does — None, 3, 5, 10 and 30 seconds.
     /// </remarks>
-    public int DelaySeconds { get; init; } = 5;
+    public int DelaySeconds { get; init; }
 
     /// <summary>How many past captures are kept. Zero turns history off entirely.</summary>
     public int HistorySize { get; init; } = 20;

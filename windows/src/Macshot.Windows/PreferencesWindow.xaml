@@ -169,18 +169,18 @@
                         <TextBlock Text="Application" Style="{StaticResource SectionHeading}" />
                         <CheckBox
                             x:Name="LaunchAtLoginCheck"
-                            Content="Launch at Login"
+                            Content="Launch at login"
                             Style="{StaticResource Unlabelled}"
                             Checked="Setting_Toggled"
                             Unchecked="Setting_Toggled" />
                         <CheckBox
                             x:Name="HideTrayIconCheck"
-                            Content="Hide Menu Bar Icon"
+                            Content="Hide menu bar icon"
                             Style="{StaticResource Unlabelled}"
                             Checked="Setting_Toggled"
                             Unchecked="Setting_Toggled" />
                         <TextBlock
-                            Text="Shortcuts still work. To show the icon again, restart macshot."
+                            Text="Hotkeys still work. To show the icon again, re-launch macshot."
                             Style="{StaticResource Caption}" />
                         <CheckBox
                             x:Name="AutomaticUpdatesCheck"
@@ -263,7 +263,7 @@
                             Style="{StaticResource Caption}" />
                         <CheckBox
                             x:Name="HideInstructionsCheck"
-                            Content="Hide the capture instructions"
+                            Content="Hide capture instructions"
                             Style="{StaticResource Unlabelled}"
                             Checked="Setting_Toggled"
                             Unchecked="Setting_Toggled" />
@@ -272,12 +272,12 @@
                             Style="{StaticResource Caption}" />
                         <CheckBox
                             x:Name="ThumbnailCheck"
-                            Content="Show the floating thumbnail after a capture"
+                            Content="Show floating thumbnail after capture"
                             Style="{StaticResource Unlabelled}"
                             Checked="Setting_Toggled"
                             Unchecked="Setting_Toggled" />
                         <StackPanel Style="{StaticResource Row}">
-                            <TextBlock Text="Dismiss it after:" Style="{StaticResource RowLabel}" />
+                            <TextBlock Text="  Dismiss after:" Style="{StaticResource RowLabel}" />
                             <NumberBox
                                 x:Name="ThumbnailSecondsBox"
                                 Width="120"
@@ -296,7 +296,7 @@
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
                         <StackPanel Style="{StaticResource Row}">
-                            <TextBlock Text="Preview size:" Style="{StaticResource RowLabel}" />
+                            <TextBlock Text="  Preview size:" Style="{StaticResource RowLabel}" />
                             <Slider
                                 x:Name="ThumbnailScaleSlider"
                                 Width="180"
@@ -307,21 +307,12 @@
                                 ValueChanged="ThumbnailScale_Changed" />
                             <TextBlock x:Name="ThumbnailScaleReading" Style="{StaticResource RowText}" />
                         </StackPanel>
-                        <StackPanel Style="{StaticResource Row}">
-                            <TextBlock Text="Delayed capture:" Style="{StaticResource RowLabel}" />
-                            <NumberBox
-                                x:Name="DelaySecondsBox"
-                                Width="120"
-                                FontSize="13"
-                                Minimum="1"
-                                Maximum="60"
-                                SpinButtonPlacementMode="Compact"
-                                ValueChanged="Setting_NumberChanged" />
-                            <TextBlock Text="seconds" Style="{StaticResource RowText}" />
-                        </StackPanel>
-                        <TextBlock
-                            Text="Used by &quot;Capture area after a delay&quot; in the notification-area menu, for capturing a menu or a hover state that would close if you reached for macshot. The keyboard shortcut stays immediate."
-                            Style="{StaticResource Caption}" />
+                        <!-- No delay row. macshot sets the capture delay from the menu bar's
+                             "Capture Delay" submenu and nowhere else (AppDelegate.swift:717),
+                             and the tray menu here offers the same five choices. A second
+                             control for one setting let the two disagree: the submenu offers
+                             None, this box could not go below one second, and it could reach
+                             values the submenu has no tick for. -->
                         <TextBlock
                             Text="On the overlay: scroll to zoom in on what you are capturing, middle-drag to pan, Ctrl+0 for actual size."
                             Style="{StaticResource Caption}" />
@@ -332,11 +323,11 @@
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Save folder:" Style="{StaticResource RowLabel}" />
                             <TextBox x:Name="DirectoryBox" FontSize="13" Width="240" PlaceholderText="Pictures\Macshot" IsReadOnly="True" />
-                            <Button Content="Browse" FontSize="13" Click="Browse_Click" />
+                            <Button Content="Browse…" FontSize="13" Click="Browse_Click" />
                             <Button Content="Reset" FontSize="13" Click="ResetDirectory_Click" />
                         </StackPanel>
                         <StackPanel Style="{StaticResource Row}">
-                            <TextBlock Text="File name:" Style="{StaticResource RowLabel}" />
+                            <TextBlock Text="Filename:" Style="{StaticResource RowLabel}" />
                             <TextBox
                                 x:Name="TemplateBox"
                                 FontSize="13"
@@ -350,7 +341,7 @@
                         <TextBlock x:Name="TemplatePreview" Style="{StaticResource Caption}" />
                         <TextBlock Text="Tokens: {yyyy} {yy} {MM} {dd} {HH} {mm} {ss}" Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
-                            <TextBlock Text="Format:" Style="{StaticResource RowLabel}" />
+                            <TextBlock Text="Image format:" Style="{StaticResource RowLabel}" />
                             <ComboBox x:Name="FormatBox" FontSize="13" Width="160" SelectionChanged="Format_SelectionChanged" />
                         </StackPanel>
                         <StackPanel x:Name="QualityPanel" Style="{StaticResource Row}">
@@ -384,7 +375,7 @@
                             Text="The toolbar's copy, save and pin buttons each mean one of these on their own, whatever is chosen here."
                             Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
-                            <TextBlock Text="Keep the last:" Style="{StaticResource RowLabel}" />
+                            <TextBlock Text="History size:" Style="{StaticResource RowLabel}" />
                             <NumberBox
                                 x:Name="HistorySizeBox"
                                 Width="120"
@@ -471,7 +462,7 @@
                     <StackPanel Style="{StaticResource Section}">
                         <TextBlock Text="Annotation Tools" Style="{StaticResource SectionHeading}" />
                         <TextBlock
-                            Text="Unticked tools are taken off the strip. Nothing is lost by hiding one, and the same choice is on the right-click menu of any tool button."
+                            Text="Hidden tools are removed from the bottom toolbar."
                             Style="{StaticResource Caption}" />
                         <!-- Filled in code from the toolbar's own list, so a tool added
                              later appears here without this page being edited. -->
@@ -529,11 +520,11 @@
                                 Width="240"
                                 PlaceholderText="Same as screenshots"
                                 IsReadOnly="True" />
-                            <Button Content="Browse" FontSize="13" Click="BrowseRecordings_Click" />
+                            <Button Content="Browse…" FontSize="13" Click="BrowseRecordings_Click" />
                             <Button Content="Clear" FontSize="13" Click="ClearRecordingDirectory_Click" />
                         </StackPanel>
                         <StackPanel Style="{StaticResource Row}">
-                            <TextBlock Text="File name:" Style="{StaticResource RowLabel}" />
+                            <TextBlock Text="Filename:" Style="{StaticResource RowLabel}" />
                             <TextBox
                                 x:Name="RecordingTemplateBox"
                                 FontSize="13"
@@ -550,7 +541,7 @@
                     <StackPanel Style="{StaticResource Section}">
                         <TextBlock Text="Frame Rate" Style="{StaticResource SectionHeading}" />
                         <StackPanel Style="{StaticResource Row}">
-                            <TextBlock Text="Video:" Style="{StaticResource RowLabel}" />
+                            <TextBlock Text="Frame rate:" Style="{StaticResource RowLabel}" />
                             <ComboBox
                                 x:Name="RecordingFrameRateBox"
                                 FontSize="13"
@@ -843,7 +834,7 @@
                         <StackPanel x:Name="UploadHistoryList" Spacing="6" />
                         <TextBlock
                             x:Name="UploadHistoryEmpty"
-                            Text="Nothing has been uploaded yet."
+                            Text="No uploads yet."
                             Style="{StaticResource Caption}" />
                     </StackPanel>
                 </StackPanel>

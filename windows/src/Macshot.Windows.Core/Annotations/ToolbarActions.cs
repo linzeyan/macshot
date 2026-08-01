@@ -343,6 +343,13 @@ public static class ToolbarActions
     ];
 
     /// <summary>The name shown when the pointer rests on a tool's button.</summary>
+    /// <remarks>
+    /// Word for word the names macshot's own settings window lists
+    /// (<c>SettingsWindowController.swift:1465–1470</c>), because these strings are the
+    /// keys its translations are filed under. A name written afresh here — "Magnify" for
+    /// "Magnify (Loupe)", or a sentence where macshot has two words — matches nothing in
+    /// the forty translated files and shows English to everyone who is not reading in it.
+    /// </remarks>
     public static string Tooltip(AnnotationTool tool) => tool switch
     {
         AnnotationTool.Pencil => "Pencil",
@@ -352,12 +359,12 @@ public static class ToolbarActions
         AnnotationTool.Ellipse => "Ellipse",
         AnnotationTool.Marker => "Marker",
         AnnotationTool.Text => "Text",
-        AnnotationTool.Number => "Number",
-        AnnotationTool.Censor => "Censor (pixelate, blur, solid, erase)",
-        AnnotationTool.Highlight => "Highlight",
-        AnnotationTool.Loupe => "Magnify",
-        AnnotationTool.Stamp => "Stamp",
-        AnnotationTool.ColorSampler => "Take a colour from the screen",
+        AnnotationTool.Number => "Number / Counter",
+        AnnotationTool.Censor => "Censor",
+        AnnotationTool.Highlight => "Highlight (Spotlight)",
+        AnnotationTool.Loupe => "Magnify (Loupe)",
+        AnnotationTool.Stamp => "Stamp / Emoji",
+        AnnotationTool.ColorSampler => "Color Picker",
         AnnotationTool.Measure => "Measure",
         AnnotationTool.Select => "Select",
         _ => tool.ToString(),
