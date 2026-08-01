@@ -150,6 +150,29 @@ public sealed partial class PreferencesWindow : Window
     /// Builds the parts of the Tools page that come from the toolbar rather than from the
     /// markup, so a tool added later appears here without this page being edited.
     /// </summary>
+    /// <summary>
+    /// Adds one tick box to a two-column grid, filling left to right and then down.
+    /// </summary>
+    /// <remarks>
+    /// macshot lays these three lists out in an NSGridView of two columns, read across
+    /// rather than down, and fourteen tools in a single column is a page that has to be
+    /// scrolled to be counted. Rows are added as they are needed, so a tool or an action
+    /// appearing later needs nothing here.
+    /// </remarks>
+    private static void PlaceInColumns(Grid host, FrameworkElement child)
+    {
+        var index = host.Children.Count;
+        var row = index / 2;
+        if (host.RowDefinitions.Count <= row)
+        {
+            host.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        }
+
+        Grid.SetRow(child, row);
+        Grid.SetColumn(child, index % 2);
+        host.Children.Add(child);
+    }
+
     private void BuildToolsPage()
     {
         foreach (var tool in ToolbarActions.ToolOrder)
@@ -161,7 +184,7 @@ public sealed partial class PreferencesWindow : Window
             toggle.Checked += Setting_Changed;
             toggle.Unchecked += Setting_Changed;
             _toolToggles[tool] = toggle;
-            ToolToggles.Children.Add(toggle);
+            PlaceInColumns(ToolToggles, toggle);
         }
 
         foreach (var (actions, host) in new[]
@@ -185,7 +208,7 @@ public sealed partial class PreferencesWindow : Window
                 toggle.Checked += Setting_Changed;
                 toggle.Unchecked += Setting_Changed;
                 _actionToggles[action.Id] = toggle;
-                host.Children.Add(toggle);
+                PlaceInColumns(host, toggle);
             }
         }
 

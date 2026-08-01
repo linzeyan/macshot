@@ -466,7 +466,7 @@
                             Style="{StaticResource Caption}" />
                         <!-- Filled in code from the toolbar's own list, so a tool added
                              later appears here without this page being edited. -->
-                        <StackPanel x:Name="ToolToggles" Margin="188,4,0,0" Spacing="2" />
+                        <Grid x:Name="ToolToggles" Margin="188,4,0,0" ColumnDefinitions="*,*" RowSpacing="2" ColumnSpacing="12" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Freehand:" Style="{StaticResource RowLabel}" />
                             <ComboBox
@@ -488,7 +488,7 @@
                         <!-- Both lists are filled in code from ToolbarCustomActions, for the
                              reason the tool list above is: the strip and this page then
                              cannot disagree about what exists. -->
-                        <StackPanel x:Name="BottomActionToggles" Margin="188,4,0,0" Spacing="2" />
+                        <Grid x:Name="BottomActionToggles" Margin="188,4,0,0" ColumnDefinitions="*,*" RowSpacing="2" ColumnSpacing="12" />
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
@@ -496,7 +496,7 @@
                         <TextBlock
                             Text="Hidden actions are removed from the right toolbar."
                             Style="{StaticResource Caption}" />
-                        <StackPanel x:Name="RightActionToggles" Margin="188,4,0,0" Spacing="2" />
+                        <Grid x:Name="RightActionToggles" Margin="188,4,0,0" ColumnDefinitions="*,*" RowSpacing="2" ColumnSpacing="12" />
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>

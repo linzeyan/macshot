@@ -91,9 +91,10 @@ public sealed class ToolbarActionsTests
         Assert.IsTrue(
             Array.IndexOf(commands, ToolbarCommand.Beautify) > Array.IndexOf(commands, ToolbarCommand.Adjust),
             "and adjust before beautify, with the gap after it for the one the port lacks");
-        Assert.IsTrue(
-            Array.IndexOf(commands, ToolbarCommand.Redact) > Array.IndexOf(commands, ToolbarCommand.Beautify),
-            "the port's own redact button follows macshot's block rather than sitting inside it");
+        CollectionAssert.DoesNotContain(
+            commands,
+            ToolbarCommand.Redact,
+            "redact is macshot's autoRedact and belongs to the action strip, not this one");
     }
 
     [TestMethod]
@@ -122,8 +123,12 @@ public sealed class ToolbarActionsTests
     {
         var overlay = ToolbarActions.Actions(editorMode: false).Select(item => item.Command).ToArray();
 
-        Assert.AreEqual(ToolbarCommand.Record, overlay[^1], "macshot ends the strip with it");
+        // rightSettingsActions ends ... record, scrollCapture, share
+        // (ToolbarDefinitions.swift:103), so share is last and recording comes first of
+        // the two that need a live screen.
+        Assert.AreEqual(ToolbarCommand.Share, overlay[^1], "macshot ends the strip with it");
         Assert.AreEqual(ToolbarCommand.ScrollCapture, overlay[^2]);
+        Assert.AreEqual(ToolbarCommand.Record, overlay[^3]);
         Assert.IsTrue(
             Array.IndexOf(overlay, ToolbarCommand.ScrollCapture) > Array.IndexOf(overlay, ToolbarCommand.ReadText),
             "both follow the output actions, the way macshot orders them");
@@ -136,31 +141,32 @@ public sealed class ToolbarActionsTests
     }
 
     [TestMethod]
-    public void Share_FollowsSaving_InBothHosts()
+    public void Share_EndsTheStrip_InBothHosts()
     {
-        // macshot puts it between saving and pinning, and it is offered wherever there
-        // are finished pixels — the editor has those too.
+        // Last in macshot's rightSettingsActions, and offered wherever there are finished
+        // pixels — the editor has those too. This strip used to lead with it, on the
+        // strength of a comment that had the list the wrong way round.
         foreach (var editorMode in new[] { false, true })
         {
             var items = ToolbarActions.Actions(editorMode).Select(item => item.Command).ToArray();
 
-            Assert.AreEqual(
-                Array.IndexOf(items, ToolbarCommand.Save) + 1,
-                Array.IndexOf(items, ToolbarCommand.Share),
-                $"editorMode {editorMode}");
+            Assert.AreEqual(ToolbarCommand.Share, items[^1], $"editorMode {editorMode}");
         }
     }
 
     [TestMethod]
     public void Translate_FollowsReadingTheText_AndIsAbsentWithoutATranslator()
     {
-        // macshot's own order: pin, read, translate, then the two that aim at a live
-        // screen. The two that read words sit next to each other because they are
-        // answered from the same recognition pass.
+        // macshot's own order: pin, ocr, autoRedact, translate, then the two that aim at
+        // a live screen. Redact sits between the two that read words because it is one of
+        // them — it finds what to cover by recognising it.
         var overlay = ToolbarActions.Actions(editorMode: false).Select(item => item.Command).ToArray();
 
         Assert.AreEqual(
             Array.IndexOf(overlay, ToolbarCommand.ReadText) + 1,
+            Array.IndexOf(overlay, ToolbarCommand.Redact));
+        Assert.AreEqual(
+            Array.IndexOf(overlay, ToolbarCommand.Redact) + 1,
             Array.IndexOf(overlay, ToolbarCommand.Translate));
 
         // The offline build has no translator compiled into it, so a button for one

@@ -25,10 +25,12 @@ public readonly record struct ToolbarCustomAction(string Id, string Label, Toolb
 /// toolbar is for, and a toolbar that can lose Copy is one a user can break.
 /// </para>
 /// <para>
-/// Each action sits under the strip <em>this</em> product draws it on, which is not always
-/// macshot's. Redact is macshot's <c>autoRedact</c> and is listed there under the right
-/// strip, but this port puts the button at the end of the tool row — hiding it from a list
-/// headed "Right Toolbar Actions" would hide it from somewhere it never was.
+/// Both lists are macshot's, in macshot's order — <c>bottomSettingsActions</c> and
+/// <c>rightSettingsActions</c> (<c>ToolbarDefinitions.swift:99</c>). Redact is macshot's
+/// <c>autoRedact</c> and belongs to the right strip, between OCR and Translate; this port
+/// drew it at the end of the tool row and listed it under the bottom heading to match,
+/// which made the two products disagree about where a button lives rather than about where
+/// it is listed.
 /// </para>
 /// <para>
 /// Remove Background is absent because this build cannot do it. It comes back with the
@@ -45,19 +47,19 @@ public static class ToolbarCustomActions
         new("invertColors", "Invert Colors", ToolbarCommand.InvertColors),
         new("effects", "Adjust (Image Effects)", ToolbarCommand.Adjust),
         new("beautify", "Beautify", ToolbarCommand.Beautify),
-        new("autoRedact", "Auto-Redact sensitive data", ToolbarCommand.Redact),
     ];
 
     /// <summary>The hideable buttons on the action strip, in that strip's order.</summary>
     public static IReadOnlyList<ToolbarCustomAction> Right { get; } =
     [
-        new("share", "Share", ToolbarCommand.Share),
         new("upload", "Upload", ToolbarCommand.Upload),
         new("pin", "Pin (floating window)", ToolbarCommand.Pin),
         new("ocr", "OCR & QR", ToolbarCommand.ReadText),
+        new("autoRedact", "Auto-Redact sensitive data", ToolbarCommand.Redact),
         new("translate", "Translate", ToolbarCommand.Translate),
-        new("scrollCapture", "Scroll Capture", ToolbarCommand.ScrollCapture),
         new("record", "Record screen", ToolbarCommand.Record),
+        new("scrollCapture", "Scroll Capture", ToolbarCommand.ScrollCapture),
+        new("share", "Share", ToolbarCommand.Share),
     ];
 
     /// <summary>Both lists, bottom first, as the settings page reads them.</summary>

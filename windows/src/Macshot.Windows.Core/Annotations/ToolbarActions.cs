@@ -209,12 +209,11 @@ public static class ToolbarActions
         // Then the actions that change the picture rather than draw on it, in macshot's
         // order: invert, adjust, beautify, remove background. Remove background is not
         // here yet; the three that are keep the places they hold there, so filling the
-        // gap later moves nothing. The port's own redact button follows the block rather
-        // than sitting inside it.
+        // gap later moves nothing. Redact is not among them — macshot keeps it on the
+        // action strip, and it has moved there.
         Offer(new ToolbarItem(ToolbarCommand.InvertColors, "Invert the colours", IsSelected: inverted));
         Offer(new ToolbarItem(ToolbarCommand.Adjust, "Adjust", IsSelected: adjusted));
         Offer(new ToolbarItem(ToolbarCommand.Beautify, "Beautify", IsSelected: beautified));
-        Offer(new ToolbarItem(ToolbarCommand.Redact, "Cover personal details"));
 
         return items;
 
@@ -266,17 +265,18 @@ public static class ToolbarActions
 
         items.Add(new ToolbarItem(ToolbarCommand.Copy, "Copy"));
         items.Add(new ToolbarItem(ToolbarCommand.Save, "Save"));
-        Offer(new ToolbarItem(ToolbarCommand.Share, "Share"));
+
+        // macshot's rightSettingsActions, in its order (ToolbarDefinitions.swift:103):
+        // upload, pin, ocr, autoRedact, translate, record, scrollCapture, share. Share
+        // is last there, not second — this strip used to lead with it.
         if (upload)
         {
-            // After Share and before Pin, which is where macshot's own right strip puts
-            // it — rightToolbarActions reads share, upload, pin, ocr, translate, scroll,
-            // record.
             Offer(new ToolbarItem(ToolbarCommand.Upload, "Upload"));
         }
 
         Offer(new ToolbarItem(ToolbarCommand.Pin, "Pin on top"));
         Offer(new ToolbarItem(ToolbarCommand.ReadText, "Read the text in it"));
+        Offer(new ToolbarItem(ToolbarCommand.Redact, "Cover personal details"));
         if (translation)
         {
             Offer(new ToolbarItem(ToolbarCommand.Translate, "Translate the text in it"));
@@ -284,11 +284,13 @@ public static class ToolbarActions
 
         if (!editorMode)
         {
-            // Last, in macshot's order. Both aim at a live screen: there is no window
-            // behind an image in the editor to scroll, and nothing there to record.
-            Offer(new ToolbarItem(ToolbarCommand.ScrollCapture, "Scroll the window behind it"));
+            // Both aim at a live screen: there is no window behind an image in the editor
+            // to scroll, and nothing there to record.
             Offer(new ToolbarItem(ToolbarCommand.Record, "Record the region"));
+            Offer(new ToolbarItem(ToolbarCommand.ScrollCapture, "Scroll the window behind it"));
         }
+
+        Offer(new ToolbarItem(ToolbarCommand.Share, "Share"));
 
         return items;
 
