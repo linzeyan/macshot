@@ -183,7 +183,7 @@ public sealed class RasterizerToolsTests
     {
         // A filled rectangle is what covers something up. Rounding its corners would
         // leave the pixels it was placed over showing at each one.
-        var covered = Shape(AnnotationTool.FilledRectangle, 20, 20, 44, 44);
+        var covered = Shape(AnnotationTool.Censor, 20, 20, 44, 44);
         var asked = covered with { Style = covered.Style with { CornerRadius = 12 } };
 
         CollectionAssert.AreEqual(Render(Blank(), covered), Render(Blank(), asked));

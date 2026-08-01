@@ -7,11 +7,11 @@ namespace Macshot.Windows.Core.Tests.Annotations;
 public sealed class AnnotationToolOptionsTests
 {
     [TestMethod]
-    public void EveryToolTheToolbarOffers_TakesTheSizeControl()
+    public void EveryDrawnTool_TakesTheSizeControl()
     {
-        // The one control that means something for all of them, which is why it is the
-        // one that is never hidden.
-        foreach (var tool in AnnotationRasterizer.SupportedTools)
+        // Every tool that draws a mark, which is all of them but the censor: its two
+        // strengths are chosen for the user rather than set.
+        foreach (var tool in AnnotationRasterizer.SupportedTools.Where(tool => tool != AnnotationTool.Censor))
         {
             Assert.IsTrue(AnnotationToolOptions.UsesSize(tool), $"{tool} should take a size");
         }
@@ -28,11 +28,17 @@ public sealed class AnnotationToolOptionsTests
     }
 
     [TestMethod]
-    public void RegionEffects_TakeNoColourBecauseTheyRewriteWhatIsUnderThem()
+    public void TheCensorTool_TakesNoSizeBecauseNeitherOfItsStrengthsIsChosen()
     {
-        Assert.IsFalse(AnnotationToolOptions.UsesColor(AnnotationTool.Pixelate));
-        Assert.IsFalse(AnnotationToolOptions.UsesColor(AnnotationTool.Blur));
-        Assert.IsTrue(AnnotationToolOptions.UsesSize(AnnotationTool.Blur), "the radius is the size");
+        // The point of the whole tool: a redaction whose strength follows a slider set
+        // for something else is a redaction that is a different strength every time. The
+        // cell is fixed and the blur radius comes from the region.
+        Assert.IsFalse(AnnotationToolOptions.UsesSize(AnnotationTool.Censor));
+        Assert.IsTrue(AnnotationToolOptions.UsesCensorMode(AnnotationTool.Censor));
+        Assert.IsFalse(AnnotationToolOptions.UsesCensorMode(AnnotationTool.Rectangle));
+
+        // It does take the colour, because one of the four modes paints in it.
+        Assert.IsTrue(AnnotationToolOptions.UsesColor(AnnotationTool.Censor));
     }
 
     [TestMethod]
@@ -49,8 +55,7 @@ public sealed class AnnotationToolOptionsTests
         // each ignore it however it is set.
         Assert.IsTrue(AnnotationToolOptions.UsesLineStyle(AnnotationTool.Rectangle));
         Assert.IsTrue(AnnotationToolOptions.UsesLineStyle(AnnotationTool.Loupe));
-        Assert.IsFalse(AnnotationToolOptions.UsesLineStyle(AnnotationTool.FilledRectangle));
-        Assert.IsFalse(AnnotationToolOptions.UsesLineStyle(AnnotationTool.Pixelate));
+        Assert.IsFalse(AnnotationToolOptions.UsesLineStyle(AnnotationTool.Censor));
         Assert.IsFalse(AnnotationToolOptions.UsesLineStyle(AnnotationTool.Text));
     }
 
@@ -67,7 +72,7 @@ public sealed class AnnotationToolOptionsTests
     {
         Assert.IsTrue(AnnotationToolOptions.UsesCornerRadius(AnnotationTool.Rectangle));
         Assert.IsFalse(
-            AnnotationToolOptions.UsesCornerRadius(AnnotationTool.FilledRectangle),
+            AnnotationToolOptions.UsesCornerRadius(AnnotationTool.Censor),
             "rounding the corners of a redaction uncovers what it was placed over");
     }
 
@@ -83,6 +88,5 @@ public sealed class AnnotationToolOptionsTests
     {
         Assert.AreEqual(AnnotationSizeMeaning.Thickness, AnnotationToolOptions.SizeMeaning(AnnotationTool.Arrow));
         Assert.AreEqual(AnnotationSizeMeaning.Extent, AnnotationToolOptions.SizeMeaning(AnnotationTool.Number));
-        Assert.AreEqual(AnnotationSizeMeaning.Strength, AnnotationToolOptions.SizeMeaning(AnnotationTool.Pixelate));
     }
 }

@@ -111,12 +111,7 @@ public static class ToolbarActions
         AnnotationTool.Text,
         AnnotationTool.Number,
 
-        // macOS has one censor tool with three modes behind a right-click. Here they
-        // are three tools, kept together in the place the one tool sits there.
-        AnnotationTool.Pixelate,
-        AnnotationTool.Blur,
-        AnnotationTool.FilledRectangle,
-
+        AnnotationTool.Censor,
         AnnotationTool.Highlight,
         AnnotationTool.Loupe,
         AnnotationTool.Stamp,
@@ -240,9 +235,7 @@ public static class ToolbarActions
         AnnotationTool.Marker => "Marker",
         AnnotationTool.Text => "Text",
         AnnotationTool.Number => "Number",
-        AnnotationTool.Pixelate => "Pixelate",
-        AnnotationTool.Blur => "Blur",
-        AnnotationTool.FilledRectangle => "Cover",
+        AnnotationTool.Censor => "Censor (pixelate, blur, solid, erase)",
         AnnotationTool.Highlight => "Highlight",
         AnnotationTool.Loupe => "Magnify",
         AnnotationTool.Stamp => "Stamp",

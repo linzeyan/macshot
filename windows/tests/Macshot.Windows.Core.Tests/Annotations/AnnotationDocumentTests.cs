@@ -88,8 +88,8 @@ public sealed class AnnotationDocumentTests
     {
         // Later annotations are drawn on top, so they must also be picked first.
         var document = new AnnotationDocument();
-        document.Add(NewFilledRectangle());
-        var above = NewFilledRectangle();
+        document.Add(NewCensor());
+        var above = NewCensor();
         document.Add(above);
 
         Assert.AreEqual(above.Id, document.HitTest(new CapturePoint(20, 20))?.Id);
@@ -118,7 +118,7 @@ public sealed class AnnotationDocumentTests
     {
         var document = new AnnotationDocument();
         document.Add(NewLine());
-        document.Add(NewFilledRectangle());
+        document.Add(NewCensor());
 
         document.Reset();
 
@@ -137,7 +137,7 @@ public sealed class AnnotationDocumentTests
         document.Add(NewLine());
         document.Undo();
 
-        var restored = NewFilledRectangle();
+        var restored = NewCensor();
         document.Reset([restored]);
 
         // Restoring a state on an image operation's behalf must not itself become a step,
@@ -153,9 +153,9 @@ public sealed class AnnotationDocumentTests
         return Annotation.Create(AnnotationTool.Line, new CapturePoint(0, 0), new CapturePoint(10, 10));
     }
 
-    private static Annotation NewFilledRectangle()
+    private static Annotation NewCensor()
     {
-        return Annotation.Create(AnnotationTool.FilledRectangle, new CapturePoint(10, 10), new CapturePoint(30, 30));
+        return Annotation.Create(AnnotationTool.Censor, new CapturePoint(10, 10), new CapturePoint(30, 30));
     }
 
     [TestMethod]

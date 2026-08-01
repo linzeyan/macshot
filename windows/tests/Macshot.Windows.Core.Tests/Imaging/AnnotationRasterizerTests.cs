@@ -22,7 +22,7 @@ public sealed class AnnotationRasterizerTests
         var annotations = new[]
         {
             Annotation.Create(AnnotationTool.Rectangle, new CapturePoint(3, 3), new CapturePoint(18, 12)),
-            Annotation.Create(AnnotationTool.Blur, new CapturePoint(5, 5), new CapturePoint(15, 10)),
+            Annotation.Create(AnnotationTool.Censor, new CapturePoint(5, 5), new CapturePoint(15, 10)),
         };
 
         var expected = AnnotationRasterizer.Render(width, height, source, annotations);
@@ -129,13 +129,13 @@ public sealed class AnnotationRasterizerTests
     }
 
     [TestMethod]
-    public void Render_FilledRectangleCoversItsInteriorAndNothingOutside()
+    public void Render_CensorCoversItsInteriorAndNothingOutside()
     {
         var annotation = Annotation.Create(
-            AnnotationTool.FilledRectangle,
+            AnnotationTool.Censor,
             new CapturePoint(10, 5),
             new CapturePoint(30, 15),
-            new AnnotationStyle(Black, 3));
+            new AnnotationStyle(Black, 3, CensorMode: CensorMode.Solid));
 
         var rendered = AnnotationRasterizer.Render(Width, Height, WhiteFrame(), [annotation]);
 

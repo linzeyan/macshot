@@ -38,9 +38,7 @@ public static class AnnotationRasterizer
         AnnotationTool.Line,
         AnnotationTool.Pencil,
         AnnotationTool.Marker,
-        AnnotationTool.FilledRectangle,
-        AnnotationTool.Pixelate,
-        AnnotationTool.Blur,
+        AnnotationTool.Censor,
         AnnotationTool.Text,
         AnnotationTool.Number,
         AnnotationTool.Stamp,
@@ -163,14 +161,8 @@ public static class AnnotationRasterizer
         case AnnotationTool.Ellipse:
             CompositeStrokes(pixels, width, height, [BuildEllipsePath(annotation.BoundingRect)], annotation);
             break;
-        case AnnotationTool.FilledRectangle:
-            CompositeFill(pixels, width, height, annotation.BoundingRect, annotation.Style);
-            break;
-        case AnnotationTool.Pixelate:
-            PixelEffects.Pixelate(pixels, width, height, annotation.BoundingRect, PixelateBlockSize(annotation.Style));
-            break;
-        case AnnotationTool.Blur:
-            PixelEffects.Blur(pixels, width, height, annotation.BoundingRect, BlurRadius(annotation.Style));
+        case AnnotationTool.Censor:
+            Censor(pixels, width, height, annotation);
             break;
         case AnnotationTool.Text:
         case AnnotationTool.Number:
@@ -309,11 +301,49 @@ public static class AnnotationRasterizer
         return (byte)Math.Min(byte.MaxValue, source + kept);
     }
 
-    // Intensity is derived from the stroke width until the tool options row can
-    // supply an explicit strength, so the existing width slider already controls it.
-    private static double PixelateBlockSize(AnnotationStyle style) => Math.Max(4, style.StrokeWidth * 3);
+    /// <summary>
+    /// The cell a pixelated region is averaged into, in frame pixels. Fixed, as it is on
+    /// macOS: how much of a redaction survives is not a thing to leave to a slider that
+    /// was set for something else, and a cell that changed with the stroke width would
+    /// make the same redaction a different strength from one capture to the next.
+    /// </summary>
+    /// <remarks>
+    /// macshot scales the region down by 8, then by 2 again, then blows it back up with
+    /// nearest-neighbour sampling — sixteen source pixels to a cell, which is what this
+    /// averages over directly.
+    /// </remarks>
+    private const double CensorBlock = 16;
 
-    private static double BlurRadius(AnnotationStyle style) => Math.Max(2, style.StrokeWidth * 2);
+    /// <summary>
+    /// Blurs, solids, pixelates or fills in the region, by the mode the mark carries.
+    /// </summary>
+    private static void Censor(byte[] pixels, int width, int height, Annotation annotation)
+    {
+        var region = annotation.BoundingRect;
+        switch (annotation.Style.CensorMode)
+        {
+        case CensorMode.Blur:
+            PixelEffects.Blur(pixels, width, height, region, BlurRadius(region));
+            break;
+        case CensorMode.Solid:
+            CompositeFill(pixels, width, height, region, annotation.Style);
+            break;
+        case CensorMode.Erase:
+            PixelEffects.Erase(pixels, width, height, region);
+            break;
+        default:
+            PixelEffects.Pixelate(pixels, width, height, region, CensorBlock);
+            break;
+        }
+    }
+
+    /// <summary>
+    /// macshot's <c>max(10, min(width, height) × 0.03)</c>. It scales with the region
+    /// rather than with a setting: a blur wide enough to hide a line of text in a small
+    /// region is nothing at all across a whole window.
+    /// </summary>
+    private static double BlurRadius(CaptureRegion region) =>
+        Math.Max(10, Math.Min(region.Width, region.Height) * 0.03);
 
     private static CapturePoint[] BuildFreeformPath(Annotation annotation)
     {

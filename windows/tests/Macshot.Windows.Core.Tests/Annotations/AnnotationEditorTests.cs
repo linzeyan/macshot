@@ -82,7 +82,7 @@ public sealed class AnnotationEditorTests
     {
         // Committing every intermediate position would make Ctrl+Z replay the mouse
         // path one move at a time.
-        var editor = NewEditor(AnnotationTool.FilledRectangle);
+        var editor = NewEditor(AnnotationTool.Censor);
         Drag(editor, new CapturePoint(10, 10), new CapturePoint(60, 60));
         var original = editor.Document.Annotations[0];
 
@@ -101,7 +101,7 @@ public sealed class AnnotationEditorTests
     [TestMethod]
     public void SelectClickWithoutMoving_DoesNotConsumeAnUndoStep()
     {
-        var editor = NewEditor(AnnotationTool.FilledRectangle);
+        var editor = NewEditor(AnnotationTool.Censor);
         Drag(editor, new CapturePoint(10, 10), new CapturePoint(60, 60));
 
         editor.Tool = AnnotationTool.Select;
@@ -115,7 +115,7 @@ public sealed class AnnotationEditorTests
     [TestMethod]
     public void VisibleAnnotations_ShowsTheDraggedCopyInsteadOfBothPositions()
     {
-        var editor = NewEditor(AnnotationTool.FilledRectangle);
+        var editor = NewEditor(AnnotationTool.Censor);
         Drag(editor, new CapturePoint(10, 10), new CapturePoint(60, 60));
 
         editor.Tool = AnnotationTool.Select;
@@ -171,7 +171,7 @@ public sealed class AnnotationEditorTests
     [TestMethod]
     public void DeleteSelected_RemovesTheAnnotationAndClearsTheSelection()
     {
-        var editor = NewEditor(AnnotationTool.FilledRectangle);
+        var editor = NewEditor(AnnotationTool.Censor);
         Drag(editor, new CapturePoint(10, 10), new CapturePoint(60, 60));
 
         editor.Tool = AnnotationTool.Select;
@@ -189,7 +189,7 @@ public sealed class AnnotationEditorTests
     {
         // A selection surviving undo would let the next delete or drag act on an
         // annotation the document no longer contains.
-        var editor = NewEditor(AnnotationTool.FilledRectangle);
+        var editor = NewEditor(AnnotationTool.Censor);
         Drag(editor, new CapturePoint(10, 10), new CapturePoint(60, 60));
 
         editor.Tool = AnnotationTool.Select;
@@ -205,7 +205,7 @@ public sealed class AnnotationEditorTests
     [TestMethod]
     public void SelectClickOnEmptySpace_ClearsTheSelection()
     {
-        var editor = NewEditor(AnnotationTool.FilledRectangle);
+        var editor = NewEditor(AnnotationTool.Censor);
         Drag(editor, new CapturePoint(10, 10), new CapturePoint(60, 60));
 
         editor.Tool = AnnotationTool.Select;
@@ -289,7 +289,7 @@ public sealed class AnnotationEditorTests
         // out of the way first, and putting it back afterwards.
         var editor = NewEditor(AnnotationTool.Rectangle);
         Drag(editor, new CapturePoint(10, 10), new CapturePoint(60, 40));
-        editor.Tool = AnnotationTool.FilledRectangle;
+        editor.Tool = AnnotationTool.Censor;
         Drag(editor, new CapturePoint(50, 30), new CapturePoint(90, 70));
 
         editor.Tool = AnnotationTool.Select;

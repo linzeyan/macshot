@@ -43,7 +43,8 @@ public sealed record AnnotationStyle(
     LineStyle LineStyle = LineStyle.Solid,
     double Opacity = 1,
     ArrowStyle ArrowStyle = ArrowStyle.Filled,
-    double CornerRadius = 0)
+    double CornerRadius = 0,
+    CensorMode CensorMode = CensorMode.Pixelate)
 {
     public static AnnotationStyle Default { get; } = new(new AnnotationColor(76, 194, 255), 3);
 
@@ -196,9 +197,7 @@ public sealed record Annotation(
     public bool IsMovable => Tool is not (AnnotationTool.Crop or AnnotationTool.ColorSampler or AnnotationTool.Select);
 
     /// <summary>Tools that rewrite the pixels inside their bounds instead of drawing on top of them.</summary>
-    public bool IsRegionEffect => Tool is AnnotationTool.Pixelate or AnnotationTool.Blur;
-
-    public bool IsFilled => Tool is AnnotationTool.FilledRectangle;
+    public bool IsRegionEffect => Tool is AnnotationTool.Censor;
 
     public CaptureRegion BoundingRect
     {
@@ -226,10 +225,10 @@ public sealed record Annotation(
     }
 
     /// <summary>
-    /// Tests whether a frame-space point grabs this annotation. Filled and region
-    /// effect tools are grabbed anywhere inside their bounds; outline tools are
-    /// grabbed only near the stroke, so a click inside an empty rectangle falls
-    /// through to whatever is behind it.
+    /// Tests whether a frame-space point grabs this annotation. Marks that cover what is
+    /// under them are grabbed anywhere inside their bounds; outline tools are grabbed
+    /// only near the stroke, so a click inside an empty rectangle falls through to
+    /// whatever is behind it.
     /// </summary>
     public bool HitTest(CapturePoint point, double threshold = 6)
     {
@@ -238,7 +237,7 @@ public sealed record Annotation(
         var tolerance = threshold + Style.StrokeWidth / 2;
         var bounds = BoundingRect;
 
-        if (IsFilled || IsRegionEffect || Tool is AnnotationTool.Text or AnnotationTool.Number
+        if (IsRegionEffect || Tool is AnnotationTool.Text or AnnotationTool.Number
             or AnnotationTool.Stamp or AnnotationTool.Loupe or AnnotationTool.TranslateOverlay)
         {
             return Contains(bounds, point, tolerance);

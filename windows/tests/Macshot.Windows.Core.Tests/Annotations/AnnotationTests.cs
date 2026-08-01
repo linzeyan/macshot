@@ -31,11 +31,11 @@ public sealed class AnnotationTests
     }
 
     [TestMethod]
-    public void HitTest_FilledRectangleGrabsItsInterior()
+    public void HitTest_CensorGrabsItsInterior()
     {
         // A redaction block is solid, so its whole area is the annotation.
         var redaction = Annotation.Create(
-            AnnotationTool.FilledRectangle,
+            AnnotationTool.Censor,
             new CapturePoint(10, 10),
             new CapturePoint(50, 30));
 

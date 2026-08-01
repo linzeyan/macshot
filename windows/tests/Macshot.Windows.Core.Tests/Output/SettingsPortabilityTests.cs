@@ -97,6 +97,7 @@ public sealed class SettingsPortabilityTests
             AnnotationArrowStyle = ArrowStyle.Open,
             AnnotationCornerRadius = 12,
             PencilSmoothing = PencilSmoothing.Refined,
+            CensorMode = CensorMode.Erase,
             RememberLastSelection = true,
             WindowSnapEnabled = false,
             HideCaptureInstructions = true,

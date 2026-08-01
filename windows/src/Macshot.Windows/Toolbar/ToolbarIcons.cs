@@ -256,10 +256,6 @@ internal static class ToolbarIcons
             canvas.Children.Add(Frame(2, 3.5, 12, 9));
             break;
 
-        case AnnotationTool.FilledRectangle:
-            canvas.Children.Add(Block(2, 3.5, 12, 9));
-            break;
-
         case AnnotationTool.Ellipse:
             canvas.Children.Add(new Ellipse
             {
@@ -271,21 +267,14 @@ internal static class ToolbarIcons
             });
             break;
 
-        case AnnotationTool.Pixelate:
-            // Four blocks in a checker, which is what the effect looks like at the size
-            // anyone actually notices it.
+        case AnnotationTool.Censor:
+            // A checkerboard, which is macshot's icon for it, and what the effect looks
+            // like at the size anyone actually notices it. The mode is chosen on the
+            // options row, so the button stands for all four.
             canvas.Children.Add(Block(2, 3, 5, 4));
             canvas.Children.Add(Block(8, 3, 5, 4, opacity: 0.45));
             canvas.Children.Add(Block(2, 9, 5, 4, opacity: 0.45));
             canvas.Children.Add(Block(8, 9, 5, 4));
-            break;
-
-        case AnnotationTool.Blur:
-            // Nested rings fading outwards: the same shape losing its edge, which is
-            // what distinguishes it from the hard blocks above.
-            canvas.Children.Add(Ring(1, 14, 0.35));
-            canvas.Children.Add(Ring(4, 8, 0.7));
-            canvas.Children.Add(Ring(6, 4, 1));
             break;
 
         case AnnotationTool.Highlight:

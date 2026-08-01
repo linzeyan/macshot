@@ -61,6 +61,7 @@ public sealed partial class AnnotationToolbarView : UserControl
     private readonly Slider _cornerRadius = new() { Width = 90, Minimum = 0, Maximum = 64, StepFrequency = 1 };
     private readonly ComboBox _arrowStyle = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly ComboBox _smoothing = new() { VerticalAlignment = VerticalAlignment.Center };
+    private readonly ComboBox _censorMode = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly Button _stamp = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly GridView _stampChoices = new() { MaxWidth = 240, SelectionMode = ListViewSelectionMode.Single, RequestedTheme = ElementTheme.Dark };
 
@@ -233,6 +234,7 @@ public sealed partial class AnnotationToolbarView : UserControl
             EffectsChanged?.Invoke(this, options);
         };
         _size.ValueChanged += (_, _) => ApplyStyle();
+        _censorMode.SelectionChanged += (_, _) => ApplyStyle();
         _lineStyle.SelectionChanged += (_, _) => ApplyStyle();
         _arrowStyle.SelectionChanged += (_, _) => ApplyStyle();
         _cornerRadius.ValueChanged += (_, _) => ApplyStyle();
@@ -635,6 +637,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         _cornerRadius.Visibility = rounds;
         _stamp.Visibility = Show(AnnotationToolOptions.UsesStamp(tool));
         _smoothing.Visibility = Show(AnnotationEditor.IsFreeform(tool));
+        _censorMode.Visibility = Show(AnnotationToolOptions.UsesCensorMode(tool));
 
         // The row itself goes when it would be empty, rather than sitting under the
         // tools as a bar of nothing.
@@ -670,6 +673,11 @@ public sealed partial class AnnotationToolbarView : UserControl
         ToolTipService.SetToolTip(_smoothing, "Freehand smoothing");
         _smoothing.ItemsSource = Enum.GetValues<PencilSmoothing>().Select(mode => mode.ToString()).ToList();
 
+        // The censor tool's only option. There is deliberately no strength beside it:
+        // how much of a redaction survives is not a thing to leave to a slider.
+        ToolTipService.SetToolTip(_censorMode, "How the region is covered");
+        _censorMode.ItemsSource = Enum.GetValues<CensorMode>().Select(mode => mode.ToString()).ToList();
+
         // Populated from StampGlyph.Choices so the picker and the renderer cannot offer
         // different sets.
         _stampChoices.ItemsSource = StampGlyph.Choices;
@@ -683,6 +691,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         _optionsContent.Children.Add(_cornerRadius);
         _optionsContent.Children.Add(_arrowStyle);
         _optionsContent.Children.Add(_smoothing);
+        _optionsContent.Children.Add(_censorMode);
         _optionsContent.Children.Add(_stamp);
     }
 
@@ -717,6 +726,7 @@ public sealed partial class AnnotationToolbarView : UserControl
             // settings file and this stays the one place the toolbar's state comes from.
             editor.Smoothing = settings.Current.PencilSmoothing;
             _smoothing.SelectedIndex = (int)editor.Smoothing;
+            _censorMode.SelectedIndex = (int)_loadedStyle.CensorMode;
         }
         finally
         {
@@ -759,7 +769,10 @@ public sealed partial class AnnotationToolbarView : UserControl
             ArrowStyle: _arrowStyle.SelectedIndex >= 0
                 ? (ArrowStyle)_arrowStyle.SelectedIndex
                 : ArrowStyle.Filled,
-            CornerRadius: Math.Max(0, _cornerRadius.Value));
+            CornerRadius: Math.Max(0, _cornerRadius.Value),
+            CensorMode: _censorMode.SelectedIndex >= 0
+                ? (CensorMode)_censorMode.SelectedIndex
+                : CensorMode.Pixelate);
 
         _tools.ShowSwatch(ToUiColor(editor.Style.Color));
     }
@@ -767,14 +780,13 @@ public sealed partial class AnnotationToolbarView : UserControl
     private static Visibility Show(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;
 
     /// <summary>
-    /// What the size slider is called for this tool. One slider, three jobs — a stroke
-    /// width, the size of a glyph, the coarseness of an effect — and a label that says
-    /// "Width" over a blur radius is worse than no label.
+    /// What the size slider is called for this tool. One slider, two jobs — a stroke
+    /// width and the size of a glyph — and a label that says "Width" over the size of a
+    /// stamp is worse than no label.
     /// </summary>
     private static string SizeLabelFor(AnnotationTool tool) => AnnotationToolOptions.SizeMeaning(tool) switch
     {
         AnnotationSizeMeaning.Extent => "Size",
-        AnnotationSizeMeaning.Strength => "Strength",
         _ => "Width",
     };
 

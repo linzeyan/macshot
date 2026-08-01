@@ -4,7 +4,7 @@ using Macshot.Windows.Core.Capture;
 namespace Macshot.Windows.Core.Recognition;
 
 /// <summary>
-/// Turns recognized text into filled rectangles over anything that looks like a
+/// Turns recognized text into censored regions over anything that looks like a
 /// secret. The counterpart of the macOS <c>AutoRedactor</c>.
 /// </summary>
 /// <remarks>
@@ -16,11 +16,14 @@ namespace Macshot.Windows.Core.Recognition;
 public static class AutoRedactor
 {
     /// <summary>
-    /// Opaque black rather than the current drawing colour. A redaction is not a
-    /// highlight, and inheriting a translucent marker colour would produce boxes
-    /// that still show what is underneath them.
+    /// Solid, opaque black rather than the current drawing colour or the current censor
+    /// mode. A redaction is not a highlight: inheriting a translucent marker colour would
+    /// produce boxes that still show what is underneath them, and a blurred one would
+    /// leave short strings readable. A caller that has a toolbar to ask passes its own
+    /// style and gets the mode the user picked, which is what macshot does.
     /// </summary>
-    public static AnnotationStyle DefaultStyle { get; } = new(new AnnotationColor(0, 0, 0), 1);
+    public static AnnotationStyle DefaultStyle { get; } =
+        new(new AnnotationColor(0, 0, 0), 1, CensorMode: CensorMode.Solid);
 
     /// <summary>
     /// Extra margin as a fraction of the box height. OCR boxes hug the glyphs, and
@@ -60,7 +63,7 @@ public static class AutoRedactor
                 }
 
                 annotations.Add(Annotation.Create(
-                    AnnotationTool.FilledRectangle,
+                    AnnotationTool.Censor,
                     new CapturePoint(bounds.X, bounds.Y),
                     new CapturePoint(bounds.Right, bounds.Bottom),
                     appliedStyle) with

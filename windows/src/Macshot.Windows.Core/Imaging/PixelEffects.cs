@@ -151,6 +151,106 @@ public static class PixelEffects
         WriteRegion(bgraPixels, width, left, top, regionWidth, regionHeight, source);
     }
 
+    /// <summary>
+    /// Fills <paramref name="region"/> with the colours around it, so what was there
+    /// reads as empty background rather than as something covered up.
+    /// </summary>
+    /// <remarks>
+    /// macshot's, and it is deliberately not an inpainting: each edge is sampled just
+    /// outside the region, every pixel takes the horizontal blend of its row's two edge
+    /// colours and the vertical blend of its column's two, and the two are averaged. On
+    /// a flat or gently graded background — a toolbar, a document, a wall of one colour —
+    /// that is indistinguishable from the real thing, and on a busy one it looks like a
+    /// smear, which is honest about having removed something.
+    /// </remarks>
+    public static void Erase(byte[] bgraPixels, int width, int height, CaptureRegion region)
+    {
+        ValidateFrame(bgraPixels, width, height);
+
+        if (!TryGetBounds(region, width, height, out var left, out var top, out var right, out var bottom))
+        {
+            return;
+        }
+
+        var regionWidth = right - left;
+        var regionHeight = bottom - top;
+
+        // Averaged over a few pixels rather than taken from one, so a single stray pixel
+        // on the border does not colour a whole row of the fill.
+        const int Reach = 3;
+
+        var leftEdge = new AnnotationColor[regionHeight];
+        var rightEdge = new AnnotationColor[regionHeight];
+        for (var row = 0; row < regionHeight; row++)
+        {
+            leftEdge[row] = AverageOutside(bgraPixels, width, height, left, top + row, -1, 0, Reach);
+            rightEdge[row] = AverageOutside(bgraPixels, width, height, right - 1, top + row, 1, 0, Reach);
+        }
+
+        var topEdge = new AnnotationColor[regionWidth];
+        var bottomEdge = new AnnotationColor[regionWidth];
+        for (var column = 0; column < regionWidth; column++)
+        {
+            topEdge[column] = AverageOutside(bgraPixels, width, height, left + column, top, 0, -1, Reach);
+            bottomEdge[column] = AverageOutside(bgraPixels, width, height, left + column, bottom - 1, 0, 1, Reach);
+        }
+
+        for (var row = 0; row < regionHeight; row++)
+        {
+            var down = regionHeight > 1 ? (double)row / (regionHeight - 1) : 0;
+            for (var column = 0; column < regionWidth; column++)
+            {
+                var across = regionWidth > 1 ? (double)column / (regionWidth - 1) : 0;
+                var horizontal = Between(leftEdge[row], rightEdge[row], across);
+                var vertical = Between(topEdge[column], bottomEdge[column], down);
+
+                var offset = (((top + row) * width) + left + column) * 4;
+                bgraPixels[offset] = Mean(horizontal.Blue, vertical.Blue);
+                bgraPixels[offset + 1] = Mean(horizontal.Green, vertical.Green);
+                bgraPixels[offset + 2] = Mean(horizontal.Red, vertical.Red);
+                bgraPixels[offset + 3] = byte.MaxValue;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The mean of up to <paramref name="reach"/> pixels stepping away from
+    /// (<paramref name="x"/>, <paramref name="y"/>) in the given direction. Clamped at
+    /// the frame edge, which is what makes a region drawn against the edge of the screen
+    /// take the colour of the last row inside it rather than nothing.
+    /// </summary>
+    private static AnnotationColor AverageOutside(
+        byte[] pixels,
+        int width,
+        int height,
+        int x,
+        int y,
+        int stepX,
+        int stepY,
+        int reach)
+    {
+        int blue = 0;
+        int green = 0;
+        int red = 0;
+        for (var step = 1; step <= reach; step++)
+        {
+            var sample = Sample(pixels, width, height, x + (stepX * step), y + (stepY * step));
+            blue += sample.Blue;
+            green += sample.Green;
+            red += sample.Red;
+        }
+
+        return new AnnotationColor((byte)(red / reach), (byte)(green / reach), (byte)(blue / reach));
+    }
+
+    private static AnnotationColor Between(AnnotationColor from, AnnotationColor to, double at) =>
+        new(
+            (byte)Math.Round(from.Red + ((to.Red - from.Red) * at)),
+            (byte)Math.Round(from.Green + ((to.Green - from.Green) * at)),
+            (byte)Math.Round(from.Blue + ((to.Blue - from.Blue) * at)));
+
+    private static byte Mean(byte one, byte other) => (byte)((one + other + 1) / 2);
+
     private static void AverageBlock(byte[] pixels, int width, int left, int top, int right, int bottom)
     {
         var count = (right - left) * (bottom - top);

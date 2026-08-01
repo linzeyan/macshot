@@ -108,11 +108,17 @@ public sealed class AutoRedactorTests
     }
 
     [TestMethod]
-    public void Redact_UsesTheFilledRectangleToolSoItRendersLikeAnyOtherMark()
+    public void Redact_UsesTheCensorToolSoItRendersLikeAnyOtherMark()
     {
         var line = Line(("bob@example.com", new CaptureRegion(0, 0, 150, 20)));
 
-        Assert.AreEqual(AnnotationTool.FilledRectangle, AutoRedactor.Redact([line])[0].Tool);
+        var redaction = AutoRedactor.Redact([line])[0];
+
+        Assert.AreEqual(AnnotationTool.Censor, redaction.Tool);
+
+        // Solid rather than whatever the censor tool was last left on: a blurred box
+        // over a four-digit code is not a redaction, and this runs without being watched.
+        Assert.AreEqual(CensorMode.Solid, redaction.Style.CensorMode);
     }
 
     private static RecognizedLine Line(params (string Text, CaptureRegion Bounds)[] words) =>

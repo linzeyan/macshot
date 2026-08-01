@@ -19,19 +19,19 @@ namespace Macshot.Windows.Core.Annotations;
 public static class AnnotationToolOptions
 {
     /// <summary>
-    /// Whether the mark is drawn in the chosen colour. False for the two tools that
-    /// rewrite the pixels they cover rather than drawing over them, and for the pointer,
-    /// which draws nothing at all.
+    /// Whether the mark is drawn in the chosen colour. True of the censor tool as well,
+    /// though only its solid mode paints in it — the other three replace the pixels with
+    /// something derived from what was there.
     /// </summary>
-    public static bool UsesColor(AnnotationTool tool) =>
-        Draws(tool) && !IsRegionEffect(tool);
+    public static bool UsesColor(AnnotationTool tool) => Draws(tool);
 
     /// <summary>
-    /// Whether the width slider does anything. It does for every mark, though not always
-    /// as a width: it is the size of a badge or a label, and the strength of a pixelate
-    /// or a blur.
+    /// Whether the width slider does anything. It does for every mark that is drawn,
+    /// though not always as a width: it is also the size of a badge or a label. The
+    /// censor tool is the exception — how much of a redaction survives is not left to a
+    /// slider, so its cell and its radius are fixed and derived from the region.
     /// </summary>
-    public static bool UsesSize(AnnotationTool tool) => Draws(tool);
+    public static bool UsesSize(AnnotationTool tool) => Draws(tool) && !IsRegionEffect(tool);
 
     /// <summary>
     /// Whether the mark is drawn as a stroke, and so takes the dash pattern. A fill, a
@@ -61,30 +61,25 @@ public static class AnnotationToolOptions
     /// <summary>Whether the emoji picker applies.</summary>
     public static bool UsesStamp(AnnotationTool tool) => tool == AnnotationTool.Stamp;
 
+    /// <summary>Whether the censor tool's four modes apply.</summary>
+    public static bool UsesCensorMode(AnnotationTool tool) => IsRegionEffect(tool);
+
     /// <summary>
     /// What the size control changes for this tool, so the label can say it: the same
-    /// slider means a stroke width, a glyph size, or the coarseness of an effect.
+    /// slider means a stroke width or the size of a glyph.
     /// </summary>
-    public static AnnotationSizeMeaning SizeMeaning(AnnotationTool tool)
-    {
-        if (IsRegionEffect(tool))
-        {
-            return AnnotationSizeMeaning.Strength;
-        }
-
-        return tool is AnnotationTool.Text or AnnotationTool.Number
+    public static AnnotationSizeMeaning SizeMeaning(AnnotationTool tool) =>
+        tool is AnnotationTool.Text or AnnotationTool.Number
             or AnnotationTool.Stamp or AnnotationTool.Loupe
             ? AnnotationSizeMeaning.Extent
             : AnnotationSizeMeaning.Thickness;
-    }
 
     /// <summary>Tools that put a mark on the image at all.</summary>
     private static bool Draws(AnnotationTool tool) => tool
         is not (AnnotationTool.Select or AnnotationTool.Crop or AnnotationTool.ColorSampler
         or AnnotationTool.TranslateOverlay);
 
-    private static bool IsRegionEffect(AnnotationTool tool) =>
-        tool is AnnotationTool.Pixelate or AnnotationTool.Blur;
+    private static bool IsRegionEffect(AnnotationTool tool) => tool is AnnotationTool.Censor;
 }
 
 /// <summary>What the one size control means for the tool in hand.</summary>
@@ -95,7 +90,4 @@ public enum AnnotationSizeMeaning
 
     /// <summary>How big the mark is: a label, a badge, a stamp, a magnifier.</summary>
     Extent,
-
-    /// <summary>How coarse the effect is: the pixelate block, the blur radius.</summary>
-    Strength,
 }

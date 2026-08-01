@@ -130,6 +130,13 @@ public sealed record CaptureSettings
     public PencilSmoothing PencilSmoothing { get; init; } = Annotations.PencilSmoothing.Smooth;
 
     /// <summary>
+    /// How the censor tool covers what it is dragged over. Remembered like the drawing
+    /// colour is, because it is the same kind of choice: the last one made is nearly
+    /// always the next one wanted.
+    /// </summary>
+    public CensorMode CensorMode { get; init; } = Annotations.CensorMode.Pixelate;
+
+    /// <summary>
     /// Offers the previous selection again on the next capture. Off by default: a
     /// selection that reappears where the last one was is a surprise until you know
     /// the setting exists.
@@ -407,7 +414,8 @@ public sealed record CaptureSettings
             Math.Clamp(AnnotationStrokeWidth, MinStrokeWidth, MaxStrokeWidth),
             AnnotationLineStyle,
             ArrowStyle: AnnotationArrowStyle,
-            CornerRadius: Math.Clamp(AnnotationCornerRadius, 0, MaxCornerRadius));
+            CornerRadius: Math.Clamp(AnnotationCornerRadius, 0, MaxCornerRadius),
+            CensorMode: CensorMode);
     }
 
     public CaptureSettings WithAnnotationStyle(AnnotationStyle style)
@@ -421,6 +429,7 @@ public sealed record CaptureSettings
             AnnotationLineStyle = style.LineStyle,
             AnnotationArrowStyle = style.ArrowStyle,
             AnnotationCornerRadius = style.CornerRadius,
+            CensorMode = style.CensorMode,
         };
     }
 
@@ -469,6 +478,7 @@ public sealed record CaptureSettings
             PencilSmoothing = Enum.IsDefined(PencilSmoothing)
                 ? PencilSmoothing
                 : Annotations.PencilSmoothing.Smooth,
+            CensorMode = Enum.IsDefined(CensorMode) ? CensorMode : Annotations.CensorMode.Pixelate,
             DelaySeconds = Math.Clamp(DelaySeconds, MinDelaySeconds, MaxDelaySeconds),
             HistorySize = Math.Clamp(HistorySize, 0, MaxHistorySize),
 
