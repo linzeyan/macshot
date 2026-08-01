@@ -8,11 +8,19 @@ namespace Macshot.Windows.Core.Annotations;
 /// </summary>
 /// <remarks>
 /// <para>
-/// Chaikin's corner cutting, the same algorithm the macOS product uses. Each pass replaces
-/// every corner with two points a quarter and three quarters of the way along the segments
-/// that meet there, which pulls the path towards the curve the hand was making. Two passes
-/// is enough to lose the staircase a pointer sampled at screen resolution leaves behind,
-/// and few enough that the stroke still goes where it was drawn.
+/// <see cref="PencilSmoothing.Smooth"/> is Chaikin's corner cutting, the algorithm the
+/// macOS product uses. Each pass replaces every corner with two points a quarter and
+/// three quarters of the way along the segments that meet there, which pulls the path
+/// towards the curve the hand was making. Two passes is enough to lose the staircase a
+/// pointer sampled at screen resolution leaves behind, and few enough that the stroke
+/// still goes where it was drawn.
+/// </para>
+/// <para>
+/// <see cref="PencilSmoothing.Refined"/> runs a moving average along the stroke first,
+/// which is what removes the tremor corner cutting leaves in — cutting a corner between
+/// two shaky samples gives a shorter shaky corner. The average trails, so it lags the
+/// pointer; padding the end with copies of the last sample lets it arrive at the true
+/// end of the stroke instead of stopping short of it.
 /// </para>
 /// <para>
 /// Applied when the stroke is finished rather than as it is drawn: smoothing the live
@@ -26,22 +34,36 @@ public static class StrokeSmoothing
     public const int Passes = 2;
 
     /// <summary>
-    /// A stroke with its corners cut. The two ends are kept exactly where they were: a
-    /// stroke that started somewhere other than where the pointer went down would be
-    /// smoothing away the one thing the user aimed.
+    /// How many samples the refined mode averages over. macshot's eight — enough to lose
+    /// a hand's tremor, short enough that a deliberate turn survives it.
     /// </summary>
-    public static IReadOnlyList<CapturePoint> Smooth(IReadOnlyList<CapturePoint> points, int passes = Passes)
+    public const int Window = 8;
+
+    /// <summary>
+    /// A stroke as the chosen mode leaves it. The two ends are kept exactly where they
+    /// were: a stroke that started somewhere other than where the pointer went down would
+    /// be smoothing away the one thing the user aimed.
+    /// </summary>
+    public static IReadOnlyList<CapturePoint> Smooth(
+        IReadOnlyList<CapturePoint> points,
+        PencilSmoothing mode = PencilSmoothing.Smooth)
     {
         ArgumentNullException.ThrowIfNull(points);
-        ArgumentOutOfRangeException.ThrowIfNegative(passes);
 
         // Two points are a straight line and one is a dot; there is no corner to cut, and
         // a pass would leave both ends short of where they were.
-        if (points.Count < 3 || passes == 0)
+        if (points.Count < 3 || mode == PencilSmoothing.None)
         {
             return points;
         }
 
+        return CutCorners(
+            mode == PencilSmoothing.Refined ? Average(Padded(points)) : points,
+            Passes);
+    }
+
+    private static IReadOnlyList<CapturePoint> CutCorners(IReadOnlyList<CapturePoint> points, int passes)
+    {
         var current = points;
         for (var pass = 0; pass < passes; pass++)
         {
@@ -70,5 +92,44 @@ public static class StrokeSmoothing
 
         cut.Add(points[^1]);
         return cut;
+    }
+
+    /// <summary>The stroke with the last sample repeated, so a trailing average can catch up to it.</summary>
+    private static IReadOnlyList<CapturePoint> Padded(IReadOnlyList<CapturePoint> points)
+    {
+        var padded = new List<CapturePoint>(points.Count + Window - 1);
+        padded.AddRange(points);
+        for (var pad = 0; pad < Window - 1; pad++)
+        {
+            padded.Add(points[^1]);
+        }
+
+        return padded;
+    }
+
+    /// <summary>
+    /// Each point replaced by the mean of it and the samples before it. Trailing rather
+    /// than centred, matching macshot, so that early points are averaged over what little
+    /// there is and the stroke still starts where the pointer went down.
+    /// </summary>
+    private static IReadOnlyList<CapturePoint> Average(IReadOnlyList<CapturePoint> points)
+    {
+        var averaged = new List<CapturePoint>(points.Count);
+        for (var index = 0; index < points.Count; index++)
+        {
+            var from = Math.Max(0, index - Window + 1);
+            double x = 0;
+            double y = 0;
+            for (var at = from; at <= index; at++)
+            {
+                x += points[at].X;
+                y += points[at].Y;
+            }
+
+            var count = index - from + 1;
+            averaged.Add(new CapturePoint(x / count, y / count));
+        }
+
+        return averaged;
     }
 }

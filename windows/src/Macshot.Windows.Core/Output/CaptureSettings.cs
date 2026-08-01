@@ -123,12 +123,11 @@ public sealed record CaptureSettings
     public double AnnotationCornerRadius { get; init; }
 
     /// <summary>
-    /// Rounds off a freehand stroke once it is finished. On by default: a path sampled
-    /// from a mouse is a staircase, and nobody draws one on purpose. Configured rather
-    /// than remembered, because it is a preference about how the tool behaves and not a
-    /// value the toolbar leaves behind.
+    /// How much a freehand stroke is rounded off once it is finished. Smoothed by
+    /// default: a path sampled from a mouse is a staircase, and nobody draws one on
+    /// purpose.
     /// </summary>
-    public bool SmoothPencilStrokes { get; init; } = true;
+    public PencilSmoothing PencilSmoothing { get; init; } = Annotations.PencilSmoothing.Smooth;
 
     /// <summary>
     /// Offers the previous selection again on the next capture. Off by default: a
@@ -467,6 +466,9 @@ public sealed record CaptureSettings
             AnnotationCornerRadius = double.IsFinite(AnnotationCornerRadius)
                 ? Math.Clamp(AnnotationCornerRadius, 0, MaxCornerRadius)
                 : 0,
+            PencilSmoothing = Enum.IsDefined(PencilSmoothing)
+                ? PencilSmoothing
+                : Annotations.PencilSmoothing.Smooth,
             DelaySeconds = Math.Clamp(DelaySeconds, MinDelaySeconds, MaxDelaySeconds),
             HistorySize = Math.Clamp(HistorySize, 0, MaxHistorySize),
 

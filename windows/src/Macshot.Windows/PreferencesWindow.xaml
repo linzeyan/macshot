@@ -389,15 +389,16 @@
                         <!-- Filled in code from the toolbar's own list, so a tool added
                              later appears here without this page being edited. -->
                         <StackPanel x:Name="ToolToggles" Margin="188,4,0,0" Spacing="2" />
-                        <CheckBox
-                            x:Name="SmoothPencilCheck"
-                            Content="Smooth freehand strokes"
-                            Style="{StaticResource Unlabelled}"
-                            Margin="188,8,0,0"
-                            Checked="Setting_Toggled"
-                            Unchecked="Setting_Toggled" />
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Freehand:" Style="{StaticResource RowLabel}" />
+                            <ComboBox
+                                x:Name="PencilSmoothingBox"
+                                FontSize="13"
+                                Width="160"
+                                SelectionChanged="Setting_SelectionChanged" />
+                        </StackPanel>
                         <TextBlock
-                            Text="Rounds off the corners of a pencil or highlighter stroke once you let go. A path sampled from a mouse is a staircase; turn this off if you are tracing something and want the points exactly where the pointer went."
+                            Text="What happens to a pencil or highlighter stroke once you let go. A path sampled from a mouse is a staircase: Smooth rounds its corners off, Refined evens out the shake along it as well, and None leaves the points exactly where the pointer went, for tracing something. The same choice sits under the pencil on the toolbar."
                             Style="{StaticResource Caption}" />
                     </StackPanel>
                 </StackPanel>

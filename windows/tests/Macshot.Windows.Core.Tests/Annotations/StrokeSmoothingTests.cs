@@ -67,11 +67,87 @@ public sealed class StrokeSmoothingTests
     }
 
     [TestMethod]
-    public void ZeroPasses_ChangeNothing()
+    public void NoSmoothing_ChangesNothing()
     {
         var stroke = Path((0, 0), (10, 0), (10, 10));
 
-        CollectionAssert.AreEqual(stroke.ToArray(), StrokeSmoothing.Smooth(stroke, 0).ToArray());
+        CollectionAssert.AreEqual(
+            stroke.ToArray(),
+            StrokeSmoothing.Smooth(stroke, PencilSmoothing.None).ToArray());
+    }
+
+    [TestMethod]
+    public void Refined_KeepsBothEndsExactlyWhereTheyWere()
+    {
+        // The averaging trails the pointer, so without the padding the stroke would stop
+        // short of where the hand let go — by most of a window's worth of samples.
+        var stroke = Wobble();
+
+        var refined = StrokeSmoothing.Smooth(stroke, PencilSmoothing.Refined);
+
+        Assert.AreEqual(stroke[0], refined[0]);
+        Assert.AreEqual(stroke[^1], refined[^1]);
+    }
+
+    [TestMethod]
+    public void Refined_TakesOutAShakeThatCuttingCornersLeavesIn()
+    {
+        // The reason the mode exists. Corner cutting shortens a tremor; it does not
+        // remove it, because each cut is between two shaky samples. Measured as how far
+        // the result strays from the straight line the hand was trying to draw.
+        var stroke = Wobble();
+
+        Assert.IsTrue(
+            Wander(StrokeSmoothing.Smooth(stroke, PencilSmoothing.Refined))
+                < Wander(StrokeSmoothing.Smooth(stroke, PencilSmoothing.Smooth)) / 2,
+            "refined must be markedly straighter than smoothed, not merely different");
+    }
+
+    [TestMethod]
+    public void Refined_StaysInsideTheBoundsOfWhatWasDrawn()
+    {
+        // Both stages only ever average points that were drawn, so neither can put ink
+        // anywhere the hand did not go.
+        var stroke = Path((0, 0), (10, 0), (10, 10), (0, 10), (0, 0));
+
+        var refined = StrokeSmoothing.Smooth(stroke, PencilSmoothing.Refined);
+
+        Assert.IsTrue(refined.All(point => point.X is >= 0 and <= 10 && point.Y is >= 0 and <= 10));
+    }
+
+    [TestMethod]
+    public void Refined_LeavesAStrokeTooShortToAverageAlone()
+    {
+        var stroke = Path((0, 0), (40, 40));
+
+        CollectionAssert.AreEqual(
+            stroke.ToArray(),
+            StrokeSmoothing.Smooth(stroke, PencilSmoothing.Refined).ToArray());
+    }
+
+    [TestMethod]
+    public void APencilStrokeIsRefined_WhenThatIsWhatTheToolbarAsksFor()
+    {
+        var editor = new AnnotationEditor(new AnnotationDocument())
+        {
+            Tool = AnnotationTool.Pencil,
+            Smoothing = PencilSmoothing.Refined,
+        };
+
+        editor.PointerPressed(new CapturePoint(0, 0));
+        foreach (var point in Wobble().Skip(1))
+        {
+            editor.PointerMoved(point);
+        }
+
+        editor.PointerReleased(new CapturePoint(60, 0));
+
+        var committed = editor.Document.Annotations[0];
+        Assert.AreEqual(new CapturePoint(0, 0), committed.Start);
+        Assert.AreEqual(new CapturePoint(60, 0), committed.End);
+        Assert.IsTrue(
+            Wander(committed.Points) < Wander(Wobble()) / 4,
+            "the shake is gone from what was committed, not only from what Core returns");
     }
 
     [TestMethod]
@@ -100,7 +176,7 @@ public sealed class StrokeSmoothingTests
         var editor = new AnnotationEditor(new AnnotationDocument())
         {
             Tool = AnnotationTool.Pencil,
-            SmoothStrokes = false,
+            Smoothing = PencilSmoothing.None,
         };
 
         editor.PointerPressed(new CapturePoint(0, 0));
@@ -117,14 +193,40 @@ public sealed class StrokeSmoothingTests
     }
 
     [TestMethod]
-    public void SmoothingIsOn_UnlessTheUserTurnsItOff()
+    public void SmoothingIsTheMiddleSetting_UnlessTheUserChangesIt()
     {
         // A freehand stroke that looks drawn is what a first-time user expects; tracing
-        // a shape point for point is the specialised case, so it is the one behind a
-        // setting.
-        Assert.IsTrue(CaptureSettings.Default.SmoothPencilStrokes);
+        // a shape point for point is the specialised case, and so is a stroke averaged
+        // far enough to leave the pixels it was drawn over.
+        Assert.AreEqual(PencilSmoothing.Smooth, CaptureSettings.Default.PencilSmoothing);
     }
 
     private static IReadOnlyList<CapturePoint> Path(params (double X, double Y)[] points) =>
         [.. points.Select(point => new CapturePoint(point.X, point.Y))];
+
+    /// <summary>
+    /// A hand trying to draw a straight line and not managing it: sixty pixels of travel
+    /// with a pixel and a half of shake on every other sample, and both ends on the line.
+    /// </summary>
+    private static IReadOnlyList<CapturePoint> Wobble() =>
+        [.. Enumerable.Range(0, 31).Select(step => new CapturePoint(step * 2, step % 2 == 0 ? 0 : 1.5))];
+
+    /// <summary>
+    /// How much further the stroke travels than the straight line between its ends. It is
+    /// what shake costs: a hand that wandered draws a longer path than the one it meant.
+    /// </summary>
+    private static double Wander(IReadOnlyList<CapturePoint> points)
+    {
+        double travelled = 0;
+        for (var index = 1; index < points.Count; index++)
+        {
+            travelled += Math.Sqrt(
+                Math.Pow(points[index].X - points[index - 1].X, 2)
+                + Math.Pow(points[index].Y - points[index - 1].Y, 2));
+        }
+
+        return travelled - Math.Sqrt(
+            Math.Pow(points[^1].X - points[0].X, 2)
+            + Math.Pow(points[^1].Y - points[0].Y, 2));
+    }
 }

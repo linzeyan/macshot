@@ -88,10 +88,10 @@ public sealed class AnnotationEditor
     }
 
     /// <summary>
-    /// Whether a finished freehand stroke has its corners rounded off. On by default,
-    /// because a path sampled from a mouse is a staircase and nobody draws one on purpose.
+    /// How much a finished freehand stroke is rounded off. Smoothed by default, because a
+    /// path sampled from a mouse is a staircase and nobody draws one on purpose.
     /// </summary>
-    public bool SmoothStrokes { get; set; } = true;
+    public PencilSmoothing Smoothing { get; set; } = PencilSmoothing.Smooth;
 
     /// <summary>The annotation currently being drawn or dragged, for live preview.</summary>
     public Annotation? Draft { get; private set; }
@@ -263,12 +263,12 @@ public sealed class AnnotationEditor
     /// </summary>
     private Annotation Finished(Annotation draft)
     {
-        if (!SmoothStrokes || draft.Points.Count < 3)
+        if (Smoothing == PencilSmoothing.None || draft.Points.Count < 3)
         {
             return draft;
         }
 
-        var smoothed = StrokeSmoothing.Smooth(draft.Points);
+        var smoothed = StrokeSmoothing.Smooth(draft.Points, Smoothing);
         return draft with
         {
             Points = smoothed,
@@ -395,7 +395,12 @@ public sealed class AnnotationEditor
         Selected = _document.Annotations.FirstOrDefault(annotation => annotation.Id == id);
     }
 
-    private static bool IsFreeform(AnnotationTool tool) => tool is AnnotationTool.Pencil;
+    /// <summary>
+    /// Whether the tool draws by following the pointer rather than by dragging out a
+    /// shape — which is the same question as whether <see cref="Smoothing"/> applies to
+    /// it, so the toolbar asks here instead of keeping a list of its own.
+    /// </summary>
+    public static bool IsFreeform(AnnotationTool tool) => tool is AnnotationTool.Pencil;
 
     private static bool IsWorthKeeping(Annotation annotation)
     {

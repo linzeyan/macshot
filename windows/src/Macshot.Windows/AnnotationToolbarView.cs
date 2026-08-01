@@ -60,6 +60,7 @@ public sealed partial class AnnotationToolbarView : UserControl
     private readonly TextBlock _cornerLabel = new() { Text = "Corners", VerticalAlignment = VerticalAlignment.Center };
     private readonly Slider _cornerRadius = new() { Width = 90, Minimum = 0, Maximum = 64, StepFrequency = 1 };
     private readonly ComboBox _arrowStyle = new() { VerticalAlignment = VerticalAlignment.Center };
+    private readonly ComboBox _smoothing = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly Button _stamp = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly GridView _stampChoices = new() { MaxWidth = 240, SelectionMode = ListViewSelectionMode.Single, RequestedTheme = ElementTheme.Dark };
 
@@ -221,11 +222,6 @@ public sealed partial class AnnotationToolbarView : UserControl
         RepaintChrome();
 
         LoadStyle();
-
-        // Read here rather than by the editor itself, so Core stays free of the settings
-        // file and this stays the one place the toolbar's state comes from.
-        editor.SmoothStrokes = settings.Current.SmoothPencilStrokes;
-
         RefreshStrips();
 
         _colorPicker.ColorChanged += (_, _) => ApplyStyle();
@@ -241,6 +237,13 @@ public sealed partial class AnnotationToolbarView : UserControl
         _arrowStyle.SelectionChanged += (_, _) => ApplyStyle();
         _cornerRadius.ValueChanged += (_, _) => ApplyStyle();
         _stampChoices.SelectionChanged += StampChoice_Changed;
+        _smoothing.SelectionChanged += (_, _) =>
+        {
+            if (!_isLoadingStyle && _smoothing.SelectedIndex >= 0 && _editor is { } bound)
+            {
+                bound.Smoothing = (PencilSmoothing)_smoothing.SelectedIndex;
+            }
+        };
     }
 
     /// <summary>
@@ -329,20 +332,36 @@ public sealed partial class AnnotationToolbarView : UserControl
         sampled.Blue);
 
     /// <summary>
-    /// Remembers the style for next time. A failure is swallowed on purpose: this runs
-    /// while the host is being torn down, there is no window left to report into, and
-    /// the cost of losing it is that the next capture starts from the previous colour.
+    /// Remembers what the options row was left set to, for next time. A failure is
+    /// swallowed on purpose: this runs while the host is being torn down, there is no
+    /// window left to report into, and the cost of losing it is that the next capture
+    /// starts from the previous colour.
     /// </summary>
     public void PersistStyle()
     {
-        if (_editor is not { } editor || _settings is not { } settings || editor.Style == _loadedStyle)
+        if (_editor is not { } editor || _settings is not { } settings)
+        {
+            return;
+        }
+
+        var current = settings.Current;
+        var updated = editor.Style == _loadedStyle ? current : current.WithAnnotationStyle(editor.Style);
+        if (editor.Smoothing != current.PencilSmoothing)
+        {
+            updated = updated with { PencilSmoothing = editor.Smoothing };
+        }
+
+        // Reference equality on purpose: the settings are a record holding a list, so
+        // value equality would compare that list by reference anyway and this says what
+        // is meant — nothing was changed, so nothing is written.
+        if (ReferenceEquals(updated, current))
         {
             return;
         }
 
         try
         {
-            settings.Save(settings.Current.WithAnnotationStyle(editor.Style));
+            settings.Save(updated);
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
@@ -615,6 +634,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         _cornerLabel.Visibility = rounds;
         _cornerRadius.Visibility = rounds;
         _stamp.Visibility = Show(AnnotationToolOptions.UsesStamp(tool));
+        _smoothing.Visibility = Show(AnnotationEditor.IsFreeform(tool));
 
         // The row itself goes when it would be empty, rather than sitting under the
         // tools as a bar of nothing.
@@ -645,6 +665,11 @@ public sealed partial class AnnotationToolbarView : UserControl
         ToolTipService.SetToolTip(_arrowStyle, "Arrow ends");
         ToolTipService.SetToolTip(_stamp, "Stamp");
 
+        // On the toolbar as well as in Preferences, because it is a choice made while
+        // drawing — macshot puts it here, next to the pencil, and nowhere else.
+        ToolTipService.SetToolTip(_smoothing, "Freehand smoothing");
+        _smoothing.ItemsSource = Enum.GetValues<PencilSmoothing>().Select(mode => mode.ToString()).ToList();
+
         // Populated from StampGlyph.Choices so the picker and the renderer cannot offer
         // different sets.
         _stampChoices.ItemsSource = StampGlyph.Choices;
@@ -657,6 +682,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         _optionsContent.Children.Add(_cornerLabel);
         _optionsContent.Children.Add(_cornerRadius);
         _optionsContent.Children.Add(_arrowStyle);
+        _optionsContent.Children.Add(_smoothing);
         _optionsContent.Children.Add(_stamp);
     }
 
@@ -686,6 +712,11 @@ public sealed partial class AnnotationToolbarView : UserControl
             _size.Value = _loadedStyle.StrokeWidth;
             _cornerRadius.Value = _loadedStyle.CornerRadius;
             _colorPicker.Color = ToUiColor(_loadedStyle.Color);
+
+            // Read here rather than by the editor itself, so Core stays free of the
+            // settings file and this stays the one place the toolbar's state comes from.
+            editor.Smoothing = settings.Current.PencilSmoothing;
+            _smoothing.SelectedIndex = (int)editor.Smoothing;
         }
         finally
         {

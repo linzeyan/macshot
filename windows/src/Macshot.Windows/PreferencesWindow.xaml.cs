@@ -310,7 +310,8 @@ public sealed partial class PreferencesWindow : Window
         HistorySizeBox.Value = settings.HistorySize;
         RememberSelectionCheck.IsChecked = settings.RememberLastSelection;
         HideInstructionsCheck.IsChecked = settings.HideCaptureInstructions;
-        SmoothPencilCheck.IsChecked = settings.SmoothPencilStrokes;
+        PencilSmoothingBox.ItemsSource = Enum.GetValues<PencilSmoothing>().Select(mode => mode.ToString()).ToList();
+        PencilSmoothingBox.SelectedIndex = (int)settings.PencilSmoothing;
         VerboseLoggingCheck.IsChecked = settings.VerboseLogging;
         AutomaticUpdatesCheck.IsChecked = settings.AutomaticUpdateChecks;
         BetaUpdatesCheck.IsChecked = settings.BetaUpdates;
@@ -396,7 +397,9 @@ public sealed partial class PreferencesWindow : Window
                 : (int)HistorySizeBox.Value,
             RememberLastSelection = RememberSelectionCheck.IsChecked == true,
             HideCaptureInstructions = HideInstructionsCheck.IsChecked == true,
-            SmoothPencilStrokes = SmoothPencilCheck.IsChecked == true,
+            PencilSmoothing = PencilSmoothingBox.SelectedIndex >= 0
+                ? (PencilSmoothing)PencilSmoothingBox.SelectedIndex
+                : PencilSmoothing.Smooth,
             VerboseLogging = VerboseLoggingCheck.IsChecked == true,
             AutomaticUpdateChecks = AutomaticUpdatesCheck.IsChecked == true,
             BetaUpdates = BetaUpdatesCheck.IsChecked == true,
