@@ -211,7 +211,7 @@ internal sealed partial class ResolutionPresetsView : UserControl
             Height = RowHeight,
             Padding = new Thickness(0),
             HorizontalContentAlignment = HorizontalAlignment.Stretch,
-            Background = new SolidColorBrush(Microsoft.UI.Colors.Transparent),
+            Background = ToolbarPalette.TransparentBrush,
             BorderThickness = new Thickness(0),
             CornerRadius = new CornerRadius(0),
         };

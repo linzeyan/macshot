@@ -8,7 +8,11 @@
         x:Name="ThumbnailRoot"
         Background="#1F1F1F"
         PointerEntered="ThumbnailRoot_PointerEntered"
-        PointerExited="ThumbnailRoot_PointerExited">
+        PointerExited="ThumbnailRoot_PointerExited"
+        PointerPressed="ThumbnailRoot_PointerPressed"
+        PointerMoved="ThumbnailRoot_PointerMoved"
+        PointerReleased="ThumbnailRoot_PointerReleased"
+        PointerCaptureLost="ThumbnailRoot_PointerReleased">
 
         <!-- On the root element rather than on the Window. A WinUI Window is not a
              FrameworkElement and has no Resources of its own — that is WPF, where this

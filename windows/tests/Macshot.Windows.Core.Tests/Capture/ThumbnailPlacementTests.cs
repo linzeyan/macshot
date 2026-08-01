@@ -103,4 +103,37 @@ public sealed class ThumbnailPlacementTests
 
     private static (int X, int Y, int Width, int Height) Place(ThumbnailCorner corner, int stackIndex) =>
         ThumbnailPlacement.For(corner, WorkArea, previewScale: 1, displayScale: 1, stackIndex);
+
+    /// <summary>
+    /// A flick has to go out through the edge the panel is sitting against — flicking a
+    /// bottom-left thumbnail to the right would push it across the desk it came from.
+    /// </summary>
+    [TestMethod]
+    public void AFlickLeavesByTheNearestEdge()
+    {
+        Assert.AreEqual(1, ThumbnailPlacement.DismissDirection(ThumbnailCorner.BottomRight));
+        Assert.AreEqual(1, ThumbnailPlacement.DismissDirection(ThumbnailCorner.TopRight));
+        Assert.AreEqual(-1, ThumbnailPlacement.DismissDirection(ThumbnailCorner.BottomLeft));
+        Assert.AreEqual(-1, ThumbnailPlacement.DismissDirection(ThumbnailCorner.TopLeft));
+    }
+
+    [TestMethod]
+    public void TheThresholdIsASmallFlickAndNeverAWholeDrag()
+    {
+        // macshot's twentieth of the width, held between 8 and 16: 12 on the 240 panel,
+        // and still reachable when the preview size has been turned right down.
+        Assert.AreEqual(12, ThumbnailPlacement.DismissThreshold(240));
+        Assert.AreEqual(8, ThumbnailPlacement.DismissThreshold(60));
+        Assert.AreEqual(16, ThumbnailPlacement.DismissThreshold(2000));
+    }
+
+    [TestMethod]
+    public void ThePanelIsStillVisibleAtTheMomentItCommits()
+    {
+        // The whole point of fading over 1.4 times the threshold rather than over the
+        // threshold itself: there is something left to see being thrown away.
+        Assert.AreEqual(1, ThumbnailPlacement.DismissOpacity(0, 240));
+        Assert.IsTrue(ThumbnailPlacement.DismissOpacity(ThumbnailPlacement.DismissThreshold(240), 240) > 0.6);
+        Assert.AreEqual(0.55, ThumbnailPlacement.DismissOpacity(1000, 240), 0.0001);
+    }
 }

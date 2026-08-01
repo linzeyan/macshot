@@ -34,6 +34,12 @@ public sealed partial class ThumbnailWindow : Window
 
     private readonly CapturedFrame _frame;
     private readonly SettingsStore _settings;
+
+    /// <summary>Where the pointer was when a flick began, or null when none is in flight.</summary>
+    private double? _flickFrom;
+
+    /// <summary>Where the panel was then, so a flick that falls short can put it back.</summary>
+    private int _flickStart;
     private readonly DispatcherTimer _dismissTimer = new();
 
     public ThumbnailWindow(CapturedFrame frame, SettingsStore settings, string? historyPath)
@@ -156,6 +162,74 @@ public sealed partial class ThumbnailWindow : Window
         // something else.
         e.Handled = true;
         action();
+    }
+
+    /// <summary>
+    /// Starts a flick. Only reached when nothing on the panel wanted the press, because
+    /// every button here marks it handled and a handled press does not bubble.
+    /// </summary>
+    private void ThumbnailRoot_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        _flickFrom = e.GetCurrentPoint(null).Position.X;
+        _flickStart = this.GetAppWindow().Position.X;
+        _ = ThumbnailRoot.CapturePointer(e.Pointer);
+    }
+
+    /// <summary>
+    /// Pushes the panel along with the pointer, but only outward.
+    /// </summary>
+    /// <remarks>
+    /// Inward is refused rather than tracked: dragging a thumbnail towards the middle of
+    /// the screen is a drag to move it, which this port does not offer, and letting the
+    /// panel follow the pointer there would promise one.
+    /// </remarks>
+    private void ThumbnailRoot_PointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (_flickFrom is not { } from)
+        {
+            return;
+        }
+
+        var window = this.GetAppWindow();
+        var direction = ThumbnailPlacement.DismissDirection(_settings.Current.ThumbnailCorner);
+        var pushed = Math.Max(0, (e.GetCurrentPoint(null).Position.X - from) * direction);
+
+        // Moved in the window's own pixels rather than the pointer's layout units, which
+        // is what AppWindow.Move is measured in.
+        var scale = MonitorEnumerator.Enumerate().Layout.Primary.Scale;
+        window.Move(new PointInt32(
+            _flickStart + (int)Math.Round(pushed * direction * scale),
+            window.Position.Y));
+
+        ThumbnailRoot.Opacity = ThumbnailPlacement.DismissOpacity(pushed * scale, window.Size.Width);
+    }
+
+    /// <summary>
+    /// Lets go: past the threshold the panel is thrown away, short of it it goes back.
+    /// </summary>
+    private void ThumbnailRoot_PointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (_flickFrom is not { } from)
+        {
+            return;
+        }
+
+        ThumbnailRoot.ReleasePointerCapture(e.Pointer);
+        _flickFrom = null;
+
+        var window = this.GetAppWindow();
+        var direction = ThumbnailPlacement.DismissDirection(_settings.Current.ThumbnailCorner);
+        var scale = MonitorEnumerator.Enumerate().Layout.Primary.Scale;
+        var pushed = Math.Max(0, (e.GetCurrentPoint(null).Position.X - from) * direction) * scale;
+
+        if (pushed >= ThumbnailPlacement.DismissThreshold(window.Size.Width))
+        {
+            Close();
+            return;
+        }
+
+        window.Move(new PointInt32(_flickStart, window.Position.Y));
+        ThumbnailRoot.Opacity = 1;
     }
 
     private void ThumbnailRoot_PointerEntered(object sender, PointerRoutedEventArgs e)

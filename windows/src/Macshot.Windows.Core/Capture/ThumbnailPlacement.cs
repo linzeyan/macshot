@@ -76,4 +76,33 @@ public static class ThumbnailPlacement
 
         return (x, y, width, height);
     }
+
+    /// <summary>
+    /// Which way a flick has to go to throw the panel away: out through the nearest screen
+    /// edge, which is the one it is sitting against. -1 is left, 1 is right.
+    /// </summary>
+    public static int DismissDirection(ThumbnailCorner corner) =>
+        corner is ThumbnailCorner.BottomLeft or ThumbnailCorner.TopLeft ? -1 : 1;
+
+    /// <summary>
+    /// How far the panel has to be pushed before letting go throws it away, in the same
+    /// pixels its frame is in.
+    /// </summary>
+    /// <remarks>
+    /// macshot's <c>dismissCompletionThreshold</c> — a twentieth of the panel's width,
+    /// held between 8 and 16. Small on purpose: this is a flick, not a drag, and a
+    /// threshold anyone has to aim at is one they will miss and then wonder about.
+    /// </remarks>
+    public static double DismissThreshold(double width) => Math.Clamp(width * 0.05, 8, 16);
+
+    /// <summary>
+    /// How far the push is worth in fading, which is 1.4 times what it is worth in
+    /// dismissing — so the panel is not fully faded at the moment it commits, and there is
+    /// still something to see being thrown away.
+    /// </summary>
+    public static double DismissTravel(double width) => DismissThreshold(width) * 1.4;
+
+    /// <summary>How opaque the panel is that far into a flick. macshot fades it to 0.55.</summary>
+    public static double DismissOpacity(double pushed, double width) =>
+        1 - (Math.Clamp(pushed / DismissTravel(width), 0, 1) * 0.45);
 }

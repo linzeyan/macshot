@@ -1669,7 +1669,7 @@ public sealed partial class CaptureOverlayWindow : Window
         _sizeBox.SizeCommitted += (_, request) => ApplyTypedSize(request);
         _sizeBox.PresetPicked += (_, preset) => ApplyPreset(preset);
 
-        _sizeBox.Scale = _monitor.Scale;
+        _sizeBox.PixelsPerPoint = _monitor.Scale;
         _sizeBox.ShowPoints = _settings.Current.ResolutionUnitIsPoints;
         _sizeBox.KeepRatio = _settings.Current.KeepAspectRatio;
 

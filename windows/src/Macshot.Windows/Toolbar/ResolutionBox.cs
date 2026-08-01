@@ -143,7 +143,11 @@ internal sealed partial class ResolutionBox : UserControl
     /// How many device pixels a point is on the display this box is over. Only read when
     /// <see cref="ShowPoints"/> is on.
     /// </summary>
-    public double Scale { get; set; } = 1;
+    /// <remarks>
+    /// Not called Scale: <c>UIElement</c> already has one, and a property that quietly
+    /// hides a base member is a property someone will one day set expecting the other.
+    /// </remarks>
+    public double PixelsPerPoint { get; set; } = 1;
 
     /// <summary>
     /// Raised when the box is done with the keyboard, so the overlay can take it back —
@@ -199,12 +203,12 @@ internal sealed partial class ResolutionBox : UserControl
     /// </remarks>
     private string InTheChosenUnit(double pixels)
     {
-        var shown = ShowPoints && Scale > 0 ? pixels / Scale : pixels;
+        var shown = ShowPoints && PixelsPerPoint > 0 ? pixels / PixelsPerPoint : pixels;
         return Math.Round(shown).ToString("0", System.Globalization.CultureInfo.CurrentCulture);
     }
 
     /// <summary>A number typed into a field, back in the pixels everything else works in.</summary>
-    private double InPixels(double typed) => ShowPoints && Scale > 0 ? typed * Scale : typed;
+    private double InPixels(double typed) => ShowPoints && PixelsPerPoint > 0 ? typed * PixelsPerPoint : typed;
 
     private static TextBox Field()
     {
