@@ -91,13 +91,45 @@ public sealed class CaptureSettingsTests
     [TestMethod]
     public void AnnotationStyle_RoundTripsThroughTheSettings()
     {
-        var style = new AnnotationStyle(new AnnotationColor(255, 0, 0, 128), 7, LineStyle.Dotted);
+        var style = new AnnotationStyle(new AnnotationColor(255, 0, 0, 128), 7, LineStyle.Dotted)
+        {
+            NumberFormat = NumberFormat.AlphaLower,
+            MeasureInPoints = true,
+            LoupeMagnification = 4.5,
+        };
 
         var restored = CaptureSettings.Default.WithAnnotationStyle(style).Normalized().ToAnnotationStyle();
 
         Assert.AreEqual(style.Color, restored.Color);
         Assert.AreEqual(style.StrokeWidth, restored.StrokeWidth);
         Assert.AreEqual(style.LineStyle, restored.LineStyle);
+
+        // The tool settings the options row remembers between captures. Left off
+        // WithAnnotationStyle they would appear to work for one capture and reset on the
+        // next, which reads as the row forgetting at random.
+        Assert.AreEqual(style.NumberFormat, restored.NumberFormat);
+        Assert.AreEqual(style.MeasureInPoints, restored.MeasureInPoints);
+        Assert.AreEqual(style.LoupeMagnification, restored.LoupeMagnification);
+    }
+
+    /// <summary>
+    /// The settings file is hand-editable and can be stale after an upgrade. A loupe left
+    /// at no magnification would be a circle drawn on the capture for no reason, and a
+    /// sequence starting at zero would put an empty badge on it.
+    /// </summary>
+    [TestMethod]
+    public void Normalized_RepairsTheOptionsRowsOwnSettings()
+    {
+        var settings = (CaptureSettings.Default with
+        {
+            LoupeMagnification = 0,
+            NumberStartAt = 0,
+            NumberFormat = (NumberFormat)42,
+        }).Normalized();
+
+        Assert.AreEqual(AnnotationStyle.DefaultLoupeMagnification, settings.LoupeMagnification);
+        Assert.AreEqual(1, settings.NumberStartAt);
+        Assert.AreEqual(NumberFormat.Decimal, settings.NumberFormat);
     }
 
     [TestMethod]

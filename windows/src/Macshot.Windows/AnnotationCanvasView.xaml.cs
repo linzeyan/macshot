@@ -86,6 +86,18 @@ public sealed partial class AnnotationCanvasView : UserControl
     /// <summary>The stamp tool's emoji, read from the toolbar when one is placed.</summary>
     public Func<string> StampEmoji { get; set; } = () => StampGlyph.Default;
 
+    /// <summary>
+    /// What the first badge of this capture counts from. Asked for rather than held,
+    /// because the toolbar owns the control and the answer can change between two clicks.
+    /// </summary>
+    public Func<int> NumberStartAt { get; set; } = () => 1;
+
+    /// <summary>Whether a highlighter stroke should land on the text it was drawn across.</summary>
+    public Func<bool> SmartMarker { get; set; } = () => false;
+
+    /// <summary>Whether a censor drag should cover only the text found inside its region.</summary>
+    public Func<bool> CensorTextOnly { get; set; } = () => false;
+
     /// <summary>True while the text tool's entry box is open and owns the keyboard.</summary>
     public bool IsTyping => _textEntry is not null;
 
@@ -160,20 +172,102 @@ public sealed partial class AnnotationCanvasView : UserControl
         // harder to read than one that sits still.
         if (_editor?.Draft is { Tool: AnnotationTool.Measure } ruler)
         {
-            _reportHint(MeasureReading.Format(ruler.Span));
+            _reportHint(MeasureReading.Format(ruler.Span, ruler.Style.MeasureInPoints, SpriteScale));
         }
+    }
+
+    /// <summary>
+    /// Finishes whatever the gesture that just ended could not finish itself.
+    /// </summary>
+    /// <param name="committed">
+    /// The mark the editor committed, or null when the gesture drew nothing new.
+    /// </param>
+    /// <remarks>
+    /// Called by the host once a gesture ends, because none of this can be done during
+    /// one: a reading is not known until the drag stops, and the two options that read the
+    /// pixels are asynchronous. Each amends the mark the drag produced rather than adding
+    /// beside it, so the whole gesture stays one undo step.
+    /// </remarks>
+    public void FinishedGesture(Annotation? committed)
+    {
+        LabelRulers();
+
+        if (committed is null)
+        {
+            return;
+        }
+
+        // Both of these read the screen, which is why they are here rather than in the
+        // editor: Core has no OCR engine and no business acquiring one.
+        if (committed.Tool == AnnotationTool.Marker && SmartMarker())
+        {
+            QueueSprite(() => SnapMarkerAsync(committed));
+        }
+        else if (committed.Tool == AnnotationTool.Censor && CensorTextOnly())
+        {
+            QueueSprite(() => CensorTextAsync(committed));
+        }
+    }
+
+    /// <summary>
+    /// Lays a highlighter stroke over the line of text it was drawn across.
+    /// </summary>
+    /// <remarks>
+    /// The stroke is already on the canvas by the time this runs, and is amended in place
+    /// once the text is known. Waiting for the OCR pass before showing anything would make
+    /// the highlighter feel as slow as the engine is; showing the hand-drawn stroke and
+    /// then straightening it is what macshot does, and it reads as the tool tidying up.
+    /// </remarks>
+    private async Task SnapMarkerAsync(Annotation stroke)
+    {
+        var snapped = TextSnapping.SnapToText(stroke, await RecognizeAsync());
+        if (!ReferenceEquals(snapped, stroke))
+        {
+            _editor?.Document.Amend(snapped);
+            Render();
+        }
+    }
+
+    /// <summary>
+    /// Replaces a censor region with one box per line of text inside it.
+    /// </summary>
+    /// <remarks>
+    /// The region is taken back off, so what is left is only the boxes. Kept as well, it
+    /// would cover the whole area anyway and the option would appear to do nothing —
+    /// and the two removals are one undo step because the whole thing was one drag.
+    /// </remarks>
+    private async Task CensorTextAsync(Annotation region)
+    {
+        if (_editor is not { } editor)
+        {
+            return;
+        }
+
+        var lines = await RecognizeAsync();
+        var boxes = AutoRedactor.RedactAllText(lines, region.BoundingRect, region.Style);
+
+        // Nothing found means nothing to cover, and the region the user dragged is left
+        // exactly as it was: covering nothing at all would lose a redaction they made.
+        if (boxes.Count == 0)
+        {
+            // macshot's own wording for the same answer, so it is already translated
+            // everywhere rather than being one more English string in this port's file.
+            _reportHint(Localization.L("(No text detected in the selected area)"));
+            return;
+        }
+
+        editor.Document.Amend(region.Id, boxes);
+        Render();
     }
 
     /// <summary>
     /// Gives every ruler that has been drawn but not yet labelled its reading.
     /// </summary>
     /// <remarks>
-    /// Called by the host once a gesture ends, because the reading cannot be produced
-    /// during one: rasterizing digits is asynchronous, and the number is not known until
-    /// the drag stops. The label is amended onto the annotation rather than replacing it,
-    /// so the ruler and its reading are one undo step — the drag the user made.
+    /// The label is amended onto the annotation rather than replacing it, so the ruler and
+    /// its reading are one undo step — the drag the user made.
     /// </remarks>
-    public void LabelRulers()
+    private void LabelRulers()
     {
         if (_editor is not { } editor)
         {
@@ -524,7 +618,10 @@ public sealed partial class AnnotationCanvasView : UserControl
 
         // The next number is read off the document rather than kept in a counter, so
         // undoing a badge frees its number instead of leaving a hole in the sequence.
-        var value = editor.Document.Annotations.Count(existing => existing.Tool == AnnotationTool.Number) + 1;
+        // Offset by where the user asked the sequence to start, which is how a screenshot
+        // carries on the numbering of the figure before it.
+        var value = NumberStartAt()
+            + editor.Document.Annotations.Count(existing => existing.Tool == AnnotationTool.Number);
 
         var badge = NumberBadge.Build(value, style, SpriteScale);
         var sprite = await GlyphSpriteFactory.RenderAsync(SpriteHost, badge);

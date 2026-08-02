@@ -108,7 +108,87 @@ public sealed partial class AnnotationToolbarView : UserControl
         VerticalAlignment = VerticalAlignment.Center,
     };
     private readonly StyleSegments _smoothing = new();
+
+    /// <summary>
+    /// macshot's Pressure. Not folded into the smoothing row beside it: smoothing decides
+    /// what the stroke's path is and this decides how wide it is along that path, and a
+    /// four-choice row mixing the two would be answering two questions at once.
+    /// </summary>
+    private readonly CheckBox _pencilPressure = new()
+    {
+        Content = L("Pressure"),
+        FontSize = OptionValueSize,
+        MinWidth = 0,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
+    /// <summary>
+    /// macshot's Smart marker: the stroke lands on the line of text it was drawn across
+    /// rather than where the hand actually went. Highlighting a line of text by hand means
+    /// holding a straight line at a constant height, which is the one thing a mouse is
+    /// worst at.
+    /// </summary>
+    private readonly CheckBox _smartMarker = new()
+    {
+        Content = L("Smart"),
+        FontSize = OptionValueSize,
+        MinWidth = 0,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
     private readonly StyleSegments _censorMode = new();
+    private readonly TextBlock _drawLabel = OptionLabel(L("Draw:"));
+
+    /// <summary>
+    /// Whether a censor drag covers the whole region or only the text found inside it.
+    /// macshot's <c>censorTextOnly</c> — the difference between blacking out a panel and
+    /// blacking out the words on it, which is what most redactions actually want.
+    /// </summary>
+    private readonly StyleSegments _censorScope = new();
+
+    private readonly StyleSegments _numberFormat = new();
+    private readonly TextBlock _startLabel = OptionLabel(L("Start:"));
+
+    /// <summary>
+    /// What the first badge of the capture counts from. A <see cref="NumberBox"/> rather
+    /// than macshot's bare stepper, because Windows' stepper is one: typing 17 beats
+    /// clicking an arrow sixteen times, and a screenshot that carries on from figure 16 is
+    /// the case this exists for.
+    /// </summary>
+    private readonly NumberBox _numberStart = new()
+    {
+        Minimum = 1,
+        Maximum = CaptureSettings.MaxNumberStartAt,
+        SmallChange = 1,
+        LargeChange = 10,
+        Width = 84,
+        FontSize = OptionValueSize,
+        SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
+    /// <summary>
+    /// The first badge as it will actually read. The box above says 4; this says IV, which
+    /// is the only way to tell what a lettered or numbered sequence will look like without
+    /// placing one to find out.
+    /// </summary>
+    private readonly TextBlock _startPreview = OptionValue(34, string.Empty);
+
+    private readonly StyleSegments _measureUnit = new();
+
+    private readonly TextBlock _zoomLabel = OptionLabel(L("Zoom"));
+
+    private readonly Slider _loupeZoom = OptionSlider(
+        84,
+        AnnotationStyle.MinLoupeMagnification,
+        AnnotationStyle.MaxLoupeMagnification);
+
+    /// <summary>
+    /// The magnification, written by <see cref="ShowZoomValue"/> rather than by the shared
+    /// slider readout — hence no unit on the box, which is where that readout takes one
+    /// from.
+    /// </summary>
+    private readonly TextBlock _zoomValue = OptionValue(38, string.Empty);
     private readonly Button _font = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 10, Padding = new Thickness(8, 2, 8, 2) };
     private readonly FontPickerView _fontChoices = new();
     private readonly StyleSegments _weight = new();
@@ -301,6 +381,19 @@ public sealed partial class AnnotationToolbarView : UserControl
     public string StampEmoji { get; private set; } = StampGlyph.Default;
 
     /// <summary>
+    /// What the first badge of this capture counts from. Read by the canvas when it places
+    /// one; the toolbar owns it because it is the row's control, and the canvas has no
+    /// settings file of its own.
+    /// </summary>
+    public int NumberStartAt => double.IsNaN(_numberStart.Value) ? 1 : (int)_numberStart.Value;
+
+    /// <summary>Whether a highlighter stroke should land on the text it was drawn across.</summary>
+    public bool SmartMarker => _smartMarker.IsChecked == true;
+
+    /// <summary>Whether a censor drag should cover only the text found inside the region.</summary>
+    public bool CensorTextOnly => _censorScope.SelectedIndex == 1;
+
+    /// <summary>
     /// Whether the sampler is armed, which makes the next click on the host a pick
     /// rather than a mark.
     /// </summary>
@@ -362,7 +455,47 @@ public sealed partial class AnnotationToolbarView : UserControl
             ApplyStyle();
         };
 
+        _loupeZoom.ValueChanged += (_, _) =>
+        {
+            ShowZoomValue();
+            ApplyStyle();
+        };
+
+        _numberFormat.SelectionChanged += (_, _) =>
+        {
+            // The preview reads the format straight off the row, so it is right whether
+            // or not the style write below is suppressed by a load in progress.
+            ShowStartPreview();
+            ApplyStyle();
+        };
+
+        _numberStart.ValueChanged += (_, _) =>
+        {
+            // Cleared or half-typed, the box reports NaN. Left alone rather than snapped
+            // back to 1, which would fight a user in the middle of typing "12".
+            if (double.IsNaN(_numberStart.Value))
+            {
+                return;
+            }
+
+            ShowStartPreview();
+            Remember(current => current with { NumberStartAt = (int)_numberStart.Value });
+        };
+
+        _measureUnit.SelectionChanged += (_, _) => ApplyStyle();
         _censorMode.SelectionChanged += (_, _) => ApplyStyle();
+        _censorScope.SelectionChanged += (_, index) => Remember(
+            current => current with { CensorTextOnly = index == 1 });
+
+        _smartMarker.Checked += (_, _) => Remember(current => current with { SmartMarker = true });
+        _smartMarker.Unchecked += (_, _) => Remember(current => current with { SmartMarker = false });
+
+        // Straight onto the editor, the way Smoothing is: it changes how the next gesture
+        // is recorded rather than how any mark is styled, so it does not belong in the
+        // style write ApplyStyle performs.
+        _pencilPressure.Checked += (_, _) => ShowPressure(true);
+        _pencilPressure.Unchecked += (_, _) => ShowPressure(false);
+
         _lineStyle.SelectionChanged += (_, _) => ApplyStyle();
         _arrowStyle.SelectionChanged += (_, _) => ApplyStyle();
         _shapeFill.SelectionChanged += (_, _) => ApplyStyle();
@@ -1075,7 +1208,26 @@ public sealed partial class AnnotationToolbarView : UserControl
         _cornerValue.Visibility = rounds;
         _stamp.Visibility = Show(AnnotationToolOptions.UsesStamp(tool));
         _smoothing.Visibility = Show(AnnotationEditor.IsFreeform(tool));
+        _pencilPressure.Visibility = Show(AnnotationToolOptions.UsesPressure(tool));
+        _smartMarker.Visibility = Show(AnnotationToolOptions.UsesSmartSnap(tool));
         _censorMode.Visibility = Show(AnnotationToolOptions.UsesCensorMode(tool));
+
+        var scoped = Show(AnnotationToolOptions.UsesCensorScope(tool));
+        _drawLabel.Visibility = scoped;
+        _censorScope.Visibility = scoped;
+
+        var counted = Show(AnnotationToolOptions.UsesNumberFormat(tool));
+        _numberFormat.Visibility = counted;
+        _startLabel.Visibility = counted;
+        _numberStart.Visibility = counted;
+        _startPreview.Visibility = counted;
+
+        _measureUnit.Visibility = Show(AnnotationToolOptions.UsesMeasureUnit(tool));
+
+        var magnified = Show(AnnotationToolOptions.UsesLoupeMagnification(tool));
+        _zoomLabel.Visibility = magnified;
+        _loupeZoom.Visibility = magnified;
+        _zoomValue.Visibility = magnified;
 
         var typesetting = Show(tool == AnnotationTool.Text);
         _font.Visibility = typesetting;
@@ -1108,6 +1260,40 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// </remarks>
     private static void ShowSliderValue(Slider slider, TextBlock readout) =>
         readout.Text = $"{(int)Math.Round(slider.Value)}{readout.Tag as string}";
+
+    /// <summary>
+    /// Writes the magnification into the box after its slider, to one decimal.
+    /// </summary>
+    /// <remarks>
+    /// Its own formatter rather than <see cref="ShowSliderValue"/>, because this is the
+    /// one slider on the row whose useful range is smaller than the gap between two whole
+    /// numbers: rounded to an integer, half its positions would read the same.
+    /// </remarks>
+    private void ShowZoomValue() => _zoomValue.Text = string.Create(
+        System.Globalization.CultureInfo.CurrentCulture,
+        $"{_loupeZoom.Value:0.0}x");
+
+    /// <summary>Shows the first badge as it will read, in the format the row is set to.</summary>
+    private void ShowStartPreview()
+    {
+        var format = _numberFormat.SelectedIndex >= 0
+            ? (NumberFormat)_numberFormat.SelectedIndex
+            : NumberFormat.Decimal;
+
+        _startPreview.Text = format.Format(
+            double.IsNaN(_numberStart.Value) ? 1 : (int)_numberStart.Value);
+    }
+
+    /// <summary>Turns pen pressure on or off for the next stroke, and remembers it.</summary>
+    private void ShowPressure(bool wanted)
+    {
+        if (_editor is { } editor)
+        {
+            editor.PenPressure = wanted;
+        }
+
+        Remember(current => current with { PencilPressure = wanted });
+    }
 
     /// <summary>
     /// Points the one size slider at whichever number the tool in hand is sized by.
@@ -1162,8 +1348,16 @@ public sealed partial class AnnotationToolbarView : UserControl
     {
         _sizeLabel.Foreground = ToolbarPalette.IconBrush(0.4);
         _cornerLabel.Foreground = ToolbarPalette.IconBrush(0.4);
+        _zoomLabel.Foreground = ToolbarPalette.IconBrush(0.4);
+        _startLabel.Foreground = ToolbarPalette.IconBrush(0.4);
+        _drawLabel.Foreground = ToolbarPalette.IconBrush(0.4);
         _sizeValue.Foreground = ToolbarPalette.IconBrush(0.6);
         _cornerValue.Foreground = ToolbarPalette.IconBrush(0.6);
+        _zoomValue.Foreground = ToolbarPalette.IconBrush(0.6);
+
+        // Brighter than the labels beside it: it is the answer the row exists to give,
+        // not the name of a control.
+        _startPreview.Foreground = ToolbarPalette.IconBrush(0.85);
     }
 
     /// <summary>The name in front of a slider, at macshot's size, weight and opacity.</summary>
@@ -1239,11 +1433,45 @@ public sealed partial class AnnotationToolbarView : UserControl
         _smoothing.SetSegments([.. Enum.GetValues<PencilSmoothing>().Select(mode =>
             new StyleSegment(null, L(mode.ToString()), 0))]);
 
-        // The censor tool's only option. There is deliberately no strength beside it:
+        // The censor tool's two options. There is deliberately no strength beside them:
         // how much of a redaction survives is not a thing to leave to a slider.
         ToolTipService.SetToolTip(_censorMode, "How the region is covered");
         _censorMode.SetSegments([.. Enum.GetValues<CensorMode>().Select(mode =>
             new StyleSegment(null, L(mode.ToString()), 0))]);
+
+        ToolTipService.SetToolTip(_censorScope, "What inside the region is covered");
+        _censorScope.SetSegments(
+        [
+            new StyleSegment(null, L("All"), 0),
+            new StyleSegment(null, L("Text Only"), 0),
+        ]);
+
+        // The glyphs themselves rather than the names of the formats: "1 I A a" is read
+        // at a glance and needs no translating, where "Roman" and "Lowercase letters"
+        // would need both a wider row and a round trip through the strings file.
+        ToolTipService.SetToolTip(_numberFormat, "What the badges count in");
+        _numberFormat.SetSegments(
+        [
+            new StyleSegment(null, "1", 0),
+            new StyleSegment(null, "I", 0),
+            new StyleSegment(null, "A", 0),
+            new StyleSegment(null, "a", 0),
+        ]);
+
+        // Both readings of the same span. Which one a number means has to be said, so the
+        // ruler says it — and the choice is here rather than in the settings window
+        // because it is made while looking at what is being measured.
+        ToolTipService.SetToolTip(_measureUnit, "What the ruler reports");
+        _measureUnit.SetSegments(
+        [
+            new StyleSegment(null, "px", 0),
+            new StyleSegment(null, "pt", 0),
+        ]);
+
+        // Tenths, where every other slider on this row steps in whole units: the useful
+        // range is 1.1 to 6, and whole steps would offer five of them.
+        _loupeZoom.StepFrequency = 0.1;
+        ToolTipService.SetToolTip(_loupeZoom, "How much the loupe enlarges");
 
         // Populated from StampGlyph.Choices so the picker and the renderer cannot offer
         // different sets.
@@ -1276,6 +1504,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         // outline: the two rows read as different toolbars at a glance, which is the one
         // thing the order is for.
         AddGroup(_sizeLabel, _size, _sizeValue);
+        AddGroup(_zoomLabel, _loupeZoom, _zoomValue);
         AddGroup(_lineStyle);
         AddGroup(_arrowStyle);
         AddGroup(_shapeFill);
@@ -1283,7 +1512,13 @@ public sealed partial class AnnotationToolbarView : UserControl
         AddGroup(_outline);
         AddGroup(_flipArrow);
         AddGroup(_smoothing);
+        AddGroup(_pencilPressure);
+        AddGroup(_smartMarker);
         AddGroup(_censorMode);
+        AddGroup(_drawLabel, _censorScope);
+        AddGroup(_numberFormat);
+        AddGroup(_startLabel, _numberStart, _startPreview);
+        AddGroup(_measureUnit);
         AddGroup(_font, _weight);
         AddGroup(_textFill, _textOutline);
         AddGroup(_stamp);
@@ -1413,7 +1648,19 @@ public sealed partial class AnnotationToolbarView : UserControl
             editor.Smoothing = settings.Current.PencilSmoothing;
             _smoothing.SelectedIndex = (int)editor.Smoothing;
             editor.SnapGuides = settings.Current.SnapGuides;
+            editor.PenPressure = settings.Current.PencilPressure;
+            _pencilPressure.IsChecked = editor.PenPressure;
+            _smartMarker.IsChecked = settings.Current.SmartMarker;
             _censorMode.SelectedIndex = (int)_loadedStyle.CensorMode;
+            _censorScope.SelectedIndex = settings.Current.CensorTextOnly ? 1 : 0;
+
+            _numberFormat.SelectedIndex = (int)_loadedStyle.NumberFormat;
+            _numberStart.Value = settings.Current.NumberStartAt;
+            ShowStartPreview();
+
+            _measureUnit.SelectedIndex = _loadedStyle.MeasureInPoints ? 1 : 0;
+            _loupeZoom.Value = _loadedStyle.LoupeMagnification;
+            ShowZoomValue();
 
             _fontChoices.Show(_loadedStyle.FontFamily);
             _font.Content = string.IsNullOrWhiteSpace(_loadedStyle.FontFamily)
@@ -1495,6 +1742,14 @@ public sealed partial class AnnotationToolbarView : UserControl
                 : FontPickerView.FamilyOf(_fontChoices.SelectedItem),
             Bold = _weight.SelectedIndex == 1,
             ArrowReversed = _flipArrow.IsChecked == true,
+            NumberFormat = _numberFormat.SelectedIndex >= 0
+                ? (NumberFormat)_numberFormat.SelectedIndex
+                : NumberFormat.Decimal,
+            MeasureInPoints = _measureUnit.SelectedIndex == 1,
+            LoupeMagnification = Math.Clamp(
+                _loupeZoom.Value,
+                AnnotationStyle.MinLoupeMagnification,
+                AnnotationStyle.MaxLoupeMagnification),
             Outline = _outline.IsOn ? ToAnnotationColor(_outline.Color) : null,
             TextBackground = _textFill.IsOn ? ToAnnotationColor(_textFill.Color) : null,
             TextOutline = _textOutline.IsOn ? ToAnnotationColor(_textOutline.Color) : null,

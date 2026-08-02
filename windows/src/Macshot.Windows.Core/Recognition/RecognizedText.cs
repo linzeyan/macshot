@@ -53,6 +53,18 @@ public sealed class RecognizedLine
     public string Text { get; }
 
     /// <summary>
+    /// The box the whole line occupies, in frame space.
+    /// </summary>
+    /// <remarks>
+    /// Built from the words rather than reported by the engine, so it is the box the
+    /// glyphs actually sit in. It is what anything working with a line as a thing on the
+    /// screen needs — a highlighter snapping to it, a redaction covering it — where the
+    /// per-word boxes answer the different question of which words a match covered.
+    /// </remarks>
+    public CaptureRegion Bounds =>
+        Words.Aggregate(default(CaptureRegion), (box, word) => box.Union(word.Bounds));
+
+    /// <summary>
     /// The words touched by a character range. A partial overlap counts: half an
     /// email address left visible is not a redaction.
     /// </summary>

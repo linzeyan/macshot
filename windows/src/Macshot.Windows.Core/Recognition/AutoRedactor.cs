@@ -76,6 +76,81 @@ public static class AutoRedactor
         return annotations;
     }
 
+    /// <summary>
+    /// Covers every line of text inside <paramref name="within"/>, rather than only the
+    /// lines that look like secrets. macshot's "Text Only" censor scope.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Whole lines rather than the whole region, because that is the difference the option
+    /// exists for: blacking out a panel loses the layout that says what was there, and
+    /// blacking out the words on it keeps the shape of the thing while making it
+    /// unreadable. The gaps between lines are also what makes a redaction obviously a
+    /// redaction rather than a crop.
+    /// </para>
+    /// <para>
+    /// A line only partly inside the region is left alone. A box that covered half a
+    /// sentence would be a redaction with the rest of the sentence beside it, which is not
+    /// a redaction — and the region the user dragged is their statement about how far they
+    /// meant to go.
+    /// </para>
+    /// </remarks>
+    public static IReadOnlyList<Annotation> RedactAllText(
+        IEnumerable<RecognizedLine> lines,
+        CaptureRegion within,
+        AnnotationStyle? style = null,
+        Guid? groupId = null)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+
+        var appliedStyle = style ?? DefaultStyle;
+        var group = groupId ?? Guid.NewGuid();
+
+        return
+        [
+            .. lines
+                .Select(line => Padded(line.Bounds))
+                .Where(bounds => !bounds.IsEmpty && Encloses(within, bounds))
+                .Select(bounds => Annotation.Create(
+                    AnnotationTool.Censor,
+                    new CapturePoint(bounds.X, bounds.Y),
+                    new CapturePoint(bounds.Right, bounds.Bottom),
+                    appliedStyle) with
+                {
+                    GroupId = group,
+                }),
+        ];
+    }
+
+    /// <summary>
+    /// Whether <paramref name="inner"/> sits inside <paramref name="outer"/>, allowing the
+    /// padding a box was just grown by — otherwise a line the user dragged exactly around
+    /// would be rejected by the margin added to cover its own ascenders.
+    /// </summary>
+    private static bool Encloses(CaptureRegion outer, CaptureRegion inner)
+    {
+        var slack = Math.Max(MinimumPadding, inner.Height * PaddingRatio);
+        return inner.X >= outer.X - slack
+            && inner.Right <= outer.Right + slack
+            && inner.Y >= outer.Y - slack
+            && inner.Bottom <= outer.Bottom + slack;
+    }
+
+    private static CaptureRegion Padded(CaptureRegion bounds)
+    {
+        if (bounds.IsEmpty)
+        {
+            return bounds;
+        }
+
+        var padding = Math.Max(MinimumPadding, bounds.Height * PaddingRatio);
+        return new CaptureRegion(
+            bounds.X - padding,
+            bounds.Y - padding,
+            bounds.Width + (padding * 2),
+            bounds.Height + (padding * 2));
+    }
+
     private static bool TryCover(RecognizedLine line, PiiMatch match, out CaptureRegion bounds)
     {
         bounds = default;
@@ -89,12 +164,7 @@ public static class AutoRedactor
             return false;
         }
 
-        var padding = Math.Max(MinimumPadding, bounds.Height * PaddingRatio);
-        bounds = new CaptureRegion(
-            bounds.X - padding,
-            bounds.Y - padding,
-            bounds.Width + (padding * 2),
-            bounds.Height + (padding * 2));
+        bounds = Padded(bounds);
         return true;
     }
 }

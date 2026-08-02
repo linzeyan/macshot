@@ -78,6 +78,38 @@ public static class AnnotationToolOptions
     public static bool UsesCensorMode(AnnotationTool tool) => IsRegionEffect(tool);
 
     /// <summary>
+    /// Whether the censor tool's scope — the whole region, or only the text found inside
+    /// it — applies. The same tools as the mode, because it is the second half of the same
+    /// question: what is covered, and how.
+    /// </summary>
+    public static bool UsesCensorScope(AnnotationTool tool) => IsRegionEffect(tool);
+
+    /// <summary>Whether the badge's numbering — its format and where it starts — applies.</summary>
+    public static bool UsesNumberFormat(AnnotationTool tool) => tool == AnnotationTool.Number;
+
+    /// <summary>Whether the ruler's unit applies.</summary>
+    public static bool UsesMeasureUnit(AnnotationTool tool) => tool == AnnotationTool.Measure;
+
+    /// <summary>Whether the loupe's magnification applies.</summary>
+    public static bool UsesLoupeMagnification(AnnotationTool tool) => tool == AnnotationTool.Loupe;
+
+    /// <summary>
+    /// Whether the highlighter's snap-to-text option applies.
+    /// </summary>
+    /// <remarks>
+    /// The marker only. The pencil could be snapped to a line of text as easily, but a
+    /// pencil is the tool you reach for when the thing you want to mark is not a line of
+    /// text — snapping it would be undoing the choice the user made by picking it.
+    /// </remarks>
+    public static bool UsesSmartSnap(AnnotationTool tool) => tool == AnnotationTool.Marker;
+
+    /// <summary>
+    /// Whether the pen-pressure option applies. Freeform tools only: a shape dragged out
+    /// by two corners has no along-the-stroke for a pressure to vary over.
+    /// </summary>
+    public static bool UsesPressure(AnnotationTool tool) => tool == AnnotationTool.Pencil;
+
+    /// <summary>
     /// What the size control changes for this tool, so the label can say it: the same
     /// slider means a stroke width or the size of a glyph.
     /// </summary>
