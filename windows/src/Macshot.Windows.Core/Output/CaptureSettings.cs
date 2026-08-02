@@ -455,6 +455,19 @@ public sealed record CaptureSettings
     public AnnotationTool LastTool { get; init; } = AnnotationTool.Arrow;
 
     /// <summary>
+    /// Whether marks line up with the marks already made, and with the region's own edges
+    /// and centre.
+    /// </summary>
+    /// <remarks>
+    /// On by default, as macshot's <c>snapGuidesEnabled</c> is. Three arrows meant to
+    /// start level read as crooked when one is two pixels out, and nothing about dragging
+    /// with a mouse makes two pixels reliable. Off is for the person placing marks a hair
+    /// apart on purpose, who is otherwise fighting it; Shift is the way out for one
+    /// gesture.
+    /// </remarks>
+    public bool SnapGuides { get; init; } = true;
+
+    /// <summary>
     /// Whether two quick clicks inside the region finish the capture.
     /// </summary>
     /// <remarks>

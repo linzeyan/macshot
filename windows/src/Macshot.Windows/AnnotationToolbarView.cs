@@ -1334,6 +1334,7 @@ public sealed partial class AnnotationToolbarView : UserControl
             // settings file and this stays the one place the toolbar's state comes from.
             editor.Smoothing = settings.Current.PencilSmoothing;
             _smoothing.SelectedIndex = (int)editor.Smoothing;
+            editor.SnapGuides = settings.Current.SnapGuides;
             _censorMode.SelectedIndex = (int)_loadedStyle.CensorMode;
 
             _fontChoices.Show(_loadedStyle.FontFamily);

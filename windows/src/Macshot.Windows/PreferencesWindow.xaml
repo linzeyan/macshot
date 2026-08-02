@@ -331,6 +331,12 @@
                             <TextBlock x:Name="ThumbnailScaleReading" Style="{StaticResource RowText}" />
                         </StackPanel>
                         <CheckBox
+                            x:Name="SnapGuidesCheck"
+                            Content="Show snap alignment guides"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <CheckBox
                             x:Name="CaptureCursorCheck"
                             Content="Capture mouse cursor in screenshot"
                             Style="{StaticResource Unlabelled}"

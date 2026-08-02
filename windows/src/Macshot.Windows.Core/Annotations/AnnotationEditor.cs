@@ -93,6 +93,26 @@ public sealed class AnnotationEditor
     /// </summary>
     public PencilSmoothing Smoothing { get; set; } = PencilSmoothing.Smooth;
 
+    /// <summary>
+    /// Whether marks line up with the marks already there — macshot's
+    /// <c>snapGuidesEnabled</c>, on by default. Set by the host from the settings.
+    /// </summary>
+    public bool SnapGuides { get; set; } = true;
+
+    /// <summary>
+    /// What marks line up against besides each other: the capture's own edges and centre.
+    /// Empty until the host says what the capture is, and then nothing lines up with the
+    /// picture — only with other marks.
+    /// </summary>
+    public CaptureRegion SnapRegion { get; set; }
+
+    /// <summary>
+    /// Where the mark in flight lined up, for the host to draw. Cleared the moment the
+    /// gesture ends: a guide left on screen is a line the user has to work out the
+    /// meaning of.
+    /// </summary>
+    public SnapResult Snap { get; private set; }
+
     /// <summary>The annotation currently being drawn or dragged, for live preview.</summary>
     public Annotation? Draft { get; private set; }
 
@@ -196,9 +216,16 @@ public sealed class AnnotationEditor
 
         if (_dragTarget is not null)
         {
-            Draft = _handle is { } handle
-                ? AnnotationHandles.Drag(_dragTarget, handle, point, modifiers)
-                : _dragTarget.Translate(point.X - _origin.X, point.Y - _origin.Y);
+            if (_handle is { } handle)
+            {
+                Draft = AnnotationHandles.Drag(_dragTarget, handle, point, modifiers);
+                Snap = SnapResult.None;
+                return;
+            }
+
+            var moved = _dragTarget.Translate(point.X - _origin.X, point.Y - _origin.Y);
+            Snap = SnapFor(moved.BoundingRect, modifiers, _dragTarget.Id);
+            Draft = Snap == SnapResult.None ? moved : moved.Translate(Snap.Dx, Snap.Dy);
             return;
         }
 
@@ -209,7 +236,38 @@ public sealed class AnnotationEditor
             return;
         }
 
-        Draft = Draft with { End = Constrain(_tool, _origin, point, modifiers) };
+        // Only the corner under the pointer, because the other one is where the press
+        // landed and pulling that about would move ink the user already placed.
+        var end = Constrain(_tool, _origin, point, modifiers);
+        Snap = SnapFor(new CaptureRegion(end.X, end.Y, 0, 0), modifiers, null);
+        Draft = Draft with { End = new CapturePoint(end.X + Snap.Dx, end.Y + Snap.Dy) };
+    }
+
+    /// <summary>
+    /// Where <paramref name="moved"/> lines up, or nothing at all when the user has said
+    /// they do not want it.
+    /// </summary>
+    /// <param name="exclude">
+    /// The mark being dragged, which must not line up against its own old position — it
+    /// would be within nothing of it and never leave.
+    /// </param>
+    /// <remarks>
+    /// Shift turns snapping off for the gesture, because Shift already means "the exact
+    /// angle I asked for" and a nudge afterwards would take it away again. It is also the
+    /// way out when a mark genuinely belongs three pixels from another one.
+    /// </remarks>
+    private SnapResult SnapFor(CaptureRegion moved, EditorModifiers modifiers, Guid? exclude)
+    {
+        if (!SnapGuides || modifiers.HasFlag(EditorModifiers.Constrain))
+        {
+            return SnapResult.None;
+        }
+
+        var others = exclude is { } id
+            ? _document.Annotations.Where(a => a.Id != id)
+            : _document.Annotations;
+
+        return AnnotationSnapping.ForMove(moved, SnapRegion, others);
     }
 
     /// <summary>Ends the gesture, committing it to the document when it produced something.</summary>
@@ -225,6 +283,7 @@ public sealed class AnnotationEditor
 
         var draft = Draft;
         var dragTarget = _dragTarget;
+        Snap = SnapResult.None;
         Draft = null;
         _dragTarget = null;
         _handle = null;
@@ -290,6 +349,7 @@ public sealed class AnnotationEditor
         }
 
         Draft = null;
+        Snap = SnapResult.None;
         _dragTarget = null;
         _handle = null;
         _freeformSamples = null;

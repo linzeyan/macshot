@@ -52,6 +52,10 @@ public sealed partial class AnnotationCanvasView : UserControl
     private readonly Brush _chromeStroke = new SolidColorBrush(Color.FromArgb(255, 76, 194, 255));
     private readonly Brush _handleFill = new SolidColorBrush(Color.FromArgb(255, 255, 255, 255));
 
+    // The chrome colour at macshot's 0.6, so an alignment guide reads as the editor
+    // talking rather than as something drawn on the screenshot.
+    private readonly Brush _guideStroke = new SolidColorBrush(Color.FromArgb(153, 76, 194, 255));
+
     private AnnotationEditor? _editor;
     private IFramePlacement _placement = new ImageFramePlacement();
     private Action<string> _reportHint = _ => { };
@@ -117,6 +121,11 @@ public sealed partial class AnnotationCanvasView : UserControl
         if (_editor is { } editor)
         {
             editor.Scale = placement.Scale;
+
+            // Alongside the scale for the same reason: the region a mark can line up with
+            // is the one being annotated, and which region that is only becomes known
+            // here.
+            editor.SnapRegion = region;
         }
 
         _preview?.Detach();
@@ -143,6 +152,7 @@ public sealed partial class AnnotationCanvasView : UserControl
     {
         _preview?.Render(_editor?.VisibleAnnotations ?? []);
         DrawSelectionChrome();
+        DrawSnapGuides();
 
         // A ruler is worth nothing until it says a number, and the number it will say
         // once it is let go is worth having during the drag. It goes in the hint line
@@ -233,6 +243,54 @@ public sealed partial class AnnotationCanvasView : UserControl
         {
             AddHandle(handle, outline);
         }
+    }
+
+    /// <summary>
+    /// Draws the lines saying what the mark in flight lined up with.
+    /// </summary>
+    /// <remarks>
+    /// Into the selection layer, which <see cref="DrawSelectionChrome"/> has just cleared:
+    /// a guide belongs to a gesture, and the layer that is emptied every render is the one
+    /// that cannot leave one behind.
+    /// </remarks>
+    private void DrawSnapGuides()
+    {
+        if (_editor?.Snap is not { } snap)
+        {
+            return;
+        }
+
+        if (snap.GuideX is { } x)
+        {
+            AddGuide(new CapturePoint(x, _region.Y), new CapturePoint(x, _region.Bottom));
+        }
+
+        if (snap.GuideY is { } y)
+        {
+            AddGuide(new CapturePoint(_region.X, y), new CapturePoint(_region.Right, y));
+        }
+    }
+
+    private void AddGuide(CapturePoint from, CapturePoint to)
+    {
+        var start = _placement.ToLayout(from);
+        var end = _placement.ToLayout(to);
+
+        SelectionLayer.Children.Add(new Line
+        {
+            X1 = start.X,
+            Y1 = start.Y,
+            X2 = end.X,
+            Y2 = end.Y,
+            Stroke = _guideStroke,
+
+            // A whole unit rather than macshot's half: a half-unit line on a display at
+            // 100% falls between pixels and comes out as a grey smear, and a guide that
+            // faint is worse than none.
+            StrokeThickness = 1,
+            StrokeDashArray = new DoubleCollection { 4, 3 },
+            IsHitTestVisible = false,
+        });
     }
 
     private void AddHandle(AnnotationHandle handle, IReadOnlyList<Point> outline)
