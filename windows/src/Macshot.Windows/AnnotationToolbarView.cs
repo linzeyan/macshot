@@ -755,6 +755,24 @@ public sealed partial class AnnotationToolbarView : UserControl
             ShowFramePicker(anchor);
             break;
 
+        case ToolbarCommand.Upload:
+            // Where macshot keeps it (OverlayView.swift:7575) rather than in Preferences:
+            // it is a question about the capture in front of you, and it belongs on the
+            // button that would send it. Off unless asked for, in both products — pressing
+            // Upload is already a deliberate act, and a confirmation on every one of them
+            // is a thing people click through without reading.
+            var confirm = new ToggleMenuFlyoutItem
+            {
+                Text = L("Confirm before upload"),
+                IsChecked = _settings?.Current.UploadConfirm == true,
+            };
+            confirm.Click += (_, _) => Remember(current => current with { UploadConfirm = confirm.IsChecked });
+
+            var uploadMenu = new MenuFlyout();
+            uploadMenu.Items.Add(confirm);
+            uploadMenu.ShowAt(anchor);
+            break;
+
         default:
             break;
         }

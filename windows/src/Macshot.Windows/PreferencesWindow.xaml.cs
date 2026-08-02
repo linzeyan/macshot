@@ -1208,7 +1208,6 @@ public sealed partial class PreferencesWindow : Window
             .Select(provider => L(UploadProviders.Label(provider)))
             .ToList();
         UploadProviderBox.SelectedIndex = (int)settings.UploadProvider;
-        UploadConfirmBox.IsChecked = settings.UploadConfirm;
 
         S3EndpointBox.Text = settings.S3Endpoint;
         S3RegionBox.Text = settings.S3Region;
@@ -1452,7 +1451,8 @@ public sealed partial class PreferencesWindow : Window
 
 #if !OFFLINE
             UploadProvider = (UploadProvider)Math.Max(UploadProviderBox.SelectedIndex, 0),
-            UploadConfirm = UploadConfirmBox.IsChecked == true,
+            // No UploadConfirm. It is set from the right-click on the Upload button now,
+            // and this record is built with "with", so leaving it out keeps that answer.
             S3Endpoint = S3EndpointBox.Text,
             S3Region = S3RegionBox.Text,
             S3Bucket = S3BucketBox.Text,

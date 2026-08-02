@@ -878,12 +878,9 @@
                                 Width="240"
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
-                        <CheckBox
-                            x:Name="UploadConfirmBox"
-                            Content="Confirm before upload"
-                            FontSize="13"
-                            Checked="Setting_Toggled"
-                            Unchecked="Setting_Toggled" />
+                        <!-- No "Confirm before upload" here. macshot has the setting, but
+                             behind the right-click on the Upload button, which is where
+                             this port now keeps it too. -->
                     </StackPanel>
 
                     <StackPanel Style="{StaticResource Section}">
