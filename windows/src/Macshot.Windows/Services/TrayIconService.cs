@@ -167,11 +167,15 @@ public sealed class TrayIconService : IDisposable
     /// <summary>Raised on a left click, which should do the most common thing.</summary>
     public event EventHandler? DefaultActionInvoked;
 
-    public void AddMenuItem(int id, string text)
+    /// <param name="glyph">
+    /// The Segoe Fluent Icons character drawn beside it, or null for none — see
+    /// <see cref="MenuIcons"/>. macshot puts a symbol on every item of its own menu.
+    /// </param>
+    public void AddMenuItem(int id, string text, string? glyph = null)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(id, 1);
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
-        _menuItems.Add(new MenuEntry(id, text, null));
+        _menuItems.Add(new MenuEntry(id, text, null, Glyph: glyph));
     }
 
     /// <summary>
@@ -186,12 +190,16 @@ public sealed class TrayIconService : IDisposable
     /// What the submenu says when there is nothing in it. Passed in rather than written
     /// here so it goes through the same translation lookup as every other menu string.
     /// </param>
-    public void AddSubmenu(string text, Func<IReadOnlyList<TrayMenuEntry>> items, string emptyText)
+    public void AddSubmenu(
+        string text,
+        Func<IReadOnlyList<TrayMenuEntry>> items,
+        string emptyText,
+        string? glyph = null)
     {
         ArgumentException.ThrowIfNullOrWhiteSpace(text);
         ArgumentNullException.ThrowIfNull(items);
         ArgumentException.ThrowIfNullOrWhiteSpace(emptyText);
-        _menuItems.Add(new MenuEntry(0, text, items, emptyText));
+        _menuItems.Add(new MenuEntry(0, text, items, emptyText, glyph));
     }
 
     /// <summary>
@@ -351,13 +359,17 @@ public sealed class TrayIconService : IDisposable
 
         try
         {
-            foreach (var entry in _menuItems)
+            for (var position = 0; position < _menuItems.Count; position++)
             {
+                var entry = _menuItems[position];
+
                 if (entry.Text is null)
                 {
                     AppendMenu(menu, MenuSeparator, UIntPtr.Zero, null);
+                    continue;
                 }
-                else if (entry.Submenu is { } items)
+
+                if (entry.Submenu is { } items)
                 {
                     // Owned by the parent from here: DestroyMenu takes the submenus
                     // with it, so the popup below needs no cleanup of its own.
@@ -370,6 +382,24 @@ public sealed class TrayIconService : IDisposable
                 else
                 {
                     AppendMenu(menu, MenuString, new UIntPtr((uint)entry.Id), Literal(entry.Text));
+                }
+
+                // After the item exists, and by position rather than by id: a submenu has
+                // no command id to be found by. The bitmap belongs to MenuIcons, which
+                // keeps it for the life of the process — a menu does not own what is set
+                // on it here, and destroying it with the menu would leave the next
+                // right-click drawing from a freed handle.
+                var glyph = MenuIcons.For(entry.Glyph, Theme);
+                if (glyph != IntPtr.Zero)
+                {
+                    var info = new MenuItemInfo
+                    {
+                        Size = (uint)Marshal.SizeOf<MenuItemInfo>(),
+                        Mask = MenuMaskBitmap,
+                        ItemBitmap = glyph,
+                    };
+
+                    SetMenuItemInfo(menu, (uint)position, byPosition: true, ref info);
                 }
             }
 
@@ -547,7 +577,8 @@ public sealed class TrayIconService : IDisposable
         int Id,
         string? Text,
         Func<IReadOnlyList<TrayMenuEntry>>? Submenu,
-        string? EmptyText = null);
+        string? EmptyText = null,
+        string? Glyph = null);
 
     [DllImport("shell32.dll", EntryPoint = "Shell_NotifyIconW", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
@@ -586,6 +617,14 @@ public sealed class TrayIconService : IDisposable
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool DestroyMenu(IntPtr menu);
 
+    [DllImport("user32.dll", EntryPoint = "SetMenuItemInfoW", CharSet = CharSet.Unicode, SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetMenuItemInfo(
+        IntPtr menu,
+        uint item,
+        [MarshalAs(UnmanagedType.Bool)] bool byPosition,
+        ref MenuItemInfo info);
+
     [DllImport("user32.dll", SetLastError = true)]
     private static extern int TrackPopupMenuEx(
         IntPtr menu,
@@ -606,6 +645,26 @@ public sealed class TrayIconService : IDisposable
     [DllImport("user32.dll", EntryPoint = "PostMessageW", CharSet = CharSet.Unicode)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool PostMessage(IntPtr window, uint message, IntPtr wParam, IntPtr lParam);
+
+    /// <summary>MIIM_BITMAP: only <see cref="MenuItemInfo.ItemBitmap"/> is being set.</summary>
+    private const uint MenuMaskBitmap = 0x00000080;
+
+    [StructLayout(LayoutKind.Sequential)]
+    private struct MenuItemInfo
+    {
+        public uint Size;
+        public uint Mask;
+        public uint Type;
+        public uint State;
+        public uint Id;
+        public IntPtr Submenu;
+        public IntPtr CheckedBitmap;
+        public IntPtr UncheckedBitmap;
+        public IntPtr ItemData;
+        public IntPtr TypeData;
+        public uint TextLength;
+        public IntPtr ItemBitmap;
+    }
 
     [StructLayout(LayoutKind.Sequential)]
     private struct Point
