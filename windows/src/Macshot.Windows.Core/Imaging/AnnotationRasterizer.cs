@@ -151,15 +151,15 @@ public static class AnnotationRasterizer
                 annotation);
             break;
         case AnnotationTool.Rectangle:
-            CompositeStrokes(
+            CompositeFillable(
                 pixels,
                 width,
                 height,
-                [BuildRectanglePath(annotation.BoundingRect, annotation.Style.CornerRadius)],
+                BuildRectanglePath(annotation.BoundingRect, annotation.Style.CornerRadius),
                 annotation);
             break;
         case AnnotationTool.Ellipse:
-            CompositeStrokes(pixels, width, height, [BuildEllipsePath(annotation.BoundingRect)], annotation);
+            CompositeFillable(pixels, width, height, BuildEllipsePath(annotation.BoundingRect), annotation);
             break;
         case AnnotationTool.Censor:
             Censor(pixels, width, height, annotation);
@@ -680,6 +680,94 @@ public static class AnnotationRasterizer
         IReadOnlyList<CapturePoint[]> paths,
         Annotation annotation) =>
         CompositeShape(pixels, width, height, paths, [], annotation);
+
+    /// <summary>
+    /// Draws a closed shape the way its <see cref="ShapeFill"/> asks for.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two composites for the middle mode rather than one, because a mask is composited at
+    /// a single opacity and macshot's wash is half the alpha of the line over it. One pass
+    /// would give a line as pale as its fill or a fill as solid as its line.
+    /// </para>
+    /// <para>
+    /// The halo of a solid shape is stroked in a pass of its own for the matching reason:
+    /// <see cref="CompositeShape"/> lays the halo through the same geometry it lays the
+    /// mark through, and a polygon added to that mask lands exactly under the fill and is
+    /// never seen. macshot strokes it at <c>strokeWidth + 6</c> around the shape
+    /// (<c>Annotation.swift:1456</c>), which is a ring, so that is what is drawn.
+    /// </para>
+    /// </remarks>
+    private static void CompositeFillable(
+        byte[] pixels,
+        int width,
+        int height,
+        CapturePoint[] path,
+        Annotation annotation)
+    {
+        var style = annotation.Style;
+
+        switch (style.ShapeFill)
+        {
+        case ShapeFill.Stroke:
+            CompositeStrokes(pixels, width, height, [path], annotation);
+            return;
+
+        case ShapeFill.StrokeAndFill:
+            CompositeShape(
+                pixels,
+                width,
+                height,
+                [],
+                [path],
+                annotation with
+                {
+                    Style = style with
+                    {
+                        Opacity = style.Opacity * AnnotationStyle.WashAlpha,
+
+                        // The halo belongs to the line, and the line is the pass below.
+                        // Laid here as well it would be drawn twice, and the overlap of a
+                        // translucent halo with itself is a darker ring.
+                        Outline = null,
+                    },
+                });
+
+            CompositeStrokes(pixels, width, height, [path], annotation);
+            return;
+
+        default:
+            if (style.Outline is { } halo)
+            {
+                CompositeStrokes(
+                    pixels,
+                    width,
+                    height,
+                    [path],
+                    annotation with
+                    {
+                        Style = style with
+                        {
+                            Color = halo,
+                            StrokeWidth = style.StrokeWidth + AnnotationStyle.OutlineSpread,
+
+                            // Solid whatever the shape's own pattern is, as macshot forces.
+                            LineStyle = LineStyle.Solid,
+                            Outline = null,
+                        },
+                    });
+            }
+
+            CompositeShape(
+                pixels,
+                width,
+                height,
+                [],
+                [path],
+                annotation with { Style = style with { Outline = null } });
+            return;
+        }
+    }
 
     /// <summary>
     /// Draws a mark made of stroked paths, filled polygons, or both.

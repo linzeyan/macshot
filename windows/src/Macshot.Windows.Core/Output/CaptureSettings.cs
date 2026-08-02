@@ -431,6 +431,9 @@ public sealed record CaptureSettings
     /// <summary>Which ends the arrow tool draws.</summary>
     public ArrowStyle AnnotationArrowStyle { get; init; } = ArrowStyle.Filled;
 
+    /// <summary>Whether the rectangle and ellipse tools outline, wash, or fill.</summary>
+    public ShapeFill AnnotationShapeFill { get; init; } = ShapeFill.Stroke;
+
     /// <summary>How far the rectangle tool rounds its corners, in frame pixels.</summary>
     public double AnnotationCornerRadius { get; init; }
 
@@ -1108,7 +1111,8 @@ public sealed record CaptureSettings
             AnnotationLineStyle,
             ArrowStyle: AnnotationArrowStyle,
             CornerRadius: Math.Clamp(AnnotationCornerRadius, 0, MaxCornerRadius),
-            CensorMode: CensorMode)
+            CensorMode: CensorMode,
+            ShapeFill: AnnotationShapeFill)
         {
             FontSize = Math.Clamp(
                 AnnotationFontSize,
@@ -1139,6 +1143,7 @@ public sealed record CaptureSettings
             AnnotationStrokeWidth = style.StrokeWidth,
             AnnotationLineStyle = style.LineStyle,
             AnnotationArrowStyle = style.ArrowStyle,
+            AnnotationShapeFill = style.ShapeFill,
             AnnotationCornerRadius = style.CornerRadius,
             CensorMode = style.CensorMode,
             AnnotationFontSize = style.FontSize,
@@ -1230,6 +1235,7 @@ public sealed record CaptureSettings
                 : string.Empty,
             AnnotationLineStyle = Enum.IsDefined(AnnotationLineStyle) ? AnnotationLineStyle : LineStyle.Solid,
             AnnotationArrowStyle = Enum.IsDefined(AnnotationArrowStyle) ? AnnotationArrowStyle : ArrowStyle.Filled,
+            AnnotationShapeFill = Enum.IsDefined(AnnotationShapeFill) ? AnnotationShapeFill : ShapeFill.Stroke,
             AnnotationCornerRadius = double.IsFinite(AnnotationCornerRadius)
                 ? Math.Clamp(AnnotationCornerRadius, 0, MaxCornerRadius)
                 : 0,

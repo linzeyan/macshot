@@ -44,8 +44,17 @@ public sealed record AnnotationStyle(
     double Opacity = 1,
     ArrowStyle ArrowStyle = ArrowStyle.Filled,
     double CornerRadius = 0,
-    CensorMode CensorMode = CensorMode.Pixelate)
+    CensorMode CensorMode = CensorMode.Pixelate,
+    ShapeFill ShapeFill = ShapeFill.Stroke)
 {
+    /// <summary>
+    /// How much of the colour's alpha a <see cref="Annotations.ShapeFill.StrokeAndFill"/>
+    /// wash keeps — macshot's <c>alphaComponent * 0.5</c>
+    /// (<c>Annotation.swift:1467</c>). Half rather than a fixed value, so a colour
+    /// already dialled down stays dialled down.
+    /// </summary>
+    public const double WashAlpha = 0.5;
+
     /// <summary>macshot's own starting size for a label — <c>Annotation.swift:159</c>.</summary>
     public const double DefaultFontSize = 20;
 

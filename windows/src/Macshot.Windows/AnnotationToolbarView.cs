@@ -89,6 +89,13 @@ public sealed partial class AnnotationToolbarView : UserControl
     private readonly StyleSegments _arrowStyle = new();
 
     /// <summary>
+    /// Outline, wash, or solid — macshot's rectFillStyle picker. Its segments are rebuilt
+    /// when the tool changes rather than set once, because macshot draws the preview as
+    /// the shape in hand: an oval for the ellipse tool, a rounded box for the rectangle.
+    /// </summary>
+    private readonly StyleSegments _shapeFill = new();
+
+    /// <summary>
     /// macshot's Flip, which turns an arrow round without redrawing it — an arrow is
     /// drawn from where the hand starts to where it stops, and what it should point at is
     /// often where the hand started.
@@ -139,6 +146,11 @@ public sealed partial class AnnotationToolbarView : UserControl
 
     /// <summary>The style the toolbar started from, so only a real change is written back.</summary>
     private AnnotationStyle _loadedStyle = AnnotationStyle.Default;
+
+    /// <summary>Which shape the fill segments are currently drawn as, and whether yet.</summary>
+    private bool _shapeFillIsOval;
+
+    private bool _shapeFillDrawn;
 
     private bool _isLoadingStyle;
 
@@ -353,6 +365,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         _censorMode.SelectionChanged += (_, _) => ApplyStyle();
         _lineStyle.SelectionChanged += (_, _) => ApplyStyle();
         _arrowStyle.SelectionChanged += (_, _) => ApplyStyle();
+        _shapeFill.SelectionChanged += (_, _) => ApplyStyle();
         _flipArrow.Checked += (_, _) => ApplyStyle();
         _flipArrow.Unchecked += (_, _) => ApplyStyle();
         _stampChoices.SelectionChanged += StampChoice_Changed;
@@ -1040,6 +1053,13 @@ public sealed partial class AnnotationToolbarView : UserControl
         _arrowStyle.Visibility = Show(AnnotationToolOptions.UsesArrowStyle(tool));
         _flipArrow.Visibility = _arrowStyle.Visibility;
 
+        var fillable = AnnotationToolOptions.UsesShapeFill(tool);
+        _shapeFill.Visibility = Show(fillable);
+        if (fillable)
+        {
+            ShowShapeFillSegments(tool == AnnotationTool.Ellipse);
+        }
+
         // Every mark with an edge to rim. Censor marks and the loupe carry their own
         // chrome, and a halo round a pixelated block would outline the redaction.
         _outline.Visibility = Show(AnnotationToolOptions.UsesLineStyle(tool) || tool == AnnotationTool.Arrow);
@@ -1189,6 +1209,8 @@ public sealed partial class AnnotationToolbarView : UserControl
     {
         RepaintChrome();
 
+        ToolTipService.SetToolTip(_shapeFill, "How the shape is filled");
+        ShowShapeFillSegments(oval: false);
         ToolTipService.SetToolTip(_arrowStyle, "Arrow ends");
         ToolTipService.SetToolTip(_stamp, "Stamp");
 
@@ -1251,6 +1273,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         AddGroup(_sizeLabel, _size, _sizeValue);
         AddGroup(_lineStyle);
         AddGroup(_arrowStyle);
+        AddGroup(_shapeFill);
         AddGroup(_cornerLabel, _cornerRadius, _cornerValue);
         AddGroup(_outline);
         AddGroup(_flipArrow);
@@ -1259,6 +1282,31 @@ public sealed partial class AnnotationToolbarView : UserControl
         AddGroup(_font, _weight);
         AddGroup(_textFill, _textOutline);
         AddGroup(_stamp);
+    }
+
+    /// <summary>
+    /// Draws the fill segments as the shape they apply to.
+    /// </summary>
+    /// <remarks>
+    /// Rebuilt only when the shape changes. The chosen segment survives it — SetSegments
+    /// keeps the index and repaints — so switching between the rectangle and the ellipse
+    /// does not quietly reset a user who had asked for a filled one.
+    /// </remarks>
+    private void ShowShapeFillSegments(bool oval)
+    {
+        if (_shapeFillDrawn && _shapeFillIsOval == oval)
+        {
+            return;
+        }
+
+        _shapeFillIsOval = oval;
+        _shapeFillDrawn = true;
+
+        _shapeFill.SetSegments([.. Enum.GetValues<ShapeFill>().Select(style =>
+            new StyleSegment(
+                StylePreviews.ShapeFillPreview(style, oval),
+                null,
+                StylePreviews.ShapeFillSegmentWidth))]);
     }
 
     private void FontChoice_Changed(object sender, SelectionChangedEventArgs e)
@@ -1345,6 +1393,7 @@ public sealed partial class AnnotationToolbarView : UserControl
 
             _lineStyle.SelectedIndex = (int)_loadedStyle.LineStyle;
             _arrowStyle.SelectedIndex = (int)_loadedStyle.ArrowStyle;
+            _shapeFill.SelectedIndex = (int)_loadedStyle.ShapeFill;
             _flipArrow.IsChecked = _loadedStyle.ArrowReversed;
             _outline.Show(_loadedStyle.Outline is not null, ToUiColor(
                 _loadedStyle.Outline ?? new AnnotationColor(255, 255, 255)));
@@ -1424,7 +1473,10 @@ public sealed partial class AnnotationToolbarView : UserControl
             CornerRadius: Math.Max(0, _cornerRadius.Value),
             CensorMode: _censorMode.SelectedIndex >= 0
                 ? (CensorMode)_censorMode.SelectedIndex
-                : CensorMode.Pixelate)
+                : CensorMode.Pixelate,
+            ShapeFill: _shapeFill.SelectedIndex >= 0
+                ? (ShapeFill)_shapeFill.SelectedIndex
+                : ShapeFill.Stroke)
         {
             FontSize = typesetting
                 ? Math.Clamp(_size.Value, AnnotationStyle.MinFontSize, AnnotationStyle.MaxFontSize)

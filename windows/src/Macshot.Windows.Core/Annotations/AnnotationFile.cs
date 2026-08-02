@@ -116,6 +116,7 @@ public static class AnnotationFile
             ArrowStyle = annotation.Style.ArrowStyle.ToString(),
             CornerRadius = annotation.Style.CornerRadius,
             CensorMode = annotation.Style.CensorMode.ToString(),
+            ShapeFill = annotation.Style.ShapeFill.ToString(),
             ArrowReversed = annotation.Style.ArrowReversed,
             Outline = annotation.Style.Outline?.ToHex(),
             FontSize = annotation.Style.FontSize,
@@ -172,7 +173,14 @@ public static class AnnotationFile
             // enum's own first mode rather than a throw.
             Enum.TryParse<CensorMode>(stored.CensorMode, out var censor) && Enum.IsDefined(censor)
                 ? censor
-                : Annotations.CensorMode.Pixelate)
+                : Annotations.CensorMode.Pixelate,
+
+            // Absent from every file written before shapes could be filled, where the
+            // outline was the only thing a rectangle could be. Stroke is what those files
+            // meant, so it is what they reopen as.
+            Enum.TryParse<ShapeFill>(stored.ShapeFill, out var fillStyle) && Enum.IsDefined(fillStyle)
+                ? fillStyle
+                : Annotations.ShapeFill.Stroke)
         {
             FontSize = stored.FontSize > 0 ? stored.FontSize : AnnotationStyle.DefaultFontSize,
             FontFamily = stored.FontFamily ?? string.Empty,
@@ -312,6 +320,8 @@ public static class AnnotationFile
         public double Opacity { get; init; } = 1;
 
         public string ArrowStyle { get; init; } = string.Empty;
+
+        public string ShapeFill { get; init; } = string.Empty;
 
         public double CornerRadius { get; init; }
 

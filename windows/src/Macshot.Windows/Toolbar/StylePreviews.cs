@@ -43,6 +43,9 @@ internal static class StylePreviews
     /// <summary>How wide an arrow-style segment is — <c>:486</c>.</summary>
     public const double ArrowSegmentWidth = 30;
 
+    /// <summary>How wide a shape-fill segment is: macshot's 22-wide tile plus its gap.</summary>
+    public const double ShapeFillSegmentWidth = 22;
+
     /// <summary>A dash pattern shown at the weight the preview is drawn in.</summary>
     private const double PreviewStroke = 2;
 
@@ -121,6 +124,53 @@ internal static class StylePreviews
             break;
         }
 
+        return canvas;
+    }
+
+    /// <summary>
+    /// The outline/wash/solid segment: macshot's own preview, which is the shape itself
+    /// drawn the three ways — <c>ToolOptionsRowView.swift:723–744</c>.
+    /// </summary>
+    /// <remarks>
+    /// The ellipse tool gets an oval and the rectangle a rounded box, because the segment
+    /// is answering "how", not "what", and a rectangle in the ellipse tool's row would be
+    /// read as a second shape picker.
+    /// </remarks>
+    public static FrameworkElement ShapeFillPreview(ShapeFill style, bool oval)
+    {
+        var canvas = NewCanvas(ShapeFillSegmentWidth);
+        var stroke = ToolbarPalette.IconBrush();
+
+        // macshot's 3-in, 2-down inset on a 22x16 tile, at this row's own width.
+        const double Inset = 3;
+        var box = new Rect(Inset, 2, ShapeFillSegmentWidth - (Inset * 2), Extent - 4);
+
+        Shape shape = oval
+            ? new Ellipse { Width = box.Width, Height = box.Height }
+            : new Rectangle { Width = box.Width, Height = box.Height, RadiusX = 2, RadiusY = 2 };
+
+        Canvas.SetLeft(shape, box.X);
+        Canvas.SetTop(shape, box.Y);
+
+        switch (style)
+        {
+        case ShapeFill.Fill:
+            shape.Fill = stroke;
+            break;
+
+        case ShapeFill.StrokeAndFill:
+            shape.Fill = ToolbarPalette.IconBrush(0.4);
+            shape.Stroke = stroke;
+            shape.StrokeThickness = 1.5;
+            break;
+
+        default:
+            shape.Stroke = stroke;
+            shape.StrokeThickness = 1.5;
+            break;
+        }
+
+        canvas.Children.Add(shape);
         return canvas;
     }
 

@@ -58,6 +58,14 @@ public static class AnnotationToolOptions
     /// <summary>Whether the arrow-ends picker applies.</summary>
     public static bool UsesArrowStyle(AnnotationTool tool) => tool == AnnotationTool.Arrow;
 
+    /// <summary>
+    /// Whether the outline/wash/solid picker applies. The two closed shapes only —
+    /// macshot's own answer, and the reason is that nothing else here encloses an area
+    /// there would be a difference between filling and not.
+    /// </summary>
+    public static bool UsesShapeFill(AnnotationTool tool) =>
+        tool is AnnotationTool.Rectangle or AnnotationTool.Ellipse;
+
     /// <summary>Whether the emoji picker applies.</summary>
     public static bool UsesStamp(AnnotationTool tool) => tool == AnnotationTool.Stamp;
 
