@@ -46,6 +46,34 @@ public sealed class CaptureController : IDisposable
     private const int CommandOpenFromClipboard = 14;
     private const int CommandPinFromClipboard = 15;
     private const int CommandOpenVideo = 16;
+    private const int CommandCheckForUpdates = 17;
+
+    /// <summary>
+    /// The picture on each menu line, as a Segoe Fluent Icons character.
+    /// </summary>
+    /// <remarks>
+    /// One per item, chosen against the SF Symbol macshot puts on the same line
+    /// (<c>AppDelegate.swift:709–806</c>) rather than by name: Crop for its <c>crop</c>,
+    /// a monitor for its <c>desktopcomputer</c>, a scan frame for its
+    /// <c>text.viewfinder</c>. Two lines share a picture where macshot's two are the same
+    /// picture of the same thing — the whole screen, and doing something again.
+    /// Quit carries none, as macshot's does not.
+    /// </remarks>
+    private const string GlyphCrop = "\uE7A8";
+    private const string GlyphScreen = "\uE7F4";
+    private const string GlyphScan = "\uE8FE";
+    private const string GlyphDownload = "\uE896";
+    private const string GlyphAgain = "\uE72C";
+    private const string GlyphScroll = "\uEC8F";
+    private const string GlyphStopwatch = "\uE916";
+    private const string GlyphVideo = "\uE714";
+    private const string GlyphHistory = "\uE81C";
+    private const string GlyphGrid = "\uE7AA";
+    private const string GlyphPicture = "\uE8B9";
+    private const string GlyphMovies = "\uE8B2";
+    private const string GlyphPaste = "\uE77F";
+    private const string GlyphPinned = "\uE840";
+    private const string GlyphSettings = "\uE713";
 
     /// <summary>
     /// The capture-delay submenu. One command per choice rather than one command
@@ -239,29 +267,33 @@ public sealed class CaptureController : IDisposable
         // ships, so "Capture area" found nothing where "Capture Area" finds every
         // language the Mac app has.
         // The first six are macshot's CaptureMenuItemID.defaultOrder, in that order.
-        _trayIcon.AddMenuItem(CommandCaptureArea, L("Capture Area"));
-        _trayIcon.AddMenuItem(CommandCaptureAllScreens, L("Capture Screen"));
-        _trayIcon.AddMenuItem(CommandCaptureText, L("Capture OCR & QR"));
-        _trayIcon.AddMenuItem(CommandQuickCapture, L("Quick Capture"));
-        _trayIcon.AddMenuItem(CommandCaptureLastArea, L("Capture Last Area"));
-        _trayIcon.AddMenuItem(CommandScrollCapture, L("Scroll Capture"));
-        _trayIcon.AddSubmenu(L("Capture Delay"), DelayMenuEntries, L("None"));
+        _trayIcon.AddMenuItem(CommandCaptureArea, L("Capture Area"), GlyphCrop);
+        _trayIcon.AddMenuItem(CommandCaptureAllScreens, L("Capture Screen"), GlyphScreen);
+        _trayIcon.AddMenuItem(CommandCaptureText, L("Capture OCR & QR"), GlyphScan);
+        _trayIcon.AddMenuItem(CommandQuickCapture, L("Quick Capture"), GlyphDownload);
+        _trayIcon.AddMenuItem(CommandCaptureLastArea, L("Capture Last Area"), GlyphAgain);
+        _trayIcon.AddMenuItem(CommandScrollCapture, L("Scroll Capture"), GlyphScroll);
+        _trayIcon.AddSubmenu(L("Capture Delay"), DelayMenuEntries, L("None"), GlyphStopwatch);
         _trayIcon.AddSeparator();
-        _trayIcon.AddMenuItem(CommandRecordArea, L("Record Area"));
-        _trayIcon.AddMenuItem(CommandRecordScreen, L("Record Screen"));
+        _trayIcon.AddMenuItem(CommandRecordArea, L("Record Area"), GlyphVideo);
+        _trayIcon.AddMenuItem(CommandRecordScreen, L("Record Screen"), GlyphScreen);
         _trayIcon.AddSeparator();
-        _trayIcon.AddSubmenu(L("Recent Captures"), RecentMenuEntries, L("No recent captures"));
-        _trayIcon.AddMenuItem(CommandHistory, L("Show History Panel"));
+        _trayIcon.AddSubmenu(
+            L("Recent Captures"), RecentMenuEntries, L("No recent captures"), GlyphHistory);
+        _trayIcon.AddMenuItem(CommandHistory, L("Show History Panel"), GlyphGrid);
         _trayIcon.AddSeparator();
-        _trayIcon.AddMenuItem(CommandOpenImage, L("Open Image..."));
-        _trayIcon.AddMenuItem(CommandOpenVideo, L("Open Video..."));
-        _trayIcon.AddMenuItem(CommandOpenFromClipboard, L("Open from Clipboard"));
-        _trayIcon.AddMenuItem(CommandPinFromClipboard, L("Pin from Clipboard"));
+        _trayIcon.AddMenuItem(CommandOpenImage, L("Open Image..."), GlyphPicture);
+        _trayIcon.AddMenuItem(CommandOpenVideo, L("Open Video..."), GlyphMovies);
+        _trayIcon.AddMenuItem(CommandOpenFromClipboard, L("Open from Clipboard"), GlyphPaste);
+        _trayIcon.AddMenuItem(CommandPinFromClipboard, L("Pin from Clipboard"), GlyphPinned);
         _trayIcon.AddSeparator();
-        _trayIcon.AddMenuItem(CommandPreferences, L("Settings..."));
+        _trayIcon.AddMenuItem(CommandPreferences, L("Settings..."), GlyphSettings);
 
-        // And macshot's "Check for Updates..." belongs here, once there is something to
-        // update from. See the parity notes: the format is still undecided.
+        // macshot's own next item. What it does here is the check without the install:
+        // there is no installer to hand a downloaded build to yet, so a newer release
+        // opens its page. See UpdateService.
+        _trayIcon.AddMenuItem(CommandCheckForUpdates, L("Check for Updates..."), GlyphAgain);
+
         _trayIcon.AddSeparator();
         _trayIcon.AddMenuItem(CommandQuit, L("Quit macshot"));
         _trayIcon.CommandInvoked += OnTrayCommandInvoked;
@@ -293,6 +325,15 @@ public sealed class CaptureController : IDisposable
         if (UrlSchemeCommands.Parse(startupUrl) is { } startupCommand)
         {
             _dispatcher.TryEnqueue(() => Run(startupCommand));
+        }
+
+        // macshot checks on its own as well as on request, which is what the setting on
+        // the General page says. Queued like everything else here rather than awaited, so
+        // a slow or hanging network cannot delay the tray icon appearing: the first thing
+        // a user does after launching a background app is look for it.
+        if (_settings.Current.AutomaticUpdateChecks)
+        {
+            Post(() => CheckForUpdatesAsync(asked: false));
         }
     }
 
@@ -895,6 +936,9 @@ public sealed class CaptureController : IDisposable
         _trayIcon.Dispose();
         _hotkeys.Dispose();
         _messageWindow.Dispose();
+
+        // After the menu that draws from them is gone.
+        MenuIcons.Clear();
         GC.SuppressFinalize(this);
     }
 
@@ -946,6 +990,9 @@ public sealed class CaptureController : IDisposable
             return;
         case CommandPreferences:
             _dispatcher.TryEnqueue(ShowPreferences);
+            break;
+        case CommandCheckForUpdates:
+            Post(() => CheckForUpdatesAsync(asked: true));
             break;
         case >= CommandRecentFirst:
             OpenRecent(command - CommandRecentFirst);
@@ -1379,6 +1426,68 @@ public sealed class CaptureController : IDisposable
             // The panel drew this capture a moment ago, so a failure here is the file
             // going away underneath it. Nothing to ask the user about.
             DiagnosticLog.Write($"Could not reopen '{request.Entry.Path}': {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// macshot's Check for Updates..., and the check the setting above it promises.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The one difference between the two callers is what silence means. Asked for from
+    /// the menu, every outcome has to be said — a menu item that does nothing visible has
+    /// been pressed and has failed, as far as the person who pressed it knows. Run on
+    /// startup, only an update is worth a box: a laptop that was opened on a train would
+    /// otherwise greet its owner with a network error every morning.
+    /// </para>
+    /// <para>
+    /// The startup check is what makes <c>AutomaticUpdateChecks</c> mean something. It
+    /// was in the settings file and on the General page before anything read it, which is
+    /// a checkbox that lies.
+    /// </para>
+    /// </remarks>
+    /// <param name="asked">Whether the user asked, rather than the app checking by itself.</param>
+    private async Task CheckForUpdatesAsync(bool asked)
+    {
+        try
+        {
+            var offer = await UpdateService.FindUpdateAsync(_settings.Current.BetaUpdates);
+
+            if (offer is not { } update)
+            {
+                if (asked)
+                {
+                    Message.Say(
+                        _messageWindow.Handle,
+                        $"{L("You're up to date!")}{Environment.NewLine}{Environment.NewLine}"
+                            + $"{BuildVariant.DisplayName} {UpdateService.CurrentVersion}");
+                }
+
+                return;
+            }
+
+            var page = update.PageUrl.Length > 0 ? update.PageUrl : UpdateService.ReleasesPage;
+            if (Message.Ask(
+                _messageWindow.Handle,
+                $"{L("A new version of macshot is available.")}{Environment.NewLine}{Environment.NewLine}"
+                    + $"{update.Tag}{Environment.NewLine}{Environment.NewLine}"
+                    + L("Open the download page?")))
+            {
+                OpenWithShell(page);
+            }
+        }
+        catch (Exception exception)
+        {
+            // Silent unless the user asked: a check nobody asked for that could not be
+            // made is not news, and the log is where it belongs.
+            DiagnosticLog.Write($"The update check failed: {exception.Message}");
+
+            if (asked)
+            {
+                FailureReport.Notice(
+                    _messageWindow.Handle,
+                    L("Could not check for updates.") + Environment.NewLine + exception.Message);
+            }
         }
     }
 
