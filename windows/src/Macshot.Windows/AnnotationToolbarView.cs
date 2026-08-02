@@ -1010,7 +1010,11 @@ public sealed partial class AnnotationToolbarView : UserControl
         // Detached from any previous anchor first, for the same reason the colour picker
         // is: a Flyout can be shown from one place at a time, and the strip rebuilds its
         // buttons whenever anything on it lights up.
-        new Flyout { Content = _effectsPicker }.ShowAt(anchor);
+        new Flyout
+        {
+            Content = _effectsPicker,
+            FlyoutPresenterStyle = ToolbarPalette.BareFlyoutStyle,
+        }.ShowAt(anchor);
     }
 
     /// <summary>
