@@ -190,7 +190,7 @@ internal static class ToolbarIcons
         // web.camera — the lens, and the bar it stands on.
         ToolbarCommand.Webcam => Icon(
             Outline("M12 3a7.5 7.5 0 1 1 0 15 7.5 7.5 0 0 1 0 -15z"),
-            Solid("M12 7.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0 -7z"),
+            Solid("M12 7a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0 -7z"),
             Outline("M12 18v2M6 21h12", Faint)),
 
         // gearshape
@@ -207,7 +207,7 @@ internal static class ToolbarIcons
         // scribble — a stroke that followed a hand, which is the whole difference from
         // the line tool.
         AnnotationTool.Pencil => Icon(Outline(
-            "M3 15c1.2 -4.5 3.6 -4.5 4.8 0s3.6 4.5 4.8 0 3.6 -4.5 4.8 0")),
+            "M2 12c1.6 -6 4.8 -6 6.4 0s4.8 6 6.4 0 4.8 -6 6.4 0")),
 
         // line.diagonal
         AnnotationTool.Line => Icon(Outline("M4 20 20 4")),
@@ -269,18 +269,18 @@ internal static class ToolbarIcons
         // eyedropper
         AnnotationTool.ColorSampler => Icon(
             Solid("M17 2.6a2.9 2.9 0 0 1 4.1 4.1l-1.9 1.9 -4.1 -4.1z"),
-            Outline("M15 4.6 19.4 9M14.6 7 5 16.6V19.5h2.9L17.5 9.9")),
+            Outline("M15 4.6 19.4 9M14.6 7 5 16.6V19.5h2.9L17.5 9.9z")),
 
         // ruler
         AnnotationTool.Measure => Icon(
             Outline("M4 14.5 14.5 4a2 2 0 0 1 2.8 0l2.7 2.7a2 2 0 0 1 0 2.8L9.5 20a2 2 0 0 1 -2.8 0L4 17.3a2 2 0 0 1 0 -2.8z"),
-            Outline("M8 13.5l2 2M11 10.5l2 2M14 7.5l2 2", Faint)),
+            Outline("M7.6 13.9l1.5 1.5M10.6 10.9l1.5 1.5M13.6 7.9l1.5 1.5", Faint)),
 
         _ => Unnamed(ToolbarActions.Tooltip(tool)[..1]),
     };
 
     /// <summary>The two commands that are the same cross, written once.</summary>
-    private const string Xmark = "M5 5 19 19M19 5 5 19";
+    private const string Xmark = "M6 6 18 18M18 6 6 18";
 
     /// <summary>
     /// Puts an icon's layers on the 16-unit square a button centres.
