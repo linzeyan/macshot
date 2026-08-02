@@ -71,6 +71,14 @@
                     x:Name="SelectionRectangle"
                     Visibility="Collapsed"
                     StrokeThickness="2" />
+
+                <!-- The line in the picture a dragged edge just landed on. Solid, one
+                     unit, and drawn right across the display: the point of it is that the
+                     edge of the panel being cropped to is now exactly under the edge of
+                     the selection, which is only obvious if the line is longer than the
+                     region. Stroked in the accent in code, like the marquee. -->
+                <Line x:Name="BoundaryGuideX" Visibility="Collapsed" StrokeThickness="1" Opacity="0.9" />
+                <Line x:Name="BoundaryGuideY" Visibility="Collapsed" StrokeThickness="1" Opacity="0.9" />
             </Canvas>
 
             <!-- The selection's grips, above the marquee because they straddle its edge:

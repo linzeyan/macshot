@@ -468,6 +468,18 @@ public sealed record CaptureSettings
     public bool SnapGuides { get; init; } = true;
 
     /// <summary>
+    /// Whether a selection edge dragged near a line in the picture lands exactly on it.
+    /// </summary>
+    /// <remarks>
+    /// On by default, as macshot's <c>boundarySnapEnabled</c> is. Cropping to a panel, a
+    /// dialog or a table row is aiming at an edge that is already drawn, and a hand on a
+    /// mouse is worth about three pixels — so without it the result carries a sliver of
+    /// whatever was beside it, or loses a row of its own border. Alt is the way past it
+    /// for one drag.
+    /// </remarks>
+    public bool BoundarySnap { get; init; } = true;
+
+    /// <summary>
     /// Whether two quick clicks inside the region finish the capture.
     /// </summary>
     /// <remarks>

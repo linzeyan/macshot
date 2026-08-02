@@ -290,6 +290,17 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private long _lastPressAt;
 
+    /// <summary>
+    /// The lines in this display's pixels, once they have been read. Null until then, and
+    /// for the whole capture when the setting is off — which every use of it must survive.
+    /// </summary>
+    /// <remarks>
+    /// Written by the worker that builds it and read on the UI thread. Volatile so the UI
+    /// thread is guaranteed to see it rather than a cached null: a snap that never
+    /// switches on is the one failure here that would look like the feature not working.
+    /// </remarks>
+    private volatile BoundarySnapIndex? _boundaries;
+
     public CaptureOverlayWindow(
         CapturedFrame desktopFrame,
         MonitorLayout layout,
@@ -415,6 +426,41 @@ public sealed partial class CaptureOverlayWindow : Window
         BuildSnapLine();
         ShowIdleInstruction();
         OfferRememberedSelection();
+        BuildBoundaryIndex();
+    }
+
+    /// <summary>
+    /// Reads the lines out of this display's pixels, so a dragged edge can land on one.
+    /// </summary>
+    /// <remarks>
+    /// Off the UI thread and not awaited: it reads every pixel on the display, and the
+    /// overlay has to be up and taking a drag immediately. Until it lands, and if it never
+    /// does, every snapping call sees a null index and leaves the selection where the
+    /// pointer put it — the first second of a capture is worth more than the first second
+    /// of snapping.
+    /// </remarks>
+    private void BuildBoundaryIndex()
+    {
+        if (!_settings.Current.BoundarySnap)
+        {
+            return;
+        }
+
+        var frame = _monitorFrame;
+        _ = Task.Run(() =>
+        {
+            var index = BoundarySnapIndex.Build(
+                frame.BgraPixels,
+                frame.Width,
+                frame.Height,
+                frame.VirtualX,
+                frame.VirtualY);
+
+            // Assigned from the worker: a reference store is atomic, every read of it is
+            // one load on the UI thread, and marshalling back would queue work behind the
+            // pointer moves this exists to serve.
+            _boundaries = index;
+        });
     }
 
     /// <summary>
@@ -805,6 +851,11 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         SelectionCanvas.ReleasePointerCaptures();
 
+        // Whatever this release ends, the line saying where an edge landed has said it.
+        // Left up, it would sit across the capture as something the user has to work out
+        // the meaning of — and it is not in the delivered pixels, which makes it worse.
+        HideBoundaryGuides();
+
         if (_panningFrom is not null)
         {
             _panningFrom = null;
@@ -831,6 +882,7 @@ public sealed partial class CaptureOverlayWindow : Window
         if (_resizing != SelectionHandle.None)
         {
             var resized = ResizedTo(e);
+            HideBoundaryGuides();
             _resizing = SelectionHandle.None;
             ApplyRegion(resized);
             return;
@@ -853,11 +905,15 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         var end = e.GetCurrentPoint(SelectionCanvas).Position;
-        DrawMarquee(start, end);
+        var taken = DrawMarquee(start, end);
+        HideBoundaryGuides();
         _selectionStart = null;
         _marqueeAt = null;
         ShowIdleInstruction();
 
+        // The gesture measured where the pointer went, not where the snap put it: a drag
+        // of two pixels that landed on a line is still a click asking for the window
+        // under it.
         var dragged = CaptureRegion.FromPoints(start.X, start.Y, end.X, end.Y);
 
         // A press that never became a drag is a click on the highlighted window.
@@ -891,10 +947,9 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
 
-        var region = _layout.PointerToFrame(_monitor, dragged);
-        if (!region.IsEmpty)
+        if (!taken.IsEmpty)
         {
-            EnterAnnotationPhase(region);
+            EnterAnnotationPhase(taken);
         }
     }
 
@@ -1087,6 +1142,8 @@ public sealed partial class CaptureOverlayWindow : Window
         // of its colour: ToolbarPalette repaints in place, so a chosen accent reaches the
         // region's edge and its grips without the overlay being rebuilt.
         SelectionRectangle.Stroke = ToolbarPalette.AccentBrush;
+        BoundaryGuideX.Stroke = ToolbarPalette.AccentBrush;
+        BoundaryGuideY.Stroke = ToolbarPalette.AccentBrush;
 
         foreach (var handle in SelectionHandles.All)
         {
@@ -1169,12 +1226,79 @@ public sealed partial class CaptureOverlayWindow : Window
             .Resize(_resizeFrom, _resizing, ToFrame(e), e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift))
             .Intersect(MonitorBounds);
 
+        // Onto the lines in the picture before the shape is applied, the order macshot
+        // uses: a snap afterwards would pull one edge off the ratio the user asked to
+        // hold, where this way the ratio is worked out from where the edge ended up.
+        var snapped = BoundarySnapping.Resize(dragged, _resizing, Boundaries, BoundaryRadius);
+        ShowBoundaryGuides(snapped);
+
         // A held shape applies to the grips too. One that only applied to typed numbers
         // would come apart the first time anyone dragged an edge, which is how the region
         // is adjusted the rest of the time.
         return _lockedAspect is { } aspect
-            ? SelectionSizing.ConstrainToAspect(dragged, aspect, _resizing, MonitorBounds)
-            : dragged;
+            ? SelectionSizing.ConstrainToAspect(snapped.Region, aspect, _resizing, MonitorBounds)
+            : snapped.Region;
+    }
+
+    /// <summary>
+    /// The lines a dragged edge may land on, or none while Alt is held.
+    /// </summary>
+    /// <remarks>
+    /// Alt is macshot's Option: the way past the snap when the edge belongs a pixel off
+    /// the border rather than on it. Without it there is no way to place an edge inside
+    /// the radius of a line at all, and a feature that cannot be switched off mid-gesture
+    /// is one the user has to visit the settings to escape.
+    /// </remarks>
+    private BoundarySnapIndex? Boundaries => IsDown(VirtualKey.Menu) ? null : _boundaries;
+
+    /// <summary>How near a line has to be, in this display's pixels.</summary>
+    private double BoundaryRadius => BoundarySnapping.Radius * _monitor.Scale;
+
+    /// <summary>
+    /// Draws the lines the selection just landed on, right across the display.
+    /// </summary>
+    /// <remarks>
+    /// Across the display rather than along the region, unlike the guides that line marks
+    /// up with each other: this one is saying the edge is now exactly on something in the
+    /// picture, which a line no longer than the region cannot show.
+    /// </remarks>
+    private void ShowBoundaryGuides(BoundarySnap snap)
+    {
+        var bounds = LayoutBounds;
+
+        if (snap.GuideX is { } x)
+        {
+            var at = _layout.FrameToPointer(_monitor, new CapturePoint(x, 0)).X;
+            BoundaryGuideX.X1 = at;
+            BoundaryGuideX.X2 = at;
+            BoundaryGuideX.Y1 = 0;
+            BoundaryGuideX.Y2 = bounds.Height;
+            BoundaryGuideX.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            BoundaryGuideX.Visibility = Visibility.Collapsed;
+        }
+
+        if (snap.GuideY is { } y)
+        {
+            var at = _layout.FrameToPointer(_monitor, new CapturePoint(0, y)).Y;
+            BoundaryGuideY.X1 = 0;
+            BoundaryGuideY.X2 = bounds.Width;
+            BoundaryGuideY.Y1 = at;
+            BoundaryGuideY.Y2 = at;
+            BoundaryGuideY.Visibility = Visibility.Visible;
+        }
+        else
+        {
+            BoundaryGuideY.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void HideBoundaryGuides()
+    {
+        BoundaryGuideX.Visibility = Visibility.Collapsed;
+        BoundaryGuideY.Visibility = Visibility.Collapsed;
     }
 
     /// <summary>
@@ -1303,6 +1427,7 @@ public sealed partial class CaptureOverlayWindow : Window
         var moved = _movePending;
         _movingFrom = null;
         _moveGrip = null;
+        HideBoundaryGuides();
         Hint(string.Empty);
 
         if (keep)
@@ -1326,7 +1451,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         _moveGrip ??= new CapturePoint(pointer.X - original.X, pointer.Y - original.Y);
 
-        _movePending = SelectionHandles.ClampTo(
+        var moved = SelectionHandles.ClampTo(
             new CaptureRegion(
                 pointer.X - _moveGrip.Value.X,
                 pointer.Y - _moveGrip.Value.Y,
@@ -1334,6 +1459,12 @@ public sealed partial class CaptureOverlayWindow : Window
                 original.Height),
             MonitorBounds);
 
+        // The whole region shifts onto the line, because a move may not resize what is
+        // being moved: whichever of the two edges is nearer one wins the axis.
+        var snapped = BoundarySnapping.Move(moved, Boundaries, BoundaryRadius);
+        ShowBoundaryGuides(snapped);
+
+        _movePending = SelectionHandles.ClampTo(snapped.Region, MonitorBounds);
         ShowPendingRegion(_movePending);
     }
 
@@ -1345,6 +1476,7 @@ public sealed partial class CaptureOverlayWindow : Window
     private void AbandonResize()
     {
         _resizing = SelectionHandle.None;
+        HideBoundaryGuides();
         if (_selection is { } current)
         {
             ShowPendingRegion(current);
@@ -2767,9 +2899,27 @@ public sealed partial class CaptureOverlayWindow : Window
     }
 
     /// <summary>Draws the marquee, which stays in layout units because it is chrome.</summary>
-    private void DrawMarquee(Point start, Point end)
+    /// <summary>
+    /// Draws the rubber band between the press and the pointer, and answers the region it
+    /// covers in frame space — with the corner under the pointer pulled onto any line in
+    /// the picture it is near.
+    /// </summary>
+    /// <remarks>
+    /// Returns what it drew rather than being told: the snap happens in the capture's own
+    /// pixels, so the region the release takes has to be the one this worked out, or
+    /// letting go would move the selection off the line it was showing.
+    /// </remarks>
+    private CaptureRegion DrawMarquee(Point start, Point end)
     {
-        var region = CaptureRegion.FromPoints(start.X, start.Y, end.X, end.Y);
+        var snap = BoundarySnapping.Corner(
+            _layout.PointerToFrame(_monitor, start.X, start.Y),
+            _layout.PointerToFrame(_monitor, end.X, end.Y),
+            Boundaries,
+            BoundaryRadius);
+
+        ShowBoundaryGuides(snap);
+
+        var region = ToLayout(snap.Region);
         UpdateDim(region);
         Canvas.SetLeft(SelectionRectangle, region.X);
         Canvas.SetTop(SelectionRectangle, region.Y);
@@ -2777,6 +2927,7 @@ public sealed partial class CaptureOverlayWindow : Window
         SelectionRectangle.Height = region.Height;
         SelectionRectangle.Visibility = Visibility.Visible;
         PlaceHint();
+        return snap.Region;
     }
 
     /// <summary>

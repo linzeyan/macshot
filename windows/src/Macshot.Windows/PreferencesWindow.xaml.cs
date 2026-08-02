@@ -1040,6 +1040,7 @@ public sealed partial class PreferencesWindow : Window
         HistorySizeBox.IsEnabled = !settings.HistoryUnlimited;
         RememberSelectionCheck.IsChecked = settings.RememberLastSelection;
         SnapGuidesCheck.IsChecked = settings.SnapGuides;
+        BoundarySnapCheck.IsChecked = settings.BoundarySnap;
         CaptureCursorCheck.IsChecked = settings.CaptureCursor;
         DoubleClickCopyCheck.IsChecked = settings.DoubleClickToCopy;
         HideInstructionsCheck.IsChecked = settings.HideCaptureInstructions;
@@ -1412,6 +1413,7 @@ public sealed partial class PreferencesWindow : Window
             HistoryUnlimited = HistoryUnlimitedCheck.IsChecked == true,
             RememberLastSelection = RememberSelectionCheck.IsChecked == true,
             SnapGuides = SnapGuidesCheck.IsChecked == true,
+            BoundarySnap = BoundarySnapCheck.IsChecked == true,
             CaptureCursor = CaptureCursorCheck.IsChecked == true,
             DoubleClickToCopy = DoubleClickCopyCheck.IsChecked == true,
             HideCaptureInstructions = HideInstructionsCheck.IsChecked == true,

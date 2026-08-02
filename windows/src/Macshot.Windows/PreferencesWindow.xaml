@@ -337,6 +337,12 @@
                             Checked="Setting_Toggled"
                             Unchecked="Setting_Toggled" />
                         <CheckBox
+                            x:Name="BoundarySnapCheck"
+                            Content="Snap selection edges to image boundaries"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <CheckBox
                             x:Name="CaptureCursorCheck"
                             Content="Capture mouse cursor in screenshot"
                             Style="{StaticResource Unlabelled}"
