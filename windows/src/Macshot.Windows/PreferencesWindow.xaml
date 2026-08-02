@@ -16,9 +16,16 @@
             <!-- Written as macshot writes it and put into capitals at runtime, not in the
                  markup: the capitals were what broke the translation, since "OUTPUT" is
                  not a key macshot ships and "Output" is. See ShoutTheSectionHeadings. -->
+            <!-- 12, which is the smallest size Windows has a text style for. macOS's
+                 heading is 11 of its own points and 10 was that number carried across
+                 unconverted; at 100% scaling it lands under every other piece of small
+                 text on the system and reads as a rendering fault rather than a heading.
+                 The tracking is because these are put into capitals at runtime, and
+                 capitals set at their lowercase spacing close up into a block. -->
             <Style x:Key="SectionHeading" TargetType="TextBlock">
-                <Setter Property="FontSize" Value="10" />
+                <Setter Property="FontSize" Value="12" />
                 <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="CharacterSpacing" Value="60" />
                 <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
                 <!-- 4 here plus the section's own 6 is the 10 macOS puts after a heading. -->
                 <Setter Property="Margin" Value="0,0,0,4" />
@@ -47,10 +54,12 @@
             </Style>
 
             <!-- Indented to where the controls start, so a caption reads as belonging to
-                 the control above it rather than to the label beside it. -->
+                 the control above it rather than to the label beside it. 12 for the same
+                 reason the heading is: it is the size Windows sets a caption at, and the
+                 secondary colour is already doing the work of making it subordinate. -->
             <Style x:Key="Caption" TargetType="TextBlock">
                 <Setter Property="Margin" Value="188,0,0,0" />
-                <Setter Property="FontSize" Value="10" />
+                <Setter Property="FontSize" Value="12" />
                 <Setter Property="TextWrapping" Value="Wrap" />
                 <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
             </Style>
@@ -66,14 +75,17 @@
                  to copy, and what it does. Styles rather than properties set where the
                  rows are built, so the secondary colour comes from the theme the same way
                  every other caption on the page gets it. -->
+            <!-- Cascadia Mono ahead of Consolas: it is the monospace Windows 11 ships and
+                 sets its own terminal in, and the fallback is what the machines without
+                 it were going to use anyway. -->
             <Style x:Key="CommandText" TargetType="TextBlock">
-                <Setter Property="FontSize" Value="11" />
-                <Setter Property="FontFamily" Value="Consolas" />
+                <Setter Property="FontSize" Value="12" />
+                <Setter Property="FontFamily" Value="Cascadia Mono, Consolas" />
                 <Setter Property="IsTextSelectionEnabled" Value="True" />
             </Style>
 
             <Style x:Key="CommandDescription" TargetType="TextBlock">
-                <Setter Property="FontSize" Value="11" />
+                <Setter Property="FontSize" Value="12" />
                 <Setter Property="TextWrapping" Value="Wrap" />
                 <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
             </Style>
@@ -85,6 +97,34 @@
 
             <Style x:Key="Section" TargetType="StackPanel">
                 <Setter Property="Spacing" Value="6" />
+            </Style>
+
+            <!-- The tab icons, drawn the way the capture toolbar's are: outlines on a
+                 24-unit grid at one weight, answering to the SF Symbol macshot names for
+                 the same tab. Segoe Fluent Icons was the obvious thing to reach for and
+                 is the wrong shape — its glyphs are heavier and squarer than anything
+                 else in this app, so the one row of icons a user sees before the settings
+                 themselves looked like it came out of a different program. -->
+            <Style x:Key="TabIcon" TargetType="Path">
+                <Setter Property="Stroke" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+                <Setter Property="StrokeThickness" Value="1.5" />
+                <Setter Property="StrokeStartLineCap" Value="Round" />
+                <Setter Property="StrokeEndLineCap" Value="Round" />
+                <Setter Property="StrokeLineJoin" Value="Round" />
+            </Style>
+
+            <Style x:Key="TabIconFill" TargetType="Path">
+                <Setter Property="Fill" Value="{ThemeResource TextFillColorPrimaryBrush}" />
+            </Style>
+
+            <!-- A Canvas rather than the StackPanel's own layout: a Path in a stack is
+                 measured to its own bounding box and then aligned in the slot, which
+                 slides the two halves of a two-layer icon apart. A Canvas leaves every
+                 layer on the coordinates it was drawn on. -->
+            <Style x:Key="TabIconBox" TargetType="Canvas">
+                <Setter Property="Width" Value="24" />
+                <Setter Property="Height" Value="24" />
+                <Setter Property="HorizontalAlignment" Value="Center" />
             </Style>
         </Grid.Resources>
 
@@ -107,31 +147,59 @@
 
             <ListViewItem Tag="general" IsSelected="True">
                 <StackPanel Width="72" Padding="0,4">
-                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE713;" FontSize="22" />
+                    <!-- gearshape -->
+                    <Canvas Style="{StaticResource TabIconBox}">
+                        <Path
+                            Style="{StaticResource TabIcon}"
+                            Data="M12 5a7 7 0 1 1 0 14 7 7 0 0 1 0 -14zM12 9a3 3 0 1 1 0 6 3 3 0 0 1 0 -6zM12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7.1 7.1M16.9 16.9l2.2 2.2M19.1 4.9 16.9 7.1M7.1 16.9l-2.2 2.2" />
+                    </Canvas>
                     <TextBlock Text="General" FontSize="12" HorizontalAlignment="Center" Margin="0,4,0,0" />
                 </StackPanel>
             </ListViewItem>
             <ListViewItem Tag="capture">
                 <StackPanel Width="72" Padding="0,4">
-                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE722;" FontSize="22" />
+                    <!-- camera.viewfinder -->
+                    <Canvas Style="{StaticResource TabIconBox}">
+                        <Path
+                            Style="{StaticResource TabIcon}"
+                            Data="M3 8V5a2 2 0 0 1 2 -2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1 -2 2h-3M8 21H5a2 2 0 0 1 -2 -2v-3M12 8.6a3.4 3.4 0 1 1 0 6.8 3.4 3.4 0 0 1 0 -6.8z" />
+                    </Canvas>
                     <TextBlock Text="Capture" FontSize="12" HorizontalAlignment="Center" Margin="0,4,0,0" />
                 </StackPanel>
             </ListViewItem>
             <ListViewItem Tag="shortcuts">
                 <StackPanel Width="72" Padding="0,4">
-                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE144;" FontSize="22" />
+                    <!-- keyboard -->
+                    <Canvas Style="{StaticResource TabIconBox}">
+                        <Path
+                            Style="{StaticResource TabIcon}"
+                            Data="M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2H4a2 2 0 0 1 -2 -2V7a2 2 0 0 1 2 -2zM6.5 9.5h1M10 9.5h1M13.5 9.5h1M17 9.5h1M8 14.5h8" />
+                    </Canvas>
                     <TextBlock Text="Shortcuts" FontSize="12" HorizontalAlignment="Center" Margin="0,4,0,0" />
                 </StackPanel>
             </ListViewItem>
             <ListViewItem Tag="tools">
                 <StackPanel Width="72" Padding="0,4">
-                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE70F;" FontSize="22" />
+                    <!-- paintbrush -->
+                    <Canvas Style="{StaticResource TabIconBox}">
+                        <Path
+                            Style="{StaticResource TabIcon}"
+                            Data="M18.5 2.5a2.8 2.8 0 0 1 3 3L12.5 14.5l-3 -3zM9.5 11.5l3 3 -2.5 2.5c-1 1 -2.6 1.5 -4.5 1.5 0 -1.9 .5 -3.5 1.5 -4.5z" />
+                    </Canvas>
                     <TextBlock Text="Tools" FontSize="12" HorizontalAlignment="Center" Margin="0,4,0,0" />
                 </StackPanel>
             </ListViewItem>
             <ListViewItem Tag="recording">
                 <StackPanel Width="72" Padding="0,4">
-                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE714;" FontSize="22" />
+                    <!-- record.circle -->
+                    <Canvas Style="{StaticResource TabIconBox}">
+                        <Path
+                            Style="{StaticResource TabIcon}"
+                            Data="M12 2.5a9.5 9.5 0 1 1 0 19 9.5 9.5 0 0 1 0 -19z" />
+                        <Path
+                            Style="{StaticResource TabIconFill}"
+                            Data="M12 7a5 5 0 1 1 0 10 5 5 0 0 1 0 -10z" />
+                    </Canvas>
                     <TextBlock Text="Recording" FontSize="12" HorizontalAlignment="Center" Margin="0,4,0,0" />
                 </StackPanel>
             </ListViewItem>
@@ -140,13 +208,26 @@
                  with. -->
             <ListViewItem x:Name="UploadsTab" Tag="uploads">
                 <StackPanel Width="72" Padding="0,4">
-                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE898;" FontSize="22" />
+                    <!-- icloud.and.arrow.up -->
+                    <Canvas Style="{StaticResource TabIconBox}">
+                        <Path
+                            Style="{StaticResource TabIcon}"
+                            Data="M7.5 13h9.5a4 4 0 0 0 .2 -8A5.5 5.5 0 0 0 6.8 4.2 4.4 4.4 0 0 0 7.5 13zM12 22v-9M8.5 16.5 12 13l3.5 3.5" />
+                    </Canvas>
                     <TextBlock Text="Uploads" FontSize="12" HorizontalAlignment="Center" Margin="0,4,0,0" />
                 </StackPanel>
             </ListViewItem>
             <ListViewItem Tag="about">
                 <StackPanel Width="72" Padding="0,4">
-                    <FontIcon FontFamily="Segoe Fluent Icons" Glyph="&#xE946;" FontSize="22" />
+                    <!-- info.circle -->
+                    <Canvas Style="{StaticResource TabIconBox}">
+                        <Path
+                            Style="{StaticResource TabIcon}"
+                            Data="M12 2.5a9.5 9.5 0 1 1 0 19 9.5 9.5 0 0 1 0 -19zM12 11v6" />
+                        <Path
+                            Style="{StaticResource TabIconFill}"
+                            Data="M12 6.4a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0 -2.6z" />
+                    </Canvas>
                     <TextBlock Text="About" FontSize="12" HorizontalAlignment="Center" Margin="0,4,0,0" />
                 </StackPanel>
             </ListViewItem>

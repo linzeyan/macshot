@@ -1,13 +1,9 @@
 using Macshot.Windows.Core.Annotations;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
-
-// Imported rather than written out at each use site: inside namespace Macshot.Windows
-// the name "Windows" binds to Macshot.Windows, so a qualified Rect resolves to
-// Macshot.Rect and does not compile.
-using Windows.Foundation;
 
 namespace Macshot.Windows.Toolbar;
 
@@ -21,16 +17,37 @@ namespace Macshot.Windows.Toolbar;
 /// know from the word. The word survives as the tooltip.
 /// </para>
 /// <para>
-/// Built from <c>Line</c>, <c>Rectangle</c> and <c>Ellipse</c> rather than icon-font
-/// codepoints. A codepoint written without a Windows to look at renders as an empty box
-/// when it is wrong, which is worse than the word it replaced — and half of these have
-/// no glyph in the icon font anyway. Where a tool's mark can be drawn, the icon is that
-/// mark rather than a picture of an instrument.
+/// One outline per icon, drawn from path data on a 24-unit grid and scaled down to the
+/// button's 16 — the grid every icon set is drawn on, and the size SF Symbols hands back
+/// at <c>pointSize 14</c>. Each icon here answers to the SF Symbol macshot names for the
+/// same button, named in the comment above it, down to whether that symbol is the outline
+/// or the <c>.fill</c>: a filled pin beside an outlined tray is the kind of mismatch that
+/// makes a row of icons look assembled rather than drawn.
+/// </para>
+/// <para>
+/// Path data rather than <c>Line</c> and <c>Rectangle</c> laid out by margin. Curves that
+/// are really curves, corners that are really rounded, and one stroke width across the
+/// whole row — the three things a row of hand-placed primitives cannot hold on to, and
+/// between them the difference between an icon and a diagram of one.
 /// </para>
 /// </remarks>
 internal static class ToolbarIcons
 {
+    /// <summary>The grid the path data below is drawn on.</summary>
+    private const double Grid = 24;
+
+    /// <summary>The drawing area an icon is composed in, centred in a button.</summary>
     private const double Extent = ToolbarPalette.IconExtent;
+
+    /// <summary>
+    /// One weight for every stroke in the row, which is what SF Symbols' <c>.medium</c>
+    /// comes back as at this size. Set on the pen rather than on the geometry, so scaling
+    /// the 24-grid down to 16 moves the outline without thinning it.
+    /// </summary>
+    private const double Weight = 1.5;
+
+    /// <summary>The weight of a line that is there to be read past rather than read.</summary>
+    private const double Faint = 0.5;
 
     /// <summary>The icon for a button, or null when the button draws itself.</summary>
     public static FrameworkElement? For(ToolbarItem item) => item.Command switch
@@ -42,463 +59,329 @@ internal static class ToolbarIcons
         _ => ForCommand(item.Command),
     };
 
-    private static FrameworkElement ForCommand(ToolbarCommand command)
+    private static FrameworkElement ForCommand(ToolbarCommand command) => command switch
     {
-        var canvas = NewCanvas();
+        // arrow.uturn.backward — the shaft runs left to the head, and the turn below it
+        // is what separates undo from a plain back arrow.
+        ToolbarCommand.Undo => Icon(
+            Outline("M9 5 4 10l5 5M4 10h9a6 6 0 0 1 0 12h-2")),
 
-        switch (command)
+        // arrow.uturn.forward
+        ToolbarCommand.Redo => Icon(
+            Outline("M15 5l5 5 -5 5M20 10h-9a6 6 0 0 0 0 12h2")),
+
+        // xmark
+        ToolbarCommand.Cancel => Icon(Outline(Xmark)),
+
+        // arrow.up.and.down.and.arrow.left.and.right
+        ToolbarCommand.MoveSelection => Icon(Outline(
+            "M12 2v20M2 12h20M9 5l3 -3 3 3M9 19l3 3 3 -3M5 9l-3 3 3 3M19 9l3 3 -3 3")),
+
+        // arrow.up.forward.app — the capture carries on outside the frame it is in, so
+        // the frame is the faint half and the arrow leaving it is the loud one.
+        ToolbarCommand.OpenEditor => Icon(
+            Outline("M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2H5a2 2 0 0 1 -2 -2V5a2 2 0 0 1 2 -2z", Faint),
+            Outline("M9 15 15 9M10 9h5v5")),
+
+        // doc.on.doc — two sheets, the one behind faint so the front one keeps its edge.
+        ToolbarCommand.Copy => Icon(
+            Outline("M6 17H5a2 2 0 0 1 -2 -2V4a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v1", Faint),
+            Outline("M11 7h8a2 2 0 0 1 2 2v11a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2V9a2 2 0 0 1 2 -2z")),
+
+        // square.and.arrow.down.fill — the tray is the filled half of that symbol, the
+        // arrow going into it the stroked one.
+        ToolbarCommand.Save => Icon(
+            Solid("M3 13h3v5h12v-5h3v6a3 3 0 0 1 -3 3H6a3 3 0 0 1 -3 -3z"),
+            Outline("M12 2v12M7 9.5l5 5 5 -5")),
+
+        // pin.fill
+        ToolbarCommand.Pin => Icon(Solid(
+            "M9 2h6a1 1 0 0 1 0 2h-.6l.6 5.6 2.9 2.4a2 2 0 0 1 .7 1.6V15a1 1 0 0 1 -1 1h-5v6"
+            + "a.8 .8 0 0 1 -1.6 0v-6h-5a1 1 0 0 1 -1 -1v-1.4a2 2 0 0 1 .7 -1.6L9 9.6 9.6 4H9a1 1 0 0 1 0 -2z")),
+
+        // doc.text.viewfinder — four corners and the lines they are closing in on.
+        ToolbarCommand.ReadText => Icon(
+            Outline("M3 8V5a2 2 0 0 1 2 -2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1 -2 2h-3M8 21H5a2 2 0 0 1 -2 -2v-3"),
+            Outline("M8 9h8M8 12.5h8M8 16h5", Faint)),
+
+        // slider.horizontal.3 — three tracks at three settings, which is what the popover
+        // behind the button holds.
+        ToolbarCommand.Adjust => Icon(
+            Outline("M3 6h18M3 12h18M3 18h18", Faint),
+            Solid("M15 6a2 2 0 1 1 -4 0 2 2 0 0 1 4 0zM9 12a2 2 0 1 1 -4 0 2 2 0 0 1 4 0zM19 18a2 2 0 1 1 -4 0 2 2 0 0 1 4 0z")),
+
+        // square.and.arrow.up
+        ToolbarCommand.Share => Icon(
+            Outline("M8 11H6a2 2 0 0 0 -2 2v7a2 2 0 0 0 2 2h12a2 2 0 0 0 2 -2v-7a2 2 0 0 0 -2 -2h-2"),
+            Outline("M12 2v14M7.5 6.5 12 2l4.5 4.5")),
+
+        // icloud.and.arrow.up
+        ToolbarCommand.Upload => Icon(
+            Outline("M7.5 13h9.5a4 4 0 0 0 .2 -8A5.5 5.5 0 0 0 6.8 4.2 4.4 4.4 0 0 0 7.5 13z", Faint),
+            Outline("M12 22v-9M8.5 16.5 12 13l3.5 3.5")),
+
+        // translate — two scripts side by side, a Latin A and a mark built the way a CJK
+        // character is, which is what the button turns one into.
+        ToolbarCommand.Translate => Icon(
+            Outline("M3 19.5 7 6.5l4 13M4.4 15.4h5.2"),
+            Outline("M13 9h8M17 9v10.5M14.5 13.5h5")),
+
+        // person.crop.circle.dashed — the dashes are the symbol's own, and they are what
+        // says the face inside is on its way out.
+        ToolbarCommand.Redact => Icon(
+            Outline("M12 2.5a9.5 9.5 0 1 1 0 19 9.5 9.5 0 0 1 0 -19z", 1, [2.2, 1.8]),
+            Outline("M12 12.6a3.3 3.3 0 1 0 0 -6.6 3.3 3.3 0 0 0 0 6.6zM6.2 19.6a6.6 6.6 0 0 1 11.6 0")),
+
+        // circle.righthalf.filled.inverse — the same picture the other way round, said
+        // without naming a colour.
+        ToolbarCommand.InvertColors => Icon(
+            Outline("M12 2.5a9.5 9.5 0 1 1 0 19 9.5 9.5 0 0 1 0 -19z"),
+            Solid("M12 3.6a8.4 8.4 0 0 1 0 16.8z")),
+
+        // sparkles — one four-pointed star with a smaller one off its shoulder.
+        ToolbarCommand.Beautify => Icon(Solid(
+            "M10 3l1.5 5L16.5 9.5 11.5 11 10 16 8.5 11 3.5 9.5 8.5 8z"
+            + "M18 13.5l.8 2.7 2.7 .8 -2.7 .8 -.8 2.7 -.8 -2.7 -2.7 -.8 2.7 -.8z")),
+
+        // scroll — a page taller than the view with the capture going on down it. The
+        // symbol itself is a rolled parchment, which at sixteen across is a lozenge; what
+        // survives the size is the page and the direction, so that is what is drawn.
+        ToolbarCommand.ScrollCapture => Icon(
+            Outline("M6 3h12a2 2 0 0 1 2 2v6a2 2 0 0 1 -2 2H6a2 2 0 0 1 -2 -2V5a2 2 0 0 1 2 -2z", Faint),
+            Outline("M12 10v11M7.5 16.5 12 21l4.5 -4.5")),
+
+        // video.fill
+        ToolbarCommand.Record => Icon(Solid(
+            "M4 6h9a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2H4a2 2 0 0 1 -2 -2V8a2 2 0 0 1 2 -2z"
+            + "M16 13.4V10.6l4.6 -2.7a.9 .9 0 0 1 1.4 .8v6.2a.9 .9 0 0 1 -1.4 .8z")),
+
+        // record.circle — the same dot as Record, ringed, because this is the press that
+        // actually starts it.
+        ToolbarCommand.StartRecording => Icon(
+            Outline("M12 2.5a9.5 9.5 0 1 1 0 19 9.5 9.5 0 0 1 0 -19z"),
+            Solid("M12 7a5 5 0 1 1 0 10 5 5 0 0 1 0 -10z")),
+
+        ToolbarCommand.CancelRecording => Icon(Outline(Xmark)),
+
+        // cursorarrow.click.2 — the pointer, and the marks the recording draws round
+        // each click.
+        ToolbarCommand.MouseHighlight => Icon(
+            Outline("M9.5 8.5l10 4.5 -4.3 1.7 -1.7 4.3z"),
+            Outline("M4.5 4.5 6.7 6.7M3 11.5h3M11.5 3v3", Faint)),
+
+        // keyboard
+        ToolbarCommand.ShowKeystrokes => Icon(
+            Outline("M4 5h16a2 2 0 0 1 2 2v10a2 2 0 0 1 -2 2H4a2 2 0 0 1 -2 -2V7a2 2 0 0 1 2 -2z"),
+            Solid("M6 9h2v2H6zM10 9h2v2h-2zM14 9h2v2h-2zM18 9h2v2h-2zM8 14h8v2H8z")),
+
+        // speaker.wave.2.fill — both waves are drawn whatever the state. The button
+        // lights when it is on, and the drawing does not have to say so twice.
+        ToolbarCommand.SystemAudio => Icon(
+            Solid("M11 4.8v14.4a.8 .8 0 0 1 -1.3 .6L5.6 16H3a1 1 0 0 1 -1 -1v-6a1 1 0 0 1 1 -1h2.6l4.1 -3.8a.8 .8 0 0 1 1.3 .6z"),
+            Outline("M15 9.2a4 4 0 0 1 0 5.6", 0.8),
+            Outline("M18.2 6a8 8 0 0 1 0 12", Faint)),
+
+        // mic.fill — the capsule is the filled half of that symbol, the cradle under it
+        // the stroked one.
+        ToolbarCommand.MicAudio => Icon(
+            Solid("M12 2a3.2 3.2 0 0 1 3.2 3.2v6.4a3.2 3.2 0 0 1 -6.4 0V5.2A3.2 3.2 0 0 1 12 2z"),
+            Outline("M18.5 11v.8a6.5 6.5 0 0 1 -13 0V11M12 18.3V22M8.5 22h7")),
+
+        // web.camera — the lens, and the bar it stands on.
+        ToolbarCommand.Webcam => Icon(
+            Outline("M12 3a7.5 7.5 0 1 1 0 15 7.5 7.5 0 0 1 0 -15z"),
+            Solid("M12 7.5a3.5 3.5 0 1 1 0 7 3.5 3.5 0 0 1 0 -7z"),
+            Outline("M12 18v2M6 21h12", Faint)),
+
+        // gearshape
+        ToolbarCommand.RecordingSettings => Icon(
+            Outline("M12 5a7 7 0 1 1 0 14 7 7 0 0 1 0 -14z"),
+            Outline("M12 2v3M12 19v3M2 12h3M19 12h3M4.9 4.9 7.1 7.1M16.9 16.9l2.2 2.2M19.1 4.9 16.9 7.1M7.1 16.9l-2.2 2.2"),
+            Outline("M12 9a3 3 0 1 1 0 6 3 3 0 0 1 0 -6z", Faint)),
+
+        _ => Unnamed("?"),
+    };
+
+    private static FrameworkElement ForTool(AnnotationTool tool) => tool switch
+    {
+        // scribble — a stroke that followed a hand, which is the whole difference from
+        // the line tool.
+        AnnotationTool.Pencil => Icon(Outline(
+            "M3 15c1.2 -4.5 3.6 -4.5 4.8 0s3.6 4.5 4.8 0 3.6 -4.5 4.8 0")),
+
+        // line.diagonal
+        AnnotationTool.Line => Icon(Outline("M4 20 20 4")),
+
+        // arrow.up.right
+        AnnotationTool.Arrow => Icon(Outline("M6 18 18 6M9 6h9v9")),
+
+        // rectangle
+        AnnotationTool.Rectangle => Icon(Outline(
+            "M4 6h16a2 2 0 0 1 2 2v8a2 2 0 0 1 -2 2H4a2 2 0 0 1 -2 -2V8a2 2 0 0 1 2 -2z")),
+
+        // oval
+        AnnotationTool.Ellipse => Icon(Outline(
+            "M12 5c5.5 0 10 3.1 10 7s-4.5 7 -10 7 -10 -3.1 -10 -7 4.5 -7 10 -7z")),
+
+        // highlighter — the pen on its angle, and under it the swipe it leaves.
+        AnnotationTool.Marker => Icon(
+            Outline("M10 14 6.5 10.5 15 2a2.5 2.5 0 0 1 3.5 3.5zM6.5 10.5 4 15l1.5 1.5L10 14"),
+            Solid("M3 19.5h14v2.5H3z", 0.55)),
+
+        // textformat — the symbol's own A and a. Drawn rather than typed: a glyph would
+        // be the one icon whose size and weight follow the toolbar's font instead of the
+        // row's.
+        AnnotationTool.Text => Icon(
+            Outline("M3.5 19 9 5.5 14.5 19M5.6 15.2h6.8"),
+            Outline("M18.6 13.4a2.3 2.3 0 1 0 0 4.6 2.3 2.3 0 0 0 0 -4.6M20.9 13.2V18")),
+
+        // 1.circle.fill, less the fill: knocking the numeral out of a filled disc needs
+        // the disc painted in whatever is behind the button, and behind this one is the
+        // capture. Ringed instead, which is the same symbol without the hole.
+        AnnotationTool.Number => Icon(
+            Outline("M12 2.5a9.5 9.5 0 1 1 0 19 9.5 9.5 0 0 1 0 -19z"),
+            Outline("M10.2 9.4 12.6 7.6V16.4M10.4 16.4h4.4")),
+
+        // A checkerboard, which is macshot's own icon for it and what the effect looks
+        // like at the size anyone notices it. The mode is chosen on the options row, so
+        // the button stands for all four.
+        AnnotationTool.Censor => Icon(
+            Solid("M3 3h9v9H3zM12 12h9v9h-9z"),
+            Solid("M12 3h9v9h-9zM3 12h9v9H3z", 0.45)),
+
+        // sun.max
+        AnnotationTool.Highlight => Icon(
+            Outline("M12 8a4 4 0 1 1 0 8 4 4 0 0 1 0 -8z"),
+            Outline("M12 2v2.5M12 19.5V22M2 12h2.5M19.5 12H22M4.9 4.9 6.7 6.7M17.3 17.3l1.8 1.8M19.1 4.9 17.3 6.7M6.7 17.3l-1.8 1.8")),
+
+        // magnifyingglass — the one icon here that is a picture of the instrument rather
+        // than of its mark, because the mark is the pixels underneath at twice the size
+        // and there is no drawing that.
+        AnnotationTool.Loupe => Icon(Outline(
+            "M10.5 3a7.5 7.5 0 1 1 0 15 7.5 7.5 0 0 1 0 -15zM16 16l5.5 5.5")),
+
+        // face.smiling — the mark is whichever emoji is chosen, and no single drawing
+        // stands for all of them.
+        AnnotationTool.Stamp => Icon(
+            Outline("M12 2.5a9.5 9.5 0 1 1 0 19 9.5 9.5 0 0 1 0 -19zM7.8 14.2a5.2 5.2 0 0 0 8.4 0"),
+            Solid("M8.4 9a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0 -2.6zM15.6 9a1.3 1.3 0 1 1 0 2.6 1.3 1.3 0 0 1 0 -2.6z")),
+
+        // eyedropper
+        AnnotationTool.ColorSampler => Icon(
+            Solid("M17 2.6a2.9 2.9 0 0 1 4.1 4.1l-1.9 1.9 -4.1 -4.1z"),
+            Outline("M15 4.6 19.4 9M14.6 7 5 16.6V19.5h2.9L17.5 9.9")),
+
+        // ruler
+        AnnotationTool.Measure => Icon(
+            Outline("M4 14.5 14.5 4a2 2 0 0 1 2.8 0l2.7 2.7a2 2 0 0 1 0 2.8L9.5 20a2 2 0 0 1 -2.8 0L4 17.3a2 2 0 0 1 0 -2.8z"),
+            Outline("M8 13.5l2 2M11 10.5l2 2M14 7.5l2 2", Faint)),
+
+        _ => Unnamed(ToolbarActions.Tooltip(tool)[..1]),
+    };
+
+    /// <summary>The two commands that are the same cross, written once.</summary>
+    private const string Xmark = "M5 5 19 19M19 5 5 19";
+
+    /// <summary>
+    /// Puts an icon's layers on the 16-unit square a button centres.
+    /// </summary>
+    /// <remarks>
+    /// A <see cref="Canvas"/> rather than a <see cref="Grid"/>: a path in a Grid is
+    /// measured to its own bounding box and then aligned to the cell, which slides each
+    /// layer of a two-layer icon to a different place and pulls the icon apart. A Canvas
+    /// leaves every layer on the coordinates it was drawn on.
+    /// </remarks>
+    private static Canvas Icon(params Path[] layers)
+    {
+        var canvas = new Canvas { Width = Extent, Height = Extent, IsHitTestVisible = false };
+
+        foreach (var layer in layers)
         {
-        case ToolbarCommand.Undo:
-            // An arrow turning back on itself: the shaft points left, the hook above it
-            // is what separates undo from a plain back arrow.
-            canvas.Children.Add(Stroke(4, 9, 12, 9));
-            canvas.Children.Add(Stroke(4, 9, 7, 6));
-            canvas.Children.Add(Stroke(4, 9, 7, 12));
-            canvas.Children.Add(Stroke(12, 9, 12, 6));
-            break;
-
-        case ToolbarCommand.Redo:
-            canvas.Children.Add(Stroke(12, 9, 4, 9));
-            canvas.Children.Add(Stroke(12, 9, 9, 6));
-            canvas.Children.Add(Stroke(12, 9, 9, 12));
-            canvas.Children.Add(Stroke(4, 9, 4, 6));
-            break;
-
-        case ToolbarCommand.Cancel:
-            canvas.Children.Add(Stroke(4, 4, 12, 12, thickness: 1.8));
-            canvas.Children.Add(Stroke(12, 4, 4, 12, thickness: 1.8));
-            break;
-
-        case ToolbarCommand.MoveSelection:
-            // Arrows the four ways the region can go, which is what the button does
-            // while it is held.
-            canvas.Children.Add(Stroke(8, 2, 8, 14));
-            canvas.Children.Add(Stroke(2, 8, 14, 8));
-            canvas.Children.Add(Stroke(8, 2, 5.5, 4.5));
-            canvas.Children.Add(Stroke(8, 2, 10.5, 4.5));
-            canvas.Children.Add(Stroke(8, 14, 5.5, 11.5));
-            canvas.Children.Add(Stroke(8, 14, 10.5, 11.5));
-            canvas.Children.Add(Stroke(2, 8, 4.5, 5.5));
-            canvas.Children.Add(Stroke(2, 8, 4.5, 10.5));
-            canvas.Children.Add(Stroke(14, 8, 11.5, 5.5));
-            canvas.Children.Add(Stroke(14, 8, 11.5, 10.5));
-            break;
-
-        case ToolbarCommand.OpenEditor:
-            // A window with an arrow leaving it: the capture carries on somewhere else.
-            canvas.Children.Add(Frame(2, 5, 9, 9));
-            canvas.Children.Add(Stroke(8, 8, 14, 2));
-            canvas.Children.Add(Stroke(14, 2, 9.5, 2));
-            canvas.Children.Add(Stroke(14, 2, 14, 6.5));
-            break;
-
-        case ToolbarCommand.Copy:
-            // Two sheets, one behind the other.
-            canvas.Children.Add(Frame(2, 2, 9, 9, opacity: 0.6));
-            canvas.Children.Add(Frame(5, 5, 9, 9));
-            break;
-
-        case ToolbarCommand.Save:
-            // Into a tray: the arrow says down, the bracket says it lands somewhere.
-            canvas.Children.Add(Stroke(8, 2, 8, 10));
-            canvas.Children.Add(Stroke(8, 10, 5, 7));
-            canvas.Children.Add(Stroke(8, 10, 11, 7));
-            canvas.Children.Add(Stroke(3, 12.5, 13, 12.5));
-            canvas.Children.Add(Stroke(3, 12.5, 3, 10.5));
-            canvas.Children.Add(Stroke(13, 12.5, 13, 10.5));
-            break;
-
-        case ToolbarCommand.Pin:
-            // A pin seen from the side: head, shaft, point.
-            canvas.Children.Add(Stroke(5, 3, 11, 3, thickness: 2));
-            canvas.Children.Add(Stroke(8, 3, 8, 10));
-            canvas.Children.Add(Stroke(6, 10, 10, 10));
-            canvas.Children.Add(Stroke(8, 10, 8, 14, thickness: 1.2));
-            break;
-
-        case ToolbarCommand.ReadText:
-            // Lines of text inside a page, which is what the tool goes looking for.
-            canvas.Children.Add(Frame(2, 2, 12, 12, opacity: 0.5));
-            canvas.Children.Add(Stroke(4.5, 6, 11.5, 6));
-            canvas.Children.Add(Stroke(4.5, 8.5, 11.5, 8.5));
-            canvas.Children.Add(Stroke(4.5, 11, 8.5, 11));
-            break;
-
-        case ToolbarCommand.Adjust:
-            // Three sliders at different settings, which is macshot's
-            // slider.horizontal.3 and is what the popover behind the button holds.
-            canvas.Children.Add(Stroke(2, 4, 14, 4, opacity: 0.5));
-            canvas.Children.Add(Stroke(2, 8, 14, 8, opacity: 0.5));
-            canvas.Children.Add(Stroke(2, 12, 14, 12, opacity: 0.5));
-            canvas.Children.Add(Block(9.5, 2.5, 2, 3));
-            canvas.Children.Add(Block(4, 6.5, 2, 3));
-            canvas.Children.Add(Block(10.5, 10.5, 2, 3));
-            break;
-
-        case ToolbarCommand.Share:
-            // A box with something leaving it upwards, which is the share glyph on both
-            // systems: macshot's square.and.arrow.up is the same drawing.
-            canvas.Children.Add(Stroke(3, 8, 3, 14));
-            canvas.Children.Add(Stroke(3, 14, 13, 14));
-            canvas.Children.Add(Stroke(13, 8, 13, 14));
-            canvas.Children.Add(Stroke(8, 2, 8, 10));
-            canvas.Children.Add(Stroke(8, 2, 5.5, 4.5));
-            canvas.Children.Add(Stroke(8, 2, 10.5, 4.5));
-            break;
-
-        case ToolbarCommand.Upload:
-            // A cloud with an arrow going into it, which is macshot's
-            // icloud.and.arrow.up. The cloud is three arcs' worth of outline drawn as
-            // straight runs: at sixteen pixels a curve and a chamfer are the same thing.
-            canvas.Children.Add(Stroke(4, 11, 12, 11, opacity: 0.5));
-            canvas.Children.Add(Stroke(4, 11, 2.5, 9, opacity: 0.5));
-            canvas.Children.Add(Stroke(2.5, 9, 4.5, 7, opacity: 0.5));
-            canvas.Children.Add(Stroke(4.5, 7, 6.5, 5.5, opacity: 0.5));
-            canvas.Children.Add(Stroke(6.5, 5.5, 10, 6, opacity: 0.5));
-            canvas.Children.Add(Stroke(10, 6, 11.5, 8, opacity: 0.5));
-            canvas.Children.Add(Stroke(11.5, 8, 13.5, 9, opacity: 0.5));
-            canvas.Children.Add(Stroke(13.5, 9, 12, 11, opacity: 0.5));
-            canvas.Children.Add(Stroke(8, 14, 8, 8));
-            canvas.Children.Add(Stroke(8, 8, 5.8, 10.2));
-            canvas.Children.Add(Stroke(8, 8, 10.2, 10.2));
-            break;
-
-        case ToolbarCommand.Translate:
-            // Two scripts side by side — a Latin A and a mark built the way a CJK
-            // character is — which is what the button turns one into. An arrow between
-            // them would say the same thing and leave neither legible at this size.
-            canvas.Children.Add(Stroke(2, 13, 4.5, 4));
-            canvas.Children.Add(Stroke(4.5, 4, 7, 13));
-            canvas.Children.Add(Stroke(3.1, 10, 5.9, 10));
-            canvas.Children.Add(Stroke(9, 5.5, 14, 5.5));
-            canvas.Children.Add(Stroke(11.5, 5.5, 11.5, 13));
-            canvas.Children.Add(Stroke(9.5, 9, 13.5, 9));
-            break;
-
-        case ToolbarCommand.Redact:
-            // A line of text with a block struck through it.
-            canvas.Children.Add(Stroke(3, 5, 13, 5, opacity: 0.5));
-            canvas.Children.Add(Stroke(3, 12, 9, 12, opacity: 0.5));
-            canvas.Children.Add(Block(3, 7.5, 10, 3));
-            break;
-
-        case ToolbarCommand.InvertColors:
-            // A circle with one half filled, which is what macshot draws: the shape says
-            // "the same picture, the other way round" without naming a colour.
-            canvas.Children.Add(Ring(1, 14, 1));
-            canvas.Children.Add(new Ellipse
-            {
-                Width = 14,
-                Height = 14,
-                Fill = ToolbarPalette.IconBrush(),
-                Margin = new Thickness(2, 1, 0, 0),
-
-                // A clip rather than a drawn half-disc: the geometry a Path would need is
-                // two arcs and a line, and the right half of a circle is exactly the
-                // intersection of the circle with the rectangle beside it.
-                Clip = new RectangleGeometry { Rect = new Rect(7, 0, 7, 14) },
-            });
-            break;
-
-        case ToolbarCommand.Beautify:
-            // A picture standing off its background, with the sparkle macshot's own
-            // button uses: the frame is what the action adds, the sparkle is why.
-            canvas.Children.Add(Frame(2, 5, 9, 9));
-            canvas.Children.Add(Stroke(13, 2, 13, 6));
-            canvas.Children.Add(Stroke(11, 4, 15, 4));
-            break;
-
-        case ToolbarCommand.ScrollCapture:
-            // A page longer than the view, with an arrow going on down it.
-            canvas.Children.Add(Frame(3, 2, 10, 7, opacity: 0.5));
-            canvas.Children.Add(Stroke(8, 8, 8, 14));
-            canvas.Children.Add(Stroke(8, 14, 5.5, 11.5));
-            canvas.Children.Add(Stroke(8, 14, 10.5, 11.5));
-            break;
-
-        case ToolbarCommand.Record:
-            // A filled circle, which is what every recorder anyone has used shows.
-            canvas.Children.Add(new Ellipse
-            {
-                Width = 9,
-                Height = 9,
-                Fill = ToolbarPalette.IconBrush(),
-                Margin = new Thickness(3.5, 3.5, 0, 0),
-            });
-            canvas.Children.Add(Ring(0.5, 15, 0.55));
-            break;
-
-        case ToolbarCommand.StartRecording:
-            // macshot's record.circle: the same dot as Record, ringed, because this is
-            // the press that actually starts it.
-            canvas.Children.Add(new Ellipse
-            {
-                Width = 7,
-                Height = 7,
-                Fill = ToolbarPalette.IconBrush(),
-                Margin = new Thickness(4.5, 4.5, 0, 0),
-            });
-            canvas.Children.Add(Ring(1, 13, 1));
-            break;
-
-        case ToolbarCommand.CancelRecording:
-            canvas.Children.Add(Stroke(4, 4, 12, 12, thickness: 1.8));
-            canvas.Children.Add(Stroke(12, 4, 4, 12, thickness: 1.8));
-            break;
-
-        case ToolbarCommand.MouseHighlight:
-            // A pointer with the two marks that say it was clicked, which is what the
-            // recording draws round each click.
-            canvas.Children.Add(Stroke(6, 4, 6, 12));
-            canvas.Children.Add(Stroke(6, 4, 11.5, 9.5));
-            canvas.Children.Add(Stroke(6, 12, 11.5, 9.5));
-            canvas.Children.Add(Stroke(2.5, 3, 4, 4.5, opacity: 0.7));
-            canvas.Children.Add(Stroke(2.5, 8, 4.5, 8, opacity: 0.7));
-            break;
-
-        case ToolbarCommand.ShowKeystrokes:
-            // A keyboard: the outline, two rows of keys, and the space bar.
-            canvas.Children.Add(Frame(1.5, 4, 13, 9));
-            canvas.Children.Add(Stroke(4, 6.5, 12, 6.5, thickness: 1.2, opacity: 0.7));
-            canvas.Children.Add(Stroke(4, 8.8, 12, 8.8, thickness: 1.2, opacity: 0.7));
-            canvas.Children.Add(Stroke(5.5, 11, 10.5, 11, thickness: 1.2));
-            break;
-
-        case ToolbarCommand.SystemAudio:
-            // A speaker with its waves. Both waves are drawn whatever the state — the
-            // button lights when it is on, and the drawing does not have to say so twice.
-            canvas.Children.Add(Block(2, 6, 3, 4));
-            canvas.Children.Add(Stroke(5, 6, 8, 3.5));
-            canvas.Children.Add(Stroke(5, 10, 8, 12.5));
-            canvas.Children.Add(Stroke(8, 3.5, 8, 12.5));
-            canvas.Children.Add(Stroke(10.5, 6, 10.5, 10, opacity: 0.75));
-            canvas.Children.Add(Stroke(13, 4, 13, 12, opacity: 0.5));
-            break;
-
-        case ToolbarCommand.MicAudio:
-            // A microphone: the capsule, the cradle under it, and the stand.
-            canvas.Children.Add(new Rectangle
-            {
-                Width = 4.5,
-                Height = 8,
-                RadiusX = 2.25,
-                RadiusY = 2.25,
-                Stroke = ToolbarPalette.IconBrush(),
-                StrokeThickness = 1.5,
-                Margin = new Thickness(5.75, 1.5, 0, 0),
-            });
-            canvas.Children.Add(Stroke(3.5, 8, 3.5, 9.5));
-            canvas.Children.Add(Stroke(12.5, 8, 12.5, 9.5));
-            canvas.Children.Add(Stroke(3.5, 9.5, 12.5, 9.5));
-            canvas.Children.Add(Stroke(8, 11.5, 8, 14.5));
-            break;
-
-        case ToolbarCommand.Webcam:
-            // A camera body with its lens, which is what the button puts in the corner
-            // of the recording.
-            canvas.Children.Add(new Rectangle
-            {
-                Width = 13,
-                Height = 9,
-                RadiusX = 2,
-                RadiusY = 2,
-                Stroke = ToolbarPalette.IconBrush(),
-                StrokeThickness = 1.5,
-                Margin = new Thickness(1.5, 3.5, 0, 0),
-            });
-            canvas.Children.Add(Ring(4.5, 6, 1));
-            break;
-
-        case ToolbarCommand.RecordingSettings:
-            // macshot's gearshape: a ring with four teeth, which is as much of a gear as
-            // survives being drawn 16 across.
-            canvas.Children.Add(Ring(3.5, 8, 1));
-            canvas.Children.Add(Stroke(8, 1.5, 8, 3.5));
-            canvas.Children.Add(Stroke(8, 12.5, 8, 14.5));
-            canvas.Children.Add(Stroke(1.5, 8, 3.5, 8));
-            canvas.Children.Add(Stroke(12.5, 8, 14.5, 8));
-            break;
-
-        default:
-            return new TextBlock
-            {
-                Text = "?",
-                Foreground = ToolbarPalette.IconBrush(),
-                FontSize = 12,
-            };
+            canvas.Children.Add(layer);
         }
 
         return canvas;
     }
 
-    private static FrameworkElement ForTool(AnnotationTool tool)
+    /// <summary>A stroked outline, optionally broken into dashes.</summary>
+    private static Path Outline(string data, double opacity = 1, double[]? dashes = null)
     {
-        var canvas = NewCanvas();
+        var path = Scaled(data);
 
-        switch (tool)
+        path.Stroke = ToolbarPalette.IconBrush(opacity);
+        path.StrokeThickness = Weight;
+        path.StrokeStartLineCap = PenLineCap.Round;
+        path.StrokeEndLineCap = PenLineCap.Round;
+        path.StrokeLineJoin = PenLineJoin.Round;
+
+        if (dashes is not null)
         {
-        case AnnotationTool.Line:
-            canvas.Children.Add(Stroke(2, 14, 14, 2));
-            break;
+            // Flat caps for a dashed outline: a round cap adds half the stroke width to
+            // each end of every dash, which at this size closes the gaps back up.
+            path.StrokeStartLineCap = PenLineCap.Flat;
+            path.StrokeEndLineCap = PenLineCap.Flat;
 
-        case AnnotationTool.Arrow:
-            canvas.Children.Add(Stroke(2, 14, 14, 2));
-            canvas.Children.Add(Stroke(14, 2, 8.5, 2.5));
-            canvas.Children.Add(Stroke(14, 2, 13.5, 7.5));
-            break;
+            // Assigned rather than added to: the collection a Shape starts with is the
+            // property's default value, and adding to a default is the kind of thing that
+            // is shared between every Shape in the process.
+            var pattern = new DoubleCollection();
 
-        case AnnotationTool.Pencil:
-            // A zigzag rather than a straight line: what separates this from the line
-            // tool is that the stroke follows the hand.
-            canvas.Children.Add(Stroke(2, 12, 6, 4));
-            canvas.Children.Add(Stroke(6, 4, 10, 12));
-            canvas.Children.Add(Stroke(10, 12, 14, 5));
-            break;
-
-        case AnnotationTool.Marker:
-            // Wide and translucent, which is the whole difference from the pencil.
-            canvas.Children.Add(Stroke(2, 13, 14, 3, thickness: 5, opacity: 0.55));
-            break;
-
-        case AnnotationTool.Rectangle:
-            canvas.Children.Add(Frame(2, 3.5, 12, 9));
-            break;
-
-        case AnnotationTool.Ellipse:
-            canvas.Children.Add(new Ellipse
+            foreach (var dash in dashes)
             {
-                Width = 13,
-                Height = 10,
-                Stroke = ToolbarPalette.IconBrush(),
-                StrokeThickness = 1.6,
-                Margin = new Thickness(1.5, 3, 0, 0),
-            });
-            break;
+                pattern.Add(dash);
+            }
 
-        case AnnotationTool.Censor:
-            // A checkerboard, which is macshot's icon for it, and what the effect looks
-            // like at the size anyone actually notices it. The mode is chosen on the
-            // options row, so the button stands for all four.
-            canvas.Children.Add(Block(2, 3, 5, 4));
-            canvas.Children.Add(Block(8, 3, 5, 4, opacity: 0.45));
-            canvas.Children.Add(Block(2, 9, 5, 4, opacity: 0.45));
-            canvas.Children.Add(Block(8, 9, 5, 4));
-            break;
-
-        case AnnotationTool.Highlight:
-            // A bright centre with the surround dimmed: a spotlight, not a marker.
-            canvas.Children.Add(Ring(1, 14, 0.35));
-            canvas.Children.Add(new Ellipse
-            {
-                Width = 7,
-                Height = 7,
-                Fill = ToolbarPalette.IconBrush(0.9),
-                Margin = new Thickness(4.5, 4.5, 0, 0),
-            });
-            break;
-
-        case AnnotationTool.Measure:
-            // A span with a bar across each end, which is exactly what the tool draws.
-            canvas.Children.Add(Stroke(3, 8, 13, 8));
-            canvas.Children.Add(Stroke(3, 4, 3, 12));
-            canvas.Children.Add(Stroke(13, 4, 13, 12));
-            break;
-
-        case AnnotationTool.Loupe:
-            // A circle with a handle: the one icon here that is a picture of the
-            // instrument rather than of its mark, because the mark is the pixels
-            // underneath at twice the size and there is no drawing that.
-            canvas.Children.Add(Ring(1, 11, 1));
-            canvas.Children.Add(Stroke(11, 11, 14.5, 14.5, thickness: 2));
-            break;
-
-        case AnnotationTool.Text:
-            // A capital T, drawn rather than typed: a glyph would be the one icon whose
-            // size and weight follow the toolbar's font instead of the row.
-            canvas.Children.Add(Stroke(3, 3.5, 13, 3.5));
-            canvas.Children.Add(Stroke(8, 3.5, 8, 13));
-            break;
-
-        case AnnotationTool.Number:
-            canvas.Children.Add(Ring(1, 14, 1));
-            canvas.Children.Add(Stroke(8, 4.5, 8, 11.5));
-            canvas.Children.Add(Stroke(8, 4.5, 6, 6.5));
-            break;
-
-        case AnnotationTool.ColorSampler:
-            // A dropper: the barrel on the diagonal with a tip at the bottom left.
-            canvas.Children.Add(Stroke(6, 10, 12, 4, thickness: 2.4));
-            canvas.Children.Add(Stroke(10, 2, 14, 6, thickness: 2));
-            canvas.Children.Add(Stroke(6, 10, 3, 13));
-            canvas.Children.Add(Stroke(3, 13, 4.5, 11.5, opacity: 0.6));
-            break;
-
-        case AnnotationTool.Stamp:
-            // A face, because the mark is whichever emoji is chosen and no single
-            // drawing stands for all of them.
-            canvas.Children.Add(Ring(1, 14, 1));
-            canvas.Children.Add(Block(5.5, 6, 1.6, 1.6));
-            canvas.Children.Add(Block(9, 6, 1.6, 1.6));
-            canvas.Children.Add(Stroke(5, 10, 8, 11.5));
-            canvas.Children.Add(Stroke(8, 11.5, 11, 10));
-            break;
-
-        default:
-            return new TextBlock
-            {
-                Text = ToolbarActions.Tooltip(tool)[..1],
-                Foreground = ToolbarPalette.IconBrush(),
-                FontSize = 12,
-            };
+            path.StrokeDashArray = pattern;
         }
 
-        return canvas;
+        return path;
     }
 
-    private static Canvas NewCanvas() => new() { Width = Extent, Height = Extent };
-
-    private static Line Stroke(
-        double x1,
-        double y1,
-        double x2,
-        double y2,
-        double thickness = 1.6,
-        double opacity = 1) =>
-        new()
-        {
-            X1 = x1,
-            Y1 = y1,
-            X2 = x2,
-            Y2 = y2,
-            Stroke = ToolbarPalette.IconBrush(opacity),
-            StrokeThickness = thickness,
-            StrokeStartLineCap = PenLineCap.Round,
-            StrokeEndLineCap = PenLineCap.Round,
-        };
-
-    private static Rectangle Frame(double x, double y, double width, double height, double opacity = 1) => new()
+    /// <summary>A filled shape, for the symbols macshot names the <c>.fill</c> of.</summary>
+    private static Path Solid(string data, double opacity = 1)
     {
-        Width = width,
-        Height = height,
-        Stroke = ToolbarPalette.IconBrush(opacity),
-        StrokeThickness = 1.6,
-        Margin = new Thickness(x, y, 0, 0),
-    };
+        var path = Scaled(data);
 
-    private static Rectangle Block(double x, double y, double width, double height, double opacity = 1) => new()
-    {
-        Width = width,
-        Height = height,
-        Fill = ToolbarPalette.IconBrush(opacity),
-        Margin = new Thickness(x, y, 0, 0),
-    };
+        path.Fill = ToolbarPalette.IconBrush(opacity);
 
-    private static Ellipse Ring(double inset, double extent, double opacity) => new()
+        return path;
+    }
+
+    /// <summary>
+    /// Parses path data drawn on the 24-unit grid and brings it down to the button's 16.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The scale goes on the geometry rather than on the <see cref="Path"/>: a
+    /// <c>RenderTransform</c> would take the pen down with it and leave the row two
+    /// thirds of the weight it is supposed to be.
+    /// </para>
+    /// <para>
+    /// Loaded through <see cref="XamlReader"/> rather than converted from the string
+    /// directly. WinUI's path mini-language is implemented by the XAML parser and is
+    /// reachable no other way that is guaranteed to be there; the alternative is
+    /// assembling every curve as <c>PathFigure</c> objects, which is the same drawing at
+    /// ten times the length.
+    /// </para>
+    /// </remarks>
+    private static Path Scaled(string data)
     {
-        Width = extent,
-        Height = extent,
-        Stroke = ToolbarPalette.IconBrush(opacity),
-        StrokeThickness = 1.4,
-        Margin = new Thickness(inset + 1, inset, 0, 0),
+        var path = (Path)XamlReader.Load(
+            $"""<Path xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation" Data="{data}" />""");
+
+        path.Data.Transform = new ScaleTransform { ScaleX = Extent / Grid, ScaleY = Extent / Grid };
+
+        return path;
+    }
+
+    /// <summary>
+    /// What a button with no drawing shows. Only reachable for a command that was added
+    /// without an icon, so it is a reminder rather than a design.
+    /// </summary>
+    private static FrameworkElement Unnamed(string text) => new TextBlock
+    {
+        Text = text,
+        Foreground = ToolbarPalette.IconBrush(),
+        FontSize = 12,
     };
 }

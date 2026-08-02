@@ -690,7 +690,14 @@ public sealed partial class PreferencesWindow : Window
     {
         var button = new Button
         {
-            Content = new FontIcon { Glyph = glyph, FontSize = 12 },
+            // Named for the reason SmallButton names it: the theme's icon font differs
+            // between Windows versions, and a chevron that is absent draws as a box.
+            Content = new FontIcon
+            {
+                Glyph = glyph,
+                FontSize = 12,
+                FontFamily = new FontFamily("Segoe Fluent Icons"),
+            },
             IsEnabled = index + by >= 0 && index + by < _menuOrder.Count,
             Padding = new Thickness(6, 2, 6, 2),
             VerticalAlignment = VerticalAlignment.Center,

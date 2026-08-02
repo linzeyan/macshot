@@ -1,6 +1,8 @@
 using System.Globalization;
 using System.Runtime.InteropServices;
 
+using Macshot.Windows.Core.Output;
+
 namespace Macshot.Windows.Services;
 
 /// <summary>One entry in a submenu, built at the moment the menu is opened.</summary>
@@ -69,6 +71,12 @@ public sealed class TrayIconService : IDisposable
     private bool _iconOwned;
 
     private bool _disposed;
+
+    /// <summary>
+    /// The light or dark the context menu comes up in. macshot's own setting rather than
+    /// the system's, so the menu and the settings window opened from it agree.
+    /// </summary>
+    public AppTheme Theme { get; set; }
 
     /// <param name="visible">
     /// Whether the icon is put in the notification area at all. macshot's
@@ -330,6 +338,10 @@ public sealed class TrayIconService : IDisposable
         {
             return;
         }
+
+        // Before the menu exists rather than after: uxtheme decides a popup's colours as
+        // it is created, so a mode set afterwards would arrive one right-click late.
+        MenuTheme.Apply(Theme);
 
         var menu = CreatePopupMenu();
         if (menu == IntPtr.Zero)

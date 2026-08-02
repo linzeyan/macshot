@@ -222,10 +222,16 @@ public sealed class CaptureController : IDisposable
             !_settings.Current.HideTrayIcon,
             ChosenTrayIcon(_settings.Current));
 
+        _trayIcon.Theme = _settings.Current.Theme;
+
         // Unlike whether the icon is there at all, which is read once: the picture on it
         // can change under the pointer without the tray reordering itself, and macshot's
         // own icon setting takes effect as it is chosen.
-        _settings.Changed += (_, settings) => _trayIcon.SetIcon(ChosenTrayIcon(settings));
+        _settings.Changed += (_, settings) =>
+        {
+            _trayIcon.SetIcon(ChosenTrayIcon(settings));
+            _trayIcon.Theme = settings.Theme;
+        };
 
         // macshot's own menu, item for item and in its order — AppDelegate.swift:707–805.
         // The strings are macshot's source strings rather than paraphrases of them, which
