@@ -16,24 +16,13 @@ namespace Macshot.Windows.Rendering;
 /// </remarks>
 internal static class StampGlyph
 {
-    /// <summary>Large enough to read on a screenshot without covering what it points at.</summary>
-    private const double MinimumSize = 40;
+    /// <summary>The ones laid straight on the options row.</summary>
+    public static IReadOnlyList<string> Quick => StampChoices.Quick;
 
-    private const double SizePerStrokeUnit = 14;
+    /// <summary>Everything the picker behind the row offers.</summary>
+    public static IReadOnlyList<string> Choices => StampChoices.All;
 
-    /// <summary>
-    /// A short curated set rather than the whole emoji catalogue: this is the row a
-    /// screenshot annotator actually reaches for, and a full picker is a feature of
-    /// its own.
-    /// </summary>
-    public static IReadOnlyList<string> Choices { get; } =
-    [
-        "\U0001F44D", "\U0001F44E", "✅", "❌", "⚠️", "⭐",
-        "\U0001F525", "\U0001F389", "❤️", "\U0001F440", "\U0001F914", "\U0001F44F",
-        "\U0001F680", "\U0001F41B", "\U0001F512", "\U0001F4A1",
-    ];
-
-    public static string Default => Choices[0];
+    public static string Default => StampChoices.Default;
 
     public static FrameworkElement Build(string emoji, AnnotationStyle style, double rasterizationScale)
     {
@@ -43,7 +32,7 @@ internal static class StampGlyph
 
         // Frame pixels first, then divided by the scale, for the same reason the badge
         // and the text do it: the sprite is composited one to one into the capture.
-        var size = Math.Max(MinimumSize, style.StrokeWidth * SizePerStrokeUnit) / rasterizationScale;
+        var size = style.StampSize / rasterizationScale;
 
         return new TextBlock
         {

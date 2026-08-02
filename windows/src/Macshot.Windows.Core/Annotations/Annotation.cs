@@ -69,6 +69,27 @@ public sealed record AnnotationStyle(
     public const double OutlineSpread = 6;
 
     /// <summary>
+    /// How big a stamp is placed — macshot's own 64 (<c>OverlayView.swift:568-571</c>).
+    /// </summary>
+    /// <remarks>
+    /// Its own number rather than a multiple of the stroke width, for the reason the font
+    /// size is: a stamp is placed with a click, so nothing about the gesture says how big
+    /// it should be, and deriving it from the stroke meant a bigger tick could not be had
+    /// without a thicker arrow after it. 64 is about the size of a large icon, which is
+    /// what a stamp is standing in for.
+    /// </remarks>
+    public const double DefaultStampSize = 64;
+
+    /// <summary>The smallest the row offers. Below it a colour emoji is a coloured smudge.</summary>
+    public const double MinStampSize = 16;
+
+    /// <summary>
+    /// The largest. macshot's ceiling: past it the stamp is the picture rather than a mark
+    /// on it.
+    /// </summary>
+    public const double MaxStampSize = 256;
+
+    /// <summary>
     /// How much a loupe enlarges what is under it by default. Two, as on macOS: enough to
     /// read a hairline, little enough that the circle still shows its surroundings rather
     /// than four fat pixels.
@@ -243,6 +264,18 @@ public sealed record AnnotationStyle(
     /// </remarks>
     public double LoupeSize { get; init; } = DefaultLoupeSize;
 
+    /// <summary>
+    /// How big a stamp's glyph is drawn, in frame pixels. Read by
+    /// <see cref="AnnotationTool.Stamp"/> and by nothing else.
+    /// </summary>
+    /// <remarks>
+    /// Beside <see cref="FontSize"/> rather than sharing it, though both size a glyph: a
+    /// label and a stamp are placed for different reasons and are wanted at different
+    /// sizes, and one number for both would mean a tick could not be made bigger without
+    /// enlarging the next caption too.
+    /// </remarks>
+    public double StampSize { get; init; } = DefaultStampSize;
+
     public void Validate()
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(StrokeWidth);
@@ -250,6 +283,7 @@ public sealed record AnnotationStyle(
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(FontSize);
         ArgumentOutOfRangeException.ThrowIfLessThan(LoupeMagnification, 1);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(LoupeSize);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(StampSize);
         if (Opacity is < 0 or > 1)
         {
             throw new ArgumentOutOfRangeException(nameof(Opacity));

@@ -129,6 +129,7 @@ public static class AnnotationFile
             MeasureInPoints = annotation.Style.MeasureInPoints,
             LoupeMagnification = annotation.Style.LoupeMagnification,
             LoupeSize = annotation.Style.LoupeSize,
+            StampSize = annotation.Style.StampSize,
 
             // Flattened rather than an array of objects: a smoothed pencil stroke runs
             // to hundreds of samples, and {"x":1,"y":2} costs four times what 1,2 does
@@ -227,6 +228,9 @@ public static class AnnotationFile
             LoupeSize = stored.LoupeSize >= AnnotationStyle.MinLoupeSize
                 ? Math.Min(stored.LoupeSize, AnnotationStyle.MaxLoupeSize)
                 : AnnotationStyle.DefaultLoupeSize,
+            StampSize = stored.StampSize >= AnnotationStyle.MinStampSize
+                ? Math.Min(stored.StampSize, AnnotationStyle.MaxStampSize)
+                : AnnotationStyle.DefaultStampSize,
         };
 
         var sprite = Unpack(stored.Sprite);
@@ -415,6 +419,12 @@ public static class AnnotationFile
         /// which reads back as the default rather than as a loupe of no width.
         /// </summary>
         public double LoupeSize { get; init; }
+
+        /// <summary>
+        /// How big a stamp was placed. Zero in files written before it was adjustable,
+        /// which reads back as the default rather than as a glyph of no size.
+        /// </summary>
+        public double StampSize { get; init; }
 
         public double[]? Points { get; init; }
 

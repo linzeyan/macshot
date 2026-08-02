@@ -228,6 +228,13 @@ public sealed partial class AnnotationToolbarView : UserControl
 
     private readonly ToggleSwatch _textFill = new(L("Fill"));
     private readonly ToggleSwatch _textOutline = new(L("Outline"));
+    /// <summary>
+    /// macshot's quick stamps, laid straight on the row. A stamp is a one-click mark, and
+    /// the seventeen it offers there cover nearly every use of the tool — reaching them
+    /// through a picker would make the commonest ones the slowest.
+    /// </summary>
+    private readonly List<Button> _quickStamps = [];
+
     private readonly Button _stamp = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly GridView _stampChoices = new() { MaxWidth = 240, SelectionMode = ListViewSelectionMode.Single, RequestedTheme = ElementTheme.Dark };
 
@@ -1245,7 +1252,13 @@ public sealed partial class AnnotationToolbarView : UserControl
         _cornerLabel.Visibility = rounds;
         _cornerRadius.Visibility = rounds;
         _cornerValue.Visibility = rounds;
-        _stamp.Visibility = Show(AnnotationToolOptions.UsesStamp(tool));
+        var stamping = Show(AnnotationToolOptions.UsesStamp(tool));
+        _stamp.Visibility = stamping;
+        foreach (var pick in _quickStamps)
+        {
+            pick.Visibility = stamping;
+        }
+
         _smoothing.Visibility = Show(AnnotationEditor.IsFreeform(tool));
         _pencilPressure.Visibility = Show(AnnotationToolOptions.UsesPressure(tool));
         _smartMarker.Visibility = Show(AnnotationToolOptions.UsesSmartSnap(tool));
@@ -1437,6 +1450,15 @@ public sealed partial class AnnotationToolbarView : UserControl
                     AnnotationStyle.MinLoupeSize,
                     AnnotationStyle.MaxLoupeSize);
             }
+            else if (tool == AnnotationTool.Stamp)
+            {
+                _size.Minimum = AnnotationStyle.MinStampSize;
+                _size.Maximum = AnnotationStyle.MaxStampSize;
+                _size.Value = Math.Clamp(
+                    editor.Style.StampSize,
+                    AnnotationStyle.MinStampSize,
+                    AnnotationStyle.MaxStampSize);
+            }
             else
             {
                 _size.Minimum = MinStroke;
@@ -1602,6 +1624,16 @@ public sealed partial class AnnotationToolbarView : UserControl
         _stamp.Content = StampEmoji;
         _stamp.Flyout = new Flyout { Content = _stampChoices };
 
+        foreach (var emoji in StampGlyph.Quick)
+        {
+            var pick = QuickStamp(emoji);
+
+            // The emoji is captured rather than read back off the button, so a change to
+            // how these are drawn cannot quietly change what they stamp.
+            pick.Click += (_, _) => ChooseStamp(emoji);
+            _quickStamps.Add(pick);
+        }
+
         // The label's own four controls. macshot puts them on this row and nowhere else,
         // which is right: a face and a fill are chosen while looking at the label, not in
         // a settings window opened afterwards.
@@ -1652,6 +1684,11 @@ public sealed partial class AnnotationToolbarView : UserControl
         AddGroup(_measureUnit, _clampRuler);
         AddGroup(_font, _weight);
         AddGroup(_textFill, _textOutline);
+
+        // The quick row first and the picker behind its own rule, which is macshot's order
+        // (ToolOptionsRowView.swift:1183-1208): the seventeen you can reach, then the way
+        // to the rest.
+        AddGroup([.. _quickStamps]);
         AddGroup(_stamp);
     }
 
@@ -1825,11 +1862,18 @@ public sealed partial class AnnotationToolbarView : UserControl
 
     private void StampChoice_Changed(object sender, SelectionChangedEventArgs e)
     {
-        if (_stampChoices.SelectedItem is not string emoji)
+        if (_stampChoices.SelectedItem is string emoji)
         {
-            return;
+            ChooseStamp(emoji);
         }
+    }
 
+    /// <summary>
+    /// Takes <paramref name="emoji"/> as the mark the stamp tool places, from the row or
+    /// from the picker behind it.
+    /// </summary>
+    private void ChooseStamp(string emoji)
+    {
         StampEmoji = emoji;
         _stamp.Content = emoji;
         _stamp.Flyout?.Hide();
@@ -1838,6 +1882,31 @@ public sealed partial class AnnotationToolbarView : UserControl
         // make the choice look like it did nothing.
         SelectTool(AnnotationTool.Stamp);
     }
+
+    /// <summary>
+    /// One emoji on the row: the glyph and nothing round it.
+    /// </summary>
+    /// <remarks>
+    /// Stripped of the button's slab and its padding because seventeen of them sit side by
+    /// side, and seventeen chrome boxes would be a second toolbar inside the row. macshot's
+    /// size — 26 square, the glyph a little under it (<c>ToolOptionsRowView.swift:1185-1191</c>).
+    /// The minimums go with the padding: WinUI's own floor is 32, which would silently
+    /// ignore the height asked for here.
+    /// </remarks>
+    private static Button QuickStamp(string emoji) => new()
+    {
+        Content = emoji,
+        FontFamily = new FontFamily("Segoe UI Emoji"),
+        FontSize = 16,
+        Width = 26,
+        Height = 26,
+        MinWidth = 0,
+        MinHeight = 0,
+        Padding = new Thickness(0),
+        BorderThickness = new Thickness(0),
+        Background = new SolidColorBrush(Color.FromArgb(0, 0, 0, 0)),
+        VerticalAlignment = VerticalAlignment.Center,
+    };
 
     /// <summary>
     /// The style applies to marks drawn from now on. Restyling what is already on the
@@ -1858,10 +1927,13 @@ public sealed partial class AnnotationToolbarView : UserControl
         // across untouched rather than being overwritten with a reading of the other one.
         var typesetting = editor.Tool == AnnotationTool.Text;
         var magnifying = editor.Tool == AnnotationTool.Loupe;
+        var stamping = editor.Tool == AnnotationTool.Stamp;
 
         editor.Style = new AnnotationStyle(
             new AnnotationColor(color.R, color.G, color.B, color.A),
-            typesetting || magnifying ? previous.StrokeWidth : Math.Max(MinStroke, _size.Value),
+            typesetting || magnifying || stamping
+                ? previous.StrokeWidth
+                : Math.Max(MinStroke, _size.Value),
             _lineStyle.SelectedIndex >= 0 ? (LineStyle)_lineStyle.SelectedIndex : LineStyle.Solid,
             ArrowStyle: _arrowStyle.SelectedIndex >= 0
                 ? (ArrowStyle)_arrowStyle.SelectedIndex
@@ -1897,6 +1969,9 @@ public sealed partial class AnnotationToolbarView : UserControl
             LoupeSize = magnifying
                 ? Math.Clamp(_size.Value, AnnotationStyle.MinLoupeSize, AnnotationStyle.MaxLoupeSize)
                 : previous.LoupeSize,
+            StampSize = stamping
+                ? Math.Clamp(_size.Value, AnnotationStyle.MinStampSize, AnnotationStyle.MaxStampSize)
+                : previous.StampSize,
             DimOpacity = Math.Clamp(
                 _spotlightDim.Value,
                 AnnotationStyle.MinDimOpacity,

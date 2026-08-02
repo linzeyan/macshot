@@ -536,6 +536,13 @@ public sealed record CaptureSettings
     /// </summary>
     public double LoupeSize { get; init; } = AnnotationStyle.DefaultLoupeSize;
 
+    /// <summary>
+    /// How big a stamp is placed, in captured pixels. macshot's <c>stampSize</c> — like the
+    /// loupe's, a size rather than a stroke, because a stamp is clicked into place and the
+    /// click says nothing about how big it should be.
+    /// </summary>
+    public double StampSize { get; init; } = AnnotationStyle.DefaultStampSize;
+
     /// <summary>How far down a spotlight takes the capture outside it.</summary>
     public double DimOpacity { get; init; } = AnnotationStyle.DefaultDimOpacity;
 
@@ -1201,6 +1208,10 @@ public sealed record CaptureSettings
                 LoupeSize,
                 AnnotationStyle.MinLoupeSize,
                 AnnotationStyle.MaxLoupeSize),
+            StampSize = Math.Clamp(
+                StampSize,
+                AnnotationStyle.MinStampSize,
+                AnnotationStyle.MaxStampSize),
             DimOpacity = Math.Clamp(
                 DimOpacity,
                 AnnotationStyle.MinDimOpacity,
@@ -1241,6 +1252,7 @@ public sealed record CaptureSettings
             MeasureInPoints = style.MeasureInPoints,
             LoupeMagnification = style.LoupeMagnification,
             LoupeSize = style.LoupeSize,
+            StampSize = style.StampSize,
             DimOpacity = style.DimOpacity,
             AnnotationFontSize = style.FontSize,
             AnnotationFontFamily = style.FontFamily,
@@ -1359,6 +1371,10 @@ public sealed record CaptureSettings
                 double.IsFinite(LoupeSize) && LoupeSize >= AnnotationStyle.MinLoupeSize
                     ? Math.Min(LoupeSize, AnnotationStyle.MaxLoupeSize)
                     : AnnotationStyle.DefaultLoupeSize,
+            StampSize =
+                double.IsFinite(StampSize) && StampSize >= AnnotationStyle.MinStampSize
+                    ? Math.Min(StampSize, AnnotationStyle.MaxStampSize)
+                    : AnnotationStyle.DefaultStampSize,
 
             // Zero in every file written before the spotlight had a slider, and the same
             // reading as the loupe's: a spotlight that reopened at no dim would be a

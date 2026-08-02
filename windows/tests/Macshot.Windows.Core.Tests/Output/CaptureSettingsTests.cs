@@ -97,6 +97,7 @@ public sealed class CaptureSettingsTests
             MeasureInPoints = true,
             LoupeMagnification = 4.5,
             LoupeSize = 200,
+            StampSize = 96,
             DimOpacity = 0.8,
         };
 
@@ -113,6 +114,7 @@ public sealed class CaptureSettingsTests
         Assert.AreEqual(style.MeasureInPoints, restored.MeasureInPoints);
         Assert.AreEqual(style.LoupeMagnification, restored.LoupeMagnification);
         Assert.AreEqual(style.LoupeSize, restored.LoupeSize);
+        Assert.AreEqual(style.StampSize, restored.StampSize);
         Assert.AreEqual(style.DimOpacity, restored.DimOpacity);
     }
 
@@ -128,6 +130,7 @@ public sealed class CaptureSettingsTests
         {
             LoupeMagnification = 0,
             LoupeSize = 0,
+            StampSize = 0,
             NumberStartAt = 0,
             NumberFormat = (NumberFormat)42,
 
@@ -141,6 +144,7 @@ public sealed class CaptureSettingsTests
         // A loupe of no width is not a small loupe: it is a click that puts nothing on the
         // capture, and the tool would look broken rather than badly configured.
         Assert.AreEqual(AnnotationStyle.DefaultLoupeSize, settings.LoupeSize);
+        Assert.AreEqual(AnnotationStyle.DefaultStampSize, settings.StampSize);
         Assert.AreEqual(AnnotationStyle.DefaultDimOpacity, settings.DimOpacity);
         Assert.AreEqual(1, settings.NumberStartAt);
         Assert.AreEqual(NumberFormat.Decimal, settings.NumberFormat);
