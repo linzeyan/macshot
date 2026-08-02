@@ -807,15 +807,27 @@
                         </StackPanel>
                     </StackPanel>
 
-                    <!-- macshot's fourth section, which this page did not have at all
-                         (SettingsWindowController.swift:1650). Two of its four settings
-                         are here. Its Auto-scroll switch is not: this port has no manual
-                         mode to switch to, and a switch with one position is a switch that
-                         does nothing. Nor its "Detect fixed/sticky headers", for the same
-                         reason — there is no detection behind it yet. Both belong here the
-                         day the features do. -->
+                    <!-- macshot's fourth section (SettingsWindowController.swift:1650),
+                         in macshot's order. Three of its four settings are here. "Detect
+                         fixed/sticky headers" is not: there is no detection behind it yet,
+                         and a switch with nothing on the other end of it is worse than a
+                         page that waits. It belongs here the day the feature does. -->
                     <StackPanel Style="{StaticResource Section}">
                         <TextBlock Text="Scroll Capture" Style="{StaticResource SectionHeading}" />
+                        <CheckBox
+                            x:Name="ScrollAutoScrollCheck"
+                            Content="Auto-scroll (sends synthetic scroll events)"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="ScrollAutoScroll_Toggled"
+                            Unchecked="ScrollAutoScroll_Toggled" />
+                        <!-- Said here because the alternative is finding out during a
+                             capture that will not stop. Driven, macshot knows the page has
+                             ended because the view stopped changing; undriven, a view that
+                             is not changing is someone deciding where to scroll next, so
+                             nothing but the button can mean "done". -->
+                        <TextBlock
+                            Text="Off leaves the scrolling to you: scroll the window yourself and press Stop when you have reached the end. Turn it off for views that refuse synthetic wheel input, such as some remote desktops."
+                            Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Scroll speed:" Style="{StaticResource RowLabel}" />
                             <ComboBox

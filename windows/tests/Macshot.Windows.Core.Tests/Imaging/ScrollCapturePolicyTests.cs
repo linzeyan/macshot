@@ -115,4 +115,47 @@ public sealed class ScrollCapturePolicyTests
     {
         Assert.ThrowsException<ArgumentOutOfRangeException>(() => new ScrollCapturePolicy(0));
     }
+
+    [TestMethod]
+    public void Observe_UndrivenNeverCallsAStillViewFinished()
+    {
+        // Nobody is turning the wheel, so a view that has not moved is someone deciding
+        // where to scroll next. Ending there would end the capture before the user has
+        // scrolled at all, which is every manual capture.
+        var policy = new ScrollCapturePolicy(10_000, driven: false);
+
+        for (var frame = 0; frame < ScrollCapturePolicy.UnchangedFramesBeforeComplete * 3; frame++)
+        {
+            Assert.AreEqual(
+                ScrollCaptureStop.None,
+                policy.Observe(ScrollStitchOutcome.Unchanged, 500));
+        }
+    }
+
+    [TestMethod]
+    public void Observe_UndrivenKeepsGoingThroughFramesItCannotMatch()
+    {
+        // A run of rejections is someone who flicked a whole page rather than a view
+        // that has been lost. They can scroll back; giving up cannot be undone.
+        var policy = new ScrollCapturePolicy(10_000, driven: false);
+
+        for (var frame = 0; frame < ScrollCapturePolicy.RejectedFramesBeforeLostTrack * 3; frame++)
+        {
+            Assert.AreEqual(
+                ScrollCaptureStop.None,
+                policy.Observe(ScrollStitchOutcome.Rejected, 500));
+        }
+    }
+
+    [TestMethod]
+    public void Observe_UndrivenStillStopsAtTheCeiling()
+    {
+        // The one thing that is not about reading the frames: the picture is held whole
+        // while it grows, and a feed that never ends has to meet something.
+        var policy = new ScrollCapturePolicy(1_000, driven: false);
+
+        Assert.AreEqual(
+            ScrollCaptureStop.HeightLimit,
+            policy.Observe(ScrollStitchOutcome.Advanced, 1_000));
+    }
 }

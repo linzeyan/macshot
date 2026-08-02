@@ -377,6 +377,18 @@ public sealed record CaptureSettings
     public string TrayIconPath { get; init; } = string.Empty;
 
     /// <summary>
+    /// Whether macshot turns the wheel during a scroll capture, or the user does.
+    /// macshot's <c>scrollAutoScroll</c>.
+    /// </summary>
+    /// <remarks>
+    /// On, as it has always been here and as macshot ships it. Off is for the views that
+    /// refuse synthetic wheel input — some remote desktops and some canvases take only
+    /// real hardware events — and for anything that has to be scrolled a particular way,
+    /// which macshot cannot know how to do.
+    /// </remarks>
+    public bool ScrollAutoScroll { get; init; } = true;
+
+    /// <summary>
     /// How far a scroll capture moves the page between frames. macshot's
     /// <c>scrollSpeed</c>.
     /// </summary>

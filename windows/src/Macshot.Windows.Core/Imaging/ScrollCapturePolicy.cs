@@ -53,6 +53,7 @@ public sealed class ScrollCapturePolicy
     public const int RejectedFramesBeforeLostTrack = 4;
 
     private readonly int _maximumHeight;
+    private readonly bool _driven;
     private int _unchanged;
     private int _rejected;
 
@@ -61,10 +62,20 @@ public sealed class ScrollCapturePolicy
     /// scrolled never reaches a bottom, and without a ceiling the capture would run
     /// until the buffer exhausted the machine.
     /// </param>
-    public ScrollCapturePolicy(int maximumHeight)
+    /// <param name="driven">
+    /// Whether macshot is doing the scrolling. Both counters above read the frames as
+    /// answers to a wheel macshot turned, and neither means the same thing when the
+    /// person at the keyboard is turning it: frames that do not move are someone
+    /// deciding where to scroll next, and a run that will not match is someone who
+    /// jumped a whole page rather than a view that has been lost. Undriven, the only
+    /// thing that ends a capture is the ceiling — or the Stop button, which the caller
+    /// handles.
+    /// </param>
+    public ScrollCapturePolicy(int maximumHeight, bool driven = true)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(maximumHeight);
         _maximumHeight = maximumHeight;
+        _driven = driven;
     }
 
     /// <summary>Whether the capture should stop, having taken one more frame.</summary>
@@ -94,6 +105,11 @@ public sealed class ScrollCapturePolicy
         if (stitchedHeight >= _maximumHeight)
         {
             return ScrollCaptureStop.HeightLimit;
+        }
+
+        if (!_driven)
+        {
+            return ScrollCaptureStop.None;
         }
 
         if (_unchanged >= UnchangedFramesBeforeComplete)

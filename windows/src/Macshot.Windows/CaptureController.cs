@@ -1557,7 +1557,8 @@ public sealed class CaptureController : IDisposable
         var session = new ScrollCaptureSession(
             _screenCapture.TryCaptureWindowAsync,
             new ScrollDriver(ScrollSpeeds.NotchesPerStep(settings.ScrollSpeed)),
-            settings.ScrollMaxHeight);
+            settings.ScrollMaxHeight,
+            settings.ScrollAutoScroll);
         session.Progressed += (_, progress) => hud.Report(progress.Frames, progress.Rows);
         session.Previewed += (_, picture) => preview.ShowStitched(picture);
 

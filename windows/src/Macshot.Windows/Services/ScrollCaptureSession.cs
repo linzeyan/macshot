@@ -60,20 +60,31 @@ public sealed class ScrollCaptureSession
     /// <summary>Where this capture stops, which is the user's limit or the buffer's.</summary>
     private readonly int _maximumHeight;
 
+    /// <summary>Whether macshot turns the wheel, or the user does.</summary>
+    private readonly bool _driven;
+
     /// <param name="maximumHeight">
     /// Rows past which to stop on purpose, or 0 for as far as the page goes. Clamped to
     /// <see cref="MaximumHeight"/> either way: that one is not a preference but the bound
     /// on a buffer that grows while the capture runs, and a feed that never ends would
     /// find it whatever the user asked for.
     /// </param>
+    /// <param name="driven">
+    /// Whether macshot turns the wheel. False leaves the scrolling to the user and the
+    /// stopping to the Stop button: nothing a frame can show means "finished" when
+    /// nobody is driving — a view that has not moved is someone thinking, and a view
+    /// that will not match is someone who jumped a page.
+    /// </param>
     public ScrollCaptureSession(
         Func<long, Task<CapturedFrame?>> captureWindow,
         ScrollDriver? driver = null,
-        int maximumHeight = 0)
+        int maximumHeight = 0,
+        bool driven = true)
     {
         _captureWindow = captureWindow ?? throw new ArgumentNullException(nameof(captureWindow));
         _driver = driver ?? new ScrollDriver();
         _maximumHeight = maximumHeight is > 0 and < MaximumHeight ? maximumHeight : MaximumHeight;
+        _driven = driven;
     }
 
     /// <summary>
@@ -116,6 +127,20 @@ public sealed class ScrollCaptureSession
         CaptureRegion? region = null,
         CancellationToken cancellation = default)
     {
+        if (!_driven)
+        {
+            // Forward, but the pointer stays where the user left it: they are the one
+            // about to scroll, and parking it in the middle of the window would take
+            // their hand off the wheel they were asked to turn. Nothing to restore
+            // afterwards for the same reason.
+            if (!ScrollDriver.TryBringForward(window))
+            {
+                throw new InvalidOperationException("macshot could not bring that window forward.");
+            }
+
+            return await CaptureAsync(window, region, cancellation);
+        }
+
         var over = region is { } aimed
             ? new CapturePoint(aimed.X + (aimed.Width / 2), aimed.Y + (aimed.Height / 2))
             : (CapturePoint?)null;
@@ -161,7 +186,7 @@ public sealed class ScrollCaptureSession
         }
 
         var stitcher = new ScrollStitcher(band.Width, band.Height);
-        var policy = new ScrollCapturePolicy(_maximumHeight);
+        var policy = new ScrollCapturePolicy(_maximumHeight, _driven);
 
         byte[]? pixels = band.Pixels;
         var frames = 0;
@@ -202,7 +227,10 @@ public sealed class ScrollCaptureSession
                 return Finish(first, crop, stitcher, ScrollCaptureStop.Complete, frames);
             }
 
-            _driver.StepDown();
+            if (_driven)
+            {
+                _driver.StepDown();
+            }
 
             try
             {

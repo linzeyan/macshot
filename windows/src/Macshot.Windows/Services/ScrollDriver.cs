@@ -83,6 +83,20 @@ public sealed class ScrollDriver
         return SetCursorPos((int)at.X, (int)at.Y);
     }
 
+    /// <summary>
+    /// Brings <paramref name="window"/> forward and leaves the pointer where it is.
+    /// </summary>
+    /// <remarks>
+    /// For a capture the user scrolls themselves. The window still has to be in front —
+    /// keys and the wheel go to whatever is — but the pointer is theirs: they are about
+    /// to scroll with it, and moving it to the middle of the window would be taking the
+    /// hand off the very thing they were asked to use.
+    /// </remarks>
+    public static bool TryBringForward(CaptureWindow window) =>
+        WindowEnumerator.TryGetBounds(window.Id, out _, out var bounds)
+        && !bounds.IsEmpty
+        && SetForegroundWindow((IntPtr)window.Id);
+
     /// <summary>Sends one step's worth of wheel-down.</summary>
     public void StepDown() => SendWheel(-_notchesPerStep * WheelDelta);
 

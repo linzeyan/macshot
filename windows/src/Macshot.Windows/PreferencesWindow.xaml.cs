@@ -1109,6 +1109,9 @@ public sealed partial class PreferencesWindow : Window
 
         UrlSchemeCheck.IsChecked = settings.UrlSchemeEnabled;
 
+        ScrollAutoScrollCheck.IsChecked = settings.ScrollAutoScroll;
+        ShowScrollSpeedEnabled();
+
         // macshot's four words, in macshot's order, so the stored value is the index.
         ScrollSpeedBox.ItemsSource = new List<string> { L("Slow"), L("Medium"), L("Fast"), L("Very fast") };
         ScrollSpeedBox.SelectedIndex = (int)settings.ScrollSpeed;
@@ -1490,6 +1493,7 @@ public sealed partial class PreferencesWindow : Window
             TrayIcon = TrayIconBox.SelectedIndex >= 0 ? (TrayIconSource)TrayIconBox.SelectedIndex : TrayIconSource.Default,
             TrayIconPath = TrayIconPathBox.Text,
             UrlSchemeEnabled = UrlSchemeCheck.IsChecked == true,
+            ScrollAutoScroll = ScrollAutoScrollCheck.IsChecked == true,
             ScrollSpeed = ScrollSpeedBox.SelectedIndex >= 0
                 ? (ScrollSpeed)ScrollSpeedBox.SelectedIndex
                 : CaptureSettings.Default.ScrollSpeed,
@@ -1821,6 +1825,22 @@ public sealed partial class PreferencesWindow : Window
         TrayIconBox.SelectedIndex = (int)TrayIconSource.Default;
         Apply();
     }
+
+    /// <summary>
+    /// Greys out the speed when macshot is not the one scrolling.
+    /// </summary>
+    /// <remarks>
+    /// A step size for a wheel nobody is turning is a setting with nothing to apply to,
+    /// and left live it would read as an explanation for a manual capture going slowly.
+    /// </remarks>
+    private void ScrollAutoScroll_Toggled(object sender, RoutedEventArgs e)
+    {
+        ShowScrollSpeedEnabled();
+        Setting_Toggled(sender, e);
+    }
+
+    private void ShowScrollSpeedEnabled() =>
+        ScrollSpeedBox.IsEnabled = ScrollAutoScrollCheck.IsChecked == true;
 
     /// <summary>Greys out the file row when macshot's own icon is chosen.</summary>
     private void TrayIcon_SelectionChanged(object sender, SelectionChangedEventArgs e)
