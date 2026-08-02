@@ -59,6 +59,9 @@ public enum ToolbarCommand
     /// <summary>Put it on a gradient background.</summary>
     Beautify,
 
+    /// <summary>Cut whatever is in front out of what is behind it.</summary>
+    RemoveBackground,
+
     /// <summary>Scroll what is behind the region and stitch the whole of it.</summary>
     ScrollCapture,
 
@@ -207,13 +210,12 @@ public static class ToolbarActions
         items.Add(new ToolbarItem(ToolbarCommand.Redo, "Redo"));
 
         // Then the actions that change the picture rather than draw on it, in macshot's
-        // order: invert, adjust, beautify, remove background. Remove background is not
-        // here yet; the three that are keep the places they hold there, so filling the
-        // gap later moves nothing. Redact is not among them — macshot keeps it on the
-        // action strip, and it has moved there.
+        // order: invert, adjust, beautify, remove background. Redact is not among them —
+        // macshot keeps it on the action strip, and it has moved there.
         Offer(new ToolbarItem(ToolbarCommand.InvertColors, "Invert Colors", IsSelected: inverted));
         Offer(new ToolbarItem(ToolbarCommand.Adjust, "Adjust", IsSelected: adjusted));
         Offer(new ToolbarItem(ToolbarCommand.Beautify, "Beautify", IsSelected: beautified));
+        Offer(new ToolbarItem(ToolbarCommand.RemoveBackground, "Remove Background"));
 
         return items;
 

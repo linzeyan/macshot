@@ -193,8 +193,10 @@ public static class ImageDelivery
         encoder.SetPixelData(
             BitmapPixelFormat.Bgra8,
             // BitBlt produces BGRX pixels. The alpha byte is undefined and must not
-            // make otherwise opaque screenshots transparent during encoding.
-            BitmapAlphaMode.Ignore,
+            // make otherwise opaque screenshots transparent during encoding — so it is
+            // read only for the frames that say it means something, which today is the
+            // cut-out Remove Background hands back.
+            frame.AlphaMode,
             (uint)frame.Width,
             (uint)frame.Height,
             96,

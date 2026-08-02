@@ -33,10 +33,11 @@ public readonly record struct ToolbarCustomAction(string Id, string Label, Toolb
 /// it is listed.
 /// </para>
 /// <para>
-/// Remove Background is absent because this build cannot do it. It comes back with the
-/// feature. Upload is here, and is the one entry whose button the offline build does not
-/// draw at all — hiding something already absent costs nothing, and a settings file that
-/// crossed between the variants would otherwise mean different things in each.
+/// Upload is here, and is the one entry whose button the offline build does not draw at
+/// all — hiding something already absent costs nothing, and a settings file that crossed
+/// between the variants would otherwise mean different things in each. Remove Background
+/// is listed on every machine for the same reason, though only some can carry it out:
+/// what a machine can do is not something a settings file should disagree about.
 /// </para>
 /// </remarks>
 public static class ToolbarCustomActions
@@ -47,6 +48,7 @@ public static class ToolbarCustomActions
         new("invertColors", "Invert Colors", ToolbarCommand.InvertColors),
         new("effects", "Adjust (Image Effects)", ToolbarCommand.Adjust),
         new("beautify", "Beautify", ToolbarCommand.Beautify),
+        new("removeBackground", "Remove Background", ToolbarCommand.RemoveBackground),
     ];
 
     /// <summary>The hideable buttons on the action strip, in that strip's order.</summary>

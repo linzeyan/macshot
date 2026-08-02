@@ -28,11 +28,12 @@ public readonly record struct ToolShortcut(
 /// modifier is the difference between a tool you switch to and one you go and click.
 /// </para>
 /// <para>
-/// Two of macshot's are missing here and neither is an oversight: Remove Background has
-/// no feature behind it, and Highlight has no renderer, so it is not on the toolbar
-/// either. A key bound to something that is not on the strip is a key that appears to do
-/// nothing. They come back with the features, and a test fails if one is bound before it
-/// is drawable.
+/// One of macshot's is missing here and it is not an oversight: Highlight has no
+/// renderer, so it is not on the toolbar either, and a key bound to something that is not
+/// on the strip is a key that appears to do nothing. It comes back with the feature, and
+/// a test fails if it is bound before it is drawable. Remove Background is here now that
+/// its button is: whether the machine can carry it out is answered when it is pressed,
+/// not by leaving the key out.
 /// </para>
 /// <para>
 /// Upload is here unconditionally, as Translate is, even though the offline build has no
@@ -75,6 +76,7 @@ public static class ToolShortcuts
         new("scrollCapture", "Scroll Capture", Unbound, ToolbarCommand.ScrollCapture),
         new("beautify", "Beautify", Unbound, ToolbarCommand.Beautify),
         new("invertColors", "Invert Colors", Unbound, ToolbarCommand.InvertColors),
+        new("removeBackground", "Remove Background", Unbound, ToolbarCommand.RemoveBackground),
         new("translate", "Translate", Unbound, ToolbarCommand.Translate),
         new("undo", "Undo", Unbound, ToolbarCommand.Undo),
         new("redo", "Redo", Unbound, ToolbarCommand.Redo),

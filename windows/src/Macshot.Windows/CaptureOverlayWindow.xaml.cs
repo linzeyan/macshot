@@ -2018,6 +2018,10 @@ public sealed partial class CaptureOverlayWindow : Window
                 ToggleBeautify();
                 return;
 
+            case ToolbarCommand.RemoveBackground:
+                _ = RemoveBackgroundAsync();
+                return;
+
             case ToolbarCommand.ScrollCapture:
                 RequestScrollCapture();
                 return;
@@ -2557,6 +2561,62 @@ public sealed partial class CaptureOverlayWindow : Window
             RenderAnnotations();
             Hint($"Redacted {annotations.Count} • Ctrl+Z to undo • Enter to finish");
         });
+    }
+
+    /// <summary>
+    /// Lifts the subject out of the region and delivers it with a transparent background.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A finishing move rather than an edit, which is what macshot's overlay does with it
+    /// (<c>OverlayWindowController.swift:842</c>): the cut-out is delivered the way any
+    /// other finished capture is, so the preferences decide whether it is copied, saved
+    /// or shown, and the overlay comes down behind it.
+    /// </para>
+    /// <para>
+    /// No editable pair goes with it, for the reason <see cref="Completed"/> already
+    /// withholds one from a framed capture: the marks and the original pixels would
+    /// reopen as the picture with its background back, which is not the picture that was
+    /// approved.
+    /// </para>
+    /// </remarks>
+    private async Task RemoveBackgroundAsync()
+    {
+        if (!IsAnnotating)
+        {
+            return;
+        }
+
+        await AnnotationCanvas.FlushAsync();
+        if (Finished() is not { } finished)
+        {
+            return;
+        }
+
+        Hint(L("Removing background..."));
+
+        try
+        {
+            var cut = await BackgroundRemover.CutOutAsync(finished);
+
+            if (_selection is { } taken)
+            {
+                RememberSelection(taken);
+            }
+
+            CaptureCompleted?.Invoke(
+                this,
+                new CaptureCompletion(cut, CaptureOutcome.Deliver, null, _capturedWindowTitle));
+        }
+        catch (Exception exception)
+        {
+            // In the pill, and the overlay stays up. The region is still selected and
+            // still annotated, so the answer to "there is no subject here" is to drag a
+            // different one — which needs the capture not to have ended. The old hint is
+            // not put back over it for the same reason: it would erase the answer.
+            DiagnosticLog.Write($"Background removal failed: {exception}");
+            Hint(exception.Message);
+        }
     }
 
     /// <summary>

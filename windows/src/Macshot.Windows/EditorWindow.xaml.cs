@@ -288,6 +288,10 @@ public sealed partial class EditorWindow : Window
                 FrameImage(_settings.Current.ToBeautifyOptions().StyleIndex);
                 return;
 
+            case ToolbarCommand.RemoveBackground:
+                _ = RemoveBackgroundAsync();
+                return;
+
             case ToolbarCommand.Copy:
                 _ = CopyAsync();
                 return;
@@ -1060,6 +1064,49 @@ public sealed partial class EditorWindow : Window
         }
         catch (Exception exception)
         {
+            HintText.Text = exception.Message;
+        }
+    }
+
+    /// <summary>
+    /// Lifts the subject out of the image and puts the cut-out on the clipboard.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The clipboard rather than the canvas, which is what macshot's editor does with it
+    /// (<c>DetachedEditorWindowController.swift:551</c>) even though its overlay finishes
+    /// the capture instead. There is a reason to keep that split here beyond following
+    /// it: every other transform on this window — invert, frame, flip, crop — leaves an
+    /// opaque image behind, and the canvas composes against an opaque background. A
+    /// cut-out put back on it would be the subject over the old background, which is the
+    /// picture the button was pressed to get rid of.
+    /// </para>
+    /// <para>
+    /// So the window is left exactly as it was, and the transparency lives on the
+    /// clipboard where a PNG can carry it.
+    /// </para>
+    /// </remarks>
+    private async Task RemoveBackgroundAsync()
+    {
+        var previousHint = HintText.Text;
+        HintText.Text = L("Removing background...");
+
+        try
+        {
+            await AnnotationCanvas.FlushAsync();
+            if (AnnotationCanvas.ToFrame() is not { } finished)
+            {
+                HintText.Text = previousHint;
+                return;
+            }
+
+            var cut = await BackgroundRemover.CutOutAsync(finished);
+            await ImageDelivery.CopyToClipboardAsync(cut);
+            HintText.Text = L("Copied to the clipboard");
+        }
+        catch (Exception exception)
+        {
+            DiagnosticLog.Write($"Background removal failed: {exception}");
             HintText.Text = exception.Message;
         }
     }

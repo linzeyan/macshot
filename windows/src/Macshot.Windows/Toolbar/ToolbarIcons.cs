@@ -131,10 +131,18 @@ internal static class ToolbarIcons
             Outline("M13 9h8M17 9v10.5M14.5 13.5h5")),
 
         // person.crop.circle.dashed — the dashes are the symbol's own, and they are what
-        // says the face inside is on its way out.
-        ToolbarCommand.Redact => Icon(
+        // says the figure inside is being lifted away from what is behind it.
+        ToolbarCommand.RemoveBackground => Icon(
             Outline("M12 2.5a9.5 9.5 0 1 1 0 19 9.5 9.5 0 0 1 0 -19z", 1, [2.2, 1.8]),
             Outline("M12 12.6a3.3 3.3 0 1 0 0 -6.6 3.3 3.3 0 0 0 0 6.6zM6.2 19.6a6.6 6.6 0 0 1 11.6 0")),
+
+        // text.redaction — macshot draws no button for this at all (its auto-redact is a
+        // right-click on the censor tool), so this is the port's own, taken from the
+        // symbol whose whole subject is the thing: two lines of text and the bar that has
+        // gone over the one in the middle.
+        ToolbarCommand.Redact => Icon(
+            Outline("M4 5h16M4 19h10", Faint),
+            Solid("M4 9h16v6H4z")),
 
         // circle.righthalf.filled.inverse — the same picture the other way round, said
         // without naming a colour.
