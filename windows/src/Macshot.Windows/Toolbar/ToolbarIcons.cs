@@ -87,10 +87,17 @@ internal static class ToolbarIcons
             Outline("M5 3h14a2 2 0 0 1 2 2v14a2 2 0 0 1 -2 2H5a2 2 0 0 1 -2 -2V5a2 2 0 0 1 2 -2z", Faint),
             Outline("M9 15 15 9M10 9h5v5")),
 
-        // doc.on.doc — two sheets, the one behind faint so the front one keeps its edge.
+        // doc.on.doc — two sheets at one weight, the one behind up and to the right, the
+        // one in front down and to the left, each with its top corner turned. The lean
+        // was the other way round and the sheet behind was faint, which draws a card
+        // with a shadow under it rather than a copy: what says copy is a second sheet as
+        // solid as the first, and what says sheet is the fold. The one behind stops
+        // where the front one covers it, an outline having no fill to hide it behind.
         ToolbarCommand.Copy => Icon(
-            Outline("M6 17H5a2 2 0 0 1 -2 -2V4a2 2 0 0 1 2 -2h8a2 2 0 0 1 2 2v1", Faint),
-            Outline("M11 7h8a2 2 0 0 1 2 2v11a2 2 0 0 1 -2 2h-8a2 2 0 0 1 -2 -2V9a2 2 0 0 1 2 -2z")),
+            Outline("M8.5 6.3V4.3a2 2 0 0 1 2 -2h3.7L19.7 7.8v7.5a2 2 0 0 1 -2 2h-2"),
+            Outline("M14.2 2.3v5.5h5.5"),
+            Outline("M6.3 6.3h3.9L15.7 11.8v7.9a2 2 0 0 1 -2 2H6.3a2 2 0 0 1 -2 -2V8.3a2 2 0 0 1 2 -2z"),
+            Outline("M10.2 6.3v5.5h5.5")),
 
         // square.and.arrow.down.fill — a solid square with the arrow cut out of it, which
         // is what the .fill of that symbol is; the earlier open tray with an arrow above
@@ -106,10 +113,14 @@ internal static class ToolbarIcons
             "M9 2h6a1 1 0 0 1 0 2h-.6l.6 5.6 2.9 2.4a2 2 0 0 1 .7 1.6V15a1 1 0 0 1 -1 1h-5v6"
             + "a.8 .8 0 0 1 -1.6 0v-6h-5a1 1 0 0 1 -1 -1v-1.4a2 2 0 0 1 .7 -1.6L9 9.6 9.6 4H9a1 1 0 0 1 0 -2z")),
 
-        // doc.text.viewfinder — four corners and the lines they are closing in on.
+        // doc.text.viewfinder — four corners closing in on a document, turned corner and
+        // all. Three ruled lines between the corners is the wrong half of the name: what
+        // the corners frame is a sheet, and at this size the fold is the only thing that
+        // makes the sheet a sheet rather than a box.
         ToolbarCommand.ReadText => Icon(
             Outline("M3 8V5a2 2 0 0 1 2 -2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1 -2 2h-3M8 21H5a2 2 0 0 1 -2 -2v-3"),
-            Outline("M8 9h8M8 12.5h8M8 16h5", Faint)),
+            Outline("M8.9 6.6h2.9L16.7 11.5v4.3a1.6 1.6 0 0 1 -1.6 1.6H8.9a1.6 1.6 0 0 1 -1.6 -1.6V8.2a1.6 1.6 0 0 1 1.6 -1.6z"),
+            Outline("M11.8 6.6v4.9h4.9")),
 
         // slider.horizontal.3 — three tracks at three settings, which is what the popover
         // behind the button holds. The knobs are rings and each track stops short of the
@@ -132,11 +143,24 @@ internal static class ToolbarIcons
             Outline("M7.5 13h9.5a4 4 0 0 0 .2 -8A5.5 5.5 0 0 0 6.8 4.2 4.4 4.4 0 0 0 7.5 13z", Faint),
             Outline("M12 22v-9M8.5 16.5 12 13l3.5 3.5")),
 
-        // translate — two scripts side by side, a Latin A and a mark built the way a CJK
-        // character is, which is what the button turns one into.
+        // translate — two speech bubbles talking over each other, the upper one outlined
+        // round a Latin A and the lower one filled with a 文 knocked out of it. Two
+        // scripts side by side was the idea of the button; two people saying the same
+        // thing in them is the symbol, and it is the bubbles rather than the glyphs that
+        // survive the size. Both glyphs are filled shapes rather than strokes: the row's
+        // pen is one width, and a letter this small drawn with it fills its own counter
+        // in. The 文 is knocked out by the even-odd rule, so its strokes have to be
+        // closed subpaths — the two that cross are traced as the one outline they make.
         ToolbarCommand.Translate => Icon(
-            Outline("M3 19.5 7 6.5l4 13M4.4 15.4h5.2"),
-            Outline("M13 9h8M17 9v10.5M14.5 13.5h5")),
+            Outline("M4.2 3.3h7.6a2.3 2.3 0 0 1 2.3 2.3v5.2a2.3 2.3 0 0 1 -2.3 2.3H7.5l-2.8 2.8V13.1"
+                + "H4.2a2.3 2.3 0 0 1 -2.3 -2.3V5.6a2.3 2.3 0 0 1 2.3 -2.3z"),
+            Solid("M5.9 4.9H7.3L9.3 11H7.9L7.67 10.3H5.53L5.3 11H3.9zM6.6 7L7.31 9.2H5.89z"),
+            Solid("M13 6.4h7.1a2.8 2.8 0 0 1 2.8 2.8v6.9a2.8 2.8 0 0 1 -2.8 2.8v2.6l-2.6 -2.6"
+                + "H13a2.8 2.8 0 0 1 -2.8 -2.8V9.2A2.8 2.8 0 0 1 13 6.4z"
+                + "M16.34 7.6L17.14 8.7 15.76 9.7 14.96 8.6z"
+                + "M13.55 10.35h6a0.65 0.65 0 0 1 0 1.3h-6a0.65 0.65 0 0 1 0 -1.3z"
+                + "M15.5 11.75L16.55 12.74 17.6 11.75 18.8 13.03 17.83 13.94 20.2 16.15"
+                + " 19 17.43 16.55 15.13 14.1 17.43 12.9 16.15 15.27 13.94 14.3 13.03z")),
 
         // person.crop.circle.dashed — the dashes are the symbol's own, and they are what
         // says the figure inside is being lifted away from what is behind it. The figure
@@ -170,12 +194,16 @@ internal static class ToolbarIcons
             + "M6 2.8Q6.62 6.58 10.4 7.2Q6.62 7.82 6 11.6Q5.38 7.82 1.6 7.2Q5.38 6.58 6 2.8z"
             + "M15 1.4Q15.42 3.78 17.8 4.2Q15.42 4.62 15 7Q14.58 4.62 12.2 4.2Q14.58 3.78 15 1.4z")),
 
-        // scroll — a page taller than the view with the capture going on down it. The
-        // symbol itself is a rolled parchment, which at sixteen across is a lozenge; what
-        // survives the size is the page and the direction, so that is what is drawn.
+        // scroll — a rolled parchment: the page, the curl at the top left it has been
+        // unrolled from, the roll it stands on at the foot, and two lines of writing. A
+        // faint page with an arrow down it was drawn here instead on the grounds that the
+        // parchment at sixteen across is a lozenge; rendered beside the symbol it is not,
+        // and the roll at the foot is the whole of what tells this from a page.
         ToolbarCommand.ScrollCapture => Icon(
-            Outline("M6 3h12a2 2 0 0 1 2 2v6a2 2 0 0 1 -2 2H6a2 2 0 0 1 -2 -2V5a2 2 0 0 1 2 -2z", Faint),
-            Outline("M12 10v11M7.5 16.5 12 21l4.5 -4.5")),
+            Outline("M5.5 6.5H3.1a1.2 1.2 0 0 1 -1.2 -1.2V3.3a1.2 1.2 0 0 1 1.2 -1.2H17.1a2 2 0 0 1 2 2V16.8"),
+            Outline("M5.5 2.1v18.4a1.6 1.6 0 0 0 1.6 1.6h3"),
+            Outline("M10.1 16.8h9.4a2.1 2.1 0 0 1 2.1 2.1v1.1a2.1 2.1 0 0 1 -2.1 2.1H10.1z"),
+            Outline("M8.9 6.4h7.4M8.9 10.4h4.4")),
 
         // video.fill — grown to the grid. Drawn two thirds the height the symbol has, the
         // camcorder was the smallest thing in a strip of full-height icons.
