@@ -212,7 +212,53 @@ public sealed partial class AnnotationToolbarView : UserControl
     private readonly StyleSegments _spotlightBorder = new();
     private readonly Button _font = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 10, Padding = new Thickness(8, 2, 8, 2) };
     private readonly FontPickerView _fontChoices = new();
-    private readonly StyleSegments _weight = new();
+
+    /// <summary>
+    /// Bold, italic, underline and strikethrough, each turning on by itself.
+    /// </summary>
+    /// <remarks>
+    /// Four switches rather than the two-way weight picker this row used to carry. They
+    /// are not alternatives — a heading typed onto a screenshot is often bold and
+    /// underlined at once — and a picker that made them exclusive would take away
+    /// combinations anyone can see ought to be possible. macshot has the four
+    /// (<c>ToolOptionsRowView.swift:919–942</c>).
+    /// </remarks>
+    private readonly ToggleButton _bold = TextStyleToggle("B", "Bold");
+
+    private readonly ToggleButton _italic = TextStyleToggle("I", "Italic");
+
+    private readonly ToggleButton _underline = TextStyleToggle("U", "Underline");
+
+    private readonly ToggleButton _strikethrough = TextStyleToggle("S", "Strikethrough");
+
+    /// <summary>
+    /// Which edge a label's lines are hung from. Drawn rather than worded, the way every
+    /// other picker on this row is: four ragged rules say "centred" in every language.
+    /// </summary>
+    private readonly StyleSegments _textAlignment = new();
+
+    /// <summary>
+    /// The label's size, walked a point at a time rather than dragged.
+    /// </summary>
+    /// <remarks>
+    /// macshot's − 20 + (<c>ToolOptionsRowView.swift:968–994</c>), and not the shared width
+    /// slider the port used to point at the font size. A point size is a number people
+    /// know — 12, 18, 72 — and reaching an exact one on a slider 100 wide spanning 8 to 200
+    /// means landing on a pixel worth two points. Held down, either button repeats.
+    /// </remarks>
+    private readonly RepeatButton _fontSmaller = FontSizeButton("−");
+
+    private readonly TextBlock _fontSizeValue = new()
+    {
+        Width = 26,
+        FontSize = OptionValueSize,
+        FontWeight = FontWeights.Medium,
+        TextAlignment = TextAlignment.Center,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
+    private readonly RepeatButton _fontLarger = FontSizeButton("+");
+
     /// <summary>
     /// macshot's outline controls: a halo under the mark, in a colour of its own. A red
     /// arrow over a red button is invisible, and the answer is a rim rather than a
@@ -222,6 +268,14 @@ public sealed partial class AnnotationToolbarView : UserControl
 
     private readonly ToggleSwatch _textFill = new(L("Fill"));
     private readonly ToggleSwatch _textOutline = new(L("Outline"));
+
+    /// <summary>
+    /// The line drawn round each glyph, which is a different thing from the line round the
+    /// pill: this one follows the letters. It is what makes a label readable over a
+    /// screenshot that is pale in one half and dark in the other, where no fill colour
+    /// works and a pill would cover the thing being pointed at.
+    /// </summary>
+    private readonly ToggleSwatch _textGlyphStroke = new(L("Stroke"));
     private readonly Button _stamp = new() { VerticalAlignment = VerticalAlignment.Center };
     private readonly GridView _stampChoices = new() { MaxWidth = 240, SelectionMode = ListViewSelectionMode.Single, RequestedTheme = ElementTheme.Dark };
 
@@ -247,6 +301,12 @@ public sealed partial class AnnotationToolbarView : UserControl
 
     /// <summary>The style the toolbar started from, so only a real change is written back.</summary>
     private AnnotationStyle _loadedStyle = AnnotationStyle.Default;
+
+    /// <summary>
+    /// What the − and + are walking. Held here rather than read back off the style on each
+    /// press, so a size the style rounded or clamped cannot make the buttons stick.
+    /// </summary>
+    private double _fontSize = AnnotationStyle.DefaultFontSize;
 
     /// <summary>Which shape the fill segments are currently drawn as, and whether yet.</summary>
     private bool _shapeFillIsOval;
@@ -1219,7 +1279,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         var extent = AnnotationToolOptions.SizeMeaning(tool) == AnnotationSizeMeaning.Extent;
         _sizeValue.Width = extent ? 32 : 28;
         _sizeValue.Tag = extent ? string.Empty : "px";
-        SyncSizeSlider(tool);
+        SyncSizeSlider();
 
         _lineStyle.Visibility = Show(AnnotationToolOptions.UsesLineStyle(tool));
         _arrowStyle.Visibility = Show(AnnotationToolOptions.UsesArrowStyle(tool));
@@ -1268,11 +1328,20 @@ public sealed partial class AnnotationToolbarView : UserControl
 
         _spotlightBorder.Visibility = Show(AnnotationToolOptions.UsesSpotlightBorder(tool));
 
-        var typesetting = Show(tool == AnnotationTool.Text);
+        var typesetting = Show(AnnotationToolOptions.UsesTypesetting(tool));
         _font.Visibility = typesetting;
-        _weight.Visibility = typesetting;
+        foreach (var toggle in TextStyleToggles)
+        {
+            toggle.Visibility = typesetting;
+        }
+
+        _textAlignment.Visibility = typesetting;
+        _fontSmaller.Visibility = typesetting;
+        _fontSizeValue.Visibility = typesetting;
+        _fontLarger.Visibility = typesetting;
         _textFill.Visibility = typesetting;
         _textOutline.Visibility = typesetting;
+        _textGlyphStroke.Visibility = typesetting;
 
         // A group's hairline follows the group, and the first one showing loses its rule
         // so the row never opens with a line hanging off its left edge.
@@ -1391,15 +1460,17 @@ public sealed partial class AnnotationToolbarView : UserControl
     }
 
     /// <summary>
-    /// Points the one size slider at whichever number the tool in hand is sized by.
+    /// Puts the width slider back on the stroke width and rewrites its readout, which the
+    /// tool before may have left carrying the other unit.
     /// </summary>
     /// <remarks>
-    /// The text tool is sized by <see cref="AnnotationStyle.FontSize"/> and everything
-    /// else by its stroke width, which is the whole reason the two are separate: a label
-    /// set to 42 must not leave the next arrow 42 pixels thick. Reloading rather than
-    /// rescaling, so switching to the text tool and back returns both to what they were.
+    /// The slider is one number again. It used to be pointed at
+    /// <see cref="AnnotationStyle.FontSize"/> while the text tool was in hand, which is not
+    /// what macshot does — a label's size is set by the row's own − and +, and the width
+    /// slider is not offered for text at all. Sharing it meant one drag could only ever
+    /// mean one of the two things, and switching tools had to remember which.
     /// </remarks>
-    private void SyncSizeSlider(AnnotationTool tool)
+    private void SyncSizeSlider()
     {
         if (_editor is not { } editor)
         {
@@ -1410,21 +1481,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         _isLoadingStyle = true;
         try
         {
-            if (tool == AnnotationTool.Text)
-            {
-                _size.Minimum = AnnotationStyle.MinFontSize;
-                _size.Maximum = AnnotationStyle.MaxFontSize;
-                _size.Value = Math.Clamp(
-                    editor.Style.FontSize,
-                    AnnotationStyle.MinFontSize,
-                    AnnotationStyle.MaxFontSize);
-            }
-            else
-            {
-                _size.Minimum = MinStroke;
-                _size.Maximum = MaxStroke;
-                _size.Value = Math.Clamp(editor.Style.StrokeWidth, MinStroke, MaxStroke);
-            }
+            _size.Value = Math.Clamp(editor.Style.StrokeWidth, MinStroke, MaxStroke);
         }
         finally
         {
@@ -1433,6 +1490,23 @@ public sealed partial class AnnotationToolbarView : UserControl
 
         ShowSliderValue(_size, _sizeValue);
     }
+
+    /// <summary>
+    /// Moves the label's size one point and shows where it landed.
+    /// </summary>
+    /// <remarks>
+    /// The bounds come from <see cref="AnnotationStyle"/> rather than from the buttons, so
+    /// holding − at 8 sits still instead of walking the size negative and clamping it back
+    /// on the way out through the style.
+    /// </remarks>
+    private void StepFontSize(int steps)
+    {
+        _fontSize = AnnotationStyle.StepFontSize(_fontSize, steps);
+        ShowFontSize();
+        ApplyStyle();
+    }
+
+    private void ShowFontSize() => _fontSizeValue.Text = $"{(int)Math.Round(_fontSize)}";
 
     /// <summary>
     /// Repaints what was drawn from a brush of its own rather than from the palette's
@@ -1449,6 +1523,10 @@ public sealed partial class AnnotationToolbarView : UserControl
         _sizeValue.Foreground = ToolbarPalette.IconBrush(0.6);
         _cornerValue.Foreground = ToolbarPalette.IconBrush(0.6);
         _zoomValue.Foreground = ToolbarPalette.IconBrush(0.6);
+
+        // A shade brighter than the readouts beside sliders, as macshot has it: this one
+        // is not a reading of where a thumb sits, it is the size itself.
+        _fontSizeValue.Foreground = ToolbarPalette.IconBrush(0.7);
 
         // Brighter than the labels beside it: it is the answer the row exists to give,
         // not the name of a control.
@@ -1483,6 +1561,57 @@ public sealed partial class AnnotationToolbarView : UserControl
         Typography.SetNumeralAlignment(value, FontNumeralAlignment.Tabular);
         return value;
     }
+
+    /// <summary>
+    /// One of the label's four style switches, at macshot's 26 by 22 with its letter set
+    /// semibold — <c>ToolOptionsRowView.swift:934–939</c>.
+    /// </summary>
+    /// <remarks>
+    /// A plain <see cref="ToggleButton"/> rather than a control written for this, because
+    /// the row already has three of them: the Fill, Outline and Stroke labels beside it are
+    /// each one. WinUI's own checked state is the accent fill macshot paints by hand, so
+    /// writing it again would be writing the same button twice.
+    /// </remarks>
+    private static ToggleButton TextStyleToggle(string letter, string name)
+    {
+        var toggle = new ToggleButton
+        {
+            Content = letter,
+            Width = 26,
+            Height = 22,
+            MinWidth = 0,
+            Padding = new Thickness(0),
+            FontSize = 12,
+            FontWeight = FontWeights.SemiBold,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        // The letter is the whole label, and B says nothing to anyone who has not met a
+        // word processor. macshot leans on the same convention and can afford to: it is
+        // the one control on the row with no room for a word.
+        ToolTipService.SetToolTip(toggle, name);
+        return toggle;
+    }
+
+    /// <summary>
+    /// The − or the + beside the label's size. A <see cref="RepeatButton"/> at macshot's
+    /// own delay and interval, so holding one walks the size the way holding it does there
+    /// rather than moving it a single point per press.
+    /// </summary>
+    private static RepeatButton FontSizeButton(string sign) => new()
+    {
+        Content = sign,
+        Width = 20,
+        Height = 22,
+        MinWidth = 0,
+        Padding = new Thickness(0),
+        FontSize = 14,
+        VerticalAlignment = VerticalAlignment.Center,
+
+        // macshot's 0.3 then 0.05 — ToolOptionsRowView.swift:973.
+        Delay = 300,
+        Interval = 50,
+    };
 
     private static Slider OptionSlider(double width, double minimum, double maximum) => new()
     {
@@ -1594,18 +1723,36 @@ public sealed partial class AnnotationToolbarView : UserControl
         ToolTipService.SetToolTip(_font, "Typeface");
         _font.Flyout = new Flyout { Content = _fontChoices };
         _fontChoices.SelectionChanged += FontChoice_Changed;
-        _weight.SetSegments(
-        [
-            new StyleSegment(null, L("Regular"), 0),
-            new StyleSegment(null, L("Bold"), 0),
-        ]);
-        _weight.SelectionChanged += (_, _) => ApplyStyle();
+
+        foreach (var toggle in TextStyleToggles)
+        {
+            toggle.Checked += (_, _) => ApplyStyle();
+            toggle.Unchecked += (_, _) => ApplyStyle();
+        }
+
+        // The picture of the alignment rather than its name, for the reason the dash picker
+        // draws a dash: four ragged rules are read at a glance and need no translating.
+        ToolTipService.SetToolTip(_textAlignment, "Which edge the label's lines hang from");
+        _textAlignment.SetSegments([.. Enum.GetValues<LabelAlignment>().Select(alignment =>
+            new StyleSegment(StylePreviews.Align(alignment), null, StylePreviews.AlignSegmentWidth))]);
+        _textAlignment.SelectionChanged += (_, _) => ApplyStyle();
+
+        // Tabular figures, so 8 and 88 occupy the same width and the + does not shuffle
+        // sideways as the size is walked past ten and a hundred.
+        Typography.SetNumeralAlignment(_fontSizeValue, FontNumeralAlignment.Tabular);
+        ToolTipService.SetToolTip(_fontSmaller, "Smaller");
+        ToolTipService.SetToolTip(_fontLarger, "Larger");
+        _fontSmaller.Click += (_, _) => StepFontSize(-1);
+        _fontLarger.Click += (_, _) => StepFontSize(1);
+
         _outline.Toggled += (_, _) => ApplyStyle();
         _outline.SwatchPressed += (_, _) => PickSwatchColor(_outline);
         _textFill.Toggled += (_, _) => ApplyStyle();
         _textOutline.Toggled += (_, _) => ApplyStyle();
+        _textGlyphStroke.Toggled += (_, _) => ApplyStyle();
         _textFill.SwatchPressed += (_, _) => PickSwatchColor(_textFill);
         _textOutline.SwatchPressed += (_, _) => PickSwatchColor(_textOutline);
+        _textGlyphStroke.SwatchPressed += (_, _) => PickSwatchColor(_textGlyphStroke);
 
         // macshot's order, group for group: stroke, line style, arrow ends, the shape's
         // corner, the outline, and Flip last — ToolOptionsRowView.swift:124–180, 265–270.
@@ -1633,8 +1780,14 @@ public sealed partial class AnnotationToolbarView : UserControl
         AddGroup(_numberFormat);
         AddGroup(_startLabel, _numberStart, _startPreview);
         AddGroup(_measureUnit);
-        AddGroup(_font, _weight);
-        AddGroup(_textFill, _textOutline);
+
+        // The label's own row, group for group as macshot builds it: the face beside the
+        // four style switches, then the alignment, then the size, then the three colours —
+        // behind the label, around that, and on the glyphs (ToolOptionsRowView.swift:902–1087).
+        AddGroup(_font, _bold, _italic, _underline, _strikethrough);
+        AddGroup(_textAlignment);
+        AddGroup(_fontSmaller, _fontSizeValue, _fontLarger);
+        AddGroup(_textFill, _textOutline, _textGlyphStroke);
         AddGroup(_stamp);
     }
 
@@ -1790,7 +1943,14 @@ public sealed partial class AnnotationToolbarView : UserControl
             _font.Content = string.IsNullOrWhiteSpace(_loadedStyle.FontFamily)
                 ? FontPickerView.SystemFace
                 : _loadedStyle.FontFamily;
-            _weight.SelectedIndex = _loadedStyle.Bold ? 1 : 0;
+            _bold.IsChecked = _loadedStyle.Bold;
+            _italic.IsChecked = _loadedStyle.Italic;
+            _underline.IsChecked = _loadedStyle.Underline;
+            _strikethrough.IsChecked = _loadedStyle.Strikethrough;
+            _textAlignment.SelectedIndex = (int)_loadedStyle.TextAlignment;
+
+            _fontSize = _loadedStyle.FontSize;
+            ShowFontSize();
 
             // A fill or an outline that is switched off still has a colour, so turning it
             // back on gives back the one that was there rather than an arbitrary black.
@@ -1798,6 +1958,8 @@ public sealed partial class AnnotationToolbarView : UserControl
                 _loadedStyle.TextBackground ?? new AnnotationColor(0, 0, 0, 160)));
             _textOutline.Show(_loadedStyle.TextOutline is not null, ToUiColor(
                 _loadedStyle.TextOutline ?? new AnnotationColor(255, 255, 255)));
+            _textGlyphStroke.Show(_loadedStyle.TextGlyphStroke is not null, ToUiColor(
+                _loadedStyle.TextGlyphStroke ?? new AnnotationColor(255, 255, 255)));
         }
         finally
         {
@@ -1835,13 +1997,9 @@ public sealed partial class AnnotationToolbarView : UserControl
         var color = _colorPicker.Color;
         var previous = editor.Style;
 
-        // The one slider is the label's size while the text tool is in hand and a stroke
-        // width otherwise, so the other number is carried across untouched.
-        var typesetting = editor.Tool == AnnotationTool.Text;
-
         editor.Style = new AnnotationStyle(
             new AnnotationColor(color.R, color.G, color.B, color.A),
-            typesetting ? previous.StrokeWidth : Math.Max(MinStroke, _size.Value),
+            Math.Max(MinStroke, _size.Value),
             _lineStyle.SelectedIndex >= 0 ? (LineStyle)_lineStyle.SelectedIndex : LineStyle.Solid,
             ArrowStyle: _arrowStyle.SelectedIndex >= 0
                 ? (ArrowStyle)_arrowStyle.SelectedIndex
@@ -1854,9 +2012,9 @@ public sealed partial class AnnotationToolbarView : UserControl
                 ? (ShapeFill)_shapeFill.SelectedIndex
                 : ShapeFill.Stroke)
         {
-            FontSize = typesetting
-                ? Math.Clamp(_size.Value, AnnotationStyle.MinFontSize, AnnotationStyle.MaxFontSize)
-                : previous.FontSize,
+            // Its own number rather than the width slider's, which is what the label's size
+            // used to be read off: sizing a label must not resize the next arrow.
+            FontSize = Math.Clamp(_fontSize, AnnotationStyle.MinFontSize, AnnotationStyle.MaxFontSize),
 
             // Kept rather than cleared when the picker has no row for it: a family this
             // machine does not have still names the face the file asked for, and
@@ -1864,7 +2022,13 @@ public sealed partial class AnnotationToolbarView : UserControl
             FontFamily = _fontChoices.SelectedItem is null
                 ? previous.FontFamily
                 : FontPickerView.FamilyOf(_fontChoices.SelectedItem),
-            Bold = _weight.SelectedIndex == 1,
+            Bold = _bold.IsChecked == true,
+            Italic = _italic.IsChecked == true,
+            Underline = _underline.IsChecked == true,
+            Strikethrough = _strikethrough.IsChecked == true,
+            TextAlignment = _textAlignment.SelectedIndex >= 0
+                ? (LabelAlignment)_textAlignment.SelectedIndex
+                : LabelAlignment.Left,
             ArrowReversed = _flipArrow.IsChecked == true,
             NumberFormat = _numberFormat.SelectedIndex >= 0
                 ? (NumberFormat)_numberFormat.SelectedIndex
@@ -1881,10 +2045,18 @@ public sealed partial class AnnotationToolbarView : UserControl
             Outline = _outline.IsOn ? ToAnnotationColor(_outline.Color) : null,
             TextBackground = _textFill.IsOn ? ToAnnotationColor(_textFill.Color) : null,
             TextOutline = _textOutline.IsOn ? ToAnnotationColor(_textOutline.Color) : null,
+            TextGlyphStroke = _textGlyphStroke.IsOn ? ToAnnotationColor(_textGlyphStroke.Color) : null,
         };
 
         _tools.ShowSwatch(ToUiColor(editor.Style.Color));
     }
+
+    /// <summary>
+    /// The label's four style switches, for the places that treat them alike — showing
+    /// them, hiding them, listening to them. They are named fields rather than an array
+    /// because everywhere else asks for one of them by name, and <c>[2]</c> is not a name.
+    /// </summary>
+    private ToggleButton[] TextStyleToggles => [_bold, _italic, _underline, _strikethrough];
 
     private static Visibility Show(bool visible) => visible ? Visibility.Visible : Visibility.Collapsed;
 

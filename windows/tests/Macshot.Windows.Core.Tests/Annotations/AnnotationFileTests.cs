@@ -37,8 +37,13 @@ public sealed class AnnotationFileTests
                 FontSize = 42,
                 FontFamily = "Cascadia Code",
                 Bold = true,
+                Italic = true,
+                Underline = true,
+                Strikethrough = true,
+                TextAlignment = LabelAlignment.Right,
                 TextBackground = new AnnotationColor(1, 2, 3, 200),
                 TextOutline = new AnnotationColor(4, 5, 6, 210),
+                TextGlyphStroke = new AnnotationColor(7, 8, 9, 220),
                 DimOpacity = 0.3,
                 NumberFormat = NumberFormat.Roman,
                 MeasureInPoints = true,
@@ -72,8 +77,13 @@ public sealed class AnnotationFileTests
         Assert.AreEqual(original.Style.FontSize, restored[0].Style.FontSize);
         Assert.AreEqual(original.Style.FontFamily, restored[0].Style.FontFamily);
         Assert.AreEqual(original.Style.Bold, restored[0].Style.Bold);
+        Assert.AreEqual(original.Style.Italic, restored[0].Style.Italic);
+        Assert.AreEqual(original.Style.Underline, restored[0].Style.Underline);
+        Assert.AreEqual(original.Style.Strikethrough, restored[0].Style.Strikethrough);
+        Assert.AreEqual(original.Style.TextAlignment, restored[0].Style.TextAlignment);
         Assert.AreEqual(original.Style.TextBackground, restored[0].Style.TextBackground);
         Assert.AreEqual(original.Style.TextOutline, restored[0].Style.TextOutline);
+        Assert.AreEqual(original.Style.TextGlyphStroke, restored[0].Style.TextGlyphStroke);
         Assert.AreEqual(original.Style.DimOpacity, restored[0].Style.DimOpacity);
         Assert.AreEqual(original.Rotation, restored[0].Rotation);
         Assert.AreEqual(original.Bend, restored[0].Bend);
@@ -201,6 +211,37 @@ public sealed class AnnotationFileTests
         var restored = AnnotationFile.Read(Document);
 
         Assert.AreEqual(AnnotationStyle.DefaultDimOpacity, restored[0].Style.DimOpacity);
+    }
+
+    /// <summary>
+    /// A label saved before the row could align one reopens hung from the edge it was
+    /// typed at, rather than moving the moment it is reloaded.
+    /// </summary>
+    /// <remarks>
+    /// The alignment is stored by name, so a file that is silent about it hands back an
+    /// empty string. Parsed strictly that is not a member of the enum, and the fallback has
+    /// to be the left edge specifically: it is where an unaligned label already sat, so the
+    /// repair and what the user saved agree. Any other answer would shuffle the lines of
+    /// every multi-line label in the history the first time it was opened.
+    /// </remarks>
+    [TestMethod]
+    public void Read_LeavesALabelFromBeforeAlignmentWhereItWasTyped()
+    {
+        const string Document =
+            """
+            {"version":1,"annotations":[{"id":"00000000-0000-0000-0000-000000000001",
+            "tool":"Rectangle","startX":0,"startY":0,"endX":10,"endY":10,
+            "color":"#FF000000","strokeWidth":3,"lineStyle":"Solid","opacity":1,
+            "arrowStyle":"Filled","cornerRadius":0}]}
+            """;
+
+        var restored = AnnotationFile.Read(Document);
+
+        Assert.AreEqual(LabelAlignment.Left, restored[0].Style.TextAlignment);
+
+        // And the line round the glyphs stays off rather than arriving white: a label that
+        // grew an outline nobody asked for is a worse answer than one that lost it.
+        Assert.IsNull(restored[0].Style.TextGlyphStroke);
     }
 
     [TestMethod]

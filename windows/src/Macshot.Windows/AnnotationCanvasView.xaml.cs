@@ -676,6 +676,14 @@ public sealed partial class AnnotationCanvasView : UserControl
             FontSize = TextGlyphs.FontSizeFor(editor.Style, SpriteScale),
             FontFamily = TextGlyphs.FamilyFor(editor.Style),
             FontWeight = TextGlyphs.WeightFor(editor.Style),
+            FontStyle = TextGlyphs.SlantFor(editor.Style),
+            TextAlignment = TextGlyphs.AlignmentFor(editor.Style),
+
+            // The underline, the strikethrough and the line round the glyphs are missing
+            // here and drawn on the committed sprite. A TextBox has no decorations and no
+            // way to stroke what it is showing, and the three ways round that — a
+            // RichEditBox, a TextBlock laid over the box, a box that is really a canvas —
+            // each cost more of what typing on the screenshot feels like than they buy.
             Foreground = new SolidColorBrush(GlyphSpriteFactory.ToBrushColor(editor.Style)),
             // Return has to be accepted for Shift+Enter to be able to insert one; plain
             // Enter is taken below before the box ever sees it.
