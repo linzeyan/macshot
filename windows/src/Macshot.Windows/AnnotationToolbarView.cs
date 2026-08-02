@@ -299,8 +299,8 @@ public sealed partial class AnnotationToolbarView : UserControl
 
         _tools.ItemInvoked += Strip_ItemInvoked;
         _actions.ItemInvoked += Strip_ItemInvoked;
-        _tools.ItemAlternate += Tool_Alternate;
-        _actions.ItemAlternate += Action_Alternate;
+        _tools.ItemAlternate += Item_Alternate;
+        _actions.ItemAlternate += Item_Alternate;
     }
 
     /// <summary>Raised when what is on the canvas no longer matches the document.</summary>
@@ -799,6 +799,37 @@ public sealed partial class AnnotationToolbarView : UserControl
     }
 
     /// <summary>
+    /// What a right-click on a button opens.
+    /// </summary>
+    /// <remarks>
+    /// One handler for both strips, told apart by whether the button holds a tool rather
+    /// than by which strip raised it. They were two handlers split by strip, and Beautify
+    /// is the case that proves the strip cannot be what decides: macshot keeps it on the
+    /// bottom row among the tools — <c>ToolbarDefinitions.swift:87</c> — while the branch
+    /// that opens its backgrounds was written into the action strip's handler, behind a
+    /// lookup in that strip which could never find it. The one gesture that reaches the
+    /// backgrounds during a capture did nothing at all.
+    /// </remarks>
+    private void Item_Alternate(object? sender, ToolbarItem item)
+    {
+        // The button itself, which is what a menu has to hang off. It arrives as the
+        // sender rather than being looked up, because a lookup has to be told where.
+        if (sender is not FrameworkElement anchor)
+        {
+            return;
+        }
+
+        if (item.Tool is { } tool)
+        {
+            ShowToolMenu(anchor, tool, item);
+        }
+        else
+        {
+            ShowActionMenu(anchor, item);
+        }
+    }
+
+    /// <summary>
     /// The menu behind a tool button: what to do with a tool other than use it.
     /// </summary>
     /// <remarks>
@@ -806,9 +837,9 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// offered where the tool is rather than only in the preferences, because the moment
     /// someone knows they never want the loupe is the moment they are looking at it.
     /// </remarks>
-    private void Tool_Alternate(object? sender, ToolbarItem item)
+    private void ShowToolMenu(FrameworkElement anchor, AnnotationTool tool, ToolbarItem item)
     {
-        if (item.Tool is not { } tool || sender is not FrameworkElement anchor || _settings is not { } settings)
+        if (_settings is not { } settings)
         {
             return;
         }
@@ -915,17 +946,13 @@ public sealed partial class AnnotationToolbarView : UserControl
     }
 
     /// <summary>
-    /// The menu behind an action button. Only Save has one, and it holds the way of
-    /// saving that is not the default — macshot's own arrangement: one press for the
-    /// usual answer, the menu for the other one.
+    /// The menu behind a button that does something to the capture rather than draw on
+    /// it. Three have one: Save holds the way of saving that is not the default, Beautify
+    /// its backgrounds, Upload its confirmation. macshot's own arrangement — one press
+    /// for the usual answer, the menu for the other one.
     /// </summary>
-    private void Action_Alternate(object? sender, ToolbarItem item)
+    private void ShowActionMenu(FrameworkElement anchor, ToolbarItem item)
     {
-        if (_actions.ButtonFor(item.Command) is not { } anchor)
-        {
-            return;
-        }
-
         switch (item.Command)
         {
         case ToolbarCommand.Save:
