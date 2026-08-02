@@ -9,16 +9,48 @@ public sealed class AnnotationToolOptionsTests
     [TestMethod]
     public void EveryDrawnTool_TakesTheSizeControl()
     {
-        // Every tool that draws a mark. The censor is out because its two strengths are
-        // chosen for the user rather than set, and the spotlight because what it puts on
-        // the capture is a hairline round a region — the region is what was dragged, and
-        // the hairline is the same width whatever the slider says.
+        // Every tool that draws a mark, less the three macshot does not put the slider on:
+        // the censor, whose two strengths are chosen for the user rather than set; the
+        // spotlight, which puts a hairline round a region and draws it the same width
+        // whatever the slider says; and the ruler, whose mark is a reading rather than a
+        // line anybody set out to draw at a width.
         var drawn = AnnotationRasterizer.SupportedTools
-            .Where(tool => tool is not (AnnotationTool.Censor or AnnotationTool.Highlight));
+            .Where(tool => tool is not (AnnotationTool.Censor or AnnotationTool.Highlight
+                or AnnotationTool.Measure));
 
         foreach (var tool in drawn)
         {
             Assert.IsTrue(AnnotationToolOptions.UsesSize(tool), $"{tool} should take a size");
+        }
+    }
+
+    /// <summary>
+    /// The ruler's row is the unit and the keep-inside switch, and nothing else — which is
+    /// the whole of macshot's row for it (<c>ToolOptionsRowView.swift:1123-1141</c>).
+    /// </summary>
+    /// <remarks>
+    /// It had a width slider, a dash picker and a halo, all three because it is composited
+    /// as a stroke and the row was built by asking what could be drawn rather than what
+    /// macshot offers. None of them is a choice anybody makes about a ruler: what it puts
+    /// on the capture is a number, and the line under that number is a pointer to the span
+    /// rather than a mark — every pixel it gains is a pixel of doubt about where the span
+    /// it reports ends.
+    /// </remarks>
+    [TestMethod]
+    public void TheRuler_TakesItsUnitAndItsLimitAndNothingElse()
+    {
+        Assert.IsTrue(AnnotationToolOptions.UsesMeasureUnit(AnnotationTool.Measure));
+        Assert.IsTrue(AnnotationToolOptions.UsesMeasureClamp(AnnotationTool.Measure));
+
+        Assert.IsFalse(AnnotationToolOptions.UsesSize(AnnotationTool.Measure));
+        Assert.IsFalse(AnnotationToolOptions.UsesLineStyle(AnnotationTool.Measure));
+        Assert.IsFalse(AnnotationToolOptions.UsesOutline(AnnotationTool.Measure));
+
+        // And neither control leaks onto anything else — they are the ruler's alone.
+        foreach (var tool in Enum.GetValues<AnnotationTool>().Where(tool => tool != AnnotationTool.Measure))
+        {
+            Assert.IsFalse(AnnotationToolOptions.UsesMeasureUnit(tool), $"{tool} and the unit");
+            Assert.IsFalse(AnnotationToolOptions.UsesMeasureClamp(tool), $"{tool} and the limit");
         }
     }
 

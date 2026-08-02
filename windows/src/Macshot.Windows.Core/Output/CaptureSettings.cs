@@ -512,6 +512,20 @@ public sealed record CaptureSettings
     /// <summary>Whether the ruler reports points rather than captured pixels.</summary>
     public bool MeasureInPoints { get; init; }
 
+    /// <summary>
+    /// Whether the ruler is kept inside the region being annotated. macshot's
+    /// <c>measureClampToSelection</c>, on by default as it is there.
+    /// </summary>
+    /// <remarks>
+    /// Not a property of the style, and so not on <see cref="AnnotationStyle"/>: it decides
+    /// where a drag may reach rather than how the mark is drawn, which is the same kind of
+    /// setting as snapping. On by default because the answer a ruler gives is only worth
+    /// having about something in the picture — dragged past the edge it reports a span
+    /// partly over pixels that will be cropped away, and the number would be measuring the
+    /// screen rather than the capture.
+    /// </remarks>
+    public bool MeasureClampToSelection { get; init; } = true;
+
     /// <summary>How much the loupe enlarges what is under it.</summary>
     public double LoupeMagnification { get; init; } = AnnotationStyle.DefaultLoupeMagnification;
 

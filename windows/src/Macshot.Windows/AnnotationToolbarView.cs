@@ -169,6 +169,19 @@ public sealed partial class AnnotationToolbarView : UserControl
 
     private readonly StyleSegments _measureUnit = new();
 
+    /// <summary>
+    /// macshot's "Limit to selection": the rule cannot be dragged off the region being
+    /// annotated. On by default there and here — a span that runs past the edge is
+    /// measuring pixels that will be cropped out of the file.
+    /// </summary>
+    private readonly CheckBox _clampRuler = new()
+    {
+        Content = L("Limit to selection"),
+        FontSize = OptionValueSize,
+        MinWidth = 0,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
     private readonly TextBlock _zoomLabel = OptionLabel(L("Zoom"));
 
     private readonly Slider _loupeZoom = OptionSlider(
@@ -508,6 +521,12 @@ public sealed partial class AnnotationToolbarView : UserControl
         };
 
         _measureUnit.SelectionChanged += (_, _) => ApplyStyle();
+
+        // Straight onto the editor beside the settings write, the way the smoothing and the
+        // pressure switch go: it decides where a drag may reach rather than how the mark is
+        // drawn, so there is nothing about it for the style to carry.
+        _clampRuler.Checked += (_, _) => ShowRulerClamp(true);
+        _clampRuler.Unchecked += (_, _) => ShowRulerClamp(false);
         _censorMode.SelectionChanged += (_, _) => ApplyStyle();
         _censorScope.SelectionChanged += (_, index) => Remember(
             current => current with { CensorTextOnly = index == 1 });
@@ -1240,6 +1259,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         _numberStart.Visibility = counted;
 
         _measureUnit.Visibility = Show(AnnotationToolOptions.UsesMeasureUnit(tool));
+        _clampRuler.Visibility = Show(AnnotationToolOptions.UsesMeasureClamp(tool));
 
         var magnified = Show(AnnotationToolOptions.UsesLoupeMagnification(tool));
         _zoomLabel.Visibility = magnified;
@@ -1362,6 +1382,17 @@ public sealed partial class AnnotationToolbarView : UserControl
         }
 
         Remember(current => current with { PencilPressure = wanted });
+    }
+
+    /// <summary>Holds the ruler inside the region, or lets it out, and remembers which.</summary>
+    private void ShowRulerClamp(bool wanted)
+    {
+        if (_editor is { } editor)
+        {
+            editor.ClampRulerToRegion = wanted;
+        }
+
+        Remember(current => current with { MeasureClampToSelection = wanted });
     }
 
     /// <summary>
@@ -1602,7 +1633,10 @@ public sealed partial class AnnotationToolbarView : UserControl
         AddGroup(_drawLabel, _censorScope);
         AddGroup(_numberFormat);
         AddGroup(_startLabel, _numberStart);
-        AddGroup(_measureUnit);
+        // One group, so no hairline comes between them: macshot runs the unit straight into
+        // the switch with nothing between (ToolOptionsRowView.swift:1125-1136), because the
+        // two are the whole of what it asks about a ruler.
+        AddGroup(_measureUnit, _clampRuler);
         AddGroup(_font, _weight);
         AddGroup(_textFill, _textOutline);
         AddGroup(_stamp);
@@ -1743,6 +1777,8 @@ public sealed partial class AnnotationToolbarView : UserControl
             _spotlightBorder.SelectedIndex = settings.Current.SpotlightBorderDashed ? 1 : 0;
             editor.PenPressure = settings.Current.PencilPressure;
             _pencilPressure.IsChecked = editor.PenPressure;
+            editor.ClampRulerToRegion = settings.Current.MeasureClampToSelection;
+            _clampRuler.IsChecked = editor.ClampRulerToRegion;
             _smartMarker.IsChecked = settings.Current.SmartMarker;
             _censorMode.SelectedIndex = (int)_loadedStyle.CensorMode;
             _censorScope.SelectedIndex = settings.Current.CensorTextOnly ? 1 : 0;

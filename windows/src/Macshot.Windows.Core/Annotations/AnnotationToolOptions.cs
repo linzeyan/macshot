@@ -28,15 +28,23 @@ public static class AnnotationToolOptions
     public static bool UsesColor(AnnotationTool tool) => Draws(tool) && !IsSpotlight(tool);
 
     /// <summary>
-    /// Whether the width slider does anything. It does for every mark that is drawn,
-    /// though not always as a width: it is also the size of a badge or a label. The
-    /// censor tool is the exception — how much of a redaction survives is not left to a
-    /// slider, so its cell and its radius are fixed and derived from the region. The
-    /// spotlight is the other: its ring is a hairline at any size, and the strength it
-    /// does have is how far the dim outside it goes, not how wide anything is drawn.
+    /// Whether the width slider is offered. Not the same question as whether the mark has
+    /// a width — every drawn mark does — but whether macshot puts the slider on the row
+    /// for it, which is its <c>hasStroke</c> plus the two tools sized by a number of their
+    /// own (<c>ToolOptionsRowView.swift:123</c>, <c>:1150</c>).
     /// </summary>
+    /// <remarks>
+    /// Three are left out. The censor tool, because how much of a redaction survives is
+    /// not a thing to leave to a slider, so its cell and its radius are derived from the
+    /// region. The spotlight, whose ring is a hairline at any size and whose real strength
+    /// is how far the dim outside it goes. And the ruler: what it puts on the capture is a
+    /// reading, and the line under that reading is a pointer to the span rather than a
+    /// mark being made — nobody sets out to measure something in a thicker line, and every
+    /// pixel the rule gains is a pixel of ambiguity about where the span it reports
+    /// actually ends.
+    /// </remarks>
     public static bool UsesSize(AnnotationTool tool) =>
-        Draws(tool) && !IsRegionEffect(tool) && !IsSpotlight(tool);
+        Draws(tool) && !IsRegionEffect(tool) && !IsSpotlight(tool) && tool != AnnotationTool.Measure;
 
     /// <summary>
     /// Whether the dash picker is offered. macshot's own five
@@ -112,6 +120,19 @@ public static class AnnotationToolOptions
 
     /// <summary>Whether the ruler's unit applies.</summary>
     public static bool UsesMeasureUnit(AnnotationTool tool) => tool == AnnotationTool.Measure;
+
+    /// <summary>
+    /// Whether the ruler's keep-inside-the-region switch applies.
+    /// </summary>
+    /// <remarks>
+    /// Its own question rather than part of <see cref="UsesMeasureUnit"/>, though it is the
+    /// same tool, because the two are answers to different things: one says what a reading
+    /// means and the other says where the rule may reach. Only the ruler has the second
+    /// question — every other mark is allowed off the edge of the region, since the part
+    /// that hangs over is simply cropped away, whereas a rule that runs past the edge
+    /// reports a span longer than anything in the capture.
+    /// </remarks>
+    public static bool UsesMeasureClamp(AnnotationTool tool) => tool == AnnotationTool.Measure;
 
     /// <summary>Whether the loupe's magnification applies.</summary>
     public static bool UsesLoupeMagnification(AnnotationTool tool) => tool == AnnotationTool.Loupe;

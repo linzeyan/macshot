@@ -137,6 +137,19 @@ public sealed class AnnotationEditor
     public CaptureRegion SnapRegion { get; set; }
 
     /// <summary>
+    /// Whether the ruler is held inside <see cref="SnapRegion"/> — macshot's
+    /// <c>measureClampToSelection</c>, on as it is there. Set by the host from the
+    /// settings, the way <see cref="SnapGuides"/> is.
+    /// </summary>
+    /// <remarks>
+    /// The ruler alone, because it is the only tool whose mark is a claim about a distance.
+    /// Every other mark that leaves the region is simply cropped at the edge, but a rule
+    /// dragged past it reports a span the capture does not contain — and a wrong number
+    /// written on the picture is worse than a mark trimmed off it.
+    /// </remarks>
+    public bool ClampRulerToRegion { get; set; } = true;
+
+    /// <summary>
     /// Where the mark in flight lined up, for the host to draw. Cleared the moment the
     /// gesture ends: a guide left on screen is a line the user has to work out the
     /// meaning of.
@@ -242,13 +255,20 @@ public sealed class AnnotationEditor
             return false;
         }
 
+        // Both ends of a ruler are held inside the region, not only the end being dragged:
+        // a press that landed outside it would otherwise root the rule off the picture and
+        // every reading taken from it would start from nowhere. macshot clamps the origin
+        // in the same place (MeasureToolHandler.swift:10-11).
+        var start = RuledInside(point);
+        _origin = start;
+
         // The spotlight's ring takes its own border rather than the row's dash picker,
         // which is what macshot stamps on it as it is created
         // (HighlightToolHandler.swift:32-33).
         Draft = Annotation.Create(
             _tool,
-            point,
-            point,
+            start,
+            start,
             _tool == AnnotationTool.Highlight ? Style with { LineStyle = SpotlightBorder } : Style);
         return false;
     }
@@ -293,7 +313,7 @@ public sealed class AnnotationEditor
 
         // Only the corner under the pointer, because the other one is where the press
         // landed and pulling that about would move ink the user already placed.
-        var end = Constrain(_tool, _origin, point, modifiers);
+        var end = RuledInside(Constrain(_tool, _origin, point, modifiers), modifiers);
         Snap = SnapFor(new CaptureRegion(end.X, end.Y, 0, 0), modifiers, null);
         Draft = Draft with { End = new CapturePoint(end.X + Snap.Dx, end.Y + Snap.Dy) };
     }
@@ -598,6 +618,63 @@ public sealed class AnnotationEditor
         var deltaX = annotation.End.X - annotation.Start.X;
         var deltaY = annotation.End.Y - annotation.Start.Y;
         return Math.Sqrt(deltaX * deltaX + deltaY * deltaY) >= MinimumDragDistance;
+    }
+
+    /// <summary>
+    /// <paramref name="point"/> brought back inside the region while a ruler is being
+    /// drawn, and untouched for every other tool.
+    /// </summary>
+    /// <remarks>
+    /// With Shift held the rule is at an angle the user asked for, so it is shortened
+    /// along that angle instead of being clamped one axis at a time. Clamping x and y
+    /// apart would bend the rule where it crosses the edge, and the reading would then be
+    /// of a line nobody drew. macshot makes the same distinction
+    /// (<c>MeasureToolHandler.swift:35-40</c>).
+    /// </remarks>
+    private CapturePoint RuledInside(CapturePoint point, EditorModifiers modifiers = EditorModifiers.None)
+    {
+        if (_tool != AnnotationTool.Measure || !ClampRulerToRegion || SnapRegion.IsEmpty)
+        {
+            return point;
+        }
+
+        return modifiers.HasFlag(EditorModifiers.Constrain)
+            ? ShortenedInto(_origin, point, SnapRegion)
+            : new CapturePoint(
+                Math.Clamp(point.X, SnapRegion.X, SnapRegion.Right),
+                Math.Clamp(point.Y, SnapRegion.Y, SnapRegion.Bottom));
+    }
+
+    /// <summary>
+    /// Pulls <paramref name="end"/> back along the ray from <paramref name="start"/> until
+    /// it is inside <paramref name="region"/>, keeping the direction it was dragged in.
+    /// </summary>
+    private static CapturePoint ShortenedInto(CapturePoint start, CapturePoint end, CaptureRegion region)
+    {
+        var deltaX = end.X - start.X;
+        var deltaY = end.Y - start.Y;
+        var reach = 1d;
+
+        if (deltaX > 0)
+        {
+            reach = Math.Min(reach, (region.Right - start.X) / deltaX);
+        }
+        else if (deltaX < 0)
+        {
+            reach = Math.Min(reach, (region.X - start.X) / deltaX);
+        }
+
+        if (deltaY > 0)
+        {
+            reach = Math.Min(reach, (region.Bottom - start.Y) / deltaY);
+        }
+        else if (deltaY < 0)
+        {
+            reach = Math.Min(reach, (region.Y - start.Y) / deltaY);
+        }
+
+        reach = Math.Max(0, reach);
+        return new CapturePoint(start.X + (deltaX * reach), start.Y + (deltaY * reach));
     }
 
     private static CapturePoint Constrain(

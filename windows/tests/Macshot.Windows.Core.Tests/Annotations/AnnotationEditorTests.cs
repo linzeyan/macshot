@@ -366,6 +366,91 @@ public sealed class AnnotationEditorTests
         Assert.AreEqual(LineStyle.Dotted, editor.Document.Annotations[2].Style.LineStyle);
     }
 
+    /// <summary>
+    /// A ruler dragged past the edge stops at it, so the number it writes is about
+    /// something in the picture.
+    /// </summary>
+    /// <remarks>
+    /// This is the whole point of the option. The pointer keeps going past the region —
+    /// the overlay covers the display, not the selection — and a rule that followed it
+    /// would report a span partly over pixels that get cropped out of the file. The
+    /// reading is a claim about the capture, and a claim about pixels the capture does not
+    /// contain is simply wrong.
+    /// </remarks>
+    [TestMethod]
+    public void ARulerHeldToTheRegion_StopsAtTheEdgeRatherThanFollowingThePointer()
+    {
+        var editor = NewEditor(AnnotationTool.Measure);
+        editor.SnapRegion = new CaptureRegion(0, 0, 200, 100);
+
+        Drag(editor, new CapturePoint(10, 50), new CapturePoint(500, 50));
+
+        Assert.AreEqual(200, editor.Document.Annotations[0].End.X, 1e-9);
+        Assert.AreEqual(190, editor.Document.Annotations[0].Span, 1e-9);
+    }
+
+    /// <summary>
+    /// Both ends, not only the one being dragged: a rule rooted outside the region measures
+    /// from a place the capture does not show.
+    /// </summary>
+    [TestMethod]
+    public void ARulerHeldToTheRegion_StartsInsideItEvenWhenThePressLandedOutside()
+    {
+        var editor = NewEditor(AnnotationTool.Measure);
+        editor.SnapRegion = new CaptureRegion(0, 0, 200, 100);
+
+        Drag(editor, new CapturePoint(-40, 50), new CapturePoint(100, 50));
+
+        Assert.AreEqual(0, editor.Document.Annotations[0].Start.X, 1e-9);
+    }
+
+    /// <summary>
+    /// Held at an angle, the rule is shortened along that angle rather than clamped one
+    /// axis at a time.
+    /// </summary>
+    /// <remarks>
+    /// Clamping x and y apart would bend the rule where it crosses the edge: the user asked
+    /// for 45 degrees, and what they would get is a line at some other angle carrying a
+    /// reading for a distance they never drew. Shortening keeps the angle and gives up the
+    /// length, which is the half of the gesture that was about to leave the picture anyway.
+    /// </remarks>
+    [TestMethod]
+    public void AConstrainedRulerHeldToTheRegion_KeepsItsAngleAndGivesUpItsLength()
+    {
+        var editor = NewEditor(AnnotationTool.Measure);
+        editor.SnapRegion = new CaptureRegion(0, 0, 200, 100);
+
+        Drag(editor, new CapturePoint(0, 0), new CapturePoint(400, 400), EditorModifiers.Constrain);
+
+        var ruler = editor.Document.Annotations[0];
+        Assert.AreEqual(100, ruler.End.X, 1e-9);
+        Assert.AreEqual(100, ruler.End.Y, 1e-9, "the 45 degrees the modifier asked for must survive the clamp");
+    }
+
+    /// <summary>
+    /// Switched off, the rule goes wherever it is dragged — and nothing else was ever
+    /// held to the region, whatever the switch says.
+    /// </summary>
+    [TestMethod]
+    public void TheRegionHoldsOnlyTheRuler_AndOnlyWhenItIsAskedTo()
+    {
+        var editor = NewEditor(AnnotationTool.Measure);
+        editor.SnapRegion = new CaptureRegion(0, 0, 200, 100);
+        editor.ClampRulerToRegion = false;
+
+        Drag(editor, new CapturePoint(10, 50), new CapturePoint(500, 50));
+
+        Assert.AreEqual(500, editor.Document.Annotations[0].End.X, 1e-9);
+
+        // An arrow off the edge is simply cropped there, so holding it back would be
+        // refusing a mark the user can plainly see the point of.
+        editor.Tool = AnnotationTool.Arrow;
+        editor.ClampRulerToRegion = true;
+        Drag(editor, new CapturePoint(10, 90), new CapturePoint(500, 90));
+
+        Assert.AreEqual(500, editor.Document.Annotations[1].End.X, 1e-9);
+    }
+
     /// <summary>Clicks a mark with the select tool, which is what arms its handles.</summary>
     private static void Select(AnnotationEditor editor, CapturePoint point)
     {
