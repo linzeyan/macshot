@@ -18,8 +18,9 @@ namespace Macshot.Windows.Services;
 /// <para>
 /// So the second launch is intercepted before the instance lock and written down a named
 /// pipe to the macshot already running — the same shape as
-/// <see cref="Upload.GoogleOAuthRedirect"/>, for the same reason: without it, a URL sent
-/// to a running macshot would put up "macshot is already running" and do nothing else.
+/// <c>GoogleOAuthRedirect</c> (named rather than linked, because that class is compiled
+/// out of the offline build), for the same reason: without it, a URL sent to a running
+/// macshot would put up "macshot is already running" and do nothing else.
 /// When there is no macshot to hand it to, the launch keeps the URL and becomes macshot,
 /// which is what makes a link work from cold.
 /// </para>

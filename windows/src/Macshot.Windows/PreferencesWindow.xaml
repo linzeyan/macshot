@@ -229,8 +229,14 @@
                                                 Text="Supported URL Scheme Commands"
                                                 FontSize="13"
                                                 FontWeight="SemiBold" />
+                                            <!-- Not macshot's own sentence, which names
+                                                 Raycast, Alfred and Shortcuts: three
+                                                 launchers nobody reading this window has.
+                                                 A sentence that survives translation and
+                                                 sends the reader looking for Mac software
+                                                 is worse than one that stays English. -->
                                             <TextBlock
-                                                Text="Trigger macshot from Raycast, Alfred, Shortcuts, or any tool that opens URLs."
+                                                Text="Trigger macshot from PowerToys Run, a stream deck, a desktop shortcut, or any tool that opens URLs."
                                                 FontSize="11"
                                                 TextWrapping="Wrap"
                                                 Margin="0,0,0,8"
@@ -293,6 +299,16 @@
                                 <Button Content="Import Settings…" FontSize="13" Click="ImportSettings_Click" />
                             </StackPanel>
                         </StackPanel>
+                        <!-- What the exporter leaves out, which macshot says here and this
+                             page did not. Someone moving to a new machine has to know their
+                             sign-ins are not in the file before they arrive expecting them,
+                             and the folders are dropped because a path from the old machine
+                             is a path this one does not have. Not macshot's own sentence:
+                             its version names a Mac and an app container, and half of it is
+                             about where the file lives, which the line below already says. -->
+                        <TextBlock
+                            Text="Upload credentials, your save and recording folders, and your captures are not included."
+                            Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="" Style="{StaticResource RowLabel}" />
                             <Button Content="Show the settings file" FontSize="13" Click="ShowSettingsFile_Click" />
