@@ -1232,14 +1232,7 @@ public sealed partial class AnnotationToolbarView : UserControl
             ShowShapeFillSegments(tool == AnnotationTool.Ellipse);
         }
 
-        // Every mark with an edge to rim. Censor marks and the loupe carry their own
-        // chrome, and a halo round a pixelated block would outline the redaction. The
-        // spotlight is out for the same kind of reason: its ring is a fixed white
-        // hairline, so a halo would be a second ring in a colour the mark is never
-        // drawn in.
-        _outline.Visibility = Show(
-            (AnnotationToolOptions.UsesLineStyle(tool) || tool == AnnotationTool.Arrow)
-            && tool != AnnotationTool.Highlight);
+        _outline.Visibility = Show(AnnotationToolOptions.UsesOutline(tool));
 
         var rounds = Show(AnnotationToolOptions.UsesCornerRadius(tool));
         _cornerLabel.Visibility = rounds;

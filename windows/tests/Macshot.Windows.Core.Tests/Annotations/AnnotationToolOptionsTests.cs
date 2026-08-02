@@ -39,6 +39,72 @@ public sealed class AnnotationToolOptionsTests
     }
 
     /// <summary>
+    /// The highlighter takes a width and its snap-to-text switch, and nothing else — which
+    /// is the whole of macshot's row for it.
+    /// </summary>
+    /// <remarks>
+    /// It had picked up the dash picker and the halo by being a stroke, which is how the
+    /// two controls were chosen rather than by asking which tools macshot gives them to.
+    /// Neither is a choice anybody makes about a highlighter: dashed, it is a row of blots,
+    /// and a rim round a wash of colour is a box drawn round the words.
+    /// </remarks>
+    [TestMethod]
+    public void TheHighlighter_TakesAWidthAndItsSnapAndNothingElse()
+    {
+        Assert.IsTrue(AnnotationToolOptions.UsesSize(AnnotationTool.Marker));
+        Assert.IsTrue(AnnotationToolOptions.UsesSmartSnap(AnnotationTool.Marker));
+
+        Assert.IsFalse(AnnotationToolOptions.UsesLineStyle(AnnotationTool.Marker));
+        Assert.IsFalse(AnnotationToolOptions.UsesOutline(AnnotationTool.Marker));
+    }
+
+    /// <summary>
+    /// The dash picker and the halo go to different tools, so neither may be derived from
+    /// the other.
+    /// </summary>
+    /// <remarks>
+    /// The halo used to be shown wherever the dash was, which put it on the pencil and the
+    /// highlighter — where macshot has neither — and kept it off the badge, where macshot
+    /// has it. Two lists that overlap are not one list.
+    /// </remarks>
+    [TestMethod]
+    public void TheDashAndTheHalo_AreTwoListsRatherThanOne()
+    {
+        // macshot's hasLineStyle (ToolOptionsRowView.swift:144).
+        AnnotationTool[] dashed =
+        [
+            AnnotationTool.Pencil,
+            AnnotationTool.Line,
+            AnnotationTool.Arrow,
+            AnnotationTool.Rectangle,
+            AnnotationTool.Ellipse,
+        ];
+
+        // Its arrow case, its generic four, and the loupe's own (:155, :266, :131).
+        AnnotationTool[] haloed =
+        [
+            AnnotationTool.Arrow,
+            AnnotationTool.Line,
+            AnnotationTool.Rectangle,
+            AnnotationTool.Ellipse,
+            AnnotationTool.Number,
+            AnnotationTool.Loupe,
+        ];
+
+        foreach (var tool in Enum.GetValues<AnnotationTool>())
+        {
+            Assert.AreEqual(
+                dashed.Contains(tool),
+                AnnotationToolOptions.UsesLineStyle(tool),
+                $"{tool} and the dash picker");
+            Assert.AreEqual(
+                haloed.Contains(tool),
+                AnnotationToolOptions.UsesOutline(tool),
+                $"{tool} and the halo");
+        }
+    }
+
+    /// <summary>
     /// The dim belongs to the spotlight and to nothing else. It is the strength of a layer
     /// laid over the whole capture, so a second tool offering it would be a second control
     /// for the same number — and the row would show it while holding a pencil, which draws
@@ -95,9 +161,13 @@ public sealed class AnnotationToolOptionsTests
         // The dash comes from the stroke compositor, so a fill, an effect and a sprite
         // each ignore it however it is set.
         Assert.IsTrue(AnnotationToolOptions.UsesLineStyle(AnnotationTool.Rectangle));
-        Assert.IsTrue(AnnotationToolOptions.UsesLineStyle(AnnotationTool.Loupe));
+        Assert.IsTrue(AnnotationToolOptions.UsesLineStyle(AnnotationTool.Pencil));
         Assert.IsFalse(AnnotationToolOptions.UsesLineStyle(AnnotationTool.Censor));
         Assert.IsFalse(AnnotationToolOptions.UsesLineStyle(AnnotationTool.Text));
+
+        // Being a stroke is what makes the dash possible, not what makes it worth
+        // offering — see TheDashAndTheHalo_AreTwoListsRatherThanOne for the tools that
+        // could take one and are not asked.
     }
 
     [TestMethod]

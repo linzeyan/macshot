@@ -39,18 +39,42 @@ public static class AnnotationToolOptions
         Draws(tool) && !IsRegionEffect(tool) && !IsSpotlight(tool);
 
     /// <summary>
-    /// Whether the mark is drawn as a stroke, and so takes the dash pattern. A fill, a
-    /// region effect and a sprite each ignore it.
+    /// Whether the dash picker is offered. macshot's own five
+    /// (<c>ToolOptionsRowView.swift:144</c>), and the list is shorter than "every mark
+    /// drawn as a stroke" on purpose.
     /// </summary>
+    /// <remarks>
+    /// The highlighter, the ruler and the loupe are the ones left out. Each is a stroke
+    /// and each would take a dash, but none of them is a mark whose line is the subject:
+    /// a dashed highlighter is a row of blots, a dashed ruler is harder to read a span
+    /// off, and the loupe's circle is a frame round what it magnifies. Offering a control
+    /// for something nobody wants is how a row of eight becomes a row nobody reads.
+    /// </remarks>
     public static bool UsesLineStyle(AnnotationTool tool) => tool
         is AnnotationTool.Pencil
         or AnnotationTool.Line
         or AnnotationTool.Arrow
-        or AnnotationTool.Marker
-        or AnnotationTool.Measure
-        or AnnotationTool.Loupe
         or AnnotationTool.Rectangle
         or AnnotationTool.Ellipse;
+
+    /// <summary>
+    /// Whether the halo controls are offered — the rim under a mark, in a colour of its
+    /// own.
+    /// </summary>
+    /// <remarks>
+    /// macshot's two lists at once: the arrow's own (<c>ToolOptionsRowView.swift:155</c>),
+    /// the generic four beside it (<c>:266</c>), and the loupe's, which it draws from its
+    /// own controls (<c>:131</c>). Notably not the same set as the dash picker, which is
+    /// what this used to be derived from: the badge takes a halo and no dash, and the
+    /// pencil takes a dash and no halo.
+    /// </remarks>
+    public static bool UsesOutline(AnnotationTool tool) => tool
+        is AnnotationTool.Arrow
+        or AnnotationTool.Line
+        or AnnotationTool.Rectangle
+        or AnnotationTool.Ellipse
+        or AnnotationTool.Number
+        or AnnotationTool.Loupe;
 
     /// <summary>
     /// Whether the corner-rounding control applies. The outlined rectangle only: the
