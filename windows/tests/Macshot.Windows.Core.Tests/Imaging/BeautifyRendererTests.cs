@@ -1,4 +1,5 @@
 using Macshot.Windows.Core.Annotations;
+using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
 
 namespace Macshot.Windows.Core.Tests.Imaging;
@@ -299,4 +300,154 @@ public sealed class BeautifyRendererTests
 
         Assert.AreEqual(255, style.Sample(0.5).Red);
     }
+
+    [TestMethod]
+    public void PaddingFor_IsTheFractionOfTheShorterSideInWholePixels()
+    {
+        Assert.AreEqual(10, BeautifyRenderer.PaddingFor(200, 100, new BeautifyOptions(Padding: 0.1)));
+        Assert.AreEqual(10, BeautifyRenderer.PaddingFor(100, 200, new BeautifyOptions(Padding: 0.1)));
+
+        // Rounded rather than truncated, which is the difference between a frame that
+        // matches the file and one a pixel short of it.
+        Assert.AreEqual(4, BeautifyRenderer.PaddingFor(100, 100, new BeautifyOptions(Padding: 0.035)));
+    }
+
+    [TestMethod]
+    public void FrameAround_GrowsTheSelectionOutwardsAndLeavesItWhereItWas()
+    {
+        var selection = new CaptureRegion(300, 200, 200, 100);
+        var frame = BeautifyRenderer.FrameAround(selection, new BeautifyOptions(Padding: 0.1));
+
+        // The shorter side is 100, so ten pixels on every edge.
+        Assert.AreEqual(new CaptureRegion(290, 190, 220, 120), frame);
+
+        // The point of the whole design: the capture has not moved, so everything that
+        // measures against the selection — the marks on it, the grips, what a click
+        // lands on — is untouched by the frame going on.
+        Assert.AreEqual(selection.X, frame.X + 10);
+        Assert.AreEqual(selection.Y, frame.Y + 10);
+    }
+
+    [TestMethod]
+    public void FrameAround_IsTheSizeTheExportActuallyComesOutAt()
+    {
+        // The preview is placed with FrameAround and the file is made by Render. If the
+        // two ever disagree the preview becomes a promise the file breaks, so they are
+        // checked against each other rather than each against a number.
+        foreach (var padding in new[] { 0.0, 0.035, 0.08, 0.2, 0.5 })
+        {
+            var options = new BeautifyOptions(Padding: padding);
+            var (width, height, _) = BeautifyRenderer.Render(200, 130, Solid(200, 130, 0, 0, 0), options);
+            var frame = BeautifyRenderer.FrameAround(new CaptureRegion(0, 0, 200, 130), options);
+
+            Assert.AreEqual(width, (int)frame.Width, $"width at a padding of {padding}");
+            Assert.AreEqual(height, (int)frame.Height, $"height at a padding of {padding}");
+        }
+    }
+
+    [TestMethod]
+    public void FrameAround_HasNothingToGrowFromAnEmptyRegion()
+    {
+        Assert.IsTrue(BeautifyRenderer.FrameAround(default).IsEmpty);
+    }
+
+    [TestMethod]
+    public void Backdrop_IsTheSameSizeAsTheExport()
+    {
+        var options = new BeautifyOptions(Padding: 0.125);
+
+        var (framedWidth, framedHeight, _) = BeautifyRenderer.Render(80, 80, Solid(80, 80, 0, 0, 0), options);
+        var (previewWidth, previewHeight, _) = BeautifyRenderer.Backdrop(80, 80, options);
+
+        Assert.AreEqual(framedWidth, previewWidth);
+        Assert.AreEqual(framedHeight, previewHeight);
+    }
+
+    [TestMethod]
+    public void Backdrop_LeavesTheCardClearAndCoversEverythingRoundIt()
+    {
+        var (width, height, pixels) = BeautifyRenderer.Backdrop(
+            80,
+            80,
+            new BeautifyOptions(Padding: 0.125, CornerRadius: 0.25, ShadowRadius: 0));
+
+        // The middle of the card is where the capture already is, so the frame gives all
+        // of it away.
+        Assert.AreEqual(0, Alpha(pixels, width, width / 2, height / 2));
+
+        // The padding is the frame itself, and it has to hide the dimmed screen under it.
+        Assert.AreEqual(255, Alpha(pixels, width, 0, 0));
+        Assert.AreEqual(255, Alpha(pixels, width, width / 2, 1));
+
+        // And the corner the radius cut off is background in the file, so it is opaque
+        // here too — otherwise the preview would show a square corner the file rounds.
+        Assert.AreEqual(255, Alpha(pixels, width, 10, 10));
+    }
+
+    [TestMethod]
+    public void Backdrop_LaidOverTheCaptureIsTheImageTheExportMakes()
+    {
+        // The one that matters: what the overlay shows is this backdrop composited over
+        // the capture already on screen, and what the user gets is Render. If those two
+        // are not the same picture, the preview is lying about the file.
+        var options = new BeautifyOptions(StyleIndex: 3, Padding: 0.15, CornerRadius: 0.2, ShadowRadius: 0.08);
+        var capture = Solid(60, 40, 200, 120, 40);
+
+        var (_, _, framed) = BeautifyRenderer.Render(60, 40, capture, options);
+        var (_, _, backdrop) = BeautifyRenderer.Backdrop(60, 40, options);
+
+        for (var offset = 0; offset < framed.Length; offset += 4)
+        {
+            // Source-over with a premultiplied source, against the capture underneath.
+            var clear = (255 - backdrop[offset + 3]) / 255.0;
+
+            for (var channel = 0; channel < 3; channel++)
+            {
+                var composited = backdrop[offset + channel] + (capture[channel] * clear);
+
+                // Two, because each side rounds to a byte at a different point: the
+                // export blends once, the preview scales and then composites.
+                Assert.IsTrue(
+                    Math.Abs(composited - framed[offset + channel]) <= 2,
+                    $"pixel {offset / 4} channel {channel}: preview {composited:0.##}, export {framed[offset + channel]}");
+            }
+        }
+    }
+
+    [TestMethod]
+    public void Backdrop_PaintsTheStyleThatWasAskedFor()
+    {
+        var first = BeautifyRenderer.Backdrop(40, 40, new BeautifyOptions(StyleIndex: 0, Padding: 0.25));
+        var second = BeautifyRenderer.Backdrop(40, 40, new BeautifyOptions(StyleIndex: 1, Padding: 0.25));
+
+        CollectionAssert.AreNotEqual(
+            first.Pixels,
+            second.Pixels,
+            "choosing a background from the picker has to change what the overlay shows");
+    }
+
+    [TestMethod]
+    public void Backdrop_FollowsThePaddingCornerAndShadowItIsGiven()
+    {
+        var baseline = new BeautifyOptions(Padding: 0.2, CornerRadius: 0.1, ShadowRadius: 0.05);
+        var (_, _, plain) = BeautifyRenderer.Backdrop(40, 40, baseline);
+
+        // Each of the three is a setting the user can change, and each has to reach the
+        // preview rather than only the file.
+        CollectionAssert.AreNotEqual(
+            plain,
+            BeautifyRenderer.Backdrop(40, 40, baseline with { CornerRadius = 0.4 }).Pixels);
+
+        CollectionAssert.AreNotEqual(
+            plain,
+            BeautifyRenderer.Backdrop(40, 40, baseline with { ShadowRadius = 0.2 }).Pixels);
+
+        // Padding changes the size, which moves the frame rather than repainting it.
+        Assert.AreNotEqual(
+            BeautifyRenderer.Backdrop(40, 40, baseline).Width,
+            BeautifyRenderer.Backdrop(40, 40, baseline with { Padding = 0.3 }).Width);
+    }
+
+    private static int Alpha(byte[] pixels, int width, int column, int row) =>
+        pixels[(((row * width) + column) * 4) + 3];
 }

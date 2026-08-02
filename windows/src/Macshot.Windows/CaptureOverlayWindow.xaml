@@ -87,6 +87,20 @@
                  arithmetic SelectionHandles answers, so these only have to be visible. -->
             <Canvas x:Name="SelectionGrips" IsHitTestVisible="False" />
 
+            <!-- The gradient frame, while it is armed. One bitmap of the background and
+                 the shadow with the card's own area punched clear, laid over a capture
+                 that has not moved — so the marks on it, the grips and what a click lands
+                 on stay what they are with the frame off, and the region the capture is
+                 presented at is never touched.
+
+                 Above the marquee and the grips because it swallows them: the frame is
+                 wider than the region, and once it is on, the card's own edge is what says
+                 where the capture ends. macOS covers them for the same reason, by painting
+                 the preview after the chrome rather than before it. -->
+            <Canvas x:Name="BeautifyLayer" IsHitTestVisible="False">
+                <Image x:Name="BeautifyFrame" Stretch="Fill" Visibility="Collapsed" />
+            </Canvas>
+
             <!-- The colour sampler's magnified circle. Above the grips because it is
                  shown while the pointer is over the image and must not be cut in half by
                  anything the overlay draws. -->

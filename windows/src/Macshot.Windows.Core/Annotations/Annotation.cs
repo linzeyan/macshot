@@ -59,9 +59,33 @@ public sealed record AnnotationStyle(
     public const double DefaultFontSize = 20;
 
     /// <summary>The smallest and largest a label can be set to from the toolbar.</summary>
+    /// <remarks>
+    /// macshot's own two bounds — <c>ToolOptionsRowView.swift:1780, 1791</c>. The ceiling
+    /// is generous because a label put on a 4K screenshot to be read in a slide is not the
+    /// same size as one put beside a menu item, and a tool that stopped halfway would send
+    /// the user to an image editor for the difference.
+    /// </remarks>
     public const double MinFontSize = 8;
 
-    public const double MaxFontSize = 144;
+    public const double MaxFontSize = 200;
+
+    /// <summary>
+    /// How far one press of the row's − or + moves a label's size. One point, as macshot
+    /// steps it: the row shows the number it lands on, so a coarser step would skip sizes
+    /// the user can see written there and would have no other way to reach.
+    /// </summary>
+    public const double FontSizeStep = 1;
+
+    /// <summary>
+    /// How wide the line round each glyph is drawn, as a fraction of the label's size.
+    /// macshot's <c>OutlineTextRenderer.autoWidthFraction</c>.
+    /// </summary>
+    /// <remarks>
+    /// A fraction rather than a width, because the whole job of the outline is to hold a
+    /// label apart from whatever is behind it: a fixed width would be a hairline at 72
+    /// point and would swallow the glyphs at 8.
+    /// </remarks>
+    public const double GlyphStrokeFraction = 0.09;
 
     /// <summary>
     /// How much wider than the mark its halo is drawn — macshot's <c>strokeWidth + 6</c>.
@@ -176,6 +200,38 @@ public sealed record AnnotationStyle(
     /// <summary>Whether a label is set bold.</summary>
     public bool Bold { get; init; }
 
+    /// <summary>Whether a label is set italic.</summary>
+    public bool Italic { get; init; }
+
+    /// <summary>Whether a label is underlined.</summary>
+    public bool Underline { get; init; }
+
+    /// <summary>Whether a label is struck through.</summary>
+    /// <remarks>
+    /// Its own switch beside the other three rather than one of four weights, which is
+    /// what this row used to offer. They are not alternatives: a label can be bold and
+    /// underlined at once, and macshot gives each of them a button that turns on
+    /// independently (<c>ToolOptionsRowView.swift:919–942</c>). A picker that made them
+    /// exclusive would take away combinations the user can plainly see are possible.
+    /// </remarks>
+    public bool Strikethrough { get; init; }
+
+    /// <summary>Which edge a label's lines are hung from.</summary>
+    public LabelAlignment TextAlignment { get; init; } = LabelAlignment.Left;
+
+    /// <summary>
+    /// The line drawn round each glyph, or null for none. macshot's
+    /// <c>textGlyphStrokeColor</c>.
+    /// </summary>
+    /// <remarks>
+    /// Not the same thing as <see cref="TextOutline"/>, which is the line round the pill
+    /// behind the whole label. This one follows the letters, and it is what makes white
+    /// text readable over a screenshot that is white in some places and black in others —
+    /// the case where no single fill colour works and a pill would cover the thing being
+    /// pointed at.
+    /// </remarks>
+    public AnnotationColor? TextGlyphStroke { get; init; }
+
     /// <summary>
     /// The pill drawn behind a label, or null for none. macshot's <c>textBgColor</c>,
     /// with its 4 of padding and its 4 corner — <c>Annotation.swift:1646–1655</c>.
@@ -275,6 +331,28 @@ public sealed record AnnotationStyle(
     /// enlarging the next caption too.
     /// </remarks>
     public double StampSize { get; init; } = DefaultStampSize;
+
+    /// <summary>
+    /// Where one press of the row's − or + lands, from wherever the size is now.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than in the toolbar so the two bounds are enforced in the same place
+    /// they are declared. The row holds the size the user is walking rather than reading it
+    /// back off the style each press, and a size that had gone missing — a settings file
+    /// with no label size in it yet — would otherwise step from nothing at all.
+    /// </remarks>
+    public static double StepFontSize(double from, int steps) => Math.Clamp(
+        (double.IsFinite(from) ? from : DefaultFontSize) + (steps * FontSizeStep),
+        MinFontSize,
+        MaxFontSize);
+
+    /// <summary>
+    /// How wide to draw the line round each glyph of a label of this size, in the same
+    /// units the size is given in. Never thinner than a whole unit: below that the outline
+    /// is an antialiasing artefact rather than an edge, which is worse than none.
+    /// </summary>
+    public static double GlyphStrokeWidth(double fontSize) =>
+        Math.Max(1, Math.Clamp(fontSize, MinFontSize, MaxFontSize) * GlyphStrokeFraction);
 
     public void Validate()
     {

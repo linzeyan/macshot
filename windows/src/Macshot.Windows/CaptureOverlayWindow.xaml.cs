@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices.WindowsRuntime;
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
@@ -189,10 +190,20 @@ public sealed partial class CaptureOverlayWindow : Window
 
     /// <summary>
     /// Whether the delivered capture is mounted on a gradient background. Held here
-    /// rather than applied when the button is pressed, because the frame is bigger than
-    /// the region and there is nowhere in the overlay to show it.
+    /// rather than applied when the button is pressed, because the frame goes on after
+    /// the marks — what the overlay shows meanwhile is drawn around the region by
+    /// <see cref="ShowFrame"/>, which leaves the region itself alone.
     /// </summary>
     private bool _beautify;
+
+    /// <summary>
+    /// How far the strips have moved between the region and the frame around it. One is
+    /// settled, which is where it stays for as long as the frame is not being switched.
+    /// </summary>
+    private double _frameAnchorProgress = 1;
+
+    /// <summary>Drives that move. macshot's sixtieth of a second, twelve frames of it.</summary>
+    private readonly DispatcherTimer _frameAnchor = new() { Interval = TimeSpan.FromSeconds(1 / 60.0) };
 
     /// <summary>
     /// Whether the preview and the delivered capture have their colours turned. Unlike
@@ -404,6 +415,7 @@ public sealed partial class CaptureOverlayWindow : Window
         WireSizeBox();
         WireColorWheel();
         WireCanvas();
+        WireFrameAnchor();
 
         // Covers both finishing and cancelling: the owner closes every overlay either
         // way, and a colour picked but not used is still the colour the user wants.
@@ -1352,10 +1364,14 @@ public sealed partial class CaptureOverlayWindow : Window
     private void RepositionChrome(CaptureRegion region)
     {
         // Through the viewport: the chrome is outside the transform, so where it has to go
-        // is where the region appears on screen, not where it is on the capture.
-        var selection = _viewport.ToView(ToLayout(region));
+        // is where the region appears on screen, not where it is on the capture. Around
+        // the frame rather than the region once one is armed — the strips sit against the
+        // edge of what is being made, and with a frame on, that edge is the frame's.
+        var selection = _viewport.ToView(ToLayout(ChromeAnchor(region)));
         var screen = LayoutBounds;
 
+        // The region's own size, not the frame's: this is the number the user is
+        // choosing, and the padding around it is not part of what they picked.
         _sizeBox.Show(region.Width, region.Height);
 
         // The box first, so the toolbar knows what to keep clear of, and the box again
@@ -1538,6 +1554,11 @@ public sealed partial class CaptureOverlayWindow : Window
 
         _selection = taken;
         AnnotationCanvas.Present(PixelsFor(taken), taken, _placement);
+
+        // After the region is settled rather than during the drag, for the reason the
+        // pixels are: the frame is the size of a capture to paint, and the marquee is
+        // what says where the edges are on the way there.
+        ShowFrame();
 
         DiagnosticLog.Verbose(
             $"region adjusted to {taken.Width}x{taken.Height} at {taken.X},{taken.Y} on {_monitor.DeviceName}");
@@ -2154,9 +2175,8 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     /// <remarks>
     /// A switch rather than something done to the pixels there and then, which is what
-    /// macshot's own button is. The frame is larger than the region it surrounds, so
-    /// there is nowhere inside the selection to show it — the button lighting up and the
-    /// hint line are what say it is armed, and pressing it again takes it back off.
+    /// macshot's own button is: the frame goes on at the end, over the marks, and until
+    /// then it is shown around the region rather than baked into it.
     /// </remarks>
     private void ToggleBeautify()
     {
@@ -2167,10 +2187,151 @@ public sealed partial class CaptureOverlayWindow : Window
 
         _beautify = !_beautify;
         AnnotationToolbar.Beautified = _beautify;
+        ShowFrame();
+        MoveChromeToFrame();
 
         Hint(_beautify
             ? $"Framed in {BeautifyRenderer.Styles[_settings.Current.ToBeautifyOptions().StyleIndex].Name}"
             : "Frame removed");
+    }
+
+    /// <summary>
+    /// Paints the frame around the region, or takes it away.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// What the user sees is <see cref="BeautifyRenderer.Backdrop"/> — the background and
+    /// the shadow the file will have, with the capture's own area left clear — laid over
+    /// the capture where it already is. Composited that is the same picture
+    /// <see cref="BeautifyRenderer.Render"/> makes, which is the point: a preview drawn
+    /// by other means would be a promise the file may not keep, and the padding, the
+    /// corner and both shadows here are not a second set of numbers but the ones the
+    /// export uses.
+    /// </para>
+    /// <para>
+    /// The region is not touched. Growing what the capture is presented at would move
+    /// every mark on it, change what the grips snap to and change what is delivered, so
+    /// the frame is drawn beside the region instead: it grows outwards from an origin
+    /// that stays put.
+    /// </para>
+    /// <para>
+    /// Repainted whenever the picture in it would differ — the switch, a background
+    /// chosen from the picker, a region re-cropped. The three measurements are read from
+    /// the settings on each pass, so a file edited between captures arrives with the
+    /// next one; there is no control for them inside a capture to change under this.
+    /// </para>
+    /// </remarks>
+    private void ShowFrame()
+    {
+        var region = _selection ?? default;
+
+        // Never while a recording is being set up. What that region delivers is a video,
+        // which no frame is ever put around, so a gradient sitting over it would promise
+        // something the file cannot have — macshot guards its own preview on the same two
+        // states (OverlayView.swift:1886).
+        if (!_beautify
+            || AnnotationToolbar.RecordingSetup
+            || (int)region.Width <= 0
+            || (int)region.Height <= 0)
+        {
+            BeautifyFrame.Visibility = Visibility.Collapsed;
+
+            // Dropped rather than kept for next time: it is the size of a capture, and
+            // the overlay holds one per display.
+            BeautifyFrame.Source = null;
+            return;
+        }
+
+        var options = _settings.Current.ToBeautifyOptions();
+        var (width, height, pixels) = BeautifyRenderer.Backdrop(
+            (int)region.Width,
+            (int)region.Height,
+            options);
+
+        var bitmap = new WriteableBitmap(width, height);
+        using (var stream = bitmap.PixelBuffer.AsStream())
+        {
+            stream.Write(pixels, 0, pixels.Length);
+        }
+
+        var placed = ToLayout(BeautifyRenderer.FrameAround(region, options));
+        Canvas.SetLeft(BeautifyFrame, placed.X);
+        Canvas.SetTop(BeautifyFrame, placed.Y);
+        BeautifyFrame.Width = placed.Width;
+        BeautifyFrame.Height = placed.Height;
+        BeautifyFrame.Source = bitmap;
+        BeautifyFrame.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// Where the toolbar and the size box hang off, which is the frame once there is one.
+    /// </summary>
+    /// <remarks>
+    /// macshot slides them out to the grown edge rather than jumping them there —
+    /// <c>OverlayView.swift:5082–5097</c> — and this is its curve and its twelve frames.
+    /// The reason is that the strips sit against the region: moved without the move being
+    /// shown, a toolbar that was under your pointer is suddenly a frame's width away, and
+    /// the eye has to find it again rather than follow it.
+    /// </remarks>
+    private CaptureRegion ChromeAnchor(CaptureRegion region)
+    {
+        if (!_beautify && _frameAnchorProgress >= 1)
+        {
+            return region;
+        }
+
+        var framed = BeautifyRenderer.FrameAround(region, _settings.Current.ToBeautifyOptions());
+        if (_frameAnchorProgress >= 1)
+        {
+            return _beautify ? framed : region;
+        }
+
+        // Eased out rather than linear: it leaves quickly and settles, which reads as the
+        // strip being carried by the frame rather than driven by a clock.
+        var eased = 1 - ((1 - _frameAnchorProgress) * (1 - _frameAnchorProgress));
+        var from = _beautify ? region : framed;
+        var to = _beautify ? framed : region;
+
+        return new CaptureRegion(
+            from.X + ((to.X - from.X) * eased),
+            from.Y + ((to.Y - from.Y) * eased),
+            from.Width + ((to.Width - from.Width) * eased),
+            from.Height + ((to.Height - from.Height) * eased));
+    }
+
+    /// <summary>Starts the strips moving between the region and the frame.</summary>
+    private void MoveChromeToFrame()
+    {
+        if (_selection is null)
+        {
+            return;
+        }
+
+        _frameAnchorProgress = 0;
+        _frameAnchor.Start();
+    }
+
+    private void WireFrameAnchor()
+    {
+        _frameAnchor.Tick += (_, _) =>
+        {
+            // A twelfth of the way each frame, which is macshot's step and its fifth of
+            // a second.
+            _frameAnchorProgress = Math.Min(1, _frameAnchorProgress + 0.08);
+            if (_frameAnchorProgress >= 1)
+            {
+                _frameAnchor.Stop();
+            }
+
+            if (_selection is { } region)
+            {
+                RepositionChrome(region);
+            }
+        };
+
+        // A timer left running behind a closed overlay would keep the window alive and
+        // go on placing a toolbar nobody can see.
+        Closed += (_, _) => _frameAnchor.Stop();
     }
 
     /// <summary>
@@ -2189,8 +2350,22 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
 
+        var wasArmed = _beautify;
         _beautify = true;
         AnnotationToolbar.Beautified = true;
+
+        // The picker writes the style down before this runs, so the repaint reads the
+        // background that was just chosen rather than the one before it.
+        ShowFrame();
+
+        // Only when the frame is arriving. Picking a second background while one is
+        // already on moves the strips nowhere, and animating them from where they are to
+        // where they are is a flinch.
+        if (!wasArmed)
+        {
+            MoveChromeToFrame();
+        }
+
         Hint(L("Framed in {0}", BeautifyRenderer.Styles[styleIndex].Name));
     }
 
@@ -2340,6 +2515,7 @@ public sealed partial class CaptureOverlayWindow : Window
     private void EnterRecordingSetup()
     {
         AnnotationToolbar.RecordingSetup = true;
+        ShowFrame();
         ShowWebcamPreview();
     }
 
@@ -2347,6 +2523,7 @@ public sealed partial class CaptureOverlayWindow : Window
     private void LeaveRecordingSetup()
     {
         AnnotationToolbar.RecordingSetup = false;
+        ShowFrame();
         HideWebcamPreview();
     }
 

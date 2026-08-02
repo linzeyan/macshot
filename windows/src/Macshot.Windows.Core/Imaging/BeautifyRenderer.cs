@@ -1,4 +1,5 @@
 using Macshot.Windows.Core.Annotations;
+using Macshot.Windows.Core.Capture;
 
 namespace Macshot.Windows.Core.Imaging;
 
@@ -274,6 +275,55 @@ public static class BeautifyRenderer
     }
 
     /// <summary>
+    /// How wide the frame is around the capture, in the capture's own pixels.
+    /// </summary>
+    /// <remarks>
+    /// The one place the padding fraction becomes a whole number of pixels. Anything
+    /// that has to know where the frame lands asks here rather than rounding again,
+    /// because a preview that rounded the other way would be a frame one pixel out from
+    /// the one the file gets.
+    /// </remarks>
+    public static int PaddingFor(int width, int height, BeautifyOptions? options = null)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+
+        var resolved = (options ?? BeautifyOptions.Default).Normalized();
+        return (int)Math.Round(Math.Min(width, height) * resolved.Padding);
+    }
+
+    /// <summary>
+    /// Where the frame lands around a region of the capture.
+    /// </summary>
+    /// <remarks>
+    /// The region grows outwards and does not move: the capture stays on the pixels it
+    /// was chosen from, which is what lets a preview be drawn beside a selection rather
+    /// than through it. Everything that hangs off the selection — the marks on it, the
+    /// grips, what a click lands on — is left measuring against the same rectangle it
+    /// always did.
+    /// </remarks>
+    public static CaptureRegion FrameAround(CaptureRegion selection, BeautifyOptions? options = null)
+    {
+        var width = (int)selection.Width;
+        var height = (int)selection.Height;
+
+        // Nothing to frame. Covers the empty region and the sliver under a pixel across
+        // that a drag passes through on its way to being a selection.
+        if (width <= 0 || height <= 0)
+        {
+            return selection;
+        }
+
+        var padding = PaddingFor(width, height, options);
+
+        return new CaptureRegion(
+            selection.X - padding,
+            selection.Y - padding,
+            selection.Width + (padding * 2),
+            selection.Height + (padding * 2));
+    }
+
+    /// <summary>
     /// Frames <paramref name="bgraPixels"/> and returns the larger image.
     /// </summary>
     /// <remarks>
@@ -295,13 +345,61 @@ public static class BeautifyRenderer
             throw new ArgumentException("The pixel buffer does not match the frame dimensions.", nameof(bgraPixels));
         }
 
+        return Compose(width, height, bgraPixels, options);
+    }
+
+    /// <summary>
+    /// The frame with nothing in it: the same background and the same shadow
+    /// <see cref="Render"/> lays down, with the card's own area left clear.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// What the overlay shows while the frame is armed. Laying this over a capture that
+    /// is already on screen gives the same picture as framing a copy of it, without
+    /// moving the capture — so the selection, the marks on it and what a click lands on
+    /// are what they are with the frame off, and the preview is a thing drawn around
+    /// them rather than a second coordinate system to keep in step.
+    /// </para>
+    /// <para>
+    /// It goes through the same composer as the export for the reason a swatch does: a
+    /// preview drawn by other means is a promise the file may not keep. The padding, the
+    /// corner and both shadows are not re-derived here — they are the ones the file will
+    /// have, because this is that code with the capture left out.
+    /// </para>
+    /// <para>
+    /// Premultiplied, which is the form a preview surface takes and the form this falls
+    /// out in anyway: the colour is the background scaled by how much of it shows.
+    /// </para>
+    /// </remarks>
+    public static (int Width, int Height, byte[] Pixels) Backdrop(
+        int width,
+        int height,
+        BeautifyOptions? options = null)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
+
+        return Compose(width, height, default, options);
+    }
+
+    /// <summary>
+    /// Both of the above. An empty <paramref name="bgraPixels"/> means there is no
+    /// capture to put in, which is the preview's case.
+    /// </summary>
+    private static (int Width, int Height, byte[] Pixels) Compose(
+        int width,
+        int height,
+        ReadOnlySpan<byte> bgraPixels,
+        BeautifyOptions? options)
+    {
+        var framing = bgraPixels.Length > 0;
         var resolved = (options ?? BeautifyOptions.Default).Normalized();
         var style = Styles.Count == 0
             ? new BeautifyStyle("None", 0, new AnnotationColor(0, 0, 0))
             : Styles[resolved.StyleIndex];
 
         var shortest = Math.Min(width, height);
-        var padding = (int)Math.Round(shortest * resolved.Padding);
+        var padding = PaddingFor(width, height, resolved);
         var radius = shortest * resolved.CornerRadius;
         var shadow = shortest * resolved.ShadowRadius;
 
@@ -322,9 +420,9 @@ public static class BeautifyRenderer
         var contactBlur = shadow * ContactBlurRatio;
         var contactOffset = shadowOffset * ContactOffsetRatio;
 
-        // One sampler for the whole scan: it carries the previous pixel's place on the
-        // mesh over as the next one's starting guess, which is where nearly all of the
-        // cost of inverting a patch goes.
+        // One sampler for the whole scan, which saves an allocation per pixel. It answers
+        // from the mesh alone rather than from where the last pixel landed, so a scan
+        // that skips ground gets the same colours as one that does not.
         var mesh = style.Mesh is { IsUsable: true } definition ? definition.CreateSampler() : null;
 
         for (var row = 0; row < outputHeight; row++)
@@ -332,14 +430,28 @@ public static class BeautifyRenderer
             for (var column = 0; column < outputWidth; column++)
             {
                 var offset = ((row * outputWidth) + column) * 4;
+
+                var pixelX = column + 0.5 - padding;
+                var pixelY = row + 0.5 - padding;
+
+                // Negative inside the card, positive outside. One pixel of feather
+                // across the edge is what turns a stair-stepped corner into a drawn one.
+                var distance = RoundedBoxDistance(pixelX, pixelY, width, height, radius);
+                var coverage = 1 - Smoothstep(-0.5, 0.5, distance);
+
+                // Nothing of the frame shows through the card, so the preview does not
+                // pay for the ground the capture stands on — which is most of the image.
+                // The buffer is already zeroed, and zero premultiplied is clear.
+                if (!framing && coverage >= 1)
+                {
+                    continue;
+                }
+
                 var background = mesh is null
                     ? style.Sample(GradientProgress(style.Angle, column, row, outputWidth, outputHeight))
                     : mesh.Sample(
                         (column + 0.5) / outputWidth,
                         (row + 0.5) / outputHeight);
-
-                var pixelX = column + 0.5 - padding;
-                var pixelY = row + 0.5 - padding;
 
                 var blue = background.Blue;
                 var green = background.Green;
@@ -370,25 +482,38 @@ public static class BeautifyRenderer
                     }
                 }
 
-                // Negative inside the card, positive outside. One pixel of feather
-                // across the edge is what turns a stair-stepped corner into a drawn one.
-                var distance = RoundedBoxDistance(pixelX, pixelY, width, height, radius);
-                var coverage = 1 - Smoothstep(-0.5, 0.5, distance);
+                var alpha = byte.MaxValue;
                 if (coverage > 0)
                 {
-                    var sourceX = Math.Clamp((int)pixelX, 0, width - 1);
-                    var sourceY = Math.Clamp((int)pixelY, 0, height - 1);
-                    var from = ((sourceY * width) + sourceX) * 4;
+                    if (framing)
+                    {
+                        var sourceX = Math.Clamp((int)pixelX, 0, width - 1);
+                        var sourceY = Math.Clamp((int)pixelY, 0, height - 1);
+                        var from = ((sourceY * width) + sourceX) * 4;
 
-                    blue = Blend(blue, bgraPixels[from], coverage);
-                    green = Blend(green, bgraPixels[from + 1], coverage);
-                    red = Blend(red, bgraPixels[from + 2], coverage);
+                        blue = Blend(blue, bgraPixels[from], coverage);
+                        green = Blend(green, bgraPixels[from + 1], coverage);
+                        red = Blend(red, bgraPixels[from + 2], coverage);
+                    }
+                    else
+                    {
+                        // The capture is not here to be blended with — it is underneath,
+                        // already on screen. Giving away exactly the coverage it would
+                        // have taken lets it show through by the same amount, so the
+                        // feathered edge and the rounded corners come out where the file
+                        // would have put them.
+                        var showing = 1 - coverage;
+                        blue = Scale(blue, showing);
+                        green = Scale(green, showing);
+                        red = Scale(red, showing);
+                        alpha = Scale(byte.MaxValue, showing);
+                    }
                 }
 
                 output[offset] = blue;
                 output[offset + 1] = green;
                 output[offset + 2] = red;
-                output[offset + 3] = byte.MaxValue;
+                output[offset + 3] = alpha;
             }
         }
 
@@ -477,4 +602,7 @@ public static class BeautifyRenderer
 
     private static byte Blend(byte under, byte over, double coverage) =>
         (byte)Math.Clamp(Math.Round(under + ((over - under) * coverage)), 0, byte.MaxValue);
+
+    private static byte Scale(byte value, double factor) =>
+        (byte)Math.Clamp(Math.Round(value * factor), 0, byte.MaxValue);
 }

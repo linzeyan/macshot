@@ -161,4 +161,50 @@ public sealed class AnnotationTests
 
         Assert.AreEqual(5, line.Span, 1e-9);
     }
+
+    /// <summary>
+    /// The − and + walk a point at a time and stop dead at each end.
+    /// </summary>
+    /// <remarks>
+    /// Both buttons repeat while they are held, so the size is walked rather than nudged —
+    /// which means the end of the range is reached constantly and by accident. Clamped
+    /// here rather than on the way out through the style, so a size held past 200 does not
+    /// climb into a number the row keeps showing while the label stops growing, leaving the
+    /// user to press − a hundred times before anything moves.
+    /// </remarks>
+    [TestMethod]
+    public void StepFontSize_StopsAtEachEndRatherThanWalkingPastIt()
+    {
+        Assert.AreEqual(21, AnnotationStyle.StepFontSize(20, 1));
+        Assert.AreEqual(19, AnnotationStyle.StepFontSize(20, -1));
+
+        Assert.AreEqual(AnnotationStyle.MinFontSize, AnnotationStyle.StepFontSize(AnnotationStyle.MinFontSize, -1));
+        Assert.AreEqual(AnnotationStyle.MaxFontSize, AnnotationStyle.StepFontSize(AnnotationStyle.MaxFontSize, 1));
+
+        // A settings file that has never held a label size hands back nothing at all, and
+        // a first press of + must land on a size rather than on NaN — which no clamp
+        // repairs, since every comparison against it is false.
+        Assert.AreEqual(AnnotationStyle.DefaultFontSize + 1, AnnotationStyle.StepFontSize(double.NaN, 1));
+    }
+
+    /// <summary>
+    /// The line round the glyphs is a fraction of the label's size, with a floor.
+    /// </summary>
+    /// <remarks>
+    /// Its whole job is holding a label apart from what is behind it, which is a job that
+    /// scales: a fixed width would be invisible at 72 point and would close up the counters
+    /// of an 8-point label until it read as a smudge. The floor is there because the
+    /// fraction alone puts the smallest labels under a whole unit, where an outline is an
+    /// antialiasing artefact rather than an edge.
+    /// </remarks>
+    [TestMethod]
+    public void GlyphStrokeWidth_FollowsTheLabelsSizeAndNeverThinsToNothing()
+    {
+        Assert.AreEqual(
+            AnnotationStyle.GlyphStrokeWidth(100),
+            AnnotationStyle.GlyphStrokeWidth(50) * 2,
+            1e-9);
+
+        Assert.AreEqual(1, AnnotationStyle.GlyphStrokeWidth(AnnotationStyle.MinFontSize));
+    }
 }

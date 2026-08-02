@@ -9,14 +9,15 @@ public sealed class AnnotationToolOptionsTests
     [TestMethod]
     public void EveryDrawnTool_TakesTheSizeControl()
     {
-        // Every tool that draws a mark, less the three macshot does not put the slider on:
+        // Every tool that draws a mark, less the four macshot does not put the slider on:
         // the censor, whose two strengths are chosen for the user rather than set; the
         // spotlight, which puts a hairline round a region and draws it the same width
-        // whatever the slider says; and the ruler, whose mark is a reading rather than a
-        // line anybody set out to draw at a width.
+        // whatever the slider says; the ruler, whose mark is a reading rather than a line
+        // anybody set out to draw at a width; and the label, which has a size control of
+        // its own — see the test below.
         var drawn = AnnotationRasterizer.SupportedTools
             .Where(tool => tool is not (AnnotationTool.Censor or AnnotationTool.Highlight
-                or AnnotationTool.Measure));
+                or AnnotationTool.Measure or AnnotationTool.Text));
 
         foreach (var tool in drawn)
         {
@@ -51,6 +52,46 @@ public sealed class AnnotationToolOptionsTests
         {
             Assert.IsFalse(AnnotationToolOptions.UsesMeasureUnit(tool), $"{tool} and the unit");
             Assert.IsFalse(AnnotationToolOptions.UsesMeasureClamp(tool), $"{tool} and the limit");
+        }
+    }
+
+    /// <summary>
+    /// The label is sized by the row's own − and +, and never by the shared width slider.
+    /// </summary>
+    /// <remarks>
+    /// The two used to be one control, pointed at the font size while the text tool was in
+    /// hand: macshot offers its width slider to eight tools and the text tool is not among
+    /// them (<c>ToolOptionsRowView.swift:123</c>). Sharing it is not merely a different
+    /// shape of control. A stroke is dragged to whatever looks right, and a point size is a
+    /// number people know and ask for by name — 12, 18, 72 — which a slider spanning 8 to
+    /// 200 in a hundred pixels cannot reliably be landed on.
+    /// </remarks>
+    [TestMethod]
+    public void TheLabel_IsSizedByItsOwnControlRatherThanTheWidthSlider()
+    {
+        Assert.IsFalse(AnnotationToolOptions.UsesSize(AnnotationTool.Text));
+        Assert.IsTrue(AnnotationToolOptions.UsesTypesetting(AnnotationTool.Text));
+    }
+
+    /// <summary>
+    /// The face, the four style switches, the alignment, the size and the three colours
+    /// belong to the one tool that types, and to nothing else.
+    /// </summary>
+    /// <remarks>
+    /// The badge and the stamp are the near misses worth naming: both are glyphs drawn from
+    /// a font, so a row that decided this by asking "is it made of letters" would offer a
+    /// typeface for a numbered circle and an alignment for an emoji. Neither is typed, and
+    /// neither has lines to hang from an edge.
+    /// </remarks>
+    [TestMethod]
+    public void TheLabelsControls_BelongToTheToolThatTypes()
+    {
+        foreach (var tool in Enum.GetValues<AnnotationTool>())
+        {
+            Assert.AreEqual(
+                tool == AnnotationTool.Text,
+                AnnotationToolOptions.UsesTypesetting(tool),
+                $"{tool} and the label's controls");
         }
     }
 

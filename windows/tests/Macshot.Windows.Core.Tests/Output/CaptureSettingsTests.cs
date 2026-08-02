@@ -120,6 +120,95 @@ public sealed class CaptureSettingsTests
     }
 
     /// <summary>
+    /// Everything the text tool's row sets survives to the next capture.
+    /// </summary>
+    /// <remarks>
+    /// A label is not restyled from scratch each time — someone who sets 28-point bold
+    /// centred with a white line round the glyphs is captioning a series of screenshots,
+    /// and having to set all five again on the second one is the whole feature failing.
+    /// Any of these left out of the round trip would work for exactly one capture and reset
+    /// on the next, which reads as the row forgetting at random rather than as a bug.
+    /// </remarks>
+    [TestMethod]
+    public void TheLabelsWholeAppearance_RoundTripsThroughTheSettings()
+    {
+        var style = AnnotationStyle.Default with
+        {
+            FontSize = 28,
+            FontFamily = "Cascadia Code",
+            Bold = true,
+            Italic = true,
+            Underline = true,
+            Strikethrough = true,
+            TextAlignment = LabelAlignment.Centre,
+            TextBackground = new AnnotationColor(1, 2, 3, 200),
+            TextOutline = new AnnotationColor(4, 5, 6, 210),
+            TextGlyphStroke = new AnnotationColor(255, 255, 255),
+        };
+
+        var restored = CaptureSettings.Default.WithAnnotationStyle(style).Normalized().ToAnnotationStyle();
+
+        Assert.AreEqual(style.FontSize, restored.FontSize);
+        Assert.AreEqual(style.FontFamily, restored.FontFamily);
+        Assert.AreEqual(style.Bold, restored.Bold);
+        Assert.AreEqual(style.Italic, restored.Italic);
+        Assert.AreEqual(style.Underline, restored.Underline);
+        Assert.AreEqual(style.Strikethrough, restored.Strikethrough);
+        Assert.AreEqual(style.TextAlignment, restored.TextAlignment);
+        Assert.AreEqual(style.TextBackground, restored.TextBackground);
+        Assert.AreEqual(style.TextOutline, restored.TextOutline);
+        Assert.AreEqual(style.TextGlyphStroke, restored.TextGlyphStroke);
+    }
+
+    /// <summary>
+    /// The four style switches are four switches, not one choice between four.
+    /// </summary>
+    /// <remarks>
+    /// This is the difference between the row macshot has and the two-way weight picker the
+    /// port used to carry: bold and underlined at once is an ordinary thing to want from a
+    /// heading typed onto a screenshot, and a setting that could only remember one of them
+    /// would silently drop the other on the way to the next capture.
+    /// </remarks>
+    [TestMethod]
+    public void TheLabelsStyleSwitches_AreRememberedIndependently()
+    {
+        var style = AnnotationStyle.Default with { Bold = true, Strikethrough = true };
+
+        var restored = CaptureSettings.Default.WithAnnotationStyle(style).Normalized().ToAnnotationStyle();
+
+        Assert.IsTrue(restored.Bold);
+        Assert.IsTrue(restored.Strikethrough);
+        Assert.IsFalse(restored.Italic);
+        Assert.IsFalse(restored.Underline);
+    }
+
+    /// <summary>
+    /// A colour the file cannot express means the line round the glyphs is off, not that it
+    /// is some other colour.
+    /// </summary>
+    /// <remarks>
+    /// Off is a state the user chose, and it is the state every file written before the
+    /// control existed is in. Defaulting an unreadable colour to white instead would put an
+    /// outline round every label typed after an upgrade — a change to the drawing nobody
+    /// asked for, which is worse than losing a setting they did.
+    /// </remarks>
+    [TestMethod]
+    public void Normalized_LeavesTheGlyphOutlineOffWhenItsColourCannotBeRead()
+    {
+        var settings = (CaptureSettings.Default with
+        {
+            AnnotationTextGlyphStroke = "not a colour",
+            AnnotationTextAlignment = (LabelAlignment)42,
+        }).Normalized();
+
+        Assert.AreEqual(string.Empty, settings.AnnotationTextGlyphStroke);
+        Assert.IsNull(settings.ToAnnotationStyle().TextGlyphStroke);
+
+        // And an alignment the enum does not know lands on the edge typing already gives.
+        Assert.AreEqual(LabelAlignment.Left, settings.AnnotationTextAlignment);
+    }
+
+    /// <summary>
     /// The settings file is hand-editable and can be stale after an upgrade. A loupe left
     /// at no magnification would be a circle drawn on the capture for no reason, and a
     /// sequence starting at zero would put an empty badge on it.

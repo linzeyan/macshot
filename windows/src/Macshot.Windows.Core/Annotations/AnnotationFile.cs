@@ -122,8 +122,13 @@ public static class AnnotationFile
             FontSize = annotation.Style.FontSize,
             FontFamily = annotation.Style.FontFamily,
             Bold = annotation.Style.Bold,
+            Italic = annotation.Style.Italic,
+            Underline = annotation.Style.Underline,
+            Strikethrough = annotation.Style.Strikethrough,
+            TextAlignment = annotation.Style.TextAlignment.ToString(),
             TextBackground = annotation.Style.TextBackground?.ToHex(),
             TextOutline = annotation.Style.TextOutline?.ToHex(),
+            TextGlyphStroke = annotation.Style.TextGlyphStroke?.ToHex(),
             DimOpacity = annotation.Style.DimOpacity,
             NumberFormat = annotation.Style.NumberFormat.ToString(),
             MeasureInPoints = annotation.Style.MeasureInPoints,
@@ -192,6 +197,16 @@ public static class AnnotationFile
             FontSize = stored.FontSize > 0 ? stored.FontSize : AnnotationStyle.DefaultFontSize,
             FontFamily = stored.FontFamily ?? string.Empty,
             Bold = stored.Bold,
+            Italic = stored.Italic,
+            Underline = stored.Underline,
+            Strikethrough = stored.Strikethrough,
+
+            // Absent from every file written before the row could align a label, where it
+            // reads back as the left edge — which is where an unaligned label already sat.
+            TextAlignment = Enum.TryParse<LabelAlignment>(stored.TextAlignment, out var hung)
+                && Enum.IsDefined(hung)
+                    ? hung
+                    : LabelAlignment.Left,
             ArrowReversed = stored.ArrowReversed,
             Outline = AnnotationColor.TryParseHex(stored.Outline, out var halo) ? halo : null,
             TextBackground = AnnotationColor.TryParseHex(stored.TextBackground ?? string.Empty, out var fill)
@@ -199,6 +214,9 @@ public static class AnnotationFile
                 : null,
             TextOutline = AnnotationColor.TryParseHex(stored.TextOutline ?? string.Empty, out var edge)
                 ? edge
+                : null,
+            TextGlyphStroke = AnnotationColor.TryParseHex(stored.TextGlyphStroke ?? string.Empty, out var glyph)
+                ? glyph
                 : null,
 
             // Absent from every file written before the spotlight had a strength, where it
@@ -384,6 +402,19 @@ public static class AnnotationFile
 
         public bool Bold { get; init; }
 
+        public bool Italic { get; init; }
+
+        public bool Underline { get; init; }
+
+        public bool Strikethrough { get; init; }
+
+        /// <summary>
+        /// Which edge a label's lines are hung from, by name for the reason
+        /// <see cref="Tool"/> is by name. Written since the row could align one; a file
+        /// from before that reads back as the left edge.
+        /// </summary>
+        public string TextAlignment { get; init; } = string.Empty;
+
         public bool ArrowReversed { get; init; }
 
         public string? Outline { get; init; }
@@ -391,6 +422,9 @@ public static class AnnotationFile
         public string? TextBackground { get; init; }
 
         public string? TextOutline { get; init; }
+
+        /// <summary>The line round each glyph, or absent for none.</summary>
+        public string? TextGlyphStroke { get; init; }
 
         /// <summary>
         /// How dark a spotlight takes what is outside it. Written since the tool

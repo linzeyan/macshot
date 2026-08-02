@@ -30,11 +30,12 @@ public static class AnnotationToolOptions
     /// <summary>
     /// Whether the width slider is offered. Not the same question as whether the mark has
     /// a width — every drawn mark does — but whether macshot puts the slider on the row
-    /// for it, which is its <c>hasStroke</c> plus the two tools sized by a number of their
-    /// own (<c>ToolOptionsRowView.swift:123</c>, <c>:1150</c>).
+    /// for it, which is its <c>hasStroke</c> eight plus the stamp, sized by a slider of
+    /// its own (<c>ToolOptionsRowView.swift:123</c>, <c>:1150</c>).
     /// </summary>
     /// <remarks>
-    /// Three are left out. The censor tool, because how much of a redaction survives is
+    /// <para>
+    /// Four are left out. The censor tool, because how much of a redaction survives is
     /// not a thing to leave to a slider, so its cell and its radius are derived from the
     /// region. The spotlight, whose ring is a hairline at any size and whose real strength
     /// is how far the dim outside it goes. And the ruler: what it puts on the capture is a
@@ -42,9 +43,30 @@ public static class AnnotationToolOptions
     /// mark being made — nobody sets out to measure something in a thicker line, and every
     /// pixel the rule gains is a pixel of ambiguity about where the span it reports
     /// actually ends.
+    /// </para>
+    /// <para>
+    /// The label is the fourth, and it is off this list rather than sized by it. Its size
+    /// comes from the row's own − and + instead — see <see cref="UsesTypesetting"/> —
+    /// because a size chosen in points is a number that is read and typed rather than
+    /// dragged to.
+    /// </para>
     /// </remarks>
     public static bool UsesSize(AnnotationTool tool) =>
-        Draws(tool) && !IsRegionEffect(tool) && !IsSpotlight(tool) && tool != AnnotationTool.Measure;
+        Draws(tool) && !IsRegionEffect(tool) && !IsSpotlight(tool)
+        && !UsesTypesetting(tool) && tool != AnnotationTool.Measure;
+
+    /// <summary>
+    /// Whether the label's own controls are offered: the face, bold, italic, underline and
+    /// strikethrough, the alignment, the size stepper, and the three colours behind, around
+    /// and on the glyphs.
+    /// </summary>
+    /// <remarks>
+    /// One answer for the whole group rather than nine, because they are not nine separate
+    /// facts: each of them is meaningless for anything that is not typed, and there is only
+    /// one tool that types. macshot builds them from a single branch for the same reason
+    /// (<c>ToolOptionsRowView.swift:244</c>).
+    /// </remarks>
+    public static bool UsesTypesetting(AnnotationTool tool) => tool == AnnotationTool.Text;
 
     /// <summary>
     /// Whether the dash picker is offered. macshot's own five
