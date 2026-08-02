@@ -115,6 +115,18 @@ public static class AnnotationToolOptions
     /// </summary>
     public static bool UsesCensorScope(AnnotationTool tool) => IsRegionEffect(tool);
 
+    /// <summary>
+    /// Whether the automatic redactions belong on the row — cover every line of text, or
+    /// cover what looks like a secret.
+    /// </summary>
+    /// <remarks>
+    /// The censor tool's, because they are the same act as dragging one of its regions and
+    /// the machine is only being asked to say where. They are offered here as well as on
+    /// the action strip on purpose: the moment somebody has reached for the redaction tool
+    /// is the moment they would take an offer to do the whole job for them.
+    /// </remarks>
+    public static bool UsesAutoRedact(AnnotationTool tool) => IsRegionEffect(tool);
+
     /// <summary>Whether the badge's numbering — its format and where it starts — applies.</summary>
     public static bool UsesNumberFormat(AnnotationTool tool) => tool == AnnotationTool.Number;
 

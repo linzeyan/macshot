@@ -127,6 +127,62 @@ public sealed class PiiDetectorTests
     }
 
     /// <summary>
+    /// A kind switched off is not looked for at all.
+    /// </summary>
+    /// <remarks>
+    /// The option exists because a screenshot of a bug report is full of things that look
+    /// like secrets and are not — build identifiers that pass for card numbers, version
+    /// strings that pass for addresses — and somebody whose captures come back blacked out
+    /// in the same wrong place needs a way to say so short of giving up on redaction.
+    /// Filtered where the patterns are tried rather than afterwards, because a match
+    /// dropped later would already have claimed its region and hidden the wanted match
+    /// behind it.
+    /// </remarks>
+    [TestMethod]
+    public void AKindThatIsSwitchedOff_IsNotLookedFor()
+    {
+        const string Text = "write to ada@example.com or ring 555-123-4567";
+
+        var everything = PiiDetector.Detect(Text);
+        Assert.IsTrue(everything.Any(match => match.Kind == PiiKind.Email));
+        Assert.IsTrue(everything.Any(match => match.Kind == PiiKind.Phone));
+
+        var phonesOnly = PiiDetector.Detect(Text, new HashSet<PiiKind> { PiiKind.Phone });
+        Assert.IsFalse(phonesOnly.Any(match => match.Kind == PiiKind.Email));
+        Assert.IsTrue(phonesOnly.Any(match => match.Kind == PiiKind.Phone));
+
+        // Everything switched off finds nothing, rather than quietly meaning everything.
+        Assert.AreEqual(0, PiiDetector.Detect(Text, new HashSet<PiiKind>()).Count);
+    }
+
+    /// <summary>
+    /// Every kind the detector knows is on the menu, and each is named.
+    /// </summary>
+    /// <remarks>
+    /// A pattern the menu does not list is one the user cannot switch off, which turns a
+    /// wrong redaction into an unfixable one. Walking the enum is what makes adding a
+    /// pattern without adding its row a failing build rather than a silent gap.
+    /// </remarks>
+    [TestMethod]
+    public void EveryKindTheDetectorKnows_CanBeSwitchedOffFromTheMenu()
+    {
+        foreach (var kind in Enum.GetValues<PiiKind>())
+        {
+            Assert.IsTrue(PiiKinds.Order.Contains(kind), $"{kind} is not on the menu");
+            Assert.IsFalse(string.IsNullOrWhiteSpace(PiiKinds.Label(kind)), $"{kind} has no name");
+        }
+
+        Assert.AreEqual(Enum.GetValues<PiiKind>().Length, PiiKinds.Order.Count);
+        Assert.AreEqual(PiiKinds.Order.Count, PiiKinds.Order.Distinct().Count());
+
+        // Two kinds sharing a name would give the menu two rows that read alike and do
+        // different things.
+        Assert.AreEqual(
+            PiiKinds.Order.Count,
+            PiiKinds.Order.Select(PiiKinds.Label).Distinct(StringComparer.Ordinal).Count());
+    }
+
+    /// <summary>
     /// Asserts the kind is found and that the match actually spans the secret, so a
     /// pattern that matched one stray character would still fail.
     /// </summary>

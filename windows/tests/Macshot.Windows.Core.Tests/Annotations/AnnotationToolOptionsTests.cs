@@ -166,6 +166,28 @@ public sealed class AnnotationToolOptionsTests
         Assert.IsFalse(AnnotationToolOptions.UsesLineStyle(AnnotationTool.Select));
     }
 
+    /// <summary>
+    /// The two automatic redactions belong on the censor tool's row and nowhere else.
+    /// </summary>
+    /// <remarks>
+    /// The row had the four modes and the draw scope but neither of these, which left the
+    /// port's redaction tool offering only the manual half of what macshot's does — a user
+    /// who wanted a panel of somebody's data covered had to drag a box round each line.
+    /// They are the same act as dragging one of its regions, with the machine asked to say
+    /// where; offered here as well as on the action strip because the moment somebody has
+    /// reached for the redaction tool is the moment they would take that offer.
+    /// </remarks>
+    [TestMethod]
+    public void TheAutomaticRedactions_BelongToTheCensorToolAlone()
+    {
+        Assert.IsTrue(AnnotationToolOptions.UsesAutoRedact(AnnotationTool.Censor));
+
+        foreach (var tool in Enum.GetValues<AnnotationTool>().Where(tool => tool != AnnotationTool.Censor))
+        {
+            Assert.IsFalse(AnnotationToolOptions.UsesAutoRedact(tool), $"{tool} should not offer them");
+        }
+    }
+
     [TestMethod]
     public void TheCensorTool_TakesNoSizeBecauseNeitherOfItsStrengthsIsChosen()
     {

@@ -47,6 +47,19 @@ public enum ToolbarCommand
     /// <summary>Cover the personal details in it.</summary>
     Redact,
 
+    /// <summary>
+    /// Cover every line of text found in the region, rather than only what looks like a
+    /// secret.
+    /// </summary>
+    /// <remarks>
+    /// Its own command rather than a mode of <see cref="Redact"/>, because the two answer
+    /// different questions. One asks the machine to decide what is sensitive; this is what
+    /// is used when the answer is already known to be "all of it" — a whole panel of
+    /// somebody else's data, where naming the kinds would be work the user should not have
+    /// to do, and where a pattern that missed one is a leak.
+    /// </remarks>
+    RedactAllText,
+
     /// <summary>Lay a translation over the text in it.</summary>
     Translate,
 

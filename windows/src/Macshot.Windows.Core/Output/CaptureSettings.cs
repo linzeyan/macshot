@@ -941,6 +941,50 @@ public sealed record CaptureSettings
     /// </remarks>
     public IReadOnlyList<string> HiddenActions { get; init; } = [];
 
+    /// <summary>
+    /// The kinds of personal data auto-redaction is told to leave alone, by name. Empty
+    /// means it covers everything it can find, which is what macshot starts from.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Stored as what is switched off for the same reason the tools are: a list of what is
+    /// wanted, written before a pattern existed, cannot contain it — so a version that
+    /// learns to spot a new kind of secret would quietly not redact it for every existing
+    /// user, which on this feature is a leak rather than a missing button.
+    /// </para>
+    /// <para>
+    /// It exists because a screenshot of a bug report is full of things that look like
+    /// secrets and are not: build identifiers read as card numbers, version strings read as
+    /// addresses. Someone whose captures are always blacked out in the same wrong place
+    /// needs a way to say so that is not turning the whole feature off.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<string> HiddenPiiKinds { get; init; } = [];
+
+    /// <summary>What auto-redaction should cover, given what has been switched off.</summary>
+    public IReadOnlySet<PiiKind> RedactedPiiKinds()
+    {
+        var hidden = HiddenPiiKinds
+            .Select(name => Enum.TryParse<PiiKind>(name, ignoreCase: true, out var kind) ? kind : (PiiKind?)null)
+            .Where(kind => kind is not null)
+            .Select(kind => kind!.Value)
+            .ToHashSet();
+
+        return Enum.GetValues<PiiKind>().Where(kind => !hidden.Contains(kind)).ToHashSet();
+    }
+
+    /// <summary>
+    /// The switched-off kinds, keeping only names this build has a pattern for. Unlike the
+    /// tools there is no floor: turning every one of them off is a coherent thing to want,
+    /// and what is left is a button that finds nothing rather than a broken window.
+    /// </summary>
+    private IReadOnlyList<string> SaneHiddenPiiKinds() =>
+    [
+        .. HiddenPiiKinds
+            .Where(name => Enum.TryParse<PiiKind>(name, ignoreCase: true, out _))
+            .Distinct(StringComparer.OrdinalIgnoreCase),
+    ];
+
     /// <summary>How many colours the picker keeps for the user's own. macshot's seven.</summary>
     public const int CustomColorSlots = 7;
 
@@ -1431,6 +1475,7 @@ public sealed record CaptureSettings
             // A file that hides every tool is treated as hiding none — a toolbar with no
             // tools on it is not a preference, it is a broken window.
             HiddenTools = SaneHiddenTools(),
+            HiddenPiiKinds = SaneHiddenPiiKinds(),
             HiddenActions = SaneHiddenActions(),
 
             // A held shape that is not a positive number is not a shape. Kept separate

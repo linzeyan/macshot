@@ -1,6 +1,7 @@
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Output;
+using Macshot.Windows.Core.Recognition;
 
 namespace Macshot.Windows.Core.Tests.Output;
 
@@ -148,6 +149,54 @@ public sealed class CaptureSettingsTests
         Assert.AreEqual(AnnotationStyle.DefaultDimOpacity, settings.DimOpacity);
         Assert.AreEqual(1, settings.NumberStartAt);
         Assert.AreEqual(NumberFormat.Decimal, settings.NumberFormat);
+    }
+
+    /// <summary>
+    /// The kinds of secret are stored by what is switched off, so a new pattern redacts for
+    /// everyone the day it ships.
+    /// </summary>
+    /// <remarks>
+    /// The same reasoning as the hidden tools, with a sharper consequence: stored the other
+    /// way round, a list written before a pattern existed could not name it, and every
+    /// existing user would go on publishing that one kind of secret without ever being told
+    /// the feature had learned to spot it.
+    /// </remarks>
+    [TestMethod]
+    public void SwitchingOffAPiiKindLeavesTheRestAndANewOneArrivesOn()
+    {
+        Assert.AreEqual(0, CaptureSettings.Default.HiddenPiiKinds.Count);
+        Assert.AreEqual(Enum.GetValues<PiiKind>().Length, CaptureSettings.Default.RedactedPiiKinds().Count);
+
+        var settings = (CaptureSettings.Default with
+        {
+            // The second is a name from a build that had a pattern this one does not, and
+            // must be dropped rather than written back for ever.
+            HiddenPiiKinds = ["Phone", "Astrology"],
+        }).Normalized();
+
+        CollectionAssert.AreEqual(new[] { "Phone" }, settings.HiddenPiiKinds.ToArray());
+
+        var wanted = settings.RedactedPiiKinds();
+        Assert.IsFalse(wanted.Contains(PiiKind.Phone));
+        Assert.IsTrue(wanted.Contains(PiiKind.Email));
+    }
+
+    /// <summary>
+    /// Every one of them can be switched off at once, unlike the tools.
+    /// </summary>
+    /// <remarks>
+    /// A toolbar with no tools is a broken window and is repaired; a redactor asked to find
+    /// nothing is a coherent thing to want, and the button that then finds nothing says so.
+    /// </remarks>
+    [TestMethod]
+    public void ASettingsFileThatSwitchesOffEveryPiiKindIsHonoured()
+    {
+        var settings = (CaptureSettings.Default with
+        {
+            HiddenPiiKinds = [.. Enum.GetValues<PiiKind>().Select(kind => kind.ToString())],
+        }).Normalized();
+
+        Assert.AreEqual(0, settings.RedactedPiiKinds().Count);
     }
 
     [TestMethod]

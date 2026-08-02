@@ -33,10 +33,17 @@ public static class AutoRedactor
 
     private const double MinimumPadding = 2;
 
+    /// <param name="kinds">
+    /// Which sorts of secret to cover, or null for every sort this build can spot. Passed
+    /// through to the detector rather than filtered afterwards: a box discarded after the
+    /// fact would already have claimed its region and suppressed the overlapping match
+    /// behind it, so an unwanted kind could hide a wanted one.
+    /// </param>
     public static IReadOnlyList<Annotation> Redact(
         IEnumerable<RecognizedLine> lines,
         AnnotationStyle? style = null,
-        Guid? groupId = null)
+        Guid? groupId = null,
+        IReadOnlySet<PiiKind>? kinds = null)
     {
         ArgumentNullException.ThrowIfNull(lines);
 
@@ -47,7 +54,7 @@ public static class AutoRedactor
 
         foreach (var line in lines)
         {
-            foreach (var match in PiiDetector.Detect(line.Text))
+            foreach (var match in PiiDetector.Detect(line.Text, kinds))
             {
                 if (!TryCover(line, match, out var bounds))
                 {

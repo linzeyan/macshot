@@ -2,6 +2,7 @@ using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Output;
+using Macshot.Windows.Core.Recognition;
 using Macshot.Windows.Rendering;
 using Macshot.Windows.Services;
 using static Macshot.Windows.Services.Localization;
@@ -145,6 +146,43 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// blacking out the words on it, which is what most redactions actually want.
     /// </summary>
     private readonly StyleSegments _censorScope = new();
+
+    private readonly TextBlock _autoLabel = OptionLabel(L("Auto:"));
+
+    /// <summary>
+    /// The kinds of secret the PII button looks for, and their menu items. Kept so the
+    /// ticks can be filled from the settings once the toolbar is bound, which is after the
+    /// menu itself is built.
+    /// </summary>
+    private readonly List<(PiiKind Kind, ToggleMenuFlyoutItem Item)> _piiKinds = [];
+
+    /// <summary>
+    /// Covers every line of text found in the region. macshot's "All Text": the answer for
+    /// a whole panel of somebody else's data, where naming what is sensitive would be work
+    /// the user should not have to do and a pattern that missed one would be a leak.
+    /// </summary>
+    private readonly Button _redactAllText = new()
+    {
+        Content = L("All Text"),
+        FontSize = OptionValueSize,
+        MinWidth = 0,
+        Padding = new Thickness(8, 2, 8, 2),
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
+    /// <summary>
+    /// Covers what looks like a secret, with the kinds it looks for behind the arrow.
+    /// macshot's PII button and its dropdown, in one control for the same reason macshot
+    /// pairs them: the list is what you reach for when the button covered the wrong thing.
+    /// </summary>
+    private readonly SplitButton _redactPii = new()
+    {
+        Content = L("PII"),
+        FontSize = OptionValueSize,
+        MinWidth = 0,
+        Padding = new Thickness(8, 2, 8, 2),
+        VerticalAlignment = VerticalAlignment.Center,
+    };
 
     private readonly StyleSegments _numberFormat = new();
     private readonly TextBlock _startLabel = OptionLabel(L("Start:"));
@@ -526,6 +564,13 @@ public sealed partial class AnnotationToolbarView : UserControl
 
             Remember(current => current with { NumberStartAt = (int)_numberStart.Value });
         };
+
+        // Out to the host, because the pixels these read are the host's: the whole
+        // screenshot under an overlay, the image being edited in an editor. Both are
+        // offered here as well as on the action strip — the moment somebody reaches for the
+        // redaction tool is the moment they would take an offer to do the whole job.
+        _redactAllText.Click += (_, _) => CommandInvoked?.Invoke(this, ToolbarCommand.RedactAllText);
+        _redactPii.Click += (_, _) => CommandInvoked?.Invoke(this, ToolbarCommand.Redact);
 
         _measureUnit.SelectionChanged += (_, _) => ApplyStyle();
 
@@ -1268,6 +1313,11 @@ public sealed partial class AnnotationToolbarView : UserControl
         _drawLabel.Visibility = scoped;
         _censorScope.Visibility = scoped;
 
+        var automatic = Show(AnnotationToolOptions.UsesAutoRedact(tool));
+        _autoLabel.Visibility = automatic;
+        _redactAllText.Visibility = automatic;
+        _redactPii.Visibility = automatic;
+
         var counted = Show(AnnotationToolOptions.UsesNumberFormat(tool));
         _numberFormat.Visibility = counted;
         _startLabel.Visibility = counted;
@@ -1399,6 +1449,23 @@ public sealed partial class AnnotationToolbarView : UserControl
         Remember(current => current with { PencilPressure = wanted });
     }
 
+    /// <summary>
+    /// Writes down which kinds of secret are no longer wanted.
+    /// </summary>
+    /// <remarks>
+    /// Stored as what is switched off rather than what is on, so a version that learns to
+    /// spot a new kind covers it for everyone. The other way round, a list written before
+    /// the pattern existed could not name it, and every existing user would silently keep
+    /// publishing that one — which on this feature is a leak rather than a missing button.
+    /// </remarks>
+    private void RememberPiiKinds() => Remember(current => current with
+    {
+        HiddenPiiKinds =
+        [
+            .. _piiKinds.Where(entry => !entry.Item.IsChecked).Select(entry => entry.Kind.ToString()),
+        ],
+    });
+
     /// <summary>Holds the ruler inside the region, or lets it out, and remembers which.</summary>
     private void ShowRulerClamp(bool wanted)
     {
@@ -1486,6 +1553,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         _zoomLabel.Foreground = ToolbarPalette.IconBrush(0.4);
         _startLabel.Foreground = ToolbarPalette.IconBrush(0.4);
         _drawLabel.Foreground = ToolbarPalette.IconBrush(0.4);
+        _autoLabel.Foreground = ToolbarPalette.IconBrush(0.4);
         _sizeValue.Foreground = ToolbarPalette.IconBrush(0.6);
         _cornerValue.Foreground = ToolbarPalette.IconBrush(0.6);
         _zoomValue.Foreground = ToolbarPalette.IconBrush(0.6);
@@ -1575,9 +1643,16 @@ public sealed partial class AnnotationToolbarView : UserControl
 
         // The censor tool's two options. There is deliberately no strength beside them:
         // how much of a redaction survives is not a thing to leave to a slider.
+        //
+        // The four names are left in English, which is macshot's own choice for this one
+        // control: it builds these segments from CensorMode.label, a plain string, where
+        // every other label on its row goes through the strings file. They name the effect
+        // rather than describe it — a reader who knows what a pixelated screenshot looks
+        // like knows which segment says Pixelate — and translating them here would have
+        // the two products showing different words for the same four buttons.
         ToolTipService.SetToolTip(_censorMode, "How the region is covered");
         _censorMode.SetSegments([.. Enum.GetValues<CensorMode>().Select(mode =>
-            new StyleSegment(null, L(mode.ToString()), 0))]);
+            new StyleSegment(null, mode.ToString(), 0))]);
 
         ToolTipService.SetToolTip(_censorScope, "What inside the region is covered");
         _censorScope.SetSegments(
@@ -1585,6 +1660,21 @@ public sealed partial class AnnotationToolbarView : UserControl
             new StyleSegment(null, L("All"), 0),
             new StyleSegment(null, L("Text Only"), 0),
         ]);
+
+        // The kinds the PII button looks for, behind its arrow — macshot's own dropdown
+        // (ToolOptionsRowView.swift:1267-1270). Built once and ticked from the settings
+        // when the toolbar binds: nothing else in the app writes them, so the menu cannot
+        // fall out of step with what it last wrote.
+        var kinds = new MenuFlyout();
+        foreach (var kind in PiiKinds.Order)
+        {
+            var item = new ToggleMenuFlyoutItem { Text = PiiKinds.Label(kind), IsChecked = true };
+            item.Click += (_, _) => RememberPiiKinds();
+            kinds.Items.Add(item);
+            _piiKinds.Add((kind, item));
+        }
+
+        _redactPii.Flyout = kinds;
 
         // The glyphs themselves rather than the names of the formats: "1 I A a" is read
         // at a glance and needs no translating, where "Roman" and "Lowercase letters"
@@ -1669,6 +1759,13 @@ public sealed partial class AnnotationToolbarView : UserControl
         AddGroup(_arrowStyle);
         AddGroup(_shapeFill);
         AddGroup(_cornerLabel, _cornerRadius, _cornerValue);
+
+        // The badge's two before the halo rather than after it, because macshot puts the
+        // halo last on that tool as well as on the shapes (:238-241 then :266-270) — and
+        // this is one sequence for every tool, so the badge's groups have to be somewhere
+        // the shapes do not mind. They are: nothing but the badge ever shows them.
+        AddGroup(_numberFormat);
+        AddGroup(_startLabel, _numberStart);
         AddGroup(_outline);
         AddGroup(_flipArrow);
         AddGroup(_smoothing);
@@ -1676,8 +1773,8 @@ public sealed partial class AnnotationToolbarView : UserControl
         AddGroup(_smartMarker);
         AddGroup(_censorMode);
         AddGroup(_drawLabel, _censorScope);
-        AddGroup(_numberFormat);
-        AddGroup(_startLabel, _numberStart);
+        AddGroup(_autoLabel, _redactAllText, _redactPii);
+
         // One group, so no hairline comes between them: macshot runs the unit straight into
         // the switch with nothing between (ToolOptionsRowView.swift:1125-1136), because the
         // two are the whole of what it asks about a ruler.
@@ -1832,6 +1929,12 @@ public sealed partial class AnnotationToolbarView : UserControl
             _smartMarker.IsChecked = settings.Current.SmartMarker;
             _censorMode.SelectedIndex = (int)_loadedStyle.CensorMode;
             _censorScope.SelectedIndex = settings.Current.CensorTextOnly ? 1 : 0;
+
+            var wanted = settings.Current.RedactedPiiKinds();
+            foreach (var (kind, item) in _piiKinds)
+            {
+                item.IsChecked = wanted.Contains(kind);
+            }
 
             _numberFormat.SelectedIndex = (int)_loadedStyle.NumberFormat;
             _numberStart.Value = settings.Current.NumberStartAt;

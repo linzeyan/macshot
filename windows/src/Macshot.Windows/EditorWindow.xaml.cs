@@ -280,6 +280,10 @@ public sealed partial class EditorWindow : Window
                 _ = RedactPiiAsync();
                 return;
 
+            case ToolbarCommand.RedactAllText:
+                _ = RedactAllTextAsync();
+                return;
+
             case ToolbarCommand.Translate:
 #if !OFFLINE
                 _ = TranslateAsync();
@@ -1015,7 +1019,11 @@ public sealed partial class EditorWindow : Window
     {
         await RunRecognitionAsync(lines =>
         {
-            var annotations = AutoRedactor.Redact(lines);
+            var annotations = AutoRedactor.Redact(
+                lines,
+                RedactionStyle(),
+                kinds: _settings.Current.RedactedPiiKinds());
+
             if (annotations.Count == 0)
             {
                 HintText.Text = L("No personal data found in the image");
@@ -1027,6 +1035,48 @@ public sealed partial class EditorWindow : Window
             HintText.Text = L("Redacted {0} • Ctrl+Z to undo", annotations.Count);
         });
     }
+
+    /// <summary>
+    /// Covers every line of text in the image rather than only what looks like a secret.
+    /// </summary>
+    /// <remarks>
+    /// The other half of macshot's auto group, and the one used when the answer is already
+    /// known to be "all of it": a panel of somebody else's data, where naming what is
+    /// sensitive is work the user should not have to do and a pattern that missed one
+    /// would be a leak rather than a missed box.
+    /// </remarks>
+    private async Task RedactAllTextAsync()
+    {
+        await RunRecognitionAsync(lines =>
+        {
+            var annotations = AutoRedactor.RedactAllText(lines, _editor.SnapRegion, RedactionStyle());
+            if (annotations.Count == 0)
+            {
+                // macshot's own wording for the same answer, so it arrives translated
+                // rather than as one more English string in this port's file.
+                HintText.Text = L("(No text detected in the selected area)");
+                return;
+            }
+
+            _editor.Document.AddRange(annotations);
+            AnnotationCanvas.Render();
+            HintText.Text = L("Redacted {0} • Ctrl+Z to undo", annotations.Count);
+        });
+    }
+
+    /// <summary>
+    /// How an automatic redaction is drawn: the censor settings the user chose when that
+    /// tool is in hand, and opaque black otherwise.
+    /// </summary>
+    /// <remarks>
+    /// macshot's rule (<c>OverlayView+Popovers.swift:486-487</c>). The options row's two
+    /// buttons can only be pressed with the censor tool in hand, so pressing them means the
+    /// mode picked beside them; the action strip's button can be pressed holding anything,
+    /// and inheriting a translucent marker colour there would produce boxes that still show
+    /// what they were placed over.
+    /// </remarks>
+    private AnnotationStyle RedactionStyle() =>
+        _editor.Tool == AnnotationTool.Censor ? _editor.Style : AutoRedactor.DefaultStyle;
 
 #if !OFFLINE
     /// <summary>

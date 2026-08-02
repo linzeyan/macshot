@@ -121,6 +121,27 @@ public sealed class AutoRedactorTests
         Assert.AreEqual(CensorMode.Solid, redaction.Style.CensorMode);
     }
 
+    /// <summary>
+    /// A kind switched off leaves nothing behind, not even an empty box.
+    /// </summary>
+    /// <remarks>
+    /// The whole route matters rather than just the detector: the menu behind the redact
+    /// button writes the setting, the host reads it, and this is the call that has to carry
+    /// it. Filtering after the boxes were built would be worse than not filtering at all,
+    /// because a box claims its region and suppresses the overlapping match behind it — an
+    /// unwanted kind could then hide a wanted one, and the run would come back short
+    /// without saying so.
+    /// </remarks>
+    [TestMethod]
+    public void Redact_CoversOnlyTheKindsItIsAskedFor()
+    {
+        var line = Line(("bob@example.com", new CaptureRegion(0, 0, 150, 20)));
+
+        Assert.AreEqual(1, AutoRedactor.Redact([line]).Count);
+        Assert.AreEqual(1, AutoRedactor.Redact([line], kinds: new HashSet<PiiKind> { PiiKind.Email }).Count);
+        Assert.AreEqual(0, AutoRedactor.Redact([line], kinds: new HashSet<PiiKind> { PiiKind.Phone }).Count);
+    }
+
     private static RecognizedLine Line(params (string Text, CaptureRegion Bounds)[] words) =>
         new(words.Select(word => new RecognizedWord(word.Text, word.Bounds)));
 }

@@ -24,6 +24,59 @@ public enum PiiKind
 public readonly record struct PiiMatch(PiiKind Kind, int Start, int Length, string Value);
 
 /// <summary>
+/// The kinds as the menu behind the redact button offers them.
+/// </summary>
+/// <remarks>
+/// An order of its own rather than the enum's, because the enum is ordered by how the
+/// patterns are tried — the cheap and specific ones first — and a menu ordered by that
+/// would put the developer's secrets in the middle of the cardholder's. macshot's own list
+/// (<c>AutoRedactor.swift:10-22</c>) groups them as a reader thinks of them: who you are,
+/// then how to pay, then what a machine would authenticate with.
+/// </remarks>
+public static class PiiKinds
+{
+    public static IReadOnlyList<PiiKind> Order { get; } =
+    [
+        PiiKind.Email,
+        PiiKind.Phone,
+        PiiKind.SocialSecurityNumber,
+        PiiKind.CreditCard,
+        PiiKind.CardVerificationValue,
+        PiiKind.CardExpiry,
+        PiiKind.IpAddress,
+        PiiKind.AwsAccessKey,
+        PiiKind.SecretAssignment,
+        PiiKind.HexKey,
+        PiiKind.BearerToken,
+    ];
+
+    /// <summary>
+    /// What the menu calls one.
+    /// </summary>
+    /// <remarks>
+    /// Not translated, which is macshot's own choice for exactly these strings — its
+    /// redact-type list is the one picker it builds from raw labels rather than through the
+    /// strings file. They are names of formats rather than words of English: "SSN", "CVV"
+    /// and "AWS" are read as the things they stand for in every locale, and a translated
+    /// "Bearer Tokens" would be harder to match against the header it is named after.
+    /// </remarks>
+    public static string Label(PiiKind kind) => kind switch
+    {
+        PiiKind.Email => "Emails",
+        PiiKind.Phone => "Phone Numbers",
+        PiiKind.SocialSecurityNumber => "SSN",
+        PiiKind.CreditCard => "Credit Cards",
+        PiiKind.CardVerificationValue => "CVV Codes",
+        PiiKind.CardExpiry => "Expiry Dates",
+        PiiKind.IpAddress => "IP Addresses",
+        PiiKind.AwsAccessKey => "AWS Keys",
+        PiiKind.SecretAssignment => "Secrets/Tokens",
+        PiiKind.HexKey => "Hex Keys",
+        _ => "Bearer Tokens",
+    };
+}
+
+/// <summary>
 /// Finds things in recognized text that should not be published, the portable half
 /// of the macOS <c>AutoRedactor</c>.
 /// </summary>
@@ -69,7 +122,15 @@ public static partial class PiiDetector
     /// different patterns are all reported: they redact to the same boxes anyway,
     /// and suppressing one would mean ranking which kind of secret matters more.
     /// </summary>
-    public static IReadOnlyList<PiiMatch> Detect(string? text)
+    /// <param name="kinds">
+    /// What to look for, or null for everything. A screenshot of a bug report is full of
+    /// things that look like secrets and are not — build identifiers that pass for card
+    /// numbers, version strings that pass for addresses — and somebody whose captures are
+    /// always blacked out in the same wrong place needs a way to say so short of giving up
+    /// on redaction altogether. An empty set finds nothing, which is that answer taken to
+    /// its end.
+    /// </param>
+    public static IReadOnlyList<PiiMatch> Detect(string? text, IReadOnlySet<PiiKind>? kinds = null)
     {
         if (string.IsNullOrWhiteSpace(text))
         {
@@ -79,6 +140,11 @@ public static partial class PiiDetector
         var matches = new List<PiiMatch>();
         foreach (var (kind, pattern) in Patterns)
         {
+            if (kinds is not null && !kinds.Contains(kind))
+            {
+                continue;
+            }
+
             foreach (Match match in pattern.Matches(text))
             {
                 if (kind == PiiKind.CreditCard && !PassesLuhn(match.Value))
