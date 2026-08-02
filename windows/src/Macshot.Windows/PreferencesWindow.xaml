@@ -686,8 +686,9 @@
 
             <ScrollViewer x:Name="RecordingPage" Visibility="Collapsed">
                 <StackPanel Spacing="20">
-                    <!-- macshot's three sections in macshot's order: Output, Behavior,
-                         Webcam (SettingsWindowController.swift:1547–1646). The frame rate
+                    <!-- macshot's four sections in macshot's order: Output, Behavior,
+                         Webcam, Scroll Capture (SettingsWindowController.swift:1547–1690).
+                         The frame rate
                          sits at the top of Output there rather than under a heading of its
                          own, and what macshot puts on the recording strip — the click ring,
                          the audio pair, the webcam switch — is not repeated here. The strip
@@ -804,6 +805,48 @@
                                 Width="240"
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
+                    </StackPanel>
+
+                    <!-- macshot's fourth section, which this page did not have at all
+                         (SettingsWindowController.swift:1650). Two of its four settings
+                         are here. Its Auto-scroll switch is not: this port has no manual
+                         mode to switch to, and a switch with one position is a switch that
+                         does nothing. Nor its "Detect fixed/sticky headers", for the same
+                         reason — there is no detection behind it yet. Both belong here the
+                         day the features do. -->
+                    <StackPanel Style="{StaticResource Section}">
+                        <TextBlock Text="Scroll Capture" Style="{StaticResource SectionHeading}" />
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Scroll speed:" Style="{StaticResource RowLabel}" />
+                            <ComboBox
+                                x:Name="ScrollSpeedBox"
+                                Width="240"
+                                SelectionChanged="Setting_SelectionChanged" />
+                        </StackPanel>
+                        <TextBlock
+                            Text="How far the page moves between frames. A faster setting takes fewer frames over a long page, and on a short region can move further than one frame's worth — which is what macshot has to line the frames up by, so the capture stops early instead."
+                            Style="{StaticResource Caption}" />
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Max height:" Style="{StaticResource RowLabel}" />
+                            <NumberBox
+                                x:Name="ScrollMaxHeightBox"
+                                Width="120"
+                                FontSize="13"
+                                Minimum="0"
+                                Maximum="100000"
+                                SmallChange="5000"
+                                LargeChange="5000"
+                                SpinButtonPlacementMode="Compact"
+                                ValueChanged="Setting_NumberChanged" />
+                            <TextBlock Text="px" Style="{StaticResource RowText}" />
+                        </StackPanel>
+                        <!-- macshot's label here is "px (0 = unlimited)", which is not
+                             true on either product: the stitched picture is held in memory
+                             while it grows, so something has to stop a feed that never
+                             ends. Saying where that is beats promising it is not there. -->
+                        <TextBlock
+                            Text="0 sets no limit of your own. macshot stops at 40,000 px either way — the picture is held whole while it grows."
+                            Style="{StaticResource Caption}" />
                     </StackPanel>
                 </StackPanel>
             </ScrollViewer>

@@ -57,10 +57,23 @@ public sealed class ScrollCaptureSession
     private readonly Func<long, Task<CapturedFrame?>> _captureWindow;
     private readonly ScrollDriver _driver;
 
-    public ScrollCaptureSession(Func<long, Task<CapturedFrame?>> captureWindow, ScrollDriver? driver = null)
+    /// <summary>Where this capture stops, which is the user's limit or the buffer's.</summary>
+    private readonly int _maximumHeight;
+
+    /// <param name="maximumHeight">
+    /// Rows past which to stop on purpose, or 0 for as far as the page goes. Clamped to
+    /// <see cref="MaximumHeight"/> either way: that one is not a preference but the bound
+    /// on a buffer that grows while the capture runs, and a feed that never ends would
+    /// find it whatever the user asked for.
+    /// </param>
+    public ScrollCaptureSession(
+        Func<long, Task<CapturedFrame?>> captureWindow,
+        ScrollDriver? driver = null,
+        int maximumHeight = 0)
     {
         _captureWindow = captureWindow ?? throw new ArgumentNullException(nameof(captureWindow));
         _driver = driver ?? new ScrollDriver();
+        _maximumHeight = maximumHeight is > 0 and < MaximumHeight ? maximumHeight : MaximumHeight;
     }
 
     /// <summary>
@@ -148,7 +161,7 @@ public sealed class ScrollCaptureSession
         }
 
         var stitcher = new ScrollStitcher(band.Width, band.Height);
-        var policy = new ScrollCapturePolicy(MaximumHeight);
+        var policy = new ScrollCapturePolicy(_maximumHeight);
 
         byte[]? pixels = band.Pixels;
         var frames = 0;

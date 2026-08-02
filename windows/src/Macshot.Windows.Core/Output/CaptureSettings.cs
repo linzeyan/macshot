@@ -376,6 +376,25 @@ public sealed record CaptureSettings
     /// </remarks>
     public string TrayIconPath { get; init; } = string.Empty;
 
+    /// <summary>
+    /// How far a scroll capture moves the page between frames. macshot's
+    /// <c>scrollSpeed</c>.
+    /// </summary>
+    public ScrollSpeed ScrollSpeed { get; init; } = ScrollSpeed.Fast;
+
+    /// <summary>
+    /// Rows past which a scroll capture stops on purpose, or 0 for as far as the page
+    /// goes. macshot's <c>scrollMaxHeight</c>.
+    /// </summary>
+    /// <remarks>
+    /// 0 is not truly without limit and macshot's own label says otherwise: the stitched
+    /// image is held in memory while it grows, so there is a ceiling either way and a
+    /// feed that never ends would find it. What 0 means here is "no limit of your own" —
+    /// the ceiling stays where it has always been, and the page says so rather than
+    /// promising something the machine cannot do.
+    /// </remarks>
+    public int ScrollMaxHeight { get; init; }
+
     /// <summary>Which light or dark macshot's own windows are drawn in.</summary>
     public AppTheme Theme { get; init; } = AppTheme.System;
 
@@ -1222,6 +1241,11 @@ public sealed record CaptureSettings
             Language = string.IsNullOrWhiteSpace(Language) ? AppLanguages.System : Language.Trim(),
 
             TranslateTargetLanguage = TranslationLanguages.Normalize(TranslateTargetLanguage),
+
+            // A negative limit from a hand-edited file would stop every scroll capture
+            // before its first frame. Nought is the value that means "no limit of mine",
+            // which is what someone writing a negative number was reaching for.
+            ScrollMaxHeight = ScrollMaxHeight < 0 ? 0 : ScrollMaxHeight,
 
             // In macshot's order, because Once keeps the first claim on a combination.
             CaptureAreaHotkey = Once(CaptureAreaBinding),

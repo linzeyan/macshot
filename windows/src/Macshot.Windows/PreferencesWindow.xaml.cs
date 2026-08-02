@@ -1109,6 +1109,11 @@ public sealed partial class PreferencesWindow : Window
 
         UrlSchemeCheck.IsChecked = settings.UrlSchemeEnabled;
 
+        // macshot's four words, in macshot's order, so the stored value is the index.
+        ScrollSpeedBox.ItemsSource = new List<string> { L("Slow"), L("Medium"), L("Fast"), L("Very fast") };
+        ScrollSpeedBox.SelectedIndex = (int)settings.ScrollSpeed;
+        ScrollMaxHeightBox.Value = settings.ScrollMaxHeight;
+
         ThemeBox.ItemsSource = new List<string> { L("Default"), L("Light"), L("Dark") };
         ThemeBox.SelectedIndex = (int)settings.Theme;
 
@@ -1485,6 +1490,15 @@ public sealed partial class PreferencesWindow : Window
             TrayIcon = TrayIconBox.SelectedIndex >= 0 ? (TrayIconSource)TrayIconBox.SelectedIndex : TrayIconSource.Default,
             TrayIconPath = TrayIconPathBox.Text,
             UrlSchemeEnabled = UrlSchemeCheck.IsChecked == true,
+            ScrollSpeed = ScrollSpeedBox.SelectedIndex >= 0
+                ? (ScrollSpeed)ScrollSpeedBox.SelectedIndex
+                : CaptureSettings.Default.ScrollSpeed,
+
+            // NaN is what an emptied NumberBox reports, and casting that would give a
+            // nonsense limit rather than an obviously wrong one.
+            ScrollMaxHeight = double.IsNaN(ScrollMaxHeightBox.Value)
+                ? CaptureSettings.Default.ScrollMaxHeight
+                : (int)ScrollMaxHeightBox.Value,
             Theme = ThemeBox.SelectedIndex >= 0 ? (AppTheme)ThemeBox.SelectedIndex : AppTheme.System,
             Language = LanguageBox.SelectedIndex >= 0 && LanguageBox.SelectedIndex < AppLanguages.All.Count
                 ? AppLanguages.All[LanguageBox.SelectedIndex].Code

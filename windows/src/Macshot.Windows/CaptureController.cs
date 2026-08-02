@@ -1550,7 +1550,14 @@ public sealed class CaptureController : IDisposable
         var preview = new ScrollCapturePreviewWindow();
         preview.ShowBeside(request.Region ?? request.Window.Bounds);
 
-        var session = new ScrollCaptureSession(_screenCapture.TryCaptureWindowAsync);
+        // Read now rather than held: a scroll capture is started long after the settings
+        // window was last open, and taking the values here is what lets a change made in
+        // between apply to this run.
+        var settings = _settings.Current;
+        var session = new ScrollCaptureSession(
+            _screenCapture.TryCaptureWindowAsync,
+            new ScrollDriver(ScrollSpeeds.NotchesPerStep(settings.ScrollSpeed)),
+            settings.ScrollMaxHeight);
         session.Progressed += (_, progress) => hud.Report(progress.Frames, progress.Rows);
         session.Previewed += (_, picture) => preview.ShowStitched(picture);
 
