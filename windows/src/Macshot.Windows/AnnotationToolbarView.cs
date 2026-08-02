@@ -1243,11 +1243,17 @@ public sealed partial class AnnotationToolbarView : UserControl
         _textFill.SwatchPressed += (_, _) => PickSwatchColor(_textFill);
         _textOutline.SwatchPressed += (_, _) => PickSwatchColor(_textOutline);
 
+        // macshot's order, group for group: stroke, line style, arrow ends, the shape's
+        // corner, the outline, and Flip last — ToolOptionsRowView.swift:124–180, 265–270.
+        // Flip used to sit beside the arrow ends, which put it where macshot puts the
+        // outline: the two rows read as different toolbars at a glance, which is the one
+        // thing the order is for.
         AddGroup(_sizeLabel, _size, _sizeValue);
         AddGroup(_lineStyle);
-        AddGroup(_arrowStyle, _flipArrow);
-        AddGroup(_outline);
+        AddGroup(_arrowStyle);
         AddGroup(_cornerLabel, _cornerRadius, _cornerValue);
+        AddGroup(_outline);
+        AddGroup(_flipArrow);
         AddGroup(_smoothing);
         AddGroup(_censorMode);
         AddGroup(_font, _weight);

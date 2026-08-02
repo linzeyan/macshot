@@ -109,7 +109,7 @@
                 <StackPanel Spacing="6">
                     <TextBlock
                         x:Name="HintText"
-                        Text="Drag to capture • Click a window to take it • F for the whole screen • Esc to cancel"
+                        Text="Click a window  ·  Drag for custom area  ·  F for full screen"
                         FontSize="13"
                         FontWeight="Medium"
                         HorizontalAlignment="Center"

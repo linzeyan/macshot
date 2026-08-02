@@ -202,7 +202,7 @@ public static class ToolbarActions
             items.Add(new ToolbarItem(ToolbarCommand.PickTool, Tooltip(tool), tool, tool == selected));
         }
 
-        items.Add(new ToolbarItem(ToolbarCommand.PickColor, "Colour"));
+        items.Add(new ToolbarItem(ToolbarCommand.PickColor, "Color"));
         items.Add(new ToolbarItem(ToolbarCommand.Undo, "Undo"));
         items.Add(new ToolbarItem(ToolbarCommand.Redo, "Redo"));
 
@@ -211,7 +211,7 @@ public static class ToolbarActions
         // here yet; the three that are keep the places they hold there, so filling the
         // gap later moves nothing. Redact is not among them — macshot keeps it on the
         // action strip, and it has moved there.
-        Offer(new ToolbarItem(ToolbarCommand.InvertColors, "Invert the colours", IsSelected: inverted));
+        Offer(new ToolbarItem(ToolbarCommand.InvertColors, "Invert Colors", IsSelected: inverted));
         Offer(new ToolbarItem(ToolbarCommand.Adjust, "Adjust", IsSelected: adjusted));
         Offer(new ToolbarItem(ToolbarCommand.Beautify, "Beautify", IsSelected: beautified));
 
@@ -259,8 +259,8 @@ public static class ToolbarActions
         if (!editorMode)
         {
             items.Add(new ToolbarItem(ToolbarCommand.Cancel, "Cancel"));
-            items.Add(new ToolbarItem(ToolbarCommand.MoveSelection, "Move the region"));
-            items.Add(new ToolbarItem(ToolbarCommand.OpenEditor, "Open in the editor"));
+            items.Add(new ToolbarItem(ToolbarCommand.MoveSelection, "Move Selection"));
+            items.Add(new ToolbarItem(ToolbarCommand.OpenEditor, "Open in Editor Window"));
         }
 
         items.Add(new ToolbarItem(ToolbarCommand.Copy, "Copy"));
@@ -274,20 +274,20 @@ public static class ToolbarActions
             Offer(new ToolbarItem(ToolbarCommand.Upload, "Upload"));
         }
 
-        Offer(new ToolbarItem(ToolbarCommand.Pin, "Pin on top"));
-        Offer(new ToolbarItem(ToolbarCommand.ReadText, "Read the text in it"));
-        Offer(new ToolbarItem(ToolbarCommand.Redact, "Cover personal details"));
+        Offer(new ToolbarItem(ToolbarCommand.Pin, "Pin"));
+        Offer(new ToolbarItem(ToolbarCommand.ReadText, "OCR & QR"));
+        Offer(new ToolbarItem(ToolbarCommand.Redact, "Auto-Redact sensitive data"));
         if (translation)
         {
-            Offer(new ToolbarItem(ToolbarCommand.Translate, "Translate the text in it"));
+            Offer(new ToolbarItem(ToolbarCommand.Translate, "Translate"));
         }
 
         if (!editorMode)
         {
             // Both aim at a live screen: there is no window behind an image in the editor
             // to scroll, and nothing there to record.
-            Offer(new ToolbarItem(ToolbarCommand.Record, "Record the region"));
-            Offer(new ToolbarItem(ToolbarCommand.ScrollCapture, "Scroll the window behind it"));
+            Offer(new ToolbarItem(ToolbarCommand.Record, "Record"));
+            Offer(new ToolbarItem(ToolbarCommand.ScrollCapture, "Scroll Capture"));
         }
 
         Offer(new ToolbarItem(ToolbarCommand.Share, "Share"));

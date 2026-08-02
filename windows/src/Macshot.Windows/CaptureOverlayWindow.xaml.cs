@@ -41,26 +41,39 @@ public sealed partial class CaptureOverlayWindow : Window
     /// the XAML default.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// What a click does is the whole difference between the two, which is why there are
     /// two of them rather than one sentence covering both: with snap on a click takes the
     /// window under the pointer and F is the way to the whole screen, with snap off the
     /// click is the way to the whole screen and there is no window to take.
+    /// </para>
+    /// <para>
+    /// macshot's own two sentences, word for word and separator for separator
+    /// (<c>OverlayView.swift:2203–2204</c>), because these strings are the keys its forty
+    /// translations are filed under. The port used to say the same thing in its own
+    /// words, which resolved against nothing: the pill came up in English on a machine
+    /// where every other part of the overlay was translated.
+    /// </para>
+    /// <para>
+    /// Properties rather than constants, and read at each use: the language can change
+    /// while macshot is running, and a <c>const</c> would have been folded into the
+    /// caller in English at compile time.
+    /// </para>
     /// </remarks>
-    private const string SelectionHint =
-        "Drag to capture • Click a window to take it • F for the whole screen • Esc to cancel";
+    private static string SelectionHint =>
+        L("Click a window  ·  Drag for custom area  ·  F for full screen");
 
     /// <summary>The same instruction with window snap off.</summary>
-    private const string SelectionHintNoSnap =
-        "Drag to capture • Click for the whole screen • Esc to cancel";
+    private static string SelectionHintNoSnap => L("Drag to select  ·  Click for full screen");
 
     /// <summary>
     /// Line two of the idle pill: whether a click will take a window, and the key that
     /// changes the answer. Split where the state goes, which is the one part of it that
     /// is coloured.
     /// </summary>
-    private const string SnapLinePrefix = "Window snap: ";
+    private static string SnapLinePrefix => L("Window snap: ");
 
-    private const string SnapLineSuffix = "  (Tab to toggle)";
+    private static string SnapLineSuffix => L("  (Tab to toggle)");
 
     /// <summary>
     /// Shown above the region while it is being dragged out, which is the one moment the
@@ -68,21 +81,23 @@ public sealed partial class CaptureOverlayWindow : Window
     /// wrong place, and letting go to start again is how someone who has not been told
     /// deals with that.
     /// </summary>
-    private const string SelectingHint = "Hold Space to move. Release to annotate and edit";
+    private static string SelectingHint => L("Hold Space to move. Release to annotate and edit");
 
-    private const string SamplingHint = "Click to take the colour under the pointer • Esc to stop";
+    private static string SamplingHint => L("Click to take the colour under the pointer • Esc to stop");
 
-    private const string MovingHint = "Move the region with the pointer • Click to place it • Esc to leave it";
+    private static string MovingHint =>
+        L("Move the region with the pointer • Click to place it • Esc to leave it");
 
-    private const string RememberedHint =
-        "Enter to take the last selection again • Drag for a new one • Esc to cancel";
+    private static string RememberedHint =>
+        L("Enter to take the last selection again • Drag for a new one • Esc to cancel");
 
     /// <summary>
     /// Shown while a window is highlighted. Scroll capture is otherwise unfindable:
     /// there is no toolbar yet at hover time, and a gesture nobody is told about is
     /// a feature nobody has.
     /// </summary>
-    private const string WindowHint = "Click to take this window • Shift+click to scroll-capture it • Esc to cancel";
+    private static string WindowHint =>
+        L("Click to take this window • Shift+click to scroll-capture it • Esc to cancel");
 
     /// <summary>
     /// How far, in layout units, the pointer may travel between press and release
@@ -3024,7 +3039,7 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
 
-        _snapState.Text = snapOn ? "ON" : "OFF";
+        _snapState.Text = snapOn ? L("ON") : L("OFF");
         _snapState.Foreground = snapOn ? SnapOnBrush : SnapOffBrush;
         HintSnapLine.Visibility = Visibility.Visible;
         PlaceHint();
