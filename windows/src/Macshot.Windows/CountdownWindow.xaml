@@ -15,10 +15,15 @@
     <Grid x:Name="DialRoot" Background="#262626">
         <Ellipse Margin="13" Stroke="#99FFFFFF" StrokeThickness="3" />
 
+        <!-- Windows 11's UI font comes in optical sizes and the theme's default is the
+             one cut for body text: at 52 its spacing is set for a size it will never be
+             used at, and a single numeral shows it. Display is the cut for this, and the
+             fallback is what Windows 10 was going to use anyway. -->
         <TextBlock
             x:Name="SecondsText"
             Text="5"
             FontSize="52"
+            FontFamily="Segoe UI Variable Display, Segoe UI"
             FontWeight="Bold"
             Foreground="#FFFFFF"
             HorizontalAlignment="Center"
