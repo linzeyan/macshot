@@ -3,7 +3,11 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Markup;
 using Microsoft.UI.Xaml.Media;
-using Microsoft.UI.Xaml.Shapes;
+
+// Aliased rather than imported: the project's implicit usings bring in System.IO, and a
+// bare Path there is a file path. Neither name is the one to give up, so the shape wins
+// here and the file that wants a file path can say System.IO.Path.
+using Path = Microsoft.UI.Xaml.Shapes.Path;
 
 namespace Macshot.Windows.Toolbar;
 
