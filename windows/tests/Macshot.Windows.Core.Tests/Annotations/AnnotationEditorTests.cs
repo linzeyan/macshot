@@ -66,6 +66,21 @@ public sealed class AnnotationEditorTests
     }
 
     [TestMethod]
+    public void ConstrainedSpotlight_BecomesSquare()
+    {
+        // It is dragged out as the region that stays lit, not as a stroke, so holding
+        // the modifier means a square the way it does for a rectangle. It used to snap
+        // to 45 degrees, which on an area tool moves one corner and leaves the shape a
+        // rectangle of whatever proportions the angle happened to give.
+        var editor = NewEditor(AnnotationTool.Highlight);
+
+        Drag(editor, new CapturePoint(0, 0), new CapturePoint(100, 40), EditorModifiers.Constrain);
+
+        var bounds = editor.Document.Annotations[0].BoundingRect;
+        Assert.AreEqual(bounds.Width, bounds.Height, 1e-9);
+    }
+
+    [TestMethod]
     public void ConstrainedRectangle_KeepsTheDragDirection()
     {
         // Dragging up and to the left must stay up and to the left, not flip across

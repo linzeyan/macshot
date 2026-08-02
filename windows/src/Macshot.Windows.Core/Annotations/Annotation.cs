@@ -68,6 +68,13 @@ public sealed record AnnotationStyle(
     /// </summary>
     public const double OutlineSpread = 6;
 
+    /// <summary>
+    /// How dark a spotlight takes everything outside it to begin with — macshot's own
+    /// <c>0.55</c> (<c>Annotation.swift:170</c>). Strong enough that the eye goes to the
+    /// bright part first, weak enough that what surrounds it can still be read.
+    /// </summary>
+    public const double DefaultDimOpacity = 0.55;
+
     public static AnnotationStyle Default { get; } = new(new AnnotationColor(76, 194, 255), 3);
 
     /// <summary>
@@ -127,6 +134,19 @@ public sealed record AnnotationStyle(
     /// </remarks>
     public AnnotationColor? Outline { get; init; }
 
+    /// <summary>
+    /// How dark everything outside a spotlight is taken: 0 leaves the capture as it was
+    /// and 1 is black. Read by <see cref="AnnotationTool.Highlight"/> and by nothing else.
+    /// </summary>
+    /// <remarks>
+    /// Its own number rather than <see cref="Opacity"/>, which says how translucent a mark
+    /// is drawn. A spotlight's mark is the hairline round it, so sharing the one number
+    /// would tie the two together — asking for a fainter border would lift the dim, and
+    /// the tool's only real control would have a side effect nobody asked for. macshot
+    /// keeps <c>dimOpacity</c> apart from the colour's alpha for the same reason.
+    /// </remarks>
+    public double DimOpacity { get; init; } = DefaultDimOpacity;
+
     public void Validate()
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(StrokeWidth);
@@ -135,6 +155,11 @@ public sealed record AnnotationStyle(
         if (Opacity is < 0 or > 1)
         {
             throw new ArgumentOutOfRangeException(nameof(Opacity));
+        }
+
+        if (DimOpacity is < 0 or > 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(DimOpacity));
         }
     }
 }
@@ -317,8 +342,12 @@ public sealed record Annotation(
         var tolerance = threshold + Style.StrokeWidth / 2;
         var bounds = BoundingRect;
 
+        // The spotlight is grabbed inside its bounds as well, though what it covers is
+        // everything else: the lit rectangle is the mark, and asking the user to find its
+        // hairline would be asking them to aim at the one part of it that is a pixel wide.
         if (IsRegionEffect || Tool is AnnotationTool.Text or AnnotationTool.Number
-            or AnnotationTool.Stamp or AnnotationTool.Loupe or AnnotationTool.TranslateOverlay)
+            or AnnotationTool.Stamp or AnnotationTool.Loupe or AnnotationTool.TranslateOverlay
+            or AnnotationTool.Highlight)
         {
             return Contains(bounds, point, tolerance);
         }

@@ -124,6 +124,7 @@ public static class AnnotationFile
             Bold = annotation.Style.Bold,
             TextBackground = annotation.Style.TextBackground?.ToHex(),
             TextOutline = annotation.Style.TextOutline?.ToHex(),
+            DimOpacity = annotation.Style.DimOpacity,
 
             // Flattened rather than an array of objects: a smoothed pencil stroke runs
             // to hundreds of samples, and {"x":1,"y":2} costs four times what 1,2 does
@@ -193,6 +194,13 @@ public static class AnnotationFile
             TextOutline = AnnotationColor.TryParseHex(stored.TextOutline ?? string.Empty, out var edge)
                 ? edge
                 : null,
+
+            // Absent from every file written before the spotlight had a strength, where it
+            // reads back as zero — which is no dim at all, and would reopen a spotlight as
+            // a bare rectangle. macshot's own fallback, for the same reason.
+            DimOpacity = stored.DimOpacity > 0
+                ? Math.Min(1, stored.DimOpacity)
+                : AnnotationStyle.DefaultDimOpacity,
         };
 
         var sprite = Unpack(stored.Sprite);
@@ -344,6 +352,12 @@ public static class AnnotationFile
         public string? TextBackground { get; init; }
 
         public string? TextOutline { get; init; }
+
+        /// <summary>
+        /// How dark a spotlight takes what is outside it. Written since the tool
+        /// existed; a file from before that reads back at macshot's own strength.
+        /// </summary>
+        public double DimOpacity { get; init; }
 
         public double[]? Points { get; init; }
 

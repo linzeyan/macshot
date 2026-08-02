@@ -43,6 +43,22 @@ public sealed class AnnotationTests
     }
 
     [TestMethod]
+    public void HitTest_SpotlightGrabsTheRegionItLights()
+    {
+        // The lit rectangle is the mark, so the whole of it grabs — as macshot's does.
+        // Tested against the hairline instead it would take a pixel-accurate click to
+        // pick up, and it used to be tested as the line from one corner to the other:
+        // grabbable along the diagonal and nowhere else.
+        var spotlight = Annotation.Create(
+            AnnotationTool.Highlight,
+            new CapturePoint(10, 10),
+            new CapturePoint(50, 30));
+
+        Assert.IsTrue(spotlight.HitTest(new CapturePoint(15, 25)));
+        Assert.IsFalse(spotlight.HitTest(new CapturePoint(80, 20)));
+    }
+
+    [TestMethod]
     public void HitTest_EllipseUsesTheOutlineNotTheBoundingBox()
     {
         var ellipse = Annotation.Create(

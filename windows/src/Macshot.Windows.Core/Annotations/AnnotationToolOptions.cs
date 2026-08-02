@@ -21,17 +21,22 @@ public static class AnnotationToolOptions
     /// <summary>
     /// Whether the mark is drawn in the chosen colour. True of the censor tool as well,
     /// though only its solid mode paints in it — the other three replace the pixels with
-    /// something derived from what was there.
+    /// something derived from what was there. False of the spotlight, whose two colours
+    /// are the black it dims with and the white it rings the light with, neither of them
+    /// chosen.
     /// </summary>
-    public static bool UsesColor(AnnotationTool tool) => Draws(tool);
+    public static bool UsesColor(AnnotationTool tool) => Draws(tool) && !IsSpotlight(tool);
 
     /// <summary>
     /// Whether the width slider does anything. It does for every mark that is drawn,
     /// though not always as a width: it is also the size of a badge or a label. The
     /// censor tool is the exception — how much of a redaction survives is not left to a
-    /// slider, so its cell and its radius are fixed and derived from the region.
+    /// slider, so its cell and its radius are fixed and derived from the region. The
+    /// spotlight is the other: its ring is a hairline at any size, and the strength it
+    /// does have is how far the dim outside it goes, not how wide anything is drawn.
     /// </summary>
-    public static bool UsesSize(AnnotationTool tool) => Draws(tool) && !IsRegionEffect(tool);
+    public static bool UsesSize(AnnotationTool tool) =>
+        Draws(tool) && !IsRegionEffect(tool) && !IsSpotlight(tool);
 
     /// <summary>
     /// Whether the mark is drawn as a stroke, and so takes the dash pattern. A fill, a
@@ -88,6 +93,12 @@ public static class AnnotationToolOptions
         or AnnotationTool.TranslateOverlay);
 
     private static bool IsRegionEffect(AnnotationTool tool) => tool is AnnotationTool.Censor;
+
+    /// <summary>
+    /// The tool that lights a region by taking everything else down, rather than by
+    /// putting anything of its own over it.
+    /// </summary>
+    private static bool IsSpotlight(AnnotationTool tool) => tool is AnnotationTool.Highlight;
 }
 
 /// <summary>What the one size control means for the tool in hand.</summary>

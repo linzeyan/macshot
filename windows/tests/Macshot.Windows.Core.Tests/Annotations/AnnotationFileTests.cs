@@ -39,6 +39,7 @@ public sealed class AnnotationFileTests
                 Bold = true,
                 TextBackground = new AnnotationColor(1, 2, 3, 200),
                 TextOutline = new AnnotationColor(4, 5, 6, 210),
+                DimOpacity = 0.3,
             }) with
         {
             Rotation = 0.75,
@@ -70,6 +71,7 @@ public sealed class AnnotationFileTests
         Assert.AreEqual(original.Style.Bold, restored[0].Style.Bold);
         Assert.AreEqual(original.Style.TextBackground, restored[0].Style.TextBackground);
         Assert.AreEqual(original.Style.TextOutline, restored[0].Style.TextOutline);
+        Assert.AreEqual(original.Style.DimOpacity, restored[0].Style.DimOpacity);
         Assert.AreEqual(original.Rotation, restored[0].Rotation);
         Assert.AreEqual(original.Bend, restored[0].Bend);
         Assert.AreEqual(group, restored[0].GroupId);
@@ -157,6 +159,25 @@ public sealed class AnnotationFileTests
             """;
 
         Assert.AreEqual(0, AnnotationFile.Read(Document).Count);
+    }
+
+    [TestMethod]
+    public void Read_GivesASpotlightFromBeforeItHadAStrengthTheOneMacshotStartsWith()
+    {
+        // A file written before the spotlight existed says nothing about its dim, and
+        // nothing reads back as zero — which is no dim at all, so the mark would reopen
+        // as a bare rectangle rather than as the spotlight it was saved as.
+        const string Document =
+            """
+            {"version":1,"annotations":[{"id":"00000000-0000-0000-0000-000000000001",
+            "tool":"Highlight","startX":0,"startY":0,"endX":10,"endY":10,
+            "color":"#FF000000","strokeWidth":3,"lineStyle":"Dashed","opacity":1,
+            "arrowStyle":"Filled","cornerRadius":0}]}
+            """;
+
+        var restored = AnnotationFile.Read(Document);
+
+        Assert.AreEqual(AnnotationStyle.DefaultDimOpacity, restored[0].Style.DimOpacity);
     }
 
     [TestMethod]

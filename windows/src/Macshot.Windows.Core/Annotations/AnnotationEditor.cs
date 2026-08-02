@@ -487,9 +487,11 @@ public sealed class AnnotationEditor
             return point;
         }
 
-        // Constraining a line means an angle; constraining an area means a square.
+        // Constraining a line means an angle; constraining an area means a square. A
+        // spotlight is an area — it is dragged out as the rectangle that stays lit, not
+        // as a stroke.
         return tool is AnnotationTool.Line or AnnotationTool.Arrow or AnnotationTool.Marker
-            or AnnotationTool.Highlight or AnnotationTool.Measure
+            or AnnotationTool.Measure
             ? SnapToAxis(origin, point)
             : SnapToSquare(origin, point);
     }

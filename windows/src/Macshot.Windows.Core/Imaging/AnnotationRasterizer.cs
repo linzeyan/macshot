@@ -44,6 +44,7 @@ public static class AnnotationRasterizer
         AnnotationTool.Stamp,
         AnnotationTool.Measure,
         AnnotationTool.Loupe,
+        AnnotationTool.Highlight,
     ];
 
     /// <summary>
@@ -114,10 +115,37 @@ public static class AnnotationRasterizer
         }
 
         bgraPixels.CopyTo(destination);
-        foreach (var annotation in annotations)
+
+        // Walked more than once, so a lazy sequence is settled first. The preview hands in
+        // a Select over the document on every pointer move; enumerating that twice would
+        // rebuild every translated mark twice for the same frame.
+        var marks = annotations as IReadOnlyList<Annotation> ?? [.. annotations];
+        foreach (var mark in marks)
         {
-            annotation.Style.Validate();
-            DrawAnnotation(destination, width, height, annotation);
+            mark.Style.Validate();
+        }
+
+        // Region effects rewrite the pixels they cover, so they belong to the capture
+        // rather than to what is drawn on it; the spotlight dims that capture; the marks
+        // go on top of both. macshot's own order (OverlayView.swift:9481-9492), and the
+        // reason for it is that a dim laid over the marks would darken the very things
+        // that were drawn to be read.
+        foreach (var mark in marks)
+        {
+            if (mark.IsRegionEffect)
+            {
+                DrawAnnotation(destination, width, height, mark);
+            }
+        }
+
+        Spotlight(destination, width, height, marks);
+
+        foreach (var mark in marks)
+        {
+            if (!mark.IsRegionEffect)
+            {
+                DrawAnnotation(destination, width, height, mark);
+            }
         }
     }
 
@@ -130,8 +158,18 @@ public static class AnnotationRasterizer
             break;
         case AnnotationTool.Line:
         case AnnotationTool.Marker:
-        case AnnotationTool.Highlight:
             CompositeStrokes(pixels, width, height, [BuildShaftPath(annotation)], annotation);
+            break;
+        case AnnotationTool.Highlight:
+            // Only the hairline: what makes a spotlight a spotlight is the dim outside it,
+            // and that is one pass over every spotlight at once rather than anything this
+            // mark draws for itself. See <see cref="Spotlight"/>.
+            CompositeStrokes(
+                pixels,
+                width,
+                height,
+                [BuildRectanglePath(annotation.BoundingRect)],
+                SpotlightBorder(annotation));
             break;
         case AnnotationTool.Arrow:
             CompositeArrow(pixels, width, height, annotation);
@@ -351,6 +389,148 @@ public static class AnnotationRasterizer
     /// </summary>
     private static double BlurRadius(CaptureRegion region) =>
         Math.Max(10, Math.Min(region.Width, region.Height) * 0.03);
+
+    /// <summary>The hairline round a spotlight, in frame pixels — macshot's own 1.5.</summary>
+    private const double SpotlightBorderWidth = 1.5;
+
+    /// <summary>
+    /// How solid that hairline is. macshot draws it white at 0.6, which is enough to find
+    /// the edge of the light against a bright photograph and little enough that it does
+    /// not become a rectangle in its own right.
+    /// </summary>
+    private const double SpotlightBorderOpacity = 0.6;
+
+    private static readonly AnnotationColor SpotlightBorderColor = new(255, 255, 255);
+
+    /// <summary>
+    /// The style the ring round a spotlight is drawn in: white, thin, and the annotation's
+    /// own dash pattern.
+    /// </summary>
+    /// <remarks>
+    /// Fixed rather than taken from the drawing colour and the size slider, as macshot
+    /// fixes it (<c>Annotation.swift:2058</c>). The mark here is the region left bright —
+    /// a ring in the current colour at the current width would read as a rectangle
+    /// somebody drew round it, and a ring the colour of what it sits on would vanish.
+    /// </remarks>
+    private static Annotation SpotlightBorder(Annotation annotation) => annotation with
+    {
+        Style = annotation.Style with
+        {
+            Color = SpotlightBorderColor,
+            Opacity = SpotlightBorderOpacity,
+            StrokeWidth = SpotlightBorderWidth,
+
+            // A halo would be a second ring round the first, in a colour the tool never
+            // offered: the spotlight is not drawn in the style the halo belongs to.
+            Outline = null,
+        },
+    };
+
+    /// <summary>
+    /// Takes down everything outside the spotlights, in one pass over the union of them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One pass rather than one per mark, which is what makes two overlapping spotlights
+    /// read as one lit region instead of dimming their surroundings twice over. A pixel
+    /// keeps the brightest claim any spotlight makes on it — the maximum, not the sum —
+    /// which is the union macshot punches with <c>destinationOut</c> rather than the
+    /// even-odd fill it warns against, where a point inside two rectangles would count as
+    /// outside them (<c>Annotation.swift:2077-2080</c>).
+    /// </para>
+    /// <para>
+    /// The whole set shares one strength, taken from the strongest spotlight, because the
+    /// dim is a single layer over the capture and a layer has one opacity. Two strengths
+    /// would need two layers, and the second would darken what the first already had.
+    /// </para>
+    /// </remarks>
+    private static void Spotlight(byte[] pixels, int width, int height, IReadOnlyList<Annotation> marks)
+    {
+        var lit = new List<CaptureRegion>();
+        var strength = 0d;
+
+        foreach (var mark in marks)
+        {
+            if (mark.Tool != AnnotationTool.Highlight)
+            {
+                continue;
+            }
+
+            strength = Math.Max(strength, mark.Style.DimOpacity);
+
+            // A spotlight dragged out and abandoned is a couple of pixels across. Lighting
+            // it would leave a speck of undimmed capture that cannot be aimed at to undo.
+            var bounds = mark.BoundingRect.Intersect(new CaptureRegion(0, 0, width, height));
+            if (bounds.Width > 1 && bounds.Height > 1)
+            {
+                lit.Add(bounds);
+            }
+        }
+
+        if (lit.Count == 0 || strength <= 0)
+        {
+            return;
+        }
+
+        // How much of each row every spotlight covers, worked out once for the row rather
+        // than again at every pixel along it.
+        var down = new double[lit.Count];
+
+        for (var y = 0; y < height; y++)
+        {
+            var reaches = false;
+            for (var index = 0; index < lit.Count; index++)
+            {
+                down[index] = Overlap(lit[index].Y, lit[index].Bottom, y);
+                reaches |= down[index] > 0;
+            }
+
+            for (var x = 0; x < width; x++)
+            {
+                var brightest = 0d;
+                if (reaches)
+                {
+                    for (var index = 0; index < lit.Count && brightest < 1; index++)
+                    {
+                        if (down[index] <= 0)
+                        {
+                            continue;
+                        }
+
+                        brightest = Math.Max(
+                            brightest,
+                            down[index] * Overlap(lit[index].X, lit[index].Right, x));
+                    }
+                }
+
+                var alpha = (1 - brightest) * strength;
+                if (alpha <= 0)
+                {
+                    continue;
+                }
+
+                var offset = ((y * width) + x) * 4;
+                pixels[offset] = Darken(pixels[offset], alpha);
+                pixels[offset + 1] = Darken(pixels[offset + 1], alpha);
+                pixels[offset + 2] = Darken(pixels[offset + 2], alpha);
+            }
+        }
+    }
+
+    /// <summary>
+    /// How much of the pixel at <paramref name="at"/> lies between the two edges, from
+    /// none of it to all of it. Fractional so the edge of the light is not a staircase on
+    /// a spotlight that was not dragged to a whole pixel.
+    /// </summary>
+    private static double Overlap(double from, double to, int at) =>
+        Math.Clamp(Math.Min(to, at + 1) - Math.Max(from, at), 0, 1);
+
+    /// <summary>
+    /// Mixes one channel towards black. The alpha byte is left alone: the dim says how
+    /// much light reaches the capture, not how much of the capture is there.
+    /// </summary>
+    private static byte Darken(byte channel, double alpha) =>
+        (byte)Math.Clamp(Math.Round(channel * (1 - alpha)), byte.MinValue, byte.MaxValue);
 
     private static CapturePoint[] BuildFreeformPath(Annotation annotation)
     {

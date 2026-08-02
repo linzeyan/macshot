@@ -28,12 +28,11 @@ public readonly record struct ToolShortcut(
 /// modifier is the difference between a tool you switch to and one you go and click.
 /// </para>
 /// <para>
-/// One of macshot's is missing here and it is not an oversight: Highlight has no
-/// renderer, so it is not on the toolbar either, and a key bound to something that is not
-/// on the strip is a key that appears to do nothing. It comes back with the feature, and
-/// a test fails if it is bound before it is drawable. Remove Background is here now that
-/// its button is: whether the machine can carry it out is answered when it is pressed,
-/// not by leaving the key out.
+/// Every one of macshot's is here. Highlight was the last to arrive, held back while the
+/// tool had no renderer and so no button either — a key bound to something that is not on
+/// the strip is a key that appears to do nothing, and a test says so. Remove Background
+/// is here for the opposite reason: whether the machine can carry it out is answered when
+/// it is pressed, not by leaving the key out.
 /// </para>
 /// <para>
 /// Upload is here unconditionally, as Translate is, even though the offline build has no
@@ -61,6 +60,7 @@ public static class ToolShortcuts
         new("text", "Text", "t", ToolbarCommand.PickTool, AnnotationTool.Text),
         new("number", "Number", "n", ToolbarCommand.PickTool, AnnotationTool.Number),
         new("censor", "Censor", "b", ToolbarCommand.PickTool, AnnotationTool.Censor),
+        new("highlight", "Highlight", "h", ToolbarCommand.PickTool, AnnotationTool.Highlight),
         new("colorSampler", "Color Picker", "i", ToolbarCommand.PickTool, AnnotationTool.ColorSampler),
         new("stamp", "Stamp", "g", ToolbarCommand.PickTool, AnnotationTool.Stamp),
         new("measure", "Measure", Unbound, ToolbarCommand.PickTool, AnnotationTool.Measure),

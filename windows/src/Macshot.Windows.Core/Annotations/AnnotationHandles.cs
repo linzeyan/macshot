@@ -264,7 +264,6 @@ public static class AnnotationHandles
         is AnnotationTool.Line
         or AnnotationTool.Arrow
         or AnnotationTool.Marker
-        or AnnotationTool.Highlight
         or AnnotationTool.Measure;
 
     private static IReadOnlyList<AnnotationHandle> LinearHandles(Annotation annotation)
@@ -293,17 +292,25 @@ public static class AnnotationHandles
         var bounds = annotation.BoundingRect;
         var centre = Centre(annotation);
 
-        return
-        [
+        var handles = new List<AnnotationHandle>(5)
+        {
             new(AnnotationHandleKind.TopLeft, Turn(new CapturePoint(bounds.X, bounds.Y), centre, annotation.Rotation)),
             new(AnnotationHandleKind.TopRight, Turn(new CapturePoint(bounds.Right, bounds.Y), centre, annotation.Rotation)),
             new(AnnotationHandleKind.BottomLeft, Turn(new CapturePoint(bounds.X, bounds.Bottom), centre, annotation.Rotation)),
             new(AnnotationHandleKind.BottomRight, Turn(new CapturePoint(bounds.Right, bounds.Bottom), centre, annotation.Rotation)),
-            new(AnnotationHandleKind.Rotate, Turn(
-                new CapturePoint(centre.X, bounds.Y - (RotateReach * scale)),
-                centre,
-                annotation.Rotation)),
-        ];
+        };
+
+        // A spotlight is left unturnable, as macshot leaves it: the region it lights is
+        // punched out of the frame's own rows and columns, so a rotation would swing the
+        // ring away from the bright rectangle it is supposed to be the edge of.
+        if (annotation.Tool != AnnotationTool.Highlight)
+        {
+            handles.Add(new AnnotationHandle(
+                AnnotationHandleKind.Rotate,
+                Turn(new CapturePoint(centre.X, bounds.Y - (RotateReach * scale)), centre, annotation.Rotation)));
+        }
+
+        return handles;
     }
 
     /// <summary>
