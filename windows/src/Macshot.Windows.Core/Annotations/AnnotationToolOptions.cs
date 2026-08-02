@@ -94,6 +94,14 @@ public static class AnnotationToolOptions
     public static bool UsesLoupeMagnification(AnnotationTool tool) => tool == AnnotationTool.Loupe;
 
     /// <summary>
+    /// Whether the dim slider applies — how far down the spotlight takes what is outside
+    /// it. The spotlight's only real setting, and the reason it is on this row rather than
+    /// in the settings window: how much dimming is enough depends on what is being pointed
+    /// at, which is on screen at the time.
+    /// </summary>
+    public static bool UsesDimStrength(AnnotationTool tool) => IsSpotlight(tool);
+
+    /// <summary>
     /// Whether the highlighter's snap-to-text option applies.
     /// </summary>
     /// <remarks>

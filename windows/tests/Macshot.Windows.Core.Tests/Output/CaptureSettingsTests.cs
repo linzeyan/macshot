@@ -96,6 +96,7 @@ public sealed class CaptureSettingsTests
             NumberFormat = NumberFormat.AlphaLower,
             MeasureInPoints = true,
             LoupeMagnification = 4.5,
+            DimOpacity = 0.8,
         };
 
         var restored = CaptureSettings.Default.WithAnnotationStyle(style).Normalized().ToAnnotationStyle();
@@ -110,6 +111,7 @@ public sealed class CaptureSettingsTests
         Assert.AreEqual(style.NumberFormat, restored.NumberFormat);
         Assert.AreEqual(style.MeasureInPoints, restored.MeasureInPoints);
         Assert.AreEqual(style.LoupeMagnification, restored.LoupeMagnification);
+        Assert.AreEqual(style.DimOpacity, restored.DimOpacity);
     }
 
     /// <summary>
@@ -125,9 +127,14 @@ public sealed class CaptureSettingsTests
             LoupeMagnification = 0,
             NumberStartAt = 0,
             NumberFormat = (NumberFormat)42,
+
+            // Every file written before the spotlight had a slider says zero, which is no
+            // dim at all — the tool would open having apparently stopped working.
+            DimOpacity = 0,
         }).Normalized();
 
         Assert.AreEqual(AnnotationStyle.DefaultLoupeMagnification, settings.LoupeMagnification);
+        Assert.AreEqual(AnnotationStyle.DefaultDimOpacity, settings.DimOpacity);
         Assert.AreEqual(1, settings.NumberStartAt);
         Assert.AreEqual(NumberFormat.Decimal, settings.NumberFormat);
     }

@@ -35,6 +35,26 @@ public sealed class AnnotationToolOptionsTests
         Assert.IsTrue(AnnotationToolOptions.UsesLineStyle(AnnotationTool.Highlight));
     }
 
+    /// <summary>
+    /// The dim belongs to the spotlight and to nothing else. It is the strength of a layer
+    /// laid over the whole capture, so a second tool offering it would be a second control
+    /// for the same number — and the row would show it while holding a pencil, which draws
+    /// nothing that dims anything.
+    /// </summary>
+    [TestMethod]
+    public void TheDimSlider_BelongsToTheSpotlightAlone()
+    {
+        Assert.IsTrue(AnnotationToolOptions.UsesDimStrength(AnnotationTool.Highlight));
+
+        foreach (var tool in AnnotationRasterizer.SupportedTools
+            .Where(tool => tool != AnnotationTool.Highlight))
+        {
+            Assert.IsFalse(
+                AnnotationToolOptions.UsesDimStrength(tool),
+                $"{tool} should not take the dim slider");
+        }
+    }
+
     [TestMethod]
     public void ThePointer_TakesNoneOfThem()
     {

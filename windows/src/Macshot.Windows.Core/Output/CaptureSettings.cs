@@ -515,6 +515,9 @@ public sealed record CaptureSettings
     /// <summary>How much the loupe enlarges what is under it.</summary>
     public double LoupeMagnification { get; init; } = AnnotationStyle.DefaultLoupeMagnification;
 
+    /// <summary>How far down a spotlight takes the capture outside it.</summary>
+    public double DimOpacity { get; init; } = AnnotationStyle.DefaultDimOpacity;
+
     /// <summary>
     /// Whether the highlighter snaps to the line of text it was drawn across. macshot's
     /// <c>smartMarkerEnabled</c>, off by default: it costs an OCR pass per stroke, and a
@@ -1166,6 +1169,10 @@ public sealed record CaptureSettings
                 LoupeMagnification,
                 AnnotationStyle.MinLoupeMagnification,
                 AnnotationStyle.MaxLoupeMagnification),
+            DimOpacity = Math.Clamp(
+                DimOpacity,
+                AnnotationStyle.MinDimOpacity,
+                AnnotationStyle.MaxDimOpacity),
             FontSize = Math.Clamp(
                 AnnotationFontSize,
                 AnnotationStyle.MinFontSize,
@@ -1201,6 +1208,7 @@ public sealed record CaptureSettings
             NumberFormat = style.NumberFormat,
             MeasureInPoints = style.MeasureInPoints,
             LoupeMagnification = style.LoupeMagnification,
+            DimOpacity = style.DimOpacity,
             AnnotationFontSize = style.FontSize,
             AnnotationFontFamily = style.FontFamily,
             AnnotationBold = style.Bold,
@@ -1310,6 +1318,15 @@ public sealed record CaptureSettings
                 && LoupeMagnification >= AnnotationStyle.MinLoupeMagnification
                     ? Math.Min(LoupeMagnification, AnnotationStyle.MaxLoupeMagnification)
                     : AnnotationStyle.DefaultLoupeMagnification,
+
+            // Zero in every file written before the spotlight had a slider, and the same
+            // reading as the loupe's: a spotlight that reopened at no dim would be a
+            // rectangle drawn on the capture, so that takes the default rather than being
+            // clamped up to the faintest dim the row offers.
+            DimOpacity =
+                double.IsFinite(DimOpacity) && DimOpacity >= AnnotationStyle.MinDimOpacity
+                    ? Math.Min(DimOpacity, AnnotationStyle.MaxDimOpacity)
+                    : AnnotationStyle.DefaultDimOpacity,
             DelaySeconds = CaptureDelayChosen ? Math.Clamp(DelaySeconds, MinDelaySeconds, MaxDelaySeconds) : 0,
             CaptureDelayChosen = true,
             HistorySize = Math.Clamp(HistorySize, 0, MaxHistorySize),

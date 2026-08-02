@@ -92,6 +92,20 @@ public sealed record AnnotationStyle(
     /// </summary>
     public const double DefaultDimOpacity = 0.55;
 
+    /// <summary>
+    /// The weakest dim the row offers. Below it the spotlight stops being one: the capture
+    /// outside is as bright as the part inside, and the ring is a rectangle drawn for no
+    /// reason. macshot's own floor.
+    /// </summary>
+    public const double MinDimOpacity = 0.1;
+
+    /// <summary>
+    /// The strongest. macshot stops short of 1 on purpose — a spotlight that takes its
+    /// surroundings to black has cropped the capture rather than pointed into it, and the
+    /// tool for cropping is the one called Crop.
+    /// </summary>
+    public const double MaxDimOpacity = 0.95;
+
     public static AnnotationStyle Default { get; } = new(new AnnotationColor(76, 194, 255), 3);
 
     /// <summary>

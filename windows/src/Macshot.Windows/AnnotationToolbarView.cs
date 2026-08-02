@@ -189,6 +189,20 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// from.
     /// </summary>
     private readonly TextBlock _zoomValue = OptionValue(38, string.Empty);
+
+    private readonly TextBlock _dimLabel = OptionLabel(L("Dim"));
+
+    private readonly Slider _spotlightDim = OptionSlider(
+        84,
+        AnnotationStyle.MinDimOpacity,
+        AnnotationStyle.MaxDimOpacity);
+
+    /// <summary>
+    /// The dim as a percentage, written by <see cref="ShowDimValue"/> rather than by the
+    /// shared readout: the slider runs in hundredths and the box says 55%, which is the
+    /// number macshot shows and the only one anybody would say out loud.
+    /// </summary>
+    private readonly TextBlock _dimValue = OptionValue(38, string.Empty);
     private readonly Button _font = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 10, Padding = new Thickness(8, 2, 8, 2) };
     private readonly FontPickerView _fontChoices = new();
     private readonly StyleSegments _weight = new();
@@ -459,6 +473,13 @@ public sealed partial class AnnotationToolbarView : UserControl
         {
             ShowZoomValue();
             ApplyStyle();
+        };
+
+        _spotlightDim.ValueChanged += (_, _) =>
+        {
+            ShowDimValue();
+            ApplyStyle();
+            RestyleSpotlights();
         };
 
         _numberFormat.SelectionChanged += (_, _) =>
@@ -1229,6 +1250,11 @@ public sealed partial class AnnotationToolbarView : UserControl
         _loupeZoom.Visibility = magnified;
         _zoomValue.Visibility = magnified;
 
+        var dimmed = Show(AnnotationToolOptions.UsesDimStrength(tool));
+        _dimLabel.Visibility = dimmed;
+        _spotlightDim.Visibility = dimmed;
+        _dimValue.Visibility = dimmed;
+
         var typesetting = Show(tool == AnnotationTool.Text);
         _font.Visibility = typesetting;
         _weight.Visibility = typesetting;
@@ -1272,6 +1298,61 @@ public sealed partial class AnnotationToolbarView : UserControl
     private void ShowZoomValue() => _zoomValue.Text = string.Create(
         System.Globalization.CultureInfo.CurrentCulture,
         $"{_loupeZoom.Value:0.0}x");
+
+    /// <summary>Writes the dim into the box after its slider, as macshot's percentage.</summary>
+    private void ShowDimValue() => _dimValue.Text = string.Create(
+        System.Globalization.CultureInfo.CurrentCulture,
+        $"{Math.Round(_spotlightDim.Value * 100)}%");
+
+    /// <summary>
+    /// Takes every spotlight already on the canvas to the strength the slider was just
+    /// dragged to.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The one control on this row that reaches back to marks already placed, and the
+    /// reason is that the dim is not a property of a spotlight the way a stroke width is a
+    /// property of a line. It is one layer over the whole capture, rendered from the
+    /// strongest spotlight on it — so a slider that only styled the next one would leave
+    /// the user dragging it with nothing happening, and would then jump the whole picture
+    /// the moment a second spotlight was drawn. macshot applies it to all of them for the
+    /// same reason (<c>ToolOptionsRowView.swift:1535-1546</c>).
+    /// </para>
+    /// <para>
+    /// Amended rather than replaced, so this does not become a step to take back: the user
+    /// is adjusting one thing they can see, and Ctrl+Z should undo the spotlight, not walk
+    /// back through every strength it was dragged past on the way.
+    /// </para>
+    /// </remarks>
+    private void RestyleSpotlights()
+    {
+        if (_isLoadingStyle || _editor is not { } editor)
+        {
+            return;
+        }
+
+        var strength = editor.Style.DimOpacity;
+        var stale = editor.Document.Annotations
+            .Where(mark => mark.Tool == AnnotationTool.Highlight
+                && mark.Style.DimOpacity != strength)
+            .ToList();
+
+        foreach (var spotlight in stale)
+        {
+            editor.Document.Amend(spotlight with
+            {
+                Style = spotlight.Style with { DimOpacity = strength },
+            });
+        }
+
+        // Only when something moved. The document's own Changed event is not what the
+        // canvas listens to — the hosts redraw on this one — and raising it for a drag
+        // that amended nothing would relayout the chrome on every tick of the slider.
+        if (stale.Count > 0)
+        {
+            Changed?.Invoke(this, EventArgs.Empty);
+        }
+    }
 
     /// <summary>Shows the first badge as it will read, in the format the row is set to.</summary>
     private void ShowStartPreview()
@@ -1473,6 +1554,11 @@ public sealed partial class AnnotationToolbarView : UserControl
         _loupeZoom.StepFrequency = 0.1;
         ToolTipService.SetToolTip(_loupeZoom, "How much the loupe enlarges");
 
+        // Hundredths, because the box after it reads in whole percent and a coarser step
+        // would skip numbers the user can see written there.
+        _spotlightDim.StepFrequency = 0.01;
+        ToolTipService.SetToolTip(_spotlightDim, "How far down the spotlight takes the rest");
+
         // Populated from StampGlyph.Choices so the picker and the renderer cannot offer
         // different sets.
         _stampChoices.ItemsSource = StampGlyph.Choices;
@@ -1505,6 +1591,11 @@ public sealed partial class AnnotationToolbarView : UserControl
         // thing the order is for.
         AddGroup(_sizeLabel, _size, _sizeValue);
         AddGroup(_zoomLabel, _loupeZoom, _zoomValue);
+
+        // Before the line style, which is the spotlight's border: macshot's row for this
+        // tool is the dim and then the border and nothing else
+        // (ToolOptionsRowView.swift:133-141).
+        AddGroup(_dimLabel, _spotlightDim, _dimValue);
         AddGroup(_lineStyle);
         AddGroup(_arrowStyle);
         AddGroup(_shapeFill);
@@ -1641,6 +1732,11 @@ public sealed partial class AnnotationToolbarView : UserControl
             _cornerRadius.Value = _loadedStyle.CornerRadius;
             ShowSliderValue(_size, _sizeValue);
             ShowSliderValue(_cornerRadius, _cornerValue);
+
+            // Written here rather than left to the slider's own event: a stored dim that
+            // happens to equal what the slider already reads raises nothing, and the box
+            // beside it would stay blank until the user dragged it.
+            ShowDimValue();
             _colorPicker.Color = ToUiColor(_loadedStyle.Color);
 
             // Read here rather than by the editor itself, so Core stays free of the
@@ -1660,6 +1756,7 @@ public sealed partial class AnnotationToolbarView : UserControl
 
             _measureUnit.SelectedIndex = _loadedStyle.MeasureInPoints ? 1 : 0;
             _loupeZoom.Value = _loadedStyle.LoupeMagnification;
+        _spotlightDim.Value = _loadedStyle.DimOpacity;
             ShowZoomValue();
 
             _fontChoices.Show(_loadedStyle.FontFamily);
@@ -1750,6 +1847,10 @@ public sealed partial class AnnotationToolbarView : UserControl
                 _loupeZoom.Value,
                 AnnotationStyle.MinLoupeMagnification,
                 AnnotationStyle.MaxLoupeMagnification),
+            DimOpacity = Math.Clamp(
+                _spotlightDim.Value,
+                AnnotationStyle.MinDimOpacity,
+                AnnotationStyle.MaxDimOpacity),
             Outline = _outline.IsOn ? ToAnnotationColor(_outline.Color) : null,
             TextBackground = _textFill.IsOn ? ToAnnotationColor(_textFill.Color) : null,
             TextOutline = _textOutline.IsOn ? ToAnnotationColor(_textOutline.Color) : null,
