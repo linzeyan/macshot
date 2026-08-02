@@ -134,7 +134,7 @@ public static class ScreenshotHistory
                     AnnotationFile.Write(editable.Annotations));
             }
 
-            Prune(settings.EffectiveHistorySize);
+            Prune(settings);
             return path;
         }
         catch (Exception exception)
@@ -143,6 +143,81 @@ public static class ScreenshotHistory
             // by the time this runs, so interrupting the user to say the copy of it
             // failed would report a problem they do not have.
             DiagnosticLog.Write($"Could not add the capture to history: {exception.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Writes an edited capture back over the entry it was opened from, rather than
+    /// leaving the history holding both.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// macshot's <c>updateEntry</c>. Reopening a capture, moving an arrow and pressing
+    /// Done is editing that capture — not taking a second one — and a history that
+    /// answered with two nearly identical entries would make the user pick between them
+    /// every time afterwards.
+    /// </para>
+    /// <para>
+    /// Rewriting the file is also what records the edit: the entry's own write time is
+    /// when it was last changed, which is what <see cref="Recent(int, CaptureSettings)"/>
+    /// orders by. There is no manifest here to keep a date in, and the file already knows.
+    /// </para>
+    /// </remarks>
+    /// <returns>Where the entry now is, or null when the write failed.</returns>
+    public static async Task<string?> RewriteAsync(
+        string path,
+        CapturedFrame frame,
+        CaptureSettings settings,
+        EditableCapture? editable = null)
+    {
+        ArgumentNullException.ThrowIfNull(path);
+        ArgumentNullException.ThrowIfNull(frame);
+        ArgumentNullException.ThrowIfNull(settings);
+
+        // Pruned off the end while it was open, or deleted from the panel behind the
+        // editor. The edit is still a capture worth keeping, so it is archived as a new
+        // one rather than written back to a name nothing lists any more.
+        if (!File.Exists(path))
+        {
+            return await RecordAsync(frame, settings, editable);
+        }
+
+        try
+        {
+            // From the entry's own folder rather than from Directory, so this cannot write
+            // a companion somewhere other than beside the file it belongs to.
+            var stem = Path.Combine(
+                Path.GetDirectoryName(path) ?? Directory,
+                Path.GetFileNameWithoutExtension(path));
+
+            var bytes = await ImageDelivery.EncodeAsync(frame, CaptureImageFormat.Png, CaptureSettings.MaxQuality);
+            await File.WriteAllBytesAsync(path, bytes);
+
+            // The companions follow the marks. An edit that took every mark off has to
+            // take the archived marks with them, or reopening it would put back the
+            // arrows the user just deleted.
+            if (editable is { Annotations.Count: > 0 })
+            {
+                var raw = await ImageDelivery.EncodeAsync(
+                    editable.Raw,
+                    CaptureImageFormat.Png,
+                    CaptureSettings.MaxQuality);
+
+                await File.WriteAllBytesAsync(stem + RawSuffix, raw);
+                await File.WriteAllTextAsync(stem + NotesSuffix, AnnotationFile.Write(editable.Annotations));
+            }
+            else
+            {
+                File.Delete(stem + RawSuffix);
+                File.Delete(stem + NotesSuffix);
+            }
+
+            return path;
+        }
+        catch (Exception exception)
+        {
+            DiagnosticLog.Write($"Could not update the capture in history: {exception.Message}");
             return null;
         }
     }
@@ -168,8 +243,14 @@ public static class ScreenshotHistory
     }
 
     /// <summary>The most recent captures, newest first.</summary>
-    public static IReadOnlyList<HistoryEntry> Recent(int count)
+    /// <param name="settings">
+    /// Read for one answer only: whether an edited capture counts as recent because it was
+    /// edited, or stays where it was taken.
+    /// </param>
+    public static IReadOnlyList<HistoryEntry> Recent(int count, CaptureSettings settings)
     {
+        ArgumentNullException.ThrowIfNull(settings);
+
         if (count <= 0)
         {
             return [];
@@ -182,7 +263,7 @@ public static class ScreenshotHistory
                 return [];
             }
 
-            return [.. Ordered().Take(count).Select(Describe)];
+            return [.. Ordered(settings.HistoryOrderByLastEdit).Take(count).Select(Describe)];
         }
         catch (Exception exception)
         {
@@ -208,16 +289,30 @@ public static class ScreenshotHistory
     }
 
     /// <summary>
-    /// Newest first. Ordered by name rather than by write time, because the name is
-    /// the moment the capture was taken and the write time is the moment the encoder
-    /// finished — which two captures in flight at once can put in the wrong order.
+    /// Newest first.
     /// </summary>
-    private static IEnumerable<string> Ordered()
+    /// <param name="byLastEdit">
+    /// Puts a capture that was edited today above one taken this afternoon and left alone
+    /// — macshot's <c>historyOrderByLastEdit</c>, and its default. The one being worked on
+    /// is the one being looked for.
+    /// </param>
+    /// <remarks>
+    /// In capture order it is the name that sorts, not the write time: the name is the
+    /// moment the capture was taken and the write time is the moment the encoder finished,
+    /// which two captures in flight at once can put in the wrong order. By last edit the
+    /// write time is the whole point, and the name breaks its ties for the same reason.
+    /// </remarks>
+    private static IEnumerable<string> Ordered(bool byLastEdit)
     {
-        return System.IO.Directory
+        var entries = System.IO.Directory
             .EnumerateFiles(Directory, "*" + Extension)
-            .Where(IsEntry)
-            .OrderByDescending(Path.GetFileName, StringComparer.Ordinal);
+            .Where(IsEntry);
+
+        return byLastEdit
+            ? entries
+                .OrderByDescending(File.GetLastWriteTimeUtc)
+                .ThenByDescending(Path.GetFileName, StringComparer.Ordinal)
+            : entries.OrderByDescending(Path.GetFileName, StringComparer.Ordinal);
     }
 
     /// <summary>
@@ -250,9 +345,19 @@ public static class ScreenshotHistory
             : new HistoryEntry(path, TakenAt(path));
     }
 
-    private static void Prune(int keep)
+    /// <summary>
+    /// Drops whatever falls off the end, in the order the user sees.
+    /// </summary>
+    /// <remarks>
+    /// The same order the panel lists in, so that what is pruned is always the entry
+    /// furthest from the top of it. With ordering by last edit on, a capture from last
+    /// week that was opened this morning is one the user has just shown an interest in,
+    /// and dropping it while keeping ten they have not looked at would be reading the
+    /// setting backwards.
+    /// </remarks>
+    private static void Prune(CaptureSettings settings)
     {
-        foreach (var path in Ordered().Skip(keep))
+        foreach (var path in Ordered(settings.HistoryOrderByLastEdit).Skip(settings.EffectiveHistorySize))
         {
             try
             {

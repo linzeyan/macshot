@@ -446,6 +446,15 @@
                             Style="{StaticResource Unlabelled}"
                             Checked="HistoryUnlimited_Toggled"
                             Unchecked="HistoryUnlimited_Toggled" />
+                        <CheckBox
+                            x:Name="HistoryOrderCheck"
+                            Content="Order history by last edit"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <TextBlock
+                            Text="Edited screenshots move to the top. Off keeps them in capture order."
+                            Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="" Style="{StaticResource RowLabel}" />
                             <Button Content="Clear History" FontSize="13" Click="ClearHistory_Click" />

@@ -614,6 +614,18 @@ public sealed record CaptureSettings
     public int EffectiveHistorySize => HistoryUnlimited ? int.MaxValue : HistorySize;
 
     /// <summary>
+    /// Whether a capture that was edited counts as recent because it was edited.
+    /// </summary>
+    /// <remarks>
+    /// On by default, as macshot's <c>historyOrderByLastEdit</c> is. Reopening a capture
+    /// to change something is the strongest statement anyone makes about which capture
+    /// they care about, and the history is the list they will come back to it through.
+    /// Off keeps the list in the order the captures were taken, which is what someone
+    /// working through a set of them in sequence wants.
+    /// </remarks>
+    public bool HistoryOrderByLastEdit { get; init; } = true;
+
+    /// <summary>
     /// The twelve global shortcuts, in macshot's own order, written the way
     /// <see cref="HotkeyBinding"/> reads them.
     /// </summary>

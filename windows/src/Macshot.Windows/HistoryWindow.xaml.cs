@@ -146,7 +146,7 @@ public sealed partial class HistoryWindow : Window
     {
         _tiles.Clear();
 
-        foreach (var entry in ScreenshotHistory.Recent(Depth))
+        foreach (var entry in ScreenshotHistory.Recent(Depth, _settings.Current))
         {
             if (await LoadTileAsync(entry) is { } tile)
             {

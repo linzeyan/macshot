@@ -1037,6 +1037,7 @@ public sealed partial class PreferencesWindow : Window
         ShowThumbnailScale();
         HistorySizeBox.Value = settings.HistorySize;
         HistoryUnlimitedCheck.IsChecked = settings.HistoryUnlimited;
+        HistoryOrderCheck.IsChecked = settings.HistoryOrderByLastEdit;
         HistorySizeBox.IsEnabled = !settings.HistoryUnlimited;
         RememberSelectionCheck.IsChecked = settings.RememberLastSelection;
         SnapGuidesCheck.IsChecked = settings.SnapGuides;
@@ -1411,6 +1412,7 @@ public sealed partial class PreferencesWindow : Window
                 ? CaptureSettings.Default.HistorySize
                 : (int)HistorySizeBox.Value,
             HistoryUnlimited = HistoryUnlimitedCheck.IsChecked == true,
+            HistoryOrderByLastEdit = HistoryOrderCheck.IsChecked == true,
             RememberLastSelection = RememberSelectionCheck.IsChecked == true,
             SnapGuides = SnapGuidesCheck.IsChecked == true,
             BoundarySnap = BoundarySnapCheck.IsChecked == true,

@@ -812,12 +812,12 @@ public sealed class CaptureController : IDisposable
     /// History is written whichever button was pressed, the same as it is for an ordinary
     /// delivery: it is the net under every capture, not one of the destinations.
     /// </remarks>
-    private async Task DeliverAsync(CaptureCompletion completion)
+    private async Task DeliverAsync(CaptureCompletion completion, string? origin = null)
     {
         var frame = completion.Frame;
         if (completion.Outcome is CaptureOutcome.Deliver)
         {
-            await DeliverAsync(frame, completion.Editable, completion.WindowTitle);
+            await DeliverAsync(frame, completion.Editable, completion.WindowTitle, origin);
             return;
         }
 
@@ -852,7 +852,7 @@ public sealed class CaptureController : IDisposable
                 break;
         }
 
-        _ = await ScreenshotHistory.RecordAsync(frame, settings, completion.Editable);
+        _ = await ArchiveAsync(frame, settings, completion.Editable, origin);
 
         // Only for the two that put the capture somewhere. Pinning and uploading each
         // leave a window on screen saying so, and a sound on top of that is noise.
@@ -875,7 +875,8 @@ public sealed class CaptureController : IDisposable
     private async Task DeliverAsync(
         CapturedFrame frame,
         EditableCapture? editable = null,
-        string? windowTitle = null)
+        string? windowTitle = null,
+        string? origin = null)
     {
         var settings = _settings.Current;
 
@@ -910,7 +911,7 @@ public sealed class CaptureController : IDisposable
         // After the actions the user asked for, so the extra encode is never in front
         // of the clipboard. History is the safety net under delivery, not part of it,
         // and it is written whether or not the capture was saved anywhere else.
-        var archived = await ScreenshotHistory.RecordAsync(frame, settings, editable);
+        var archived = await ArchiveAsync(frame, settings, editable, origin);
 
         // Alongside whatever else was done with it, not instead: someone who wants every
         // capture annotated still wants it copied, and an editor that swallowed the copy
@@ -967,7 +968,10 @@ public sealed class CaptureController : IDisposable
 #if !OFFLINE
         thumbnail.UploadRequested += (_, taken) => Post(() => _uploads.UploadAsync(taken));
 #endif
-        thumbnail.EditRequested += (_, captured) => Post(() => ShowEditorAsync(captured));
+        // With the archive copy, so that annotating the capture just taken writes back
+        // over the entry it already has instead of leaving the history holding the same
+        // capture twice, once with the marks and once without.
+        thumbnail.EditRequested += (_, captured) => Post(() => ShowEditorAsync(captured, origin: archived));
         thumbnail.CloseAllRequested += (_, _) => CloseThumbnails();
         thumbnail.Closed += (_, _) =>
         {
@@ -1064,7 +1068,7 @@ public sealed class CaptureController : IDisposable
 
     private IReadOnlyList<TrayMenuEntry> RecentMenuEntries()
     {
-        _recent = ScreenshotHistory.Recent(RecentMenuCount);
+        _recent = ScreenshotHistory.Recent(RecentMenuCount, _settings.Current);
         return [.. _recent.Select((entry, index) => new TrayMenuEntry(CommandRecentFirst + index, entry.Label))];
     }
 
@@ -1101,6 +1105,19 @@ public sealed class CaptureController : IDisposable
     }
 
     /// <summary>
+    /// Puts a finished capture into the history, over the entry it came from when it came
+    /// from one.
+    /// </summary>
+    private static Task<string?> ArchiveAsync(
+        CapturedFrame frame,
+        CaptureSettings settings,
+        EditableCapture? editable,
+        string? origin) =>
+        origin is null
+            ? ScreenshotHistory.RecordAsync(frame, settings, editable)
+            : ScreenshotHistory.RewriteAsync(origin, frame, settings, editable);
+
+    /// <summary>
     /// Opens a past capture in the editor, with its marks still separate from the pixels
     /// when they were archived that way.
     /// </summary>
@@ -1118,7 +1135,7 @@ public sealed class CaptureController : IDisposable
             try
             {
                 var annotations = AnnotationFile.Read(await File.ReadAllTextAsync(notes));
-                await ShowEditorAsync(await ImageLoader.LoadAsync(raw), annotations);
+                await ShowEditorAsync(await ImageLoader.LoadAsync(raw), annotations, entry.Path);
                 return;
             }
             catch (Exception exception)
@@ -1132,7 +1149,7 @@ public sealed class CaptureController : IDisposable
             }
         }
 
-        await ShowEditorAsync(await ImageLoader.LoadAsync(entry.Path));
+        await ShowEditorAsync(await ImageLoader.LoadAsync(entry.Path), origin: entry.Path);
     }
 
     /// <summary>
@@ -1822,7 +1839,15 @@ public sealed class CaptureController : IDisposable
         await PinAsync(frame);
     }
 
-    private async Task ShowEditorAsync(CapturedFrame frame, IReadOnlyList<Annotation>? annotations = null)
+    /// <param name="origin">
+    /// The history entry this capture was opened from, when it was. Pressing Done writes
+    /// back over that entry instead of adding a second one: reopening a capture to move an
+    /// arrow is editing it, not taking another.
+    /// </param>
+    private async Task ShowEditorAsync(
+        CapturedFrame frame,
+        IReadOnlyList<Annotation>? annotations = null,
+        string? origin = null)
     {
         _editor?.Close();
 
@@ -1836,7 +1861,7 @@ public sealed class CaptureController : IDisposable
         // Delivered exactly as a capture is, so the editor needs no opinion about
         // clipboards, folders or history, and what Done means cannot drift between the
         // two paths.
-        editor.Finished += (_, finished) => Post(() => DeliverAsync(finished));
+        editor.Finished += (_, finished) => Post(() => DeliverAsync(finished, origin));
         editor.Closed += (_, _) =>
         {
             if (ReferenceEquals(_editor, editor))
