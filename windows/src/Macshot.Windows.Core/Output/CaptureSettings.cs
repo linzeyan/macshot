@@ -465,11 +465,35 @@ public sealed record CaptureSettings
     /// <summary>Whether the text tool sets a label bold.</summary>
     public bool AnnotationBold { get; init; }
 
+    /// <summary>Whether the text tool sets a label italic.</summary>
+    public bool AnnotationItalic { get; init; }
+
+    /// <summary>Whether the text tool underlines a label.</summary>
+    public bool AnnotationUnderline { get; init; }
+
+    /// <summary>Whether the text tool strikes a label through.</summary>
+    /// <remarks>
+    /// Four switches rather than one weight, because that is what they are: a label can be
+    /// bold and underlined at once. Remembered one by one for the same reason the face and
+    /// the size are — the next capture nearly always wants the label the last one had.
+    /// </remarks>
+    public bool AnnotationStrikethrough { get; init; }
+
+    /// <summary>Which edge the text tool hangs a label's lines from.</summary>
+    public LabelAlignment AnnotationTextAlignment { get; init; } = LabelAlignment.Left;
+
     /// <summary>The pill behind a label as <c>#AARRGGBB</c>, or empty for none.</summary>
     public string AnnotationTextBackground { get; init; } = string.Empty;
 
     /// <summary>The line around that pill as <c>#AARRGGBB</c>, or empty for none.</summary>
     public string AnnotationTextOutline { get; init; } = string.Empty;
+
+    /// <summary>
+    /// The line around each glyph as <c>#AARRGGBB</c>, or empty for none. macshot's
+    /// <c>textGlyphStrokeEnabled</c> and <c>textGlyphStrokeColor</c> in one, the way the
+    /// halo is: a colour that cannot be read means off, so the two cannot disagree.
+    /// </summary>
+    public string AnnotationTextGlyphStroke { get; init; } = string.Empty;
 
     /// <summary>
     /// How much a freehand stroke is rounded off once it is finished. Smoothed by
@@ -1186,6 +1210,10 @@ public sealed record CaptureSettings
                 AnnotationStyle.MaxFontSize),
             FontFamily = AnnotationFontFamily,
             Bold = AnnotationBold,
+            Italic = AnnotationItalic,
+            Underline = AnnotationUnderline,
+            Strikethrough = AnnotationStrikethrough,
+            TextAlignment = AnnotationTextAlignment,
             ArrowReversed = AnnotationArrowReversed,
             Outline = Annotations.AnnotationColor.TryParseHex(AnnotationOutline, out var halo)
                 ? halo
@@ -1195,6 +1223,9 @@ public sealed record CaptureSettings
                 : null,
             TextOutline = Annotations.AnnotationColor.TryParseHex(AnnotationTextOutline, out var edge)
                 ? edge
+                : null,
+            TextGlyphStroke = Annotations.AnnotationColor.TryParseHex(AnnotationTextGlyphStroke, out var glyph)
+                ? glyph
                 : null,
         };
     }
@@ -1219,10 +1250,15 @@ public sealed record CaptureSettings
             AnnotationFontSize = style.FontSize,
             AnnotationFontFamily = style.FontFamily,
             AnnotationBold = style.Bold,
+            AnnotationItalic = style.Italic,
+            AnnotationUnderline = style.Underline,
+            AnnotationStrikethrough = style.Strikethrough,
+            AnnotationTextAlignment = style.TextAlignment,
             AnnotationArrowReversed = style.ArrowReversed,
             AnnotationOutline = style.Outline?.ToHex() ?? string.Empty,
             AnnotationTextBackground = style.TextBackground?.ToHex() ?? string.Empty,
             AnnotationTextOutline = style.TextOutline?.ToHex() ?? string.Empty,
+            AnnotationTextGlyphStroke = style.TextGlyphStroke?.ToHex() ?? string.Empty,
         };
     }
 
@@ -1303,6 +1339,19 @@ public sealed record CaptureSettings
             AnnotationTextOutline = Annotations.AnnotationColor.TryParseHex(AnnotationTextOutline, out var rim)
                 ? rim.ToHex()
                 : string.Empty,
+
+            // And the line on the glyphs themselves, for the same reason: off is a state
+            // the user chose, so an unreadable colour lands there rather than putting a
+            // white edge round every label they type next.
+            AnnotationTextGlyphStroke = Annotations.AnnotationColor.TryParseHex(AnnotationTextGlyphStroke, out var edge)
+                ? edge.ToHex()
+                : string.Empty,
+
+            // Left in every file written before the row could align a label, which is also
+            // what typing gives you — so the repair and the default agree.
+            AnnotationTextAlignment = Enum.IsDefined(AnnotationTextAlignment)
+                ? AnnotationTextAlignment
+                : LabelAlignment.Left,
             AnnotationLineStyle = Enum.IsDefined(AnnotationLineStyle) ? AnnotationLineStyle : LineStyle.Solid,
             AnnotationArrowStyle = Enum.IsDefined(AnnotationArrowStyle) ? AnnotationArrowStyle : ArrowStyle.Filled,
             AnnotationShapeFill = Enum.IsDefined(AnnotationShapeFill) ? AnnotationShapeFill : ShapeFill.Stroke,

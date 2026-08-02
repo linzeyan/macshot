@@ -11,10 +11,10 @@ namespace Macshot.Windows.Rendering;
 /// on-canvas entry box has to match.
 /// </summary>
 /// <remarks>
-/// The entry box and the sprite share <see cref="FontSizeFor"/> and
-/// <see cref="FamilyFor"/> on purpose: they are two views of one mark, and a face or a
-/// size chosen twice is one that drifts. What the user typed is then what the capture
-/// gets. See <c>docs/windows-port/architecture.md</c>, decision D7.
+/// The entry box and the sprite share <see cref="FontSizeFor"/>, <see cref="FamilyFor"/>
+/// and the rest of these on purpose: they are two views of one mark, and a face or a size
+/// chosen twice is one that drifts. What the user typed is then what the capture gets.
+/// See <c>docs/windows-port/architecture.md</c>, decision D7.
 /// </remarks>
 internal static class TextGlyphs
 {
@@ -25,6 +25,20 @@ internal static class TextGlyphs
     private const double PillCorner = 4;
 
     private const double PillOutline = 2;
+
+    /// <summary>
+    /// How many copies of the glyphs the outline is laid down as, spaced evenly round a
+    /// circle.
+    /// </summary>
+    /// <remarks>
+    /// macshot strokes the glyph paths themselves through a layout manager of its own
+    /// (<c>OutlineTextRenderer.swift</c>). WinUI hands out no glyph outlines and no text
+    /// stroke, so the line is built the way it is built everywhere else in XAML: the text
+    /// drawn round itself in the outline colour, with the real one on top hiding the
+    /// inside. Eight is where the ring stops looking like a ring — at four the corners of
+    /// a letter show the gaps, and past eight nothing changes but the work.
+    /// </remarks>
+    private const int OutlineCopies = 8;
 
     /// <summary>
     /// The font size in layout units. Chosen in frame pixels and divided by the
@@ -68,9 +82,57 @@ internal static class TextGlyphs
         return style.Bold ? FontWeights.Bold : FontWeights.Normal;
     }
 
+    /// <summary>Whether the glyphs slant. Qualified for the reason the weight is.</summary>
+    public static global::Windows.UI.Text.FontStyle SlantFor(AnnotationStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(style);
+
+        return style.Italic
+            ? global::Windows.UI.Text.FontStyle.Italic
+            : global::Windows.UI.Text.FontStyle.Normal;
+    }
+
     /// <summary>
-    /// The label as it will be rasterized: the glyphs, and macshot's pill behind them
-    /// when one is asked for.
+    /// Which edge the lines are hung from. Only a label of more than one line shows it,
+    /// which is the case it is there for.
+    /// </summary>
+    public static TextAlignment AlignmentFor(AnnotationStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(style);
+
+        return style.TextAlignment switch
+        {
+            LabelAlignment.Centre => TextAlignment.Center,
+            LabelAlignment.Right => TextAlignment.Right,
+            _ => TextAlignment.Left,
+        };
+    }
+
+    /// <summary>
+    /// The rules through and under the glyphs. Both at once when both are asked for: they
+    /// are two switches on the row rather than a choice between two.
+    /// </summary>
+    public static global::Windows.UI.Text.TextDecorations DecorationsFor(AnnotationStyle style)
+    {
+        ArgumentNullException.ThrowIfNull(style);
+
+        var marks = global::Windows.UI.Text.TextDecorations.None;
+        if (style.Underline)
+        {
+            marks |= global::Windows.UI.Text.TextDecorations.Underline;
+        }
+
+        if (style.Strikethrough)
+        {
+            marks |= global::Windows.UI.Text.TextDecorations.Strikethrough;
+        }
+
+        return marks;
+    }
+
+    /// <summary>
+    /// The label as it will be rasterized: the glyphs, the line round them when one is
+    /// asked for, and macshot's pill behind the lot when that is.
     /// </summary>
     /// <remarks>
     /// The pill is a <c>Border</c> rather than something the Core rasterizer draws,
@@ -83,27 +145,13 @@ internal static class TextGlyphs
         ArgumentException.ThrowIfNullOrEmpty(text);
         ArgumentNullException.ThrowIfNull(style);
 
-        var glyphs = new TextBlock
-        {
-            // A TextBox hands back carriage returns; a TextBlock breaks on line feeds.
-            // Left alone, a label typed on two lines would be rasterized as one long
-            // line with a box glyph in the middle of it.
-            Text = text.Replace("\r\n", "\n", StringComparison.Ordinal)
-                .Replace('\r', '\n'),
-            FontSize = FontSizeFor(style, rasterizationScale),
-            FontFamily = FamilyFor(style),
-            FontWeight = WeightFor(style),
-            Foreground = new SolidColorBrush(GlyphSpriteFactory.ToBrushColor(style)),
-
-            // The entry box does not wrap either, so a long line stays one long line
-            // and the sprite is as wide as what was typed. Explicit breaks still break:
-            // NoWrap only means nothing is broken that the user did not break.
-            TextWrapping = TextWrapping.NoWrap,
-        };
+        var body = style.TextGlyphStroke is { } edge
+            ? Outlined(text, style, rasterizationScale, edge)
+            : Glyphs(text, style, rasterizationScale, GlyphSpriteFactory.ToBrushColor(style));
 
         if (style.TextBackground is null && style.TextOutline is null)
         {
-            return glyphs;
+            return body;
         }
 
         // Both measured in layout units for the same reason the font size is: the sprite
@@ -119,10 +167,75 @@ internal static class TextGlyphs
                 ? new SolidColorBrush(GlyphSpriteFactory.ToBrushColor(fill, style.Opacity))
                 : null,
             BorderThickness = new Thickness(style.TextOutline is null ? 0 : PillOutline * scaled),
-            BorderBrush = style.TextOutline is { } edge
-                ? new SolidColorBrush(GlyphSpriteFactory.ToBrushColor(edge, style.Opacity))
+            BorderBrush = style.TextOutline is { } rim
+                ? new SolidColorBrush(GlyphSpriteFactory.ToBrushColor(rim, style.Opacity))
                 : null,
-            Child = glyphs,
+            Child = body,
         };
     }
+
+    /// <summary>
+    /// The glyphs with a line round them: the text laid down <see cref="OutlineCopies"/>
+    /// times in the outline colour on a circle of the outline's width, then once more in
+    /// its own colour on top.
+    /// </summary>
+    /// <remarks>
+    /// The copies are moved by their margins rather than by a transform, so the block ends
+    /// up as wide as the outline actually reaches — a transform leaves layout alone, and
+    /// the sprite is cut to the layout, so the left edge of the line would be sliced off.
+    /// Each copy carries the same total margin, which is what keeps every one of them
+    /// measuring and breaking its lines identically.
+    /// </remarks>
+    private static FrameworkElement Outlined(
+        string text,
+        AnnotationStyle style,
+        double rasterizationScale,
+        AnnotationColor edge)
+    {
+        var reach = AnnotationStyle.GlyphStrokeWidth(style.FontSize) / rasterizationScale;
+        var stroke = GlyphSpriteFactory.ToBrushColor(edge, style.Opacity);
+        var block = new Grid();
+
+        for (var copy = 0; copy < OutlineCopies; copy++)
+        {
+            var angle = copy * 2 * Math.PI / OutlineCopies;
+            var across = reach * Math.Cos(angle);
+            var down = reach * Math.Sin(angle);
+
+            var ghost = Glyphs(text, style, rasterizationScale, stroke);
+            ghost.Margin = new Thickness(reach + across, reach + down, reach - across, reach - down);
+            block.Children.Add(ghost);
+        }
+
+        var face = Glyphs(text, style, rasterizationScale, GlyphSpriteFactory.ToBrushColor(style));
+        face.Margin = new Thickness(reach);
+        block.Children.Add(face);
+
+        return block;
+    }
+
+    private static TextBlock Glyphs(
+        string text,
+        AnnotationStyle style,
+        double rasterizationScale,
+        global::Windows.UI.Color color) => new()
+        {
+            // A TextBox hands back carriage returns; a TextBlock breaks on line feeds.
+            // Left alone, a label typed on two lines would be rasterized as one long
+            // line with a box glyph in the middle of it.
+            Text = text.Replace("\r\n", "\n", StringComparison.Ordinal)
+                .Replace('\r', '\n'),
+            FontSize = FontSizeFor(style, rasterizationScale),
+            FontFamily = FamilyFor(style),
+            FontWeight = WeightFor(style),
+            FontStyle = SlantFor(style),
+            TextDecorations = DecorationsFor(style),
+            TextAlignment = AlignmentFor(style),
+            Foreground = new SolidColorBrush(color),
+
+            // The entry box does not wrap either, so a long line stays one long line
+            // and the sprite is as wide as what was typed. Explicit breaks still break:
+            // NoWrap only means nothing is broken that the user did not break.
+            TextWrapping = TextWrapping.NoWrap,
+        };
 }

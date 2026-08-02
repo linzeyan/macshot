@@ -46,6 +46,12 @@ internal static class StylePreviews
     /// <summary>How wide a shape-fill segment is: macshot's 22-wide tile plus its gap.</summary>
     public const double ShapeFillSegmentWidth = 22;
 
+    /// <summary>How wide an alignment segment is — macshot's 26-wide button, <c>:961</c>.</summary>
+    public const double AlignSegmentWidth = 26;
+
+    /// <summary>The block of rules an alignment is shown as.</summary>
+    private const double AlignWidth = 16;
+
     /// <summary>A dash pattern shown at the weight the preview is drawn in.</summary>
     private const double PreviewStroke = 2;
 
@@ -215,6 +221,42 @@ internal static class StylePreviews
         }
 
         canvas.Children.Add(shape);
+        return canvas;
+    }
+
+    /// <summary>
+    /// The alignment segment: four rules, every other one short, ragged down whichever edge
+    /// the alignment leaves ragged.
+    /// </summary>
+    /// <remarks>
+    /// macshot uses <c>text.alignleft</c> and its two neighbours, which is this picture —
+    /// SF Symbols are a macOS font, so the port draws the same block of rules rather than
+    /// shipping a bitmap of somebody else's glyph. Reading it needs no words in any
+    /// language, which a segment 26 wide has no room for anyway.
+    /// </remarks>
+    public static FrameworkElement Align(LabelAlignment alignment)
+    {
+        var canvas = NewCanvas(AlignWidth);
+
+        // Four rules at the spacing of set lines, with the short ones standing for the
+        // lines that do not fill their measure — the only thing there is to see here.
+        const double Full = AlignWidth - 2;
+        const double Short = Full - 5;
+
+        for (var line = 0; line < 4; line++)
+        {
+            var length = line % 2 == 0 ? Full : Short;
+            var left = alignment switch
+            {
+                LabelAlignment.Centre => (AlignWidth - length) / 2,
+                LabelAlignment.Right => AlignWidth - 1 - length,
+                _ => 1,
+            };
+
+            var y = 2.5 + (line * 3.5);
+            canvas.Children.Add(Shaft(left, y, left + length, y));
+        }
+
         return canvas;
     }
 
