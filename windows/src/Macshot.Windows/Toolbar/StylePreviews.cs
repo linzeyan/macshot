@@ -110,6 +110,26 @@ internal static class StylePreviews
             canvas.Children.Add(Head(NearX, Mid, NearX + Reach, Spread));
             break;
 
+        case ArrowStyle.Banner:
+            // The whole arrow as one shape, which is what the style is: a shaft opening
+            // from a narrow tail into the head, drawn here as the outline the rasterizer
+            // builds rather than as a line with something on the end.
+            canvas.Children.Add(new Polygon
+            {
+                Fill = ToolbarPalette.IconBrush(),
+                Points = new PointCollection
+                {
+                    new Point(NearX, Mid - 1),
+                    new Point(FarX - Reach, Mid - 2),
+                    new Point(FarX - Reach, Mid - Spread - 1),
+                    new Point(FarX, Mid),
+                    new Point(FarX - Reach, Mid + Spread + 1),
+                    new Point(FarX - Reach, Mid + 2),
+                    new Point(NearX, Mid + 1),
+                },
+            });
+            break;
+
         case ArrowStyle.Tail:
             // The bar across the near end, half a head's reach either side of it, which
             // is what TailBar draws.

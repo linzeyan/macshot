@@ -20,6 +20,17 @@ public enum ArrowStyle
     /// <summary>A filled triangle at the far end. What an arrow looks like.</summary>
     Filled,
 
+    /// <summary>
+    /// The whole arrow as one solid shape: a shaft that widens from its tail into a
+    /// broad head. macshot's <c>thick</c>.
+    /// </summary>
+    /// <remarks>
+    /// Second, where macshot puts it. The order is the order of the segments in the
+    /// toolbar, and a style appended to the end of this enum would sit in a different
+    /// place in the two products' pickers.
+    /// </remarks>
+    Banner,
+
     /// <summary>Two strokes at the far end, so the head is drawn rather than solid.</summary>
     Open,
 

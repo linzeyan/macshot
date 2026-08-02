@@ -61,6 +61,59 @@ public sealed class ArrowStyleTests
     }
 
     [TestMethod]
+    public void Banner_IsOneSolidShapeThatWidensTowardsItsHead()
+    {
+        var rendered = Render(Arrow(ArrowStyle.Banner));
+
+        // Sampled off the centreline at both ends. The taper is what makes this style
+        // itself rather than a thick line: near the tail only the centreline is inked,
+        // and by the head the shape has opened out well past it.
+        Assert.IsTrue(IsInked(rendered, 12, 32), "the tail is on the line");
+        Assert.IsFalse(IsInked(rendered, 12, 26), "and narrow there");
+        Assert.IsTrue(IsInked(rendered, 40, 26), "the head end is wide");
+    }
+
+    [TestMethod]
+    public void Banner_ShrinksToFitAShortArrow()
+    {
+        // Left alone, a heavy stroke dragged a little way gives a head wider than the
+        // arrow is long — a blot rather than something pointing anywhere. The whole
+        // shape scales down instead, so a stubby arrow stays an arrow.
+        var stubby = Annotation.Create(
+            AnnotationTool.Arrow,
+            new CapturePoint(28, 32),
+            new CapturePoint(36, 32),
+            new AnnotationStyle(new AnnotationColor(0, 0, 0), 6, ArrowStyle: ArrowStyle.Banner));
+
+        var rendered = Render(stubby);
+
+        Assert.IsTrue(IsInked(rendered, 32, 32), "it is still drawn");
+        Assert.IsFalse(IsInked(rendered, 32, 20), "but it does not spread wider than it is long");
+    }
+
+    [TestMethod]
+    public void Banner_PointsTheOtherWayWhenReversed()
+    {
+        var forward = Render(Arrow(ArrowStyle.Banner));
+        var backward = Render(Annotation.Create(
+            AnnotationTool.Arrow,
+            new CapturePoint(8, 32),
+            new CapturePoint(56, 32),
+            new AnnotationStyle(new AnnotationColor(0, 0, 0), 6, ArrowStyle: ArrowStyle.Banner)
+            {
+                ArrowReversed = true,
+            }));
+
+        // The wide end swaps ends. Without this the reverse switch would move a head
+        // this style does not draw separately, and change nothing at all. Sampled well
+        // clear of the shaft at its widest, so what is being asked about is the head and
+        // not the taper.
+        Assert.IsTrue(IsInked(forward, 40, 22), "forward, the far end is the wide one");
+        Assert.IsFalse(IsInked(backward, 40, 22), "reversed, it is not");
+        Assert.IsTrue(IsInked(backward, 22, 22), "the near end is");
+    }
+
+    [TestMethod]
     public void TheHeadGrowsWithTheStroke()
     {
         // A hairline arrow with a head sized to its stroke would end in nothing at all,

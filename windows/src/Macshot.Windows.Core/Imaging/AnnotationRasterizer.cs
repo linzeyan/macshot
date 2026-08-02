@@ -62,6 +62,13 @@ public static class AnnotationRasterizer
     /// </summary>
     private const int BendSegments = 24;
 
+    /// <summary>
+    /// How many places a banner arrow's taper is measured at. Fewer than macshot's 64
+    /// would show as flats down the side of a bent one; more buys nothing, because the
+    /// centreline it samples is itself only <see cref="BendSegments"/> long.
+    /// </summary>
+    private const int BannerSamples = 64;
+
     public static byte[] Render(
         int width,
         int height,
@@ -586,6 +593,14 @@ public static class AnnotationRasterizer
         // would come out with a bar through its point.
         var pointing = !annotation.Style.ArrowReversed;
 
+        // One solid shape rather than a shaft with something on the end, so it takes
+        // neither a stroke nor a dash pattern. Its own branch for that reason.
+        if (style == ArrowStyle.Banner)
+        {
+            CompositeShape(pixels, width, height, [], [BannerOutline(annotation, shaft, pointing)], annotation);
+            return;
+        }
+
         var strokes = new List<CapturePoint[]> { shaft };
         var fills = new List<CapturePoint[]>();
 
@@ -612,6 +627,137 @@ public static class AnnotationRasterizer
 
         CompositeShape(pixels, width, height, strokes, fills, annotation);
     }
+
+    /// <summary>
+    /// The outline of a banner arrow, walked up one side and back down the other.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// macshot's <c>drawThickArrow</c> (<c>Annotation.swift:1073</c>): a shaft that
+    /// widens from a narrow tail into the base of a broad head, then the head itself.
+    /// One closed polygon rather than a stroke, which is why a banner arrow ignores the
+    /// dash pattern — there is no line on it to break up.
+    /// </para>
+    /// <para>
+    /// Every size is scaled down together on a short arrow. Left alone, a heavy stroke
+    /// dragged out two hundredths of the way across the screen gives a head wider than
+    /// the arrow is long, which reads as a blot rather than as pointing at anything.
+    /// </para>
+    /// <para>
+    /// macshot rounds the corners where the head meets the shaft. That is left square
+    /// here: at the sizes this is drawn the rounding is under a pixel across, and the
+    /// arcs would have to be sampled into the polygon this returns.
+    /// </para>
+    /// </remarks>
+    private static CapturePoint[] BannerOutline(Annotation annotation, CapturePoint[] shaft, bool pointing)
+    {
+        var centre = pointing ? shaft : [.. shaft.Reverse()];
+        var length = PathLength(centre);
+        if (length <= 1)
+        {
+            return [];
+        }
+
+        var stroke = annotation.Style.StrokeWidth;
+        var tailHalf = Math.Max(2, stroke * 0.5);
+        var shaftHalf = Math.Max(4, stroke * 1.5);
+        var headHalf = shaftHalf * 2;
+
+        // The full width of the head against the arrow's length, with half again of
+        // room, is what decides whether everything shrinks — macshot's own ratio.
+        var fit = Math.Min(1, length / Math.Max(1, headHalf * 2 * 1.5));
+        tailHalf *= fit;
+        shaftHalf *= fit;
+        headHalf *= fit;
+
+        var headLength = Math.Min(length * 0.35, headHalf * 1.8);
+        var tip = centre[^1];
+
+        // Where the head starts, measured back along the centreline rather than along
+        // the straight line to the tip: on a bent arrow those are different points, and
+        // the straight one puts the head's base off the shaft.
+        var baseAt = PointAlong(centre, length - headLength, out var heading);
+
+        var left = new List<CapturePoint>();
+        var right = new List<CapturePoint>();
+
+        for (var step = 0; step <= BannerSamples; step++)
+        {
+            var t = (double)step / BannerSamples;
+            var at = PointAlong(centre, (length - headLength) * t, out var along);
+            var half = tailHalf + ((shaftHalf - tailHalf) * t);
+
+            left.Add(new CapturePoint(at.X - (along.Y * half), at.Y + (along.X * half)));
+            right.Add(new CapturePoint(at.X + (along.Y * half), at.Y - (along.X * half)));
+        }
+
+        // Up the left side, out to the head's left wing, round the tip, and back.
+        right.Reverse();
+        return
+        [
+            .. left,
+            new CapturePoint(baseAt.X - (heading.Y * headHalf), baseAt.Y + (heading.X * headHalf)),
+            tip,
+            new CapturePoint(baseAt.X + (heading.Y * headHalf), baseAt.Y - (heading.X * headHalf)),
+            .. right,
+        ];
+    }
+
+    /// <summary>How far it is from one end of a polyline to the other.</summary>
+    private static double PathLength(CapturePoint[] path)
+    {
+        var total = 0.0;
+        for (var step = 1; step < path.Length; step++)
+        {
+            total += Distance(path[step - 1], path[step]);
+        }
+
+        return total;
+    }
+
+    /// <summary>
+    /// The point a given distance along a polyline, and the unit direction there.
+    /// </summary>
+    /// <remarks>
+    /// Clamped at both ends rather than extrapolated. A caller asking past the end wants
+    /// the end, and a straight arrow's polyline is two points, where anything else would
+    /// be answering about a line that is not there.
+    /// </remarks>
+    private static CapturePoint PointAlong(CapturePoint[] path, double distance, out CapturePoint direction)
+    {
+        direction = new CapturePoint(1, 0);
+        if (path.Length < 2)
+        {
+            return path.Length == 1 ? path[0] : new CapturePoint(0, 0);
+        }
+
+        var travelled = 0.0;
+        for (var step = 1; step < path.Length; step++)
+        {
+            var from = path[step - 1];
+            var to = path[step];
+            var span = Distance(from, to);
+            if (span <= 0)
+            {
+                continue;
+            }
+
+            direction = new CapturePoint((to.X - from.X) / span, (to.Y - from.Y) / span);
+
+            if (travelled + span >= distance)
+            {
+                var into = Math.Clamp(distance - travelled, 0, span);
+                return new CapturePoint(from.X + (direction.X * into), from.Y + (direction.Y * into));
+            }
+
+            travelled += span;
+        }
+
+        return path[^1];
+    }
+
+    private static double Distance(CapturePoint from, CapturePoint to) =>
+        Math.Sqrt(((to.X - from.X) * (to.X - from.X)) + ((to.Y - from.Y) * (to.Y - from.Y)));
 
     /// <summary>
     /// The triangle at one end of an arrow, tip first.
