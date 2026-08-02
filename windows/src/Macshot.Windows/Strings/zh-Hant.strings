@@ -1,0 +1,59 @@
+/*
+   macshot for Windows — strings this port owns.
+
+   Keys are the English text, exactly as macshot keys its own. This file holds only
+   what the Windows build says and the Mac app does not: what Windows names its own
+   parts, what its update check and its uploads report, and the hints for the two
+   things it does differently. Everything macshot already says is translated in
+   macshot/zh-Hant.lproj/Localizable.strings and is not repeated here.
+
+   zh-Hant
+*/
+
+"A new version of macshot is available." = "macshot 有新版本可用。";
+"Background removal failed — no clear subject found." = "背景移除失敗 — 找不到明確的主體。";
+"Captured from the screen, so anything over the window is included" = "從螢幕擷取，因此視窗上方的任何內容都會包含在內";
+"Click to take the colour under the pointer • Esc to stop" = "點按以取得指標下的顏色 • Esc 停止";
+"Click to take the colour under the pointer • {0}" = "點按以取得指標下的顏色 • {0}";
+"Click to take this window • Shift+click to scroll-capture it • Esc to cancel" = "點按以擷取此視窗 • Shift+點按以捲動擷取 • Esc 取消";
+"Copied to the clipboard" = "已拷貝至剪貼簿";
+"Copied." = "已拷貝。";
+"Could not check for updates." = "無法檢查更新。";
+"Custom file" = "自訂檔案";
+"Dark" = "深色";
+"Drag the part to keep • Esc to stop cropping" = "拖移出要保留的部分 • Esc 停止裁切";
+"Draw to annotate • Ctrl+Z undo • Ctrl+S save • Ctrl+C copy" = "繪製以標註 • Ctrl+Z 還原 • Ctrl+S 儲存 • Ctrl+C 拷貝";
+"Enter to take the last selection again • Drag for a new one • Esc to cancel" = "按 Enter 再次使用上次的選取範圍 • 拖移以重新選取 • Esc 取消";
+"Framed in {0}" = "已套用外框：{0}";
+"Google Drive not signed in" = "尚未登入 Google 雲端硬碟";
+"History cleared." = "已清除記錄。";
+"imgbb cannot take videos — choose another provider in Settings" = "imgbb 無法接受影片 — 請在「設定」中選擇其他服務";
+"Light" = "淺色";
+"Move the region with the pointer • Click to place it • Esc to leave it" = "以指標移動範圍 • 點按以放置 • Esc 保持原位";
+"No personal data found in the image" = "影像中找不到個人資料";
+"No personal data found in the selection" = "選取範圍中找不到個人資料";
+"No text was recognized." = "未辨識到文字。";
+"Offline build: upload and cloud storage integrations are removed. Update checks may still connect to MacShot's update server. Screenshots and recordings stay local unless you share or save them yourself." = "離線版本：已移除上傳與雲端儲存整合。更新檢查仍可能連線至 MacShot 的更新伺服器。除非你自行分享或儲存，截圖與錄影都留在本機。";
+"Open the download page?" = "要開啟下載頁面嗎？";
+"QR code copied." = "已拷貝 QR 碼。";
+"Reading text..." = "正在辨識文字…";
+"Redacted {0} • Ctrl+Z to undo" = "已遮蔽 {0} 處 • Ctrl+Z 還原";
+"Redacted {0} • Ctrl+Z to undo • Enter to finish" = "已遮蔽 {0} 處 • Ctrl+Z 還原 • Enter 完成";
+"Regular" = "標準";
+"Remove Background needs a Copilot+ PC and an installed build of macshot." = "「移除背景」需要 Copilot+ PC，以及已安裝的 macshot 版本。";
+"Removing background..." = "正在移除背景…";
+"S3 not configured — check Settings" = "尚未設定 S3 — 請檢查「設定」";
+"Saved to {0}" = "已儲存至 {0}";
+"Sign-in was not completed." = "登入未完成。";
+"The background removal model could not be prepared." = "無法準備背景移除模型。";
+"There is no window behind that region to scroll" = "該範圍後方沒有可捲動的視窗";
+"Took {0}" = "已取得 {0}";
+"Took {0} • {1}" = "已取得 {0} • {1}";
+"Translating..." = "正在翻譯…";
+"Type the label • Enter to place • Shift+Enter for a new line • Esc to discard it" = "輸入文字 • Enter 放置 • Shift+Enter 換行 • Esc 捨棄";
+"Unknown error" = "未知的錯誤";
+"Uploading..." = "正在上傳…";
+"Waiting for the browser..." = "正在等待瀏覽器…";
+"Windows would not let macshot change its startup entry." = "Windows 不允許 macshot 更改其開機啟動項目。";
+"You're up to date!" = "已是最新版本！";
+"{0:0}% • Scroll to zoom • Middle-drag to pan" = "{0:0}% • 捲動以縮放 • 中鍵拖移以平移";

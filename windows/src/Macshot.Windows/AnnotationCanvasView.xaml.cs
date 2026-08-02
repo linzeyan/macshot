@@ -594,7 +594,7 @@ public sealed partial class AnnotationCanvasView : UserControl
         _textEntry = entry;
         _textEntryOrigin = point;
         entry.Focus(FocusState.Programmatic);
-        _reportHint("Type the label • Enter to place • Shift+Enter for a new line • Esc to discard it");
+        _reportHint(Localization.L("Type the label • Enter to place • Shift+Enter for a new line • Esc to discard it"));
     }
 
     private void TextEntry_KeyDown(object sender, KeyRoutedEventArgs e)

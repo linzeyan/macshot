@@ -72,6 +72,20 @@
   </ItemGroup>
 
   <!--
+    The strings this port owns: what Windows names its own parts, and the handful of
+    things the Windows build says that the Mac app has no words for. Kept apart from the
+    linked files below rather than added to them, because those are the Mac app's and are
+    edited by its contributors — an entry about Copilot+ PCs in macshot/de.lproj would be
+    a Windows string in a file no Windows build reads.
+
+    Merged under macshot's at load time, so a key that exists in both resolves to the
+    Mac app's wording. See Localization.Load.
+  -->
+  <ItemGroup>
+    <EmbeddedResource Include="Strings\*.strings" LogicalName="Macshot.Windows.PortStrings.%(Filename).strings" />
+  </ItemGroup>
+
+  <!--
     macshot's own translations, linked rather than copied. They live beside the Mac app
     because that is where they are contributed and reviewed; a copy under windows/ would
     fork forty files and go stale one language at a time. LogicalName is what

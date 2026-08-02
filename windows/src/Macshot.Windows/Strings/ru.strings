@@ -1,0 +1,59 @@
+/*
+   macshot for Windows — strings this port owns.
+
+   Keys are the English text, exactly as macshot keys its own. This file holds only
+   what the Windows build says and the Mac app does not: what Windows names its own
+   parts, what its update check and its uploads report, and the hints for the two
+   things it does differently. Everything macshot already says is translated in
+   macshot/ru.lproj/Localizable.strings and is not repeated here.
+
+   ru
+*/
+
+"A new version of macshot is available." = "Доступна новая версия macshot.";
+"Background removal failed — no clear subject found." = "Не удалось удалить фон — чёткий объект не найден.";
+"Captured from the screen, so anything over the window is included" = "Снимается с экрана, поэтому всё поверх окна тоже попадёт в кадр";
+"Click to take the colour under the pointer • Esc to stop" = "Щёлкните, чтобы взять цвет под указателем • Esc — выход";
+"Click to take the colour under the pointer • {0}" = "Щёлкните, чтобы взять цвет под указателем • {0}";
+"Click to take this window • Shift+click to scroll-capture it • Esc to cancel" = "Щёлкните, чтобы снять это окно • Shift+щелчок — снимок с прокруткой • Esc — отмена";
+"Copied to the clipboard" = "Скопировано в буфер обмена";
+"Copied." = "Скопировано.";
+"Could not check for updates." = "Не удалось проверить обновления.";
+"Custom file" = "Свой файл";
+"Dark" = "Тёмная";
+"Drag the part to keep • Esc to stop cropping" = "Выделите часть, которую нужно оставить • Esc — выйти из обрезки";
+"Draw to annotate • Ctrl+Z undo • Ctrl+S save • Ctrl+C copy" = "Рисуйте, чтобы аннотировать • Ctrl+Z отменить • Ctrl+S сохранить • Ctrl+C копировать";
+"Enter to take the last selection again • Drag for a new one • Esc to cancel" = "Enter — повторить прошлое выделение • Перетащите для нового • Esc — отмена";
+"Framed in {0}" = "Рамка: {0}";
+"Google Drive not signed in" = "Вход в Google Диск не выполнен";
+"History cleared." = "История очищена.";
+"imgbb cannot take videos — choose another provider in Settings" = "imgbb не принимает видео — выберите другой сервис в настройках";
+"Light" = "Светлая";
+"Move the region with the pointer • Click to place it • Esc to leave it" = "Двигайте область указателем • Щелчок — поставить • Esc — оставить как есть";
+"No personal data found in the image" = "Персональные данные на изображении не найдены";
+"No personal data found in the selection" = "Персональные данные в выделении не найдены";
+"No text was recognized." = "Текст не распознан.";
+"Offline build: upload and cloud storage integrations are removed. Update checks may still connect to MacShot's update server. Screenshots and recordings stay local unless you share or save them yourself." = "Офлайн-сборка: загрузка и интеграции с облачными хранилищами удалены. Проверка обновлений всё ещё может обращаться к серверу обновлений MacShot. Снимки и записи остаются на этом компьютере, пока вы сами их не отправите или не сохраните.";
+"Open the download page?" = "Открыть страницу загрузки?";
+"QR code copied." = "QR-код скопирован.";
+"Reading text..." = "Распознавание текста…";
+"Redacted {0} • Ctrl+Z to undo" = "Скрыто: {0} • Ctrl+Z — отменить";
+"Redacted {0} • Ctrl+Z to undo • Enter to finish" = "Скрыто: {0} • Ctrl+Z — отменить • Enter — завершить";
+"Regular" = "Обычный";
+"Remove Background needs a Copilot+ PC and an installed build of macshot." = "Для «Удалить фон» нужен Copilot+ PC и установленная сборка macshot.";
+"Removing background..." = "Удаление фона…";
+"S3 not configured — check Settings" = "S3 не настроен — проверьте настройки";
+"Saved to {0}" = "Сохранено в {0}";
+"Sign-in was not completed." = "Вход не был завершён.";
+"The background removal model could not be prepared." = "Не удалось подготовить модель удаления фона.";
+"There is no window behind that region to scroll" = "За этой областью нет окна, которое можно прокрутить";
+"Took {0}" = "Взято {0}";
+"Took {0} • {1}" = "Взято {0} • {1}";
+"Translating..." = "Перевод…";
+"Type the label • Enter to place • Shift+Enter for a new line • Esc to discard it" = "Введите подпись • Enter — поставить • Shift+Enter — новая строка • Esc — отменить";
+"Unknown error" = "Неизвестная ошибка";
+"Uploading..." = "Загрузка…";
+"Waiting for the browser..." = "Ожидание браузера…";
+"Windows would not let macshot change its startup entry." = "Windows не позволила macshot изменить запись автозапуска.";
+"You're up to date!" = "Установлена последняя версия!";
+"{0:0}% • Scroll to zoom • Middle-drag to pan" = "{0:0}% • Прокрутка — масштаб • Средняя кнопка — панорама";

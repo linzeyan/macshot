@@ -1,0 +1,59 @@
+/*
+   macshot for Windows — strings this port owns.
+
+   Keys are the English text, exactly as macshot keys its own. This file holds only
+   what the Windows build says and the Mac app does not: what Windows names its own
+   parts, what its update check and its uploads report, and the hints for the two
+   things it does differently. Everything macshot already says is translated in
+   macshot/es.lproj/Localizable.strings and is not repeated here.
+
+   es
+*/
+
+"A new version of macshot is available." = "Hay una nueva versión de macshot disponible.";
+"Background removal failed — no clear subject found." = "No se pudo quitar el fondo: no se encontró un sujeto claro.";
+"Captured from the screen, so anything over the window is included" = "Se toma de la pantalla, así que se incluye todo lo que haya sobre la ventana";
+"Click to take the colour under the pointer • Esc to stop" = "Haz clic para tomar el color bajo el puntero • Esc para salir";
+"Click to take the colour under the pointer • {0}" = "Haz clic para tomar el color bajo el puntero • {0}";
+"Click to take this window • Shift+click to scroll-capture it • Esc to cancel" = "Haz clic para capturar esta ventana • Mayús+clic para captura con desplazamiento • Esc para cancelar";
+"Copied to the clipboard" = "Copiado al portapapeles";
+"Copied." = "Copiado.";
+"Could not check for updates." = "No se pudo buscar actualizaciones.";
+"Custom file" = "Archivo personalizado";
+"Dark" = "Oscuro";
+"Drag the part to keep • Esc to stop cropping" = "Arrastra la parte que quieres conservar • Esc para dejar de recortar";
+"Draw to annotate • Ctrl+Z undo • Ctrl+S save • Ctrl+C copy" = "Dibuja para anotar • Ctrl+Z deshacer • Ctrl+S guardar • Ctrl+C copiar";
+"Enter to take the last selection again • Drag for a new one • Esc to cancel" = "Enter para volver a la última selección • Arrastra para una nueva • Esc para cancelar";
+"Framed in {0}" = "Enmarcado en {0}";
+"Google Drive not signed in" = "No has iniciado sesión en Google Drive";
+"History cleared." = "Historial borrado.";
+"imgbb cannot take videos — choose another provider in Settings" = "imgbb no acepta vídeos: elige otro proveedor en Ajustes";
+"Light" = "Claro";
+"Move the region with the pointer • Click to place it • Esc to leave it" = "Mueve la región con el puntero • Haz clic para colocarla • Esc para dejarla";
+"No personal data found in the image" = "No se encontraron datos personales en la imagen";
+"No personal data found in the selection" = "No se encontraron datos personales en la selección";
+"No text was recognized." = "No se reconoció ningún texto.";
+"Offline build: upload and cloud storage integrations are removed. Update checks may still connect to MacShot's update server. Screenshots and recordings stay local unless you share or save them yourself." = "Compilación sin conexión: se han quitado la subida y las integraciones de almacenamiento en la nube. La búsqueda de actualizaciones aún puede conectarse al servidor de actualizaciones de MacShot. Las capturas y grabaciones se quedan en tu equipo salvo que las compartas o guardes tú.";
+"Open the download page?" = "¿Abrir la página de descarga?";
+"QR code copied." = "Código QR copiado.";
+"Reading text..." = "Leyendo el texto…";
+"Redacted {0} • Ctrl+Z to undo" = "Se ocultaron {0} • Ctrl+Z para deshacer";
+"Redacted {0} • Ctrl+Z to undo • Enter to finish" = "Se ocultaron {0} • Ctrl+Z para deshacer • Enter para terminar";
+"Regular" = "Normal";
+"Remove Background needs a Copilot+ PC and an installed build of macshot." = "«Quitar fondo» necesita un PC Copilot+ y una versión instalada de macshot.";
+"Removing background..." = "Quitando el fondo…";
+"S3 not configured — check Settings" = "S3 no está configurado: revisa Ajustes";
+"Saved to {0}" = "Guardado en {0}";
+"Sign-in was not completed." = "No se completó el inicio de sesión.";
+"The background removal model could not be prepared." = "No se pudo preparar el modelo para quitar el fondo.";
+"There is no window behind that region to scroll" = "No hay ninguna ventana detrás de esa región para desplazar";
+"Took {0}" = "Se tomó {0}";
+"Took {0} • {1}" = "Se tomó {0} • {1}";
+"Translating..." = "Traduciendo…";
+"Type the label • Enter to place • Shift+Enter for a new line • Esc to discard it" = "Escribe la etiqueta • Enter para colocarla • Mayús+Enter para una línea nueva • Esc para descartarla";
+"Unknown error" = "Error desconocido";
+"Uploading..." = "Subiendo…";
+"Waiting for the browser..." = "Esperando al navegador…";
+"Windows would not let macshot change its startup entry." = "Windows no permitió que macshot cambiara su entrada de inicio.";
+"You're up to date!" = "¡Todo está actualizado!";
+"{0:0}% • Scroll to zoom • Middle-drag to pan" = "{0:0}% • Desplaza para hacer zoom • Arrastra con el botón central para mover";

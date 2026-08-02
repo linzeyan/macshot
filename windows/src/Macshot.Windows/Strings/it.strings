@@ -1,0 +1,59 @@
+/*
+   macshot for Windows — strings this port owns.
+
+   Keys are the English text, exactly as macshot keys its own. This file holds only
+   what the Windows build says and the Mac app does not: what Windows names its own
+   parts, what its update check and its uploads report, and the hints for the two
+   things it does differently. Everything macshot already says is translated in
+   macshot/it.lproj/Localizable.strings and is not repeated here.
+
+   it
+*/
+
+"A new version of macshot is available." = "È disponibile una nuova versione di macshot.";
+"Background removal failed — no clear subject found." = "Rimozione dello sfondo non riuscita: nessun soggetto chiaro trovato.";
+"Captured from the screen, so anything over the window is included" = "Acquisito dallo schermo, quindi include tutto ciò che sta sopra la finestra";
+"Click to take the colour under the pointer • Esc to stop" = "Fai clic per prendere il colore sotto il puntatore • Esc per uscire";
+"Click to take the colour under the pointer • {0}" = "Fai clic per prendere il colore sotto il puntatore • {0}";
+"Click to take this window • Shift+click to scroll-capture it • Esc to cancel" = "Fai clic per acquisire questa finestra • Maiusc+clic per l'acquisizione a scorrimento • Esc per annullare";
+"Copied to the clipboard" = "Copiato negli appunti";
+"Copied." = "Copiato.";
+"Could not check for updates." = "Impossibile verificare la presenza di aggiornamenti.";
+"Custom file" = "File personalizzato";
+"Dark" = "Scuro";
+"Drag the part to keep • Esc to stop cropping" = "Trascina la parte da tenere • Esc per uscire dal ritaglio";
+"Draw to annotate • Ctrl+Z undo • Ctrl+S save • Ctrl+C copy" = "Disegna per annotare • Ctrl+Z annulla • Ctrl+S salva • Ctrl+C copia";
+"Enter to take the last selection again • Drag for a new one • Esc to cancel" = "Invio per riprendere l'ultima selezione • Trascina per una nuova • Esc per annullare";
+"Framed in {0}" = "Incorniciato in {0}";
+"Google Drive not signed in" = "Accesso a Google Drive non effettuato";
+"History cleared." = "Cronologia cancellata.";
+"imgbb cannot take videos — choose another provider in Settings" = "imgbb non accetta video: scegli un altro servizio nelle impostazioni";
+"Light" = "Chiaro";
+"Move the region with the pointer • Click to place it • Esc to leave it" = "Sposta la regione con il puntatore • Fai clic per posarla • Esc per lasciarla";
+"No personal data found in the image" = "Nessun dato personale trovato nell'immagine";
+"No personal data found in the selection" = "Nessun dato personale trovato nella selezione";
+"No text was recognized." = "Nessun testo riconosciuto.";
+"Offline build: upload and cloud storage integrations are removed. Update checks may still connect to MacShot's update server. Screenshots and recordings stay local unless you share or save them yourself." = "Build offline: il caricamento e le integrazioni con lo storage cloud sono stati rimossi. Il controllo aggiornamenti può ancora connettersi al server di aggiornamento di MacShot. Screenshot e registrazioni restano in locale, a meno che tu non li condivida o salvi.";
+"Open the download page?" = "Aprire la pagina di download?";
+"QR code copied." = "Codice QR copiato.";
+"Reading text..." = "Lettura del testo…";
+"Redacted {0} • Ctrl+Z to undo" = "{0} oscurati • Ctrl+Z per annullare";
+"Redacted {0} • Ctrl+Z to undo • Enter to finish" = "{0} oscurati • Ctrl+Z per annullare • Invio per terminare";
+"Regular" = "Normale";
+"Remove Background needs a Copilot+ PC and an installed build of macshot." = "«Rimuovi sfondo» richiede un PC Copilot+ e una versione installata di macshot.";
+"Removing background..." = "Rimozione dello sfondo…";
+"S3 not configured — check Settings" = "S3 non è configurato: controlla le impostazioni";
+"Saved to {0}" = "Salvato in {0}";
+"Sign-in was not completed." = "L'accesso non è stato completato.";
+"The background removal model could not be prepared." = "Non è stato possibile preparare il modello per la rimozione dello sfondo.";
+"There is no window behind that region to scroll" = "Dietro quella regione non c'è nessuna finestra da scorrere";
+"Took {0}" = "Preso {0}";
+"Took {0} • {1}" = "Preso {0} • {1}";
+"Translating..." = "Traduzione…";
+"Type the label • Enter to place • Shift+Enter for a new line • Esc to discard it" = "Digita l'etichetta • Invio per posarla • Maiusc+Invio per andare a capo • Esc per scartarla";
+"Unknown error" = "Errore sconosciuto";
+"Uploading..." = "Caricamento…";
+"Waiting for the browser..." = "In attesa del browser…";
+"Windows would not let macshot change its startup entry." = "Windows non ha consentito a macshot di modificare la voce di avvio.";
+"You're up to date!" = "Tutto aggiornato!";
+"{0:0}% • Scroll to zoom • Middle-drag to pan" = "{0:0}% • Scorri per lo zoom • Trascina col tasto centrale per spostare";

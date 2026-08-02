@@ -1,0 +1,59 @@
+/*
+   macshot for Windows — strings this port owns.
+
+   Keys are the English text, exactly as macshot keys its own. This file holds only
+   what the Windows build says and the Mac app does not: what Windows names its own
+   parts, what its update check and its uploads report, and the hints for the two
+   things it does differently. Everything macshot already says is translated in
+   macshot/ko.lproj/Localizable.strings and is not repeated here.
+
+   ko
+*/
+
+"A new version of macshot is available." = "macshot의 새 버전이 있습니다.";
+"Background removal failed — no clear subject found." = "배경 제거에 실패했습니다 — 뚜렷한 피사체를 찾지 못했습니다.";
+"Captured from the screen, so anything over the window is included" = "화면에서 캡처하므로 창 위에 겹친 것도 포함됩니다";
+"Click to take the colour under the pointer • Esc to stop" = "클릭하면 포인터 아래 색을 가져옵니다 • Esc로 중지";
+"Click to take the colour under the pointer • {0}" = "클릭하면 포인터 아래 색을 가져옵니다 • {0}";
+"Click to take this window • Shift+click to scroll-capture it • Esc to cancel" = "클릭하면 이 창을 캡처 • Shift+클릭하면 스크롤 캡처 • Esc로 취소";
+"Copied to the clipboard" = "클립보드에 복사했습니다";
+"Copied." = "복사했습니다.";
+"Could not check for updates." = "업데이트를 확인하지 못했습니다.";
+"Custom file" = "사용자 지정 파일";
+"Dark" = "다크";
+"Drag the part to keep • Esc to stop cropping" = "남길 부분을 드래그 • Esc로 자르기 종료";
+"Draw to annotate • Ctrl+Z undo • Ctrl+S save • Ctrl+C copy" = "그려서 주석 • Ctrl+Z 실행 취소 • Ctrl+S 저장 • Ctrl+C 복사";
+"Enter to take the last selection again • Drag for a new one • Esc to cancel" = "Enter로 지난 선택 영역을 다시 사용 • 드래그하면 새로 선택 • Esc로 취소";
+"Framed in {0}" = "프레임: {0}";
+"Google Drive not signed in" = "Google 드라이브에 로그인하지 않았습니다";
+"History cleared." = "기록을 지웠습니다.";
+"imgbb cannot take videos — choose another provider in Settings" = "imgbb는 동영상을 받지 않습니다 — 설정에서 다른 제공자를 고르세요";
+"Light" = "라이트";
+"Move the region with the pointer • Click to place it • Esc to leave it" = "포인터로 영역을 옮기기 • 클릭하면 놓기 • Esc로 그대로 두기";
+"No personal data found in the image" = "이미지에서 개인 정보를 찾지 못했습니다";
+"No personal data found in the selection" = "선택 영역에서 개인 정보를 찾지 못했습니다";
+"No text was recognized." = "인식된 텍스트가 없습니다.";
+"Offline build: upload and cloud storage integrations are removed. Update checks may still connect to MacShot's update server. Screenshots and recordings stay local unless you share or save them yourself." = "오프라인 빌드: 업로드와 클라우드 저장소 연동이 제거되었습니다. 업데이트 확인은 여전히 MacShot의 업데이트 서버에 연결될 수 있습니다. 직접 공유하거나 저장하지 않는 한 스크린샷과 녹화는 이 PC에 남습니다.";
+"Open the download page?" = "다운로드 페이지를 열까요?";
+"QR code copied." = "QR 코드를 복사했습니다.";
+"Reading text..." = "텍스트 인식 중…";
+"Redacted {0} • Ctrl+Z to undo" = "{0}개를 가렸습니다 • Ctrl+Z로 실행 취소";
+"Redacted {0} • Ctrl+Z to undo • Enter to finish" = "{0}개를 가렸습니다 • Ctrl+Z로 실행 취소 • Enter로 완료";
+"Regular" = "보통";
+"Remove Background needs a Copilot+ PC and an installed build of macshot." = "‘배경 제거’에는 Copilot+ PC와 설치된 macshot 빌드가 필요합니다.";
+"Removing background..." = "배경 제거 중…";
+"S3 not configured — check Settings" = "S3가 설정되지 않았습니다 — 설정을 확인하세요";
+"Saved to {0}" = "{0}에 저장했습니다";
+"Sign-in was not completed." = "로그인이 완료되지 않았습니다.";
+"The background removal model could not be prepared." = "배경 제거 모델을 준비하지 못했습니다.";
+"There is no window behind that region to scroll" = "그 영역 뒤에 스크롤할 창이 없습니다";
+"Took {0}" = "{0} 가져옴";
+"Took {0} • {1}" = "{0} 가져옴 • {1}";
+"Translating..." = "번역 중…";
+"Type the label • Enter to place • Shift+Enter for a new line • Esc to discard it" = "레이블 입력 • Enter로 배치 • Shift+Enter로 줄바꿈 • Esc로 버리기";
+"Unknown error" = "알 수 없는 오류";
+"Uploading..." = "업로드 중…";
+"Waiting for the browser..." = "브라우저를 기다리는 중…";
+"Windows would not let macshot change its startup entry." = "Windows가 macshot의 시작 프로그램 항목 변경을 허용하지 않았습니다.";
+"You're up to date!" = "최신 버전입니다!";
+"{0:0}% • Scroll to zoom • Middle-drag to pan" = "{0:0}% • 스크롤로 확대·축소 • 가운데 버튼 드래그로 이동";

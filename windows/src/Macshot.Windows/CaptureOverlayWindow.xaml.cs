@@ -1800,7 +1800,7 @@ public sealed partial class CaptureOverlayWindow : Window
         // it replaced was the only thing the pill was saying.
         if (!viewport.IsIdentity)
         {
-            Hint($"{viewport.Scale * 100:0}% • Scroll to zoom • Middle-drag to pan");
+            Hint(L("{0:0}% • Scroll to zoom • Middle-drag to pan", viewport.Scale * 100));
         }
         else if (IsAnnotating)
         {
@@ -2186,7 +2186,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         _beautify = true;
         AnnotationToolbar.Beautified = true;
-        Hint($"Framed in {BeautifyRenderer.Styles[styleIndex].Name}");
+        Hint(L("Framed in {0}", BeautifyRenderer.Styles[styleIndex].Name));
     }
 
     /// <summary>
@@ -2559,7 +2559,7 @@ public sealed partial class CaptureOverlayWindow : Window
             // run back off. This is what the document's snapshot history buys.
             _editor.Document.AddRange(annotations);
             RenderAnnotations();
-            Hint($"Redacted {annotations.Count} • Ctrl+Z to undo • Enter to finish");
+            Hint(L("Redacted {0} • Ctrl+Z to undo • Enter to finish", annotations.Count));
         });
     }
 
@@ -2816,7 +2816,7 @@ public sealed partial class CaptureOverlayWindow : Window
         var sampled = SampleAt(point);
         AnnotationToolbar.ApplyPickedColor(sampled);
         SetColorSampling(false);
-        Hint($"Took {sampled.ToHex()}");
+        Hint(L("Took {0}", sampled.ToHex()));
 
         // The point as well as the colour: a sampler reading the wrong pixel is a
         // coordinate fault, and the colour alone cannot tell one from a channel swap.

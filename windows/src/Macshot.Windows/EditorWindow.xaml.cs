@@ -44,8 +44,17 @@ namespace Macshot.Windows;
 /// </remarks>
 public sealed partial class EditorWindow : Window
 {
-    private const string StandingHint = "Draw to annotate • Ctrl+Z undo • Ctrl+S save • Ctrl+C copy";
-    private const string CropHint = "Drag the part to keep • Esc to stop cropping";
+    /// <summary>
+    /// The two standing hints, looked up rather than held.
+    /// </summary>
+    /// <remarks>
+    /// Properties and not constants: a constant is folded at compile time and would ship
+    /// the English into every build, so the window would keep saying it in a session that
+    /// had chosen another language. The same reason the overlay's hints are properties.
+    /// </remarks>
+    private static string StandingHint => L("Draw to annotate • Ctrl+Z undo • Ctrl+S save • Ctrl+C copy");
+
+    private static string CropHint => L("Drag the part to keep • Esc to stop cropping");
 
     /// <summary>
     /// How much of the work area the window may take when the image is larger. Short of
@@ -602,7 +611,7 @@ public sealed partial class EditorWindow : Window
 
         if (AnnotationToolbar.IsSamplingColor)
         {
-            HintText.Text = $"Click to take the colour under the pointer • {SampleAt(ToFrame(e)).ToHex()}";
+            HintText.Text = L("Click to take the colour under the pointer • {0}", SampleAt(ToFrame(e)).ToHex());
             return;
         }
 
@@ -1011,7 +1020,7 @@ public sealed partial class EditorWindow : Window
 
             _editor.Document.AddRange(annotations);
             AnnotationCanvas.Render();
-            HintText.Text = $"Redacted {annotations.Count} • Ctrl+Z to undo";
+            HintText.Text = L("Redacted {0} • Ctrl+Z to undo", annotations.Count);
         });
     }
 
@@ -1123,7 +1132,7 @@ public sealed partial class EditorWindow : Window
             if (AnnotationCanvas.ToFrame() is { } finished
                 && await SavePrompt.WriteAsync(this, finished, _settings.Current) is { } path)
             {
-                HintText.Text = $"Saved to {path}";
+                HintText.Text = L("Saved to {0}", path);
             }
         }
         catch (Exception exception)
@@ -1164,7 +1173,7 @@ public sealed partial class EditorWindow : Window
                 // failure and not a save: the hint is left saying whatever it said.
                 if (await SavePrompt.SaveAsync(this, finished, _settings.Current) is { } path)
                 {
-                    HintText.Text = $"Saved to {path}";
+                    HintText.Text = L("Saved to {0}", path);
                 }
             }
         }
@@ -1259,7 +1268,7 @@ public sealed partial class EditorWindow : Window
         var sampled = SampleAt(point);
         AnnotationToolbar.ApplyPickedColor(sampled);
         SetColorSampling(false);
-        HintText.Text = $"Took {sampled.ToHex()} • {StandingHint}";
+        HintText.Text = L("Took {0} • {1}", sampled.ToHex(), StandingHint);
     }
 
     /// <summary>

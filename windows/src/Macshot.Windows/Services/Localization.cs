@@ -77,19 +77,33 @@ public static class Localization
         }
     }
 
+    /// <summary>
+    /// One language, from the port's own strings and the Mac app's together.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Two files rather than one, because they belong to different people: the Mac app's
+    /// are contributed and reviewed beside the Mac app, and the port's are for what only
+    /// the Windows build says. Concatenated and parsed once rather than merged as tables,
+    /// which needs no merge at all — <see cref="StringTable.Parse"/> reads a file top to
+    /// bottom and lets the last entry win.
+    /// </para>
+    /// <para>
+    /// macshot's file goes second for that reason. A key that somehow ends up in both
+    /// should resolve to the Mac app's wording, because that is the wording the two
+    /// products are meant to share.
+    /// </para>
+    /// </remarks>
     private static StringTable Load(string code)
     {
         try
         {
-            var assembly = Assembly.GetExecutingAssembly();
-            using var stream = assembly.GetManifestResourceStream($"Macshot.Windows.Strings.{code}.strings");
-            if (stream is null)
-            {
-                return StringTable.Empty;
-            }
+            var port = Read($"Macshot.Windows.PortStrings.{code}.strings");
+            var shared = Read($"Macshot.Windows.Strings.{code}.strings");
 
-            using var reader = new StreamReader(stream);
-            return StringTable.Parse(reader.ReadToEnd());
+            return port is null && shared is null
+                ? StringTable.Empty
+                : StringTable.Parse(port + "\n" + shared);
         }
         catch (Exception exception)
         {
@@ -97,5 +111,18 @@ public static class Localization
             DiagnosticLog.Write($"could not load the {code} strings: {exception.Message}");
             return StringTable.Empty;
         }
+    }
+
+    /// <summary>An embedded strings file, or null when this build has none by that name.</summary>
+    private static string? Read(string resource)
+    {
+        using var stream = Assembly.GetExecutingAssembly().GetManifestResourceStream(resource);
+        if (stream is null)
+        {
+            return null;
+        }
+
+        using var reader = new StreamReader(stream);
+        return reader.ReadToEnd();
     }
 }
