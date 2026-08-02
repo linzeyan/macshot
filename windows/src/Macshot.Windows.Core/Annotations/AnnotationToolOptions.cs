@@ -157,9 +157,17 @@ public static class AnnotationToolOptions
     /// What the size control changes for this tool, so the label can say it: the same
     /// slider means a stroke width or the size of a glyph.
     /// </summary>
+    /// <remarks>
+    /// The badge is on the thickness side, which is not where a reading of the picture
+    /// would put it — the slider visibly grows the circle. macshot calls it Stroke
+    /// (<c>ToolOptionsRowView.swift:299</c>) and stores it under <c>numberStrokeWidth</c>
+    /// because that is what it is: the badge has no size of its own, it is drawn at
+    /// <c>8 + strokeWidth * 3</c> (<c>Annotation.swift:463</c>), so what the user is
+    /// setting is the same number every other stroke tool sets. Calling it a size here
+    /// would say the badge could be sized without also thickening the next arrow.
+    /// </remarks>
     public static AnnotationSizeMeaning SizeMeaning(AnnotationTool tool) =>
-        tool is AnnotationTool.Text or AnnotationTool.Number
-            or AnnotationTool.Stamp or AnnotationTool.Loupe
+        tool is AnnotationTool.Text or AnnotationTool.Stamp or AnnotationTool.Loupe
             ? AnnotationSizeMeaning.Extent
             : AnnotationSizeMeaning.Thickness;
 

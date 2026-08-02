@@ -198,6 +198,29 @@ public sealed class AnnotationToolOptionsTests
     public void TheSizeControl_SaysWhatItChangesForTheToolInHand()
     {
         Assert.AreEqual(AnnotationSizeMeaning.Thickness, AnnotationToolOptions.SizeMeaning(AnnotationTool.Arrow));
-        Assert.AreEqual(AnnotationSizeMeaning.Extent, AnnotationToolOptions.SizeMeaning(AnnotationTool.Number));
+        Assert.AreEqual(AnnotationSizeMeaning.Extent, AnnotationToolOptions.SizeMeaning(AnnotationTool.Stamp));
+    }
+
+    /// <summary>
+    /// The badge's slider is the stroke width, and has to be labelled as one.
+    /// </summary>
+    /// <remarks>
+    /// It reads as a size — dragging it grows the circle — and that is what the row used to
+    /// call it. But the badge has no number of its own: it is drawn at a radius derived
+    /// from the stroke width, which is the same number the arrow and the rectangle are
+    /// drawn with. Calling it a size would promise that the badge can be resized without
+    /// also thickening the next arrow, which is a promise one shared setting cannot keep —
+    /// and it is why macshot labels this one Stroke.
+    /// </remarks>
+    [TestMethod]
+    public void TheBadgesSlider_IsAStrokeRatherThanASizeBecauseItIsTheSharedWidth()
+    {
+        Assert.AreEqual(AnnotationSizeMeaning.Thickness, AnnotationToolOptions.SizeMeaning(AnnotationTool.Number));
+
+        // The three that genuinely have an extent apart from the stroke: each is drawn at
+        // a number of its own, so each can be sized without touching anything else.
+        Assert.AreEqual(AnnotationSizeMeaning.Extent, AnnotationToolOptions.SizeMeaning(AnnotationTool.Text));
+        Assert.AreEqual(AnnotationSizeMeaning.Extent, AnnotationToolOptions.SizeMeaning(AnnotationTool.Stamp));
+        Assert.AreEqual(AnnotationSizeMeaning.Extent, AnnotationToolOptions.SizeMeaning(AnnotationTool.Loupe));
     }
 }

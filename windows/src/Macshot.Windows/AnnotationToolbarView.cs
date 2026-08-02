@@ -167,13 +167,6 @@ public sealed partial class AnnotationToolbarView : UserControl
         VerticalAlignment = VerticalAlignment.Center,
     };
 
-    /// <summary>
-    /// The first badge as it will actually read. The box above says 4; this says IV, which
-    /// is the only way to tell what a lettered or numbered sequence will look like without
-    /// placing one to find out.
-    /// </summary>
-    private readonly TextBlock _startPreview = OptionValue(34, string.Empty);
-
     private readonly StyleSegments _measureUnit = new();
 
     private readonly TextBlock _zoomLabel = OptionLabel(L("Zoom"));
@@ -500,13 +493,7 @@ public sealed partial class AnnotationToolbarView : UserControl
             RestyleSpotlights();
         };
 
-        _numberFormat.SelectionChanged += (_, _) =>
-        {
-            // The preview reads the format straight off the row, so it is right whether
-            // or not the style write below is suppressed by a load in progress.
-            ShowStartPreview();
-            ApplyStyle();
-        };
+        _numberFormat.SelectionChanged += (_, _) => ApplyStyle();
 
         _numberStart.ValueChanged += (_, _) =>
         {
@@ -517,7 +504,6 @@ public sealed partial class AnnotationToolbarView : UserControl
                 return;
             }
 
-            ShowStartPreview();
             Remember(current => current with { NumberStartAt = (int)_numberStart.Value });
         };
 
@@ -1252,7 +1238,6 @@ public sealed partial class AnnotationToolbarView : UserControl
         _numberFormat.Visibility = counted;
         _startLabel.Visibility = counted;
         _numberStart.Visibility = counted;
-        _startPreview.Visibility = counted;
 
         _measureUnit.Visibility = Show(AnnotationToolOptions.UsesMeasureUnit(tool));
 
@@ -1368,17 +1353,6 @@ public sealed partial class AnnotationToolbarView : UserControl
         }
     }
 
-    /// <summary>Shows the first badge as it will read, in the format the row is set to.</summary>
-    private void ShowStartPreview()
-    {
-        var format = _numberFormat.SelectedIndex >= 0
-            ? (NumberFormat)_numberFormat.SelectedIndex
-            : NumberFormat.Decimal;
-
-        _startPreview.Text = format.Format(
-            double.IsNaN(_numberStart.Value) ? 1 : (int)_numberStart.Value);
-    }
-
     /// <summary>Turns pen pressure on or off for the next stroke, and remembers it.</summary>
     private void ShowPressure(bool wanted)
     {
@@ -1449,10 +1423,6 @@ public sealed partial class AnnotationToolbarView : UserControl
         _sizeValue.Foreground = ToolbarPalette.IconBrush(0.6);
         _cornerValue.Foreground = ToolbarPalette.IconBrush(0.6);
         _zoomValue.Foreground = ToolbarPalette.IconBrush(0.6);
-
-        // Brighter than the labels beside it: it is the answer the row exists to give,
-        // not the name of a control.
-        _startPreview.Foreground = ToolbarPalette.IconBrush(0.85);
     }
 
     /// <summary>The name in front of a slider, at macshot's size, weight and opacity.</summary>
@@ -1631,7 +1601,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         AddGroup(_censorMode);
         AddGroup(_drawLabel, _censorScope);
         AddGroup(_numberFormat);
-        AddGroup(_startLabel, _numberStart, _startPreview);
+        AddGroup(_startLabel, _numberStart);
         AddGroup(_measureUnit);
         AddGroup(_font, _weight);
         AddGroup(_textFill, _textOutline);
@@ -1779,7 +1749,6 @@ public sealed partial class AnnotationToolbarView : UserControl
 
             _numberFormat.SelectedIndex = (int)_loadedStyle.NumberFormat;
             _numberStart.Value = settings.Current.NumberStartAt;
-            ShowStartPreview();
 
             _measureUnit.SelectedIndex = _loadedStyle.MeasureInPoints ? 1 : 0;
             _loupeZoom.Value = _loadedStyle.LoupeMagnification;
