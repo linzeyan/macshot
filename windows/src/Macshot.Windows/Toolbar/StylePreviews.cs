@@ -130,6 +130,30 @@ internal static class StylePreviews
             });
             break;
 
+        case ArrowStyle.Sketchy:
+            // A shaft that wanders and a chevron whose legs do not match — the two things
+            // the rasterizer varies, at the only scale a segment has room for. Drawn from
+            // fixed numbers rather than from the noise the rasterizer uses: a preview that
+            // wobbled differently from one repaint to the next would read as a glitch.
+            canvas.Children.Add(new Polyline
+            {
+                Stroke = ToolbarPalette.IconBrush(),
+                StrokeThickness = 1.5,
+                StrokeLineJoin = PenLineJoin.Round,
+                StrokeStartLineCap = PenLineCap.Round,
+                StrokeEndLineCap = PenLineCap.Round,
+                Points = new PointCollection
+                {
+                    new Point(NearX, Mid + 1),
+                    new Point(NearX + 5, Mid - 1),
+                    new Point(NearX + 10, Mid + 1),
+                    new Point(FarX - Reach - 1, Mid - 0.5),
+                },
+            });
+            canvas.Children.Add(Shaft(FarX - Reach - 1, Mid - Spread - 1, FarX, Mid));
+            canvas.Children.Add(Shaft(FarX, Mid, FarX - Reach + 1, Mid + Spread));
+            break;
+
         case ArrowStyle.Tail:
             // The bar across the near end, half a head's reach either side of it, which
             // is what TailBar draws.

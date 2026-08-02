@@ -1,4 +1,3 @@
-using System.Globalization;
 using Macshot.Windows.Core.Annotations;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
@@ -52,7 +51,7 @@ internal static class NumberBadge
             Background = new SolidColorBrush(fill),
             Child = new TextBlock
             {
-                Text = value.ToString(CultureInfo.InvariantCulture),
+                Text = style.NumberFormat.Format(value),
                 FontSize = diameter * 0.6,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = new SolidColorBrush(GlyphSpriteFactory.ReadableOn(fill)),

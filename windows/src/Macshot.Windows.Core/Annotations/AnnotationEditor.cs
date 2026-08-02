@@ -31,10 +31,18 @@ public sealed class AnnotationEditor
     /// </summary>
     public const double MinimumDragDistance = 3;
 
+    /// <summary>
+    /// The lightest pressure a sample mid-stroke is recorded at. A digitizer that reports
+    /// zero for one frame is reporting noise, not a lifted pen, and honouring it would put
+    /// a break in a stroke the user drew in one movement.
+    /// </summary>
+    private const double MinRecordedPressure = 0.05;
+
     private readonly AnnotationDocument _document;
     private AnnotationTool _tool = AnnotationTool.Arrow;
     private CapturePoint _origin;
     private List<CapturePoint>? _freeformSamples;
+    private List<double>? _freeformPressures;
     private Annotation? _dragTarget;
     private AnnotationHandleKind? _handle;
     private bool _isPressed;
@@ -92,6 +100,17 @@ public sealed class AnnotationEditor
     /// path sampled from a mouse is a staircase and nobody draws one on purpose.
     /// </summary>
     public PencilSmoothing Smoothing { get; set; } = PencilSmoothing.Smooth;
+
+    /// <summary>
+    /// Whether a freehand stroke thins and thickens with how hard the pen is pressed.
+    /// </summary>
+    /// <remarks>
+    /// The setting only says the user wants it; whether a stroke gets it depends on the
+    /// device, and the host answers that by passing a pressure of zero for anything that
+    /// does not report one. A mouse reports a constant half-press, and honouring that
+    /// would silently draw every stroke at three quarters of the width the slider says.
+    /// </remarks>
+    public bool PenPressure { get; set; }
 
     /// <summary>
     /// Whether marks line up with the marks already there — macshot's
@@ -173,7 +192,15 @@ public sealed class AnnotationEditor
     /// text tool only grabs text, because a label placed beside a rectangle is far more
     /// common than a wish to move the rectangle.
     /// </remarks>
-    public bool PointerPressed(CapturePoint point, EditorModifiers modifiers = EditorModifiers.None)
+    /// <param name="pressure">
+    /// How hard the pen is pressed, from 0 to 1, or 0 for a device that does not report
+    /// it. Zero at the press is what decides the whole stroke: a pen lifted mid-stroke
+    /// would otherwise turn a pressure stroke into a plain one halfway along.
+    /// </param>
+    public bool PointerPressed(
+        CapturePoint point,
+        EditorModifiers modifiers = EditorModifiers.None,
+        double pressure = 0)
     {
         Cancel();
         _isPressed = true;
@@ -199,7 +226,8 @@ public sealed class AnnotationEditor
         if (IsFreeform(_tool))
         {
             _freeformSamples = [point];
-            Draft = Annotation.CreateFreeform(_tool, _freeformSamples, Style);
+            _freeformPressures = PenPressure && pressure > 0 ? [pressure] : null;
+            Draft = Annotation.CreateFreeform(_tool, _freeformSamples, Style, _freeformPressures);
             return false;
         }
 
@@ -207,7 +235,15 @@ public sealed class AnnotationEditor
         return false;
     }
 
-    public void PointerMoved(CapturePoint point, EditorModifiers modifiers = EditorModifiers.None)
+    /// <param name="pressure">
+    /// How hard the pen is pressed at this sample. Only read while a pressure stroke is
+    /// in flight, and floored rather than trusted: a digitizer reporting a momentary zero
+    /// mid-stroke would otherwise put a gap in the line.
+    /// </param>
+    public void PointerMoved(
+        CapturePoint point,
+        EditorModifiers modifiers = EditorModifiers.None,
+        double pressure = 0)
     {
         if (!_isPressed || Draft is null)
         {
@@ -232,7 +268,8 @@ public sealed class AnnotationEditor
         if (_freeformSamples is not null)
         {
             _freeformSamples.Add(point);
-            Draft = Annotation.CreateFreeform(_tool, _freeformSamples, Style);
+            _freeformPressures?.Add(Math.Clamp(pressure, MinRecordedPressure, 1));
+            Draft = Annotation.CreateFreeform(_tool, _freeformSamples, Style, _freeformPressures);
             return;
         }
 
@@ -270,15 +307,34 @@ public sealed class AnnotationEditor
         return AnnotationSnapping.ForMove(moved, SnapRegion, others);
     }
 
-    /// <summary>Ends the gesture, committing it to the document when it produced something.</summary>
-    public void PointerReleased(CapturePoint point, EditorModifiers modifiers = EditorModifiers.None)
+    /// <summary>
+    /// Ends the gesture, committing it to the document when it produced something, and
+    /// answers the mark it committed.
+    /// </summary>
+    /// <remarks>
+    /// The mark comes back rather than the caller reading it off the document, because
+    /// some of them are not finished when the drag stops: a ruler has no reading until its
+    /// span is known, and a highlighter set to snap has to be told what text it crossed.
+    /// Both need pixels read asynchronously, which is the host's work and not this class's
+    /// — and the host has to be told exactly which mark to finish, not merely that
+    /// something happened.
+    /// </remarks>
+    /// <param name="pressure">
+    /// How hard the pen was pressed as it left the surface. Carried through to the last
+    /// sample: without it the final sample of every pressure stroke would record nothing,
+    /// and each stroke would taper away to a hairline as it was let go.
+    /// </param>
+    public Annotation? PointerReleased(
+        CapturePoint point,
+        EditorModifiers modifiers = EditorModifiers.None,
+        double pressure = 0)
     {
         if (!_isPressed)
         {
-            return;
+            return null;
         }
 
-        PointerMoved(point, modifiers);
+        PointerMoved(point, modifiers, pressure);
         _isPressed = false;
 
         var draft = Draft;
@@ -288,10 +344,11 @@ public sealed class AnnotationEditor
         _dragTarget = null;
         _handle = null;
         _freeformSamples = null;
+        _freeformPressures = null;
 
         if (draft is null)
         {
-            return;
+            return null;
         }
 
         if (dragTarget is not null)
@@ -304,15 +361,19 @@ public sealed class AnnotationEditor
                 Selected = draft;
             }
 
-            return;
+            // Reshaping a mark that is already there is not committing a new one, so
+            // nothing here is unfinished and there is nothing for the host to finish.
+            return null;
         }
 
         if (!IsWorthKeeping(draft))
         {
-            return;
+            return null;
         }
 
-        _document.Add(Finished(draft));
+        var committed = Finished(draft);
+        _document.Add(committed);
+        return committed;
     }
 
     /// <summary>
@@ -332,12 +393,56 @@ public sealed class AnnotationEditor
         {
             Points = smoothed,
 
+            // Smoothing changes how many samples there are, and the pressures are one per
+            // sample. Resampled rather than dropped: the taper is the whole point of
+            // having drawn with a pen, and losing it whenever smoothing is on would mean
+            // the two options quietly cancel each other out.
+            Pressures = Resampled(draft.Pressures, smoothed.Count),
+
             // Start and End follow the points, since a freeform mark's ends are its
             // first and last samples and everything from hit testing to the bounding
             // rectangle reads them.
             Start = smoothed[0],
             End = smoothed[^1],
         };
+    }
+
+    /// <summary>
+    /// Stretches a run of pressures over a different number of samples, keeping its shape.
+    /// </summary>
+    /// <remarks>
+    /// By position along the run rather than by arc length. Smoothing moves the samples a
+    /// little and adds more of them, so the two runs describe the same stroke at different
+    /// resolutions — which is exactly the case where the cheap mapping and the careful one
+    /// agree to well under a pixel of width.
+    /// </remarks>
+    private static IReadOnlyList<double> Resampled(IReadOnlyList<double> pressures, int count)
+    {
+        if (pressures.Count == 0 || count <= 0)
+        {
+            return [];
+        }
+
+        if (pressures.Count == count)
+        {
+            return pressures;
+        }
+
+        if (pressures.Count == 1 || count == 1)
+        {
+            return [.. Enumerable.Repeat(pressures[0], count)];
+        }
+
+        var stretched = new double[count];
+        for (var index = 0; index < count; index++)
+        {
+            var at = (double)index / (count - 1) * (pressures.Count - 1);
+            var lower = Math.Clamp((int)at, 0, pressures.Count - 2);
+            var into = at - lower;
+            stretched[index] = pressures[lower] + ((pressures[lower + 1] - pressures[lower]) * into);
+        }
+
+        return stretched;
     }
 
     /// <summary>Abandons an in-flight gesture. Returns whether there was one.</summary>
@@ -353,6 +458,7 @@ public sealed class AnnotationEditor
         _dragTarget = null;
         _handle = null;
         _freeformSamples = null;
+        _freeformPressures = null;
         _isPressed = false;
         return true;
     }

@@ -124,6 +124,9 @@ public static class AnnotationFile
             Bold = annotation.Style.Bold,
             TextBackground = annotation.Style.TextBackground?.ToHex(),
             TextOutline = annotation.Style.TextOutline?.ToHex(),
+            NumberFormat = annotation.Style.NumberFormat.ToString(),
+            MeasureInPoints = annotation.Style.MeasureInPoints,
+            LoupeMagnification = annotation.Style.LoupeMagnification,
 
             // Flattened rather than an array of objects: a smoothed pencil stroke runs
             // to hundreds of samples, and {"x":1,"y":2} costs four times what 1,2 does
@@ -131,6 +134,7 @@ public static class AnnotationFile
             Points = annotation.Points.Count == 0
                 ? null
                 : [.. annotation.Points.SelectMany(point => new[] { point.X, point.Y })],
+            Pressures = annotation.Pressures.Count == 0 ? null : [.. annotation.Pressures],
             Text = annotation.Text,
             NumberValue = annotation.NumberValue,
             GroupId = annotation.GroupId,
@@ -193,6 +197,20 @@ public static class AnnotationFile
             TextOutline = AnnotationColor.TryParseHex(stored.TextOutline ?? string.Empty, out var edge)
                 ? edge
                 : null,
+
+            // Absent from files written before a badge could be lettered, where the only
+            // thing a badge could count in was digits.
+            NumberFormat = Enum.TryParse<NumberFormat>(stored.NumberFormat, out var counting)
+                && Enum.IsDefined(counting)
+                    ? counting
+                    : Annotations.NumberFormat.Decimal,
+            MeasureInPoints = stored.MeasureInPoints,
+
+            // Zero in every file written before the loupe had a slider, and a loupe that
+            // reopened at no magnification would be a circle drawn for no reason.
+            LoupeMagnification = stored.LoupeMagnification >= 1
+                ? Math.Min(stored.LoupeMagnification, AnnotationStyle.MaxLoupeMagnification)
+                : AnnotationStyle.DefaultLoupeMagnification,
         };
 
         var sprite = Unpack(stored.Sprite);
@@ -204,6 +222,8 @@ public static class AnnotationFile
             return null;
         }
 
+        var points = ToPoints(stored.Points);
+
         return new Annotation(
             stored.Id == Guid.Empty ? Guid.NewGuid() : stored.Id,
             tool,
@@ -211,7 +231,14 @@ public static class AnnotationFile
             new CapturePoint(stored.EndX, stored.EndY),
             style)
         {
-            Points = ToPoints(stored.Points),
+            Points = points,
+
+            // Dropped unless there is exactly one for each sample. A half-length list
+            // would taper the start of the stroke and leave the rest at one width, which
+            // is worse than the even stroke a missing list gives.
+            Pressures = stored.Pressures is { } weights && weights.Length == points.Count
+                ? weights
+                : [],
             Text = stored.Text,
             NumberValue = stored.NumberValue,
             GroupId = stored.GroupId,
@@ -345,7 +372,30 @@ public static class AnnotationFile
 
         public string? TextOutline { get; init; }
 
+        /// <summary>
+        /// What a badge counts in, by name for the reason <see cref="Tool"/> is by name.
+        /// Written since badges could be lettered; a file from before that reads back as
+        /// digits.
+        /// </summary>
+        public string NumberFormat { get; init; } = string.Empty;
+
+        /// <summary>Whether a ruler's reading is in points rather than captured pixels.</summary>
+        public bool MeasureInPoints { get; init; }
+
+        /// <summary>
+        /// How much a loupe enlarges. Zero in files written before it was adjustable,
+        /// which reads back as the default rather than as no magnification at all.
+        /// </summary>
+        public double LoupeMagnification { get; init; }
+
         public double[]? Points { get; init; }
+
+        /// <summary>
+        /// One pen pressure per sample in <see cref="Points"/>, or absent for a stroke of
+        /// one width. Not flattened like the points are — there is only one number per
+        /// sample, so there is nothing to pair up.
+        /// </summary>
+        public double[]? Pressures { get; init; }
 
         public string? Text { get; init; }
 

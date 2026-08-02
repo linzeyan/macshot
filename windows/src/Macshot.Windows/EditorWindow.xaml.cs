@@ -341,6 +341,9 @@ public sealed partial class EditorWindow : Window
             () => EditorRoot.XamlRoot?.RasterizationScale ?? 1,
             message => HintText.Text = message);
         AnnotationCanvas.StampEmoji = () => AnnotationToolbar.StampEmoji;
+        AnnotationCanvas.NumberStartAt = () => AnnotationToolbar.NumberStartAt;
+        AnnotationCanvas.SmartMarker = () => AnnotationToolbar.SmartMarker;
+        AnnotationCanvas.CensorTextOnly = () => AnnotationToolbar.CensorTextOnly;
         AnnotationCanvas.TypingEnded += (_, _) =>
         {
             EditorRoot.Focus(FocusState.Programmatic);
@@ -591,7 +594,7 @@ public sealed partial class EditorWindow : Window
             return;
         }
 
-        _editor.PointerPressed(ToFrame(e), ToModifiers(e));
+        _editor.PointerPressed(ToFrame(e), ToModifiers(e), PenInput.Of(e));
         AnnotationCanvas.Render();
     }
 
@@ -617,7 +620,7 @@ public sealed partial class EditorWindow : Window
 
         if (e.Pointer.IsInContact)
         {
-            _editor.PointerMoved(ToFrame(e), ToModifiers(e));
+            _editor.PointerMoved(ToFrame(e), ToModifiers(e), PenInput.Of(e));
             AnnotationCanvas.Render();
         }
     }
@@ -643,12 +646,13 @@ public sealed partial class EditorWindow : Window
             return;
         }
 
-        _editor.PointerReleased(ToFrame(e), ToModifiers(e));
+        var committed = _editor.PointerReleased(ToFrame(e), ToModifiers(e), PenInput.Of(e));
         AnnotationCanvas.Render();
 
-        // After the release, because a ruler's reading is only knowable once the drag
-        // that measures it has stopped.
-        AnnotationCanvas.LabelRulers();
+        // After the release, because what a ruler reads, what text a highlighter crossed
+        // and what words a redaction covers are none of them knowable until the drag that
+        // made the mark has stopped.
+        AnnotationCanvas.FinishedGesture(committed);
     }
 
     /// <summary>

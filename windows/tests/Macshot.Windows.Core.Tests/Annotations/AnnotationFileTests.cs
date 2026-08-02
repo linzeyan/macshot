@@ -39,6 +39,9 @@ public sealed class AnnotationFileTests
                 Bold = true,
                 TextBackground = new AnnotationColor(1, 2, 3, 200),
                 TextOutline = new AnnotationColor(4, 5, 6, 210),
+                NumberFormat = NumberFormat.Roman,
+                MeasureInPoints = true,
+                LoupeMagnification = 3.5,
             }) with
         {
             Rotation = 0.75,
@@ -75,6 +78,9 @@ public sealed class AnnotationFileTests
         Assert.AreEqual(group, restored[0].GroupId);
         Assert.AreEqual("note", restored[0].Text);
         Assert.AreEqual(4, restored[0].NumberValue);
+        Assert.AreEqual(original.Style.NumberFormat, restored[0].Style.NumberFormat);
+        Assert.AreEqual(original.Style.MeasureInPoints, restored[0].Style.MeasureInPoints);
+        Assert.AreEqual(original.Style.LoupeMagnification, restored[0].Style.LoupeMagnification);
     }
 
     [TestMethod]
@@ -86,6 +92,23 @@ public sealed class AnnotationFileTests
         var restored = AnnotationFile.Read(AnnotationFile.Write([stroke]));
 
         CollectionAssert.AreEqual(points, restored[0].Points.ToArray());
+    }
+
+    /// <summary>
+    /// Pressure is one number per sample, and a file that kept the samples but not the
+    /// weights would reopen a pen stroke as an even line — the same silent loss the whole
+    /// field-by-field test above exists to prevent.
+    /// </summary>
+    [TestMethod]
+    public void RoundTrip_KeepsThePressureOfAPenStroke()
+    {
+        var points = Enumerable.Range(0, 8).Select(step => new CapturePoint(step, step)).ToArray();
+        var weights = Enumerable.Range(0, 8).Select(step => (step + 1) / 8.0).ToArray();
+        var stroke = Annotation.CreateFreeform(AnnotationTool.Pencil, points, pressures: weights);
+
+        var restored = AnnotationFile.Read(AnnotationFile.Write([stroke]));
+
+        CollectionAssert.AreEqual(weights, restored[0].Pressures.ToArray());
     }
 
     [TestMethod]
