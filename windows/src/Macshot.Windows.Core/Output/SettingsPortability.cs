@@ -80,6 +80,11 @@ public static class SettingsPortability
         // Where the last selection was, in the coordinates of a display this machine has.
         "lastSelection",
         "lastSelectionDisplay",
+
+        // The user's own notification-area icon. A path again, and one whose file is
+        // theirs rather than macshot's — so it is the least likely of all of these to
+        // exist on the machine the settings are being carried to.
+        "trayIconPath",
     };
 
     /// <summary>

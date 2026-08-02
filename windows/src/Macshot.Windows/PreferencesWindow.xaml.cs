@@ -1097,6 +1097,16 @@ public sealed partial class PreferencesWindow : Window
         // out from Task Manager's Startup tab, and the box has to say what is true.
         LaunchAtLoginCheck.IsChecked = StartupRegistration.IsEnabled();
         HideTrayIconCheck.IsChecked = settings.HideTrayIcon;
+
+        // "Default" is macshot's word and resolves against its translations. Its second
+        // is "Custom symbol", which is not what this picks — a translated label promising
+        // a symbol, beside a Browse button that opens a file dialog, is worse than an
+        // English one that is true.
+        TrayIconBox.ItemsSource = new List<string> { L("Default"), L("Custom file") };
+        TrayIconBox.SelectedIndex = (int)settings.TrayIcon;
+        TrayIconPathBox.Text = settings.TrayIconPath;
+        ShowTrayIconRowEnabled();
+
         UrlSchemeCheck.IsChecked = settings.UrlSchemeEnabled;
 
         ThemeBox.ItemsSource = new List<string> { L("Default"), L("Light"), L("Dark") };
@@ -1472,6 +1482,8 @@ public sealed partial class PreferencesWindow : Window
             BetaUpdates = BetaUpdatesCheck.IsChecked == true,
             LaunchAtLogin = LaunchAtLoginCheck.IsChecked == true,
             HideTrayIcon = HideTrayIconCheck.IsChecked == true,
+            TrayIcon = TrayIconBox.SelectedIndex >= 0 ? (TrayIconSource)TrayIconBox.SelectedIndex : TrayIconSource.Default,
+            TrayIconPath = TrayIconPathBox.Text,
             UrlSchemeEnabled = UrlSchemeCheck.IsChecked == true,
             Theme = ThemeBox.SelectedIndex >= 0 ? (AppTheme)ThemeBox.SelectedIndex : AppTheme.System,
             Language = LanguageBox.SelectedIndex >= 0 && LanguageBox.SelectedIndex < AppLanguages.All.Count
@@ -1749,6 +1761,66 @@ public sealed partial class PreferencesWindow : Window
     {
         RecordingDirectoryBox.Text = string.Empty;
         Apply();
+    }
+
+    /// <summary>
+    /// Picks the icon file for the notification area.
+    /// </summary>
+    /// <remarks>
+    /// <c>.ico</c> and nothing else, because that is what the shell loads: a PNG would
+    /// have to be decoded and turned into an icon here, and a picture with one size in it
+    /// cannot answer the tray's question, which is "give me this at 16 pixels, or 24, or
+    /// whatever this display's scaling makes it". Offering formats that come out muddy
+    /// would be offering the user a worse icon than they think they chose.
+    /// </remarks>
+    private async void BrowseTrayIcon_Click(object sender, RoutedEventArgs e)
+    {
+        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.PicturesLibrary };
+        picker.FileTypeFilter.Add(".ico");
+
+        // An unpackaged app has no implicit window for the picker to parent itself to, so
+        // it has to be told which one to use or the call fails outright.
+        InitializeWithWindow.Initialize(picker, WindowNative.GetWindowHandle(this));
+
+        if (await picker.PickSingleFileAsync() is { } file)
+        {
+            TrayIconPathBox.Text = file.Path;
+
+            // Choosing a file is choosing to use it. Leaving the mode on Default would
+            // mean picking an icon and watching nothing happen.
+            TrayIconBox.SelectedIndex = (int)TrayIconSource.Custom;
+            Apply();
+        }
+    }
+
+    /// <summary>
+    /// Forgets the chosen file and goes back to macshot's icon.
+    /// </summary>
+    /// <remarks>
+    /// The mode goes with it, unlike the dropdown on its own: Clear is the button for
+    /// undoing the choice altogether, and leaving Custom selected with nothing to load
+    /// would leave the page saying something the tray does not show.
+    /// </remarks>
+    private void ClearTrayIcon_Click(object sender, RoutedEventArgs e)
+    {
+        TrayIconPathBox.Text = string.Empty;
+        TrayIconBox.SelectedIndex = (int)TrayIconSource.Default;
+        Apply();
+    }
+
+    /// <summary>Greys out the file row when macshot's own icon is chosen.</summary>
+    private void TrayIcon_SelectionChanged(object sender, SelectionChangedEventArgs e)
+    {
+        ShowTrayIconRowEnabled();
+        Setting_SelectionChanged(sender, e);
+    }
+
+    private void ShowTrayIconRowEnabled()
+    {
+        var custom = TrayIconBox.SelectedIndex == (int)TrayIconSource.Custom;
+        TrayIconPathBox.IsEnabled = custom;
+        TrayIconBrowseButton.IsEnabled = custom;
+        TrayIconClearButton.IsEnabled = custom;
     }
 
     /// <summary>

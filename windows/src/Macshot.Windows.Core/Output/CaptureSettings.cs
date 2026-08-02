@@ -351,6 +351,31 @@ public sealed record CaptureSettings
     /// </remarks>
     public bool UrlSchemeEnabled { get; init; } = true;
 
+    /// <summary>
+    /// Whether the notification-area icon is macshot's own or one the user chose.
+    /// macshot's <c>statusBarIconMode</c>.
+    /// </summary>
+    /// <remarks>
+    /// Kept apart from <see cref="TrayIconPath"/>, as macshot keeps its mode apart from
+    /// its symbol name, so going back to macshot's icon does not throw away the file the
+    /// user picked. A custom icon with nothing to load falls back to macshot's, which is
+    /// what macshot does with a symbol name it does not recognise.
+    /// </remarks>
+    public TrayIconSource TrayIcon { get; init; } = TrayIconSource.Default;
+
+    /// <summary>
+    /// The icon file to show when <see cref="TrayIcon"/> is
+    /// <see cref="TrayIconSource.Custom"/>. macshot's <c>statusBarIconSymbolName</c>.
+    /// </summary>
+    /// <remarks>
+    /// A path, where macshot takes an SF Symbol name: Windows has no symbol set the shell
+    /// draws tray icons from, and what the notification area takes is an icon file. This
+    /// is the one place the two products cannot be given the same control, so it is also
+    /// machine-specific — see <c>SettingsPortability</c>, which drops it with the other
+    /// paths.
+    /// </remarks>
+    public string TrayIconPath { get; init; } = string.Empty;
+
     /// <summary>Which light or dark macshot's own windows are drawn in.</summary>
     public AppTheme Theme { get; init; } = AppTheme.System;
 

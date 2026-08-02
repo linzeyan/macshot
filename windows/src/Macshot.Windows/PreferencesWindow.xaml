@@ -198,6 +198,39 @@
                         <TextBlock
                             Text="Hotkeys still work. To show the icon again, re-launch macshot."
                             Style="{StaticResource Caption}" />
+                        <!-- macshot's "Menu bar icon: Default / Custom symbol" and the row
+                             under it (SettingsWindowController.swift:440–470). A file where
+                             macshot takes an SF Symbol name, because the notification area
+                             takes an icon file and Windows has no symbol set the shell
+                             draws these from. The mode is kept separate from the file, as
+                             macshot keeps its mode separate from its symbol name, so going
+                             back to macshot's icon does not throw the choice away. -->
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Menu bar icon:" Style="{StaticResource RowLabel}" />
+                            <ComboBox
+                                x:Name="TrayIconBox"
+                                Width="240"
+                                SelectionChanged="TrayIcon_SelectionChanged" />
+                        </StackPanel>
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="" Style="{StaticResource RowLabel}" />
+                            <TextBox
+                                x:Name="TrayIconPathBox"
+                                FontSize="13"
+                                Width="240"
+                                PlaceholderText="macshot's own icon"
+                                IsReadOnly="True" />
+                            <Button x:Name="TrayIconBrowseButton" Content="Browse…" FontSize="13" Click="BrowseTrayIcon_Click" />
+                            <Button x:Name="TrayIconClearButton" Content="Clear" FontSize="13" Click="ClearTrayIcon_Click" />
+                        </StackPanel>
+                        <!-- Both limits, said once. macshot's note here is about SF Symbol
+                             names and neither of these applies to it: its symbols are drawn
+                             as templates and take the menu bar's own colour, where a file
+                             is a fixed picture that can vanish into the taskbar it sits
+                             on. Better said than found out. -->
+                        <TextBlock
+                            Text="Windows icon files (.ico) only. Pick one that stays legible on both a light and a dark taskbar — unlike macOS, Windows draws the file as it is rather than recolouring it. A file it cannot read falls back to macshot's icon."
+                            Style="{StaticResource Caption}" />
                         <!-- macshot's place for this row: after the icon and before the
                              updates (SettingsWindowController.swift:479). The tick box and
                              the ⓘ beside it are macshot's pair too — the commands are a

@@ -219,7 +219,13 @@ public sealed class CaptureController : IDisposable
         _trayIcon = new TrayIconService(
             _messageWindow,
             BuildVariant.DisplayName,
-            !_settings.Current.HideTrayIcon);
+            !_settings.Current.HideTrayIcon,
+            ChosenTrayIcon(_settings.Current));
+
+        // Unlike whether the icon is there at all, which is read once: the picture on it
+        // can change under the pointer without the tray reordering itself, and macshot's
+        // own icon setting takes effect as it is chosen.
+        _settings.Changed += (_, settings) => _trayIcon.SetIcon(ChosenTrayIcon(settings));
 
         // macshot's own menu, item for item and in its order — AppDelegate.swift:707–805.
         // The strings are macshot's source strings rather than paraphrases of them, which
@@ -442,6 +448,19 @@ public sealed class CaptureController : IDisposable
     private void ApplyCaptureMenuOrder(CaptureSettings settings) =>
         _trayIcon.SetMenuItemOrder(
             [.. CaptureMenuItems.Resolve(settings.CaptureMenuOrder).Select(CommandOf)]);
+
+    /// <summary>
+    /// The icon file the settings ask for, or null for macshot's own.
+    /// </summary>
+    /// <remarks>
+    /// The mode decides, not the path: a path left behind by someone who has since gone
+    /// back to macshot's icon is a path they still want kept, and reading it would put
+    /// their old icon back on a setting that says Default.
+    /// </remarks>
+    private static string? ChosenTrayIcon(CaptureSettings settings) =>
+        settings.TrayIcon is TrayIconSource.Custom && !string.IsNullOrWhiteSpace(settings.TrayIconPath)
+            ? settings.TrayIconPath
+            : null;
 
     private static int CommandOf(CaptureMenuItem item) => item switch
     {

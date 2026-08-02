@@ -22,6 +22,12 @@ public sealed class SettingsPortabilityTests
             RecordingDirectory = @"D:\Screencasts",
             LastSelection = new CaptureRegion(10, 20, 300, 200),
             LastSelectionDisplay = @"\\.\DISPLAY1",
+
+            // The user's own icon file, which is the least likely of all of these to
+            // exist on the machine the settings are carried to: it is a file they made
+            // or downloaded rather than one macshot ships.
+            TrayIcon = TrayIconSource.Custom,
+            TrayIconPath = @"C:\Users\ricky\Pictures\camera.ico",
         };
 
         var written = Settings(SettingsPortability.Export(settings, "1.0", ExportedAt));
@@ -30,6 +36,12 @@ public sealed class SettingsPortabilityTests
         Assert.IsFalse(written.ContainsKey("recordingDirectory"));
         Assert.IsFalse(written.ContainsKey("lastSelection"));
         Assert.IsFalse(written.ContainsKey("lastSelectionDisplay"));
+        Assert.IsFalse(written.ContainsKey("trayIconPath"));
+
+        // The mode travels, though, where the path does not: someone who wanted their
+        // own icon still wants one on the new machine, and arriving on Custom with
+        // nothing to load falls back to macshot's until they point it at a file.
+        Assert.IsTrue(written.ContainsKey("trayIcon"));
     }
 
     [TestMethod]

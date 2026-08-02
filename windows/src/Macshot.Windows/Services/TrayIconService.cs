@@ -20,6 +20,7 @@ public readonly record struct TrayMenuEntry(int Id, string Text, bool Checked = 
 public sealed class TrayIconService : IDisposable
 {
     private const uint NotifyIconAdd = 0x00000000;
+    private const uint NotifyIconModify = 0x00000001;
     private const uint NotifyIconDelete = 0x00000002;
     private const uint NotifyIconFlagMessage = 0x00000001;
     private const uint NotifyIconFlagIcon = 0x00000002;
@@ -55,6 +56,18 @@ public sealed class TrayIconService : IDisposable
     private readonly MessageWindow _window;
     private readonly List<MenuEntry> _menuItems = [];
     private readonly bool _visible;
+
+    /// <summary>
+    /// The icon the shell is currently showing, and whether it is ours to destroy.
+    /// </summary>
+    /// <remarks>
+    /// The stock application icon is a shared system one and must be left alone; the two
+    /// that <c>LoadImage</c> produces are ours, and replacing one without destroying it
+    /// leaks a handle every time the user picks a different file.
+    /// </remarks>
+    private IntPtr _icon;
+    private bool _iconOwned;
+
     private bool _disposed;
 
     /// <param name="visible">
@@ -63,7 +76,12 @@ public sealed class TrayIconService : IDisposable
     /// someone who captures by hotkey has no use for an icon sitting in the tray. The
     /// menu is still built either way, so nothing downstream has to know.
     /// </param>
-    public TrayIconService(MessageWindow window, string tooltip, bool visible = true)
+    /// <param name="iconPath">
+    /// An icon file to show instead of macshot's own, or null for macshot's. Anything
+    /// that cannot be read falls back to macshot's, so a file that has since been moved
+    /// or deleted costs the user their choice and not their way into the app.
+    /// </param>
+    public TrayIconService(MessageWindow window, string tooltip, bool visible = true, string? iconPath = null)
     {
         _window = window ?? throw new ArgumentNullException(nameof(window));
         ArgumentException.ThrowIfNullOrWhiteSpace(tooltip);
@@ -72,7 +90,8 @@ public sealed class TrayIconService : IDisposable
         data.Flags = NotifyIconFlagMessage | NotifyIconFlagIcon | NotifyIconFlagTip;
         data.CallbackMessage = TrayCallbackMessage;
 
-        data.Icon = LoadTrayIcon();
+        (_icon, _iconOwned) = LoadTrayIcon(iconPath);
+        data.Icon = _icon;
         data.Tip = tooltip;
 
         _visible = visible;
@@ -88,6 +107,50 @@ public sealed class TrayIconService : IDisposable
         }
 
         _window.MessageReceived += OnMessageReceived;
+    }
+
+    /// <summary>
+    /// Shows <paramref name="path"/> instead of macshot's own icon, or macshot's again
+    /// when it is null.
+    /// </summary>
+    /// <remarks>
+    /// Changed in place rather than at the next launch, because macshot's own setting
+    /// takes effect as it is chosen — and a background app with no window is one the
+    /// user would have to be told how to restart.
+    /// </remarks>
+    public void SetIcon(string? path)
+    {
+        if (_disposed || !_visible)
+        {
+            // Nothing is on screen to change. The path is still in the settings, so it
+            // takes effect the moment the icon is shown again.
+            return;
+        }
+
+        var (icon, owned) = LoadTrayIcon(path);
+
+        var data = CreateData();
+        data.Flags = NotifyIconFlagIcon;
+        data.Icon = icon;
+
+        if (!ShellNotifyIcon(NotifyIconModify, ref data))
+        {
+            // The shell kept the old icon, so the new one is ours to throw away. Left
+            // alone it would be a handle leaked for a change that did not happen.
+            DiagnosticLog.Write("Windows refused the new notification area icon.");
+            if (owned)
+            {
+                DestroyIcon(icon);
+            }
+
+            return;
+        }
+
+        // Only after the shell has taken the new one: destroying an icon it is still
+        // drawing is how a tray icon turns into a black square.
+        ReleaseIcon();
+        _icon = icon;
+        _iconOwned = owned;
     }
 
     /// <summary>Raised with the id of the chosen context menu item.</summary>
@@ -200,6 +263,7 @@ public sealed class TrayIconService : IDisposable
 
         if (!_visible)
         {
+            ReleaseIcon();
             return;
         }
 
@@ -207,6 +271,21 @@ public sealed class TrayIconService : IDisposable
 
         var data = CreateData();
         ShellNotifyIcon(NotifyIconDelete, ref data);
+
+        // After the icon is out of the tray, for the reason SetIcon destroys late.
+        ReleaseIcon();
+    }
+
+    /// <summary>Gives back the current icon, if it was ours to give back.</summary>
+    private void ReleaseIcon()
+    {
+        if (_iconOwned && _icon != IntPtr.Zero)
+        {
+            DestroyIcon(_icon);
+        }
+
+        _icon = IntPtr.Zero;
+        _iconOwned = false;
     }
 
     private NotifyIconData CreateData()
@@ -334,13 +413,35 @@ public sealed class TrayIconService : IDisposable
     /// macshot's is a cosmetic fault; no icon at all is an app with no way in.
     /// </para>
     /// </remarks>
-    private static IntPtr LoadTrayIcon()
+    /// <param name="customPath">
+    /// The user's own icon file, tried before macshot's two. Not their problem if it has
+    /// gone: an icon file names a place on disk, and places on disk are renamed, moved
+    /// and deleted by people who have forgotten what pointed at them.
+    /// </param>
+    /// <returns>
+    /// The icon, and whether the caller owns it. Only the stock system icon is not ours.
+    /// </returns>
+    private static (IntPtr Icon, bool Owned) LoadTrayIcon(string? customPath)
     {
         var width = GetSystemMetrics(SmallIconWidth);
         var height = GetSystemMetrics(SmallIconHeight);
 
         try
         {
+            if (!string.IsNullOrWhiteSpace(customPath) && File.Exists(customPath))
+            {
+                var chosen = LoadImage(IntPtr.Zero, customPath, ImageTypeIcon, width, height, LoadFromFile);
+                if (chosen != IntPtr.Zero)
+                {
+                    return (chosen, true);
+                }
+
+                // Named, because this is the one failure here the user can act on: they
+                // chose the file, and a settings window that silently kept macshot's icon
+                // would leave them thinking the setting does nothing.
+                DiagnosticLog.Write($"'{customPath}' is not an icon Windows can read; using macshot's own.");
+            }
+
             // The loose file first, because it is the copy that can be replaced without
             // rebuilding.
             var path = System.IO.Path.Combine(AppContext.BaseDirectory, "Assets", "macshot.ico");
@@ -349,7 +450,7 @@ public sealed class TrayIconService : IDisposable
                 var fromFile = LoadImage(IntPtr.Zero, path, ImageTypeIcon, width, height, LoadFromFile);
                 if (fromFile != IntPtr.Zero)
                 {
-                    return fromFile;
+                    return (fromFile, true);
                 }
             }
 
@@ -366,7 +467,7 @@ public sealed class TrayIconService : IDisposable
 
             if (embedded != IntPtr.Zero)
             {
-                return embedded;
+                return (embedded, true);
             }
 
             DiagnosticLog.Write("The macshot icon could not be loaded; using the stock Windows icon.");
@@ -376,7 +477,9 @@ public sealed class TrayIconService : IDisposable
             DiagnosticLog.Write($"The macshot icon could not be loaded: {exception.Message}");
         }
 
-        return LoadIcon(IntPtr.Zero, new IntPtr(ApplicationIcon));
+        // Shared and owned by the system: destroying this one is destroying every
+        // program's copy of it.
+        return (LoadIcon(IntPtr.Zero, new IntPtr(ApplicationIcon)), false);
     }
 
     /// <summary>
@@ -440,6 +543,10 @@ public sealed class TrayIconService : IDisposable
 
     [DllImport("user32.dll", EntryPoint = "LoadIconW", CharSet = CharSet.Unicode)]
     private static extern IntPtr LoadIcon(IntPtr instance, IntPtr iconName);
+
+    [DllImport("user32.dll", SetLastError = true)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool DestroyIcon(IntPtr icon);
 
     [DllImport("user32.dll", EntryPoint = "LoadImageW", CharSet = CharSet.Unicode, SetLastError = true)]
     private static extern IntPtr LoadImage(
