@@ -128,6 +128,7 @@ public static class AnnotationFile
             NumberFormat = annotation.Style.NumberFormat.ToString(),
             MeasureInPoints = annotation.Style.MeasureInPoints,
             LoupeMagnification = annotation.Style.LoupeMagnification,
+            LoupeSize = annotation.Style.LoupeSize,
 
             // Flattened rather than an array of objects: a smoothed pencil stroke runs
             // to hundreds of samples, and {"x":1,"y":2} costs four times what 1,2 does
@@ -219,6 +220,13 @@ public static class AnnotationFile
             LoupeMagnification = stored.LoupeMagnification >= 1
                 ? Math.Min(stored.LoupeMagnification, AnnotationStyle.MaxLoupeMagnification)
                 : AnnotationStyle.DefaultLoupeMagnification,
+
+            // Read the same way. What is stored is the width the loupe was placed at rather
+            // than what the row happens to be set to now, so a capture reopened a month
+            // later magnifies the same patch it did when it was made.
+            LoupeSize = stored.LoupeSize >= AnnotationStyle.MinLoupeSize
+                ? Math.Min(stored.LoupeSize, AnnotationStyle.MaxLoupeSize)
+                : AnnotationStyle.DefaultLoupeSize,
         };
 
         var sprite = Unpack(stored.Sprite);
@@ -401,6 +409,12 @@ public static class AnnotationFile
         /// which reads back as the default rather than as no magnification at all.
         /// </summary>
         public double LoupeMagnification { get; init; }
+
+        /// <summary>
+        /// How wide a loupe was placed. Zero in files written before it was adjustable,
+        /// which reads back as the default rather than as a loupe of no width.
+        /// </summary>
+        public double LoupeSize { get; init; }
 
         public double[]? Points { get; init; }
 

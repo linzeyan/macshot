@@ -43,6 +43,7 @@ public sealed class AnnotationFileTests
                 NumberFormat = NumberFormat.Roman,
                 MeasureInPoints = true,
                 LoupeMagnification = 3.5,
+                LoupeSize = 180,
             }) with
         {
             Rotation = 0.75,
@@ -83,6 +84,7 @@ public sealed class AnnotationFileTests
         Assert.AreEqual(original.Style.NumberFormat, restored[0].Style.NumberFormat);
         Assert.AreEqual(original.Style.MeasureInPoints, restored[0].Style.MeasureInPoints);
         Assert.AreEqual(original.Style.LoupeMagnification, restored[0].Style.LoupeMagnification);
+        Assert.AreEqual(original.Style.LoupeSize, restored[0].Style.LoupeSize);
     }
 
     [TestMethod]

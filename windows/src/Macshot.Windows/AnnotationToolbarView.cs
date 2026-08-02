@@ -1218,12 +1218,14 @@ public sealed partial class AnnotationToolbarView : UserControl
         _sizeValue.Visibility = sizes;
         _sizeLabel.Text = SizeLabelFor(tool);
 
-        // A stroke is measured in pixels; an extent is a number of its own, which is what
-        // macshot shows for the loupe. The wider box is that number's — it can reach three
-        // digits where a stroke cannot.
-        var extent = AnnotationToolOptions.SizeMeaning(tool) == AnnotationSizeMeaning.Extent;
-        _sizeValue.Width = extent ? 32 : 28;
-        _sizeValue.Tag = extent ? string.Empty : "px";
+        // The loupe alone writes a bare number, which is macshot's own reading of it
+        // (ToolOptionsRowView.swift:324): the width of a magnifier is a measurement of the
+        // circle rather than of anything in the capture, and the box has to be wider
+        // because it reaches three digits where a stroke cannot. Everything else says px,
+        // including the stamp, whose size is a count of capture pixels like any other.
+        var bare = tool == AnnotationTool.Loupe;
+        _sizeValue.Width = bare ? 32 : 28;
+        _sizeValue.Tag = bare ? string.Empty : "px";
         SyncSizeSlider(tool);
 
         _lineStyle.Visibility = Show(AnnotationToolOptions.UsesLineStyle(tool));
@@ -1399,10 +1401,12 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// Points the one size slider at whichever number the tool in hand is sized by.
     /// </summary>
     /// <remarks>
-    /// The text tool is sized by <see cref="AnnotationStyle.FontSize"/> and everything
-    /// else by its stroke width, which is the whole reason the two are separate: a label
-    /// set to 42 must not leave the next arrow 42 pixels thick. Reloading rather than
-    /// rescaling, so switching to the text tool and back returns both to what they were.
+    /// The text tool is sized by <see cref="AnnotationStyle.FontSize"/>, the loupe by
+    /// <see cref="AnnotationStyle.LoupeSize"/>, and everything else by its stroke width —
+    /// which is the whole reason they are separate numbers: a label set to 42 must not
+    /// leave the next arrow 42 pixels thick, and a loupe 120 across must not leave it 120.
+    /// Reloading rather than rescaling, so switching tools and back returns each to what it
+    /// was.
     /// </remarks>
     private void SyncSizeSlider(AnnotationTool tool)
     {
@@ -1423,6 +1427,15 @@ public sealed partial class AnnotationToolbarView : UserControl
                     editor.Style.FontSize,
                     AnnotationStyle.MinFontSize,
                     AnnotationStyle.MaxFontSize);
+            }
+            else if (tool == AnnotationTool.Loupe)
+            {
+                _size.Minimum = AnnotationStyle.MinLoupeSize;
+                _size.Maximum = AnnotationStyle.MaxLoupeSize;
+                _size.Value = Math.Clamp(
+                    editor.Style.LoupeSize,
+                    AnnotationStyle.MinLoupeSize,
+                    AnnotationStyle.MaxLoupeSize);
             }
             else
             {
@@ -1840,13 +1853,15 @@ public sealed partial class AnnotationToolbarView : UserControl
         var color = _colorPicker.Color;
         var previous = editor.Style;
 
-        // The one slider is the label's size while the text tool is in hand and a stroke
-        // width otherwise, so the other number is carried across untouched.
+        // The one slider is the label's size, the loupe's width, or a stroke width,
+        // depending on what is in hand — so the two numbers it is not writing are carried
+        // across untouched rather than being overwritten with a reading of the other one.
         var typesetting = editor.Tool == AnnotationTool.Text;
+        var magnifying = editor.Tool == AnnotationTool.Loupe;
 
         editor.Style = new AnnotationStyle(
             new AnnotationColor(color.R, color.G, color.B, color.A),
-            typesetting ? previous.StrokeWidth : Math.Max(MinStroke, _size.Value),
+            typesetting || magnifying ? previous.StrokeWidth : Math.Max(MinStroke, _size.Value),
             _lineStyle.SelectedIndex >= 0 ? (LineStyle)_lineStyle.SelectedIndex : LineStyle.Solid,
             ArrowStyle: _arrowStyle.SelectedIndex >= 0
                 ? (ArrowStyle)_arrowStyle.SelectedIndex
@@ -1879,6 +1894,9 @@ public sealed partial class AnnotationToolbarView : UserControl
                 _loupeZoom.Value,
                 AnnotationStyle.MinLoupeMagnification,
                 AnnotationStyle.MaxLoupeMagnification),
+            LoupeSize = magnifying
+                ? Math.Clamp(_size.Value, AnnotationStyle.MinLoupeSize, AnnotationStyle.MaxLoupeSize)
+                : previous.LoupeSize,
             DimOpacity = Math.Clamp(
                 _spotlightDim.Value,
                 AnnotationStyle.MinDimOpacity,

@@ -255,6 +255,17 @@ public sealed class AnnotationEditor
             return false;
         }
 
+        // The loupe is placed rather than dragged out — macshot's own gesture
+        // (LoupeToolHandler.swift:16-33) — so its width comes from the row and a drag only
+        // decides where it lands. Dragged out, it would be the one tool whose size the
+        // user sets twice: once on the slider and again with the mouse, with the second
+        // silently winning.
+        if (_tool == AnnotationTool.Loupe)
+        {
+            Draft = Placed(point, Style.LoupeSize);
+            return false;
+        }
+
         // Both ends of a ruler are held inside the region, not only the end being dragged:
         // a press that landed outside it would otherwise root the rule off the picture and
         // every reading taken from it would start from nowhere. macshot clamps the origin
@@ -308,6 +319,15 @@ public sealed class AnnotationEditor
             _freeformSamples.Add(point);
             _freeformPressures?.Add(Math.Clamp(pressure, MinRecordedPressure, 1));
             Draft = Annotation.CreateFreeform(_tool, _freeformSamples, Style, _freeformPressures);
+            return;
+        }
+
+        // The loupe keeps the width the row gave it and follows the pointer instead of
+        // stretching, which is what makes the drag a placement rather than a second way of
+        // sizing it.
+        if (_tool == AnnotationTool.Loupe)
+        {
+            Draft = Placed(point, Style.LoupeSize);
             return;
         }
 
@@ -618,6 +638,20 @@ public sealed class AnnotationEditor
         var deltaX = annotation.End.X - annotation.Start.X;
         var deltaY = annotation.End.Y - annotation.Start.Y;
         return Math.Sqrt(deltaX * deltaX + deltaY * deltaY) >= MinimumDragDistance;
+    }
+
+    /// <summary>
+    /// A mark of the given width centred on <paramref name="centre"/>, for the one tool
+    /// whose size comes from the row rather than from the drag.
+    /// </summary>
+    private Annotation Placed(CapturePoint centre, double width)
+    {
+        var half = width / 2;
+        return Annotation.Create(
+            _tool,
+            new CapturePoint(centre.X - half, centre.Y - half),
+            new CapturePoint(centre.X + half, centre.Y + half),
+            Style);
     }
 
     /// <summary>

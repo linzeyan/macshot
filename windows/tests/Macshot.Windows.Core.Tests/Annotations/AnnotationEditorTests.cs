@@ -367,6 +367,51 @@ public sealed class AnnotationEditorTests
     }
 
     /// <summary>
+    /// The loupe is placed at the width the row is set to, whatever the pointer does.
+    /// </summary>
+    /// <remarks>
+    /// It was dragged out like a rectangle, which meant its width was set twice — once on
+    /// the slider and again with the mouse, the mouse silently winning — and the slider was
+    /// therefore a control that did nothing. macshot places it with a click at
+    /// <c>loupeSize</c> and lets a drag decide only where it lands, which is the only
+    /// arrangement in which the number on the row means anything.
+    /// </remarks>
+    [TestMethod]
+    public void TheLoupe_IsPlacedAtTheWidthTheRowSetsRatherThanDraggedOut()
+    {
+        var editor = NewEditor(AnnotationTool.Loupe);
+        editor.Style = editor.Style with { LoupeSize = 120 };
+
+        editor.PointerPressed(new CapturePoint(200, 200));
+        editor.PointerReleased(new CapturePoint(200, 200));
+
+        var bounds = editor.Document.Annotations[0].BoundingRect;
+        Assert.AreEqual(120, bounds.Width, 1e-9);
+        Assert.AreEqual(120, bounds.Height, 1e-9);
+        Assert.AreEqual(200, bounds.X + (bounds.Width / 2), 1e-9, "the click point is the centre");
+        Assert.AreEqual(200, bounds.Y + (bounds.Height / 2), 1e-9);
+    }
+
+    /// <summary>
+    /// Dragging one moves it. The gesture places the circle somewhere else rather than
+    /// stretching it, so a hand that wanders on the way to letting go cannot resize it.
+    /// </summary>
+    [TestMethod]
+    public void DraggingALoupe_MovesItWithoutChangingItsWidth()
+    {
+        var editor = NewEditor(AnnotationTool.Loupe);
+        editor.Style = editor.Style with { LoupeSize = 80 };
+
+        Drag(editor, new CapturePoint(100, 100), new CapturePoint(400, 300));
+
+        var bounds = editor.Document.Annotations[0].BoundingRect;
+        Assert.AreEqual(80, bounds.Width, 1e-9);
+        Assert.AreEqual(80, bounds.Height, 1e-9);
+        Assert.AreEqual(400, bounds.X + (bounds.Width / 2), 1e-9, "it follows the pointer");
+        Assert.AreEqual(300, bounds.Y + (bounds.Height / 2), 1e-9);
+    }
+
+    /// <summary>
     /// A ruler dragged past the edge stops at it, so the number it writes is about
     /// something in the picture.
     /// </summary>

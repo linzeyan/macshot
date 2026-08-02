@@ -86,6 +86,31 @@ public sealed record AnnotationStyle(
     public const double MaxLoupeMagnification = 6;
 
     /// <summary>
+    /// How wide a loupe is drawn — macshot's own 120 (<c>OverlayView.swift:597-600</c>).
+    /// </summary>
+    /// <remarks>
+    /// Its own number rather than a multiple of the stroke width, which is what it used to
+    /// be: a loupe is placed rather than dragged out, so nothing about the gesture says how
+    /// big it should be, and deriving it from the stroke meant the circle could not be
+    /// sized without also thickening the next arrow. It is the number the row's slider
+    /// actually sets — 120 across at 2x shows about sixty pixels of the capture, which is a
+    /// word or a control rather than a letter or a whole panel.
+    /// </remarks>
+    public const double DefaultLoupeSize = 120;
+
+    /// <summary>
+    /// The smallest the row offers. Below it the ring and the magnified pixels are the same
+    /// few, and there is nothing to read inside the circle.
+    /// </summary>
+    public const double MinLoupeSize = 40;
+
+    /// <summary>
+    /// The largest. macshot's ceiling: past this the loupe covers more of the capture than
+    /// it explains, and the reader loses the thing being pointed at.
+    /// </summary>
+    public const double MaxLoupeSize = 320;
+
+    /// <summary>
     /// How dark a spotlight takes everything outside it to begin with — macshot's own
     /// <c>0.55</c> (<c>Annotation.swift:170</c>). Strong enough that the eye goes to the
     /// bright part first, weak enough that what surrounds it can still be read.
@@ -206,12 +231,25 @@ public sealed record AnnotationStyle(
     /// </remarks>
     public double LoupeMagnification { get; init; } = DefaultLoupeMagnification;
 
+    /// <summary>
+    /// How wide the loupe is placed, in frame pixels. Read by
+    /// <see cref="AnnotationTool.Loupe"/> and by nothing else.
+    /// </summary>
+    /// <remarks>
+    /// A loupe is placed with a click rather than dragged out, so unlike every other
+    /// region on the canvas its size comes from the row instead of from the gesture — which
+    /// is why the number has to live somewhere, and why macshot keeps <c>loupeSize</c>
+    /// beside the magnification rather than deriving one from the other.
+    /// </remarks>
+    public double LoupeSize { get; init; } = DefaultLoupeSize;
+
     public void Validate()
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(StrokeWidth);
         ArgumentOutOfRangeException.ThrowIfNegative(CornerRadius);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(FontSize);
         ArgumentOutOfRangeException.ThrowIfLessThan(LoupeMagnification, 1);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(LoupeSize);
         if (Opacity is < 0 or > 1)
         {
             throw new ArgumentOutOfRangeException(nameof(Opacity));

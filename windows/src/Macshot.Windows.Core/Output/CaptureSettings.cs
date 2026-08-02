@@ -529,6 +529,13 @@ public sealed record CaptureSettings
     /// <summary>How much the loupe enlarges what is under it.</summary>
     public double LoupeMagnification { get; init; } = AnnotationStyle.DefaultLoupeMagnification;
 
+    /// <summary>
+    /// How wide a loupe is placed, in captured pixels. macshot's <c>loupeSize</c>, and the
+    /// only size on this row that is not a stroke width — a loupe is placed with a click,
+    /// so nothing about the gesture says how big it should be.
+    /// </summary>
+    public double LoupeSize { get; init; } = AnnotationStyle.DefaultLoupeSize;
+
     /// <summary>How far down a spotlight takes the capture outside it.</summary>
     public double DimOpacity { get; init; } = AnnotationStyle.DefaultDimOpacity;
 
@@ -1190,6 +1197,10 @@ public sealed record CaptureSettings
                 LoupeMagnification,
                 AnnotationStyle.MinLoupeMagnification,
                 AnnotationStyle.MaxLoupeMagnification),
+            LoupeSize = Math.Clamp(
+                LoupeSize,
+                AnnotationStyle.MinLoupeSize,
+                AnnotationStyle.MaxLoupeSize),
             DimOpacity = Math.Clamp(
                 DimOpacity,
                 AnnotationStyle.MinDimOpacity,
@@ -1229,6 +1240,7 @@ public sealed record CaptureSettings
             NumberFormat = style.NumberFormat,
             MeasureInPoints = style.MeasureInPoints,
             LoupeMagnification = style.LoupeMagnification,
+            LoupeSize = style.LoupeSize,
             DimOpacity = style.DimOpacity,
             AnnotationFontSize = style.FontSize,
             AnnotationFontFamily = style.FontFamily,
@@ -1339,6 +1351,14 @@ public sealed record CaptureSettings
                 && LoupeMagnification >= AnnotationStyle.MinLoupeMagnification
                     ? Math.Min(LoupeMagnification, AnnotationStyle.MaxLoupeMagnification)
                     : AnnotationStyle.DefaultLoupeMagnification,
+
+            // Read the same way, and for the same reason: zero is what every file written
+            // before the loupe had a size says, and a loupe placed at no width is not a
+            // small loupe, it is nothing on the capture at all.
+            LoupeSize =
+                double.IsFinite(LoupeSize) && LoupeSize >= AnnotationStyle.MinLoupeSize
+                    ? Math.Min(LoupeSize, AnnotationStyle.MaxLoupeSize)
+                    : AnnotationStyle.DefaultLoupeSize,
 
             // Zero in every file written before the spotlight had a slider, and the same
             // reading as the loupe's: a spotlight that reopened at no dim would be a
