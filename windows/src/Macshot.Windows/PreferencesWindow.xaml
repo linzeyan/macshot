@@ -243,27 +243,20 @@
                 <StackPanel Spacing="20">
                     <StackPanel Style="{StaticResource Section}">
                         <TextBlock Text="Capture" Style="{StaticResource SectionHeading}" />
+                        <!-- One list rather than the two tick boxes this page used to
+                             have. They said the same four things, but a pair of boxes
+                             asks the reader to work out what both of them off means. -->
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Enter / Quick Capture:" Style="{StaticResource RowLabel}" />
+                            <ComboBox
+                                x:Name="QuickCaptureBox"
+                                FontSize="13"
+                                Width="240"
+                                SelectionChanged="Setting_SelectionChanged" />
+                        </StackPanel>
                         <CheckBox
-                            x:Name="RememberSelectionCheck"
-                            Content="Offer the last selection again"
-                            Style="{StaticResource Unlabelled}"
-                            Checked="Setting_Toggled"
-                            Unchecked="Setting_Toggled" />
-                        <CheckBox
-                            x:Name="DoubleClickCopyCheck"
-                            Content="Double-click selection to copy"
-                            Style="{StaticResource Unlabelled}"
-                            Checked="Setting_Toggled"
-                            Unchecked="Setting_Toggled" />
-                        <CheckBox
-                            x:Name="HideInstructionsCheck"
-                            Content="Hide capture instructions"
-                            Style="{StaticResource Unlabelled}"
-                            Checked="Setting_Toggled"
-                            Unchecked="Setting_Toggled" />
-                        <CheckBox
-                            x:Name="SelectionShadowCheck"
-                            Content="Disable shadow outside selection"
+                            x:Name="QuickCaptureEditorCheck"
+                            Content="Also open in Editor"
                             Style="{StaticResource Unlabelled}"
                             Checked="Setting_Toggled"
                             Unchecked="Setting_Toggled" />
@@ -312,7 +305,7 @@
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
                         <StackPanel Style="{StaticResource Row}">
-                            <TextBlock Text="Position:" Style="{StaticResource RowLabel}" />
+                            <TextBlock Text="  Position:" Style="{StaticResource RowLabel}" />
                             <ComboBox
                                 x:Name="ThumbnailCornerBox"
                                 Width="240"
@@ -345,6 +338,35 @@
                         <CheckBox
                             x:Name="CaptureCursorCheck"
                             Content="Capture mouse cursor in screenshot"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <CheckBox
+                            x:Name="DoubleClickCopyCheck"
+                            Content="Double-click selection to copy"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <CheckBox
+                            x:Name="HideInstructionsCheck"
+                            Content="Hide capture instructions"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <CheckBox
+                            x:Name="SelectionShadowCheck"
+                            Content="Disable shadow outside selection"
+                            Style="{StaticResource Unlabelled}"
+                            Checked="Setting_Toggled"
+                            Unchecked="Setting_Toggled" />
+                        <!-- macshot has no such box: it always offers the last selection
+                             again. Kept, because a capture overlay that proposes a region
+                             on a machine the user has just sat down at is startling, and
+                             put after macshot's own rows so their order reads as macshot's
+                             does. -->
+                        <CheckBox
+                            x:Name="RememberSelectionCheck"
+                            Content="Offer the last selection again"
                             Style="{StaticResource Unlabelled}"
                             Checked="Setting_Toggled"
                             Unchecked="Setting_Toggled" />
@@ -411,23 +433,6 @@
                         <TextBlock
                             Text="Saves at the size the display shows them, for much smaller files"
                             Style="{StaticResource Caption}" />
-                        <!-- One list rather than the two tick boxes this page used to
-                             have. They said the same four things, but a pair of boxes
-                             asks the reader to work out what both of them off means. -->
-                        <StackPanel Style="{StaticResource Row}">
-                            <TextBlock Text="Enter / Quick Capture:" Style="{StaticResource RowLabel}" />
-                            <ComboBox
-                                x:Name="QuickCaptureBox"
-                                FontSize="13"
-                                Width="240"
-                                SelectionChanged="Setting_SelectionChanged" />
-                        </StackPanel>
-                        <CheckBox
-                            x:Name="QuickCaptureEditorCheck"
-                            Content="Also open in Editor"
-                            Style="{StaticResource Unlabelled}"
-                            Checked="Setting_Toggled"
-                            Unchecked="Setting_Toggled" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="History size:" Style="{StaticResource RowLabel}" />
                             <NumberBox
