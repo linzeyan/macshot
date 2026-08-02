@@ -91,6 +91,19 @@ public static class TranslationLanguages
         return DefaultCode;
     }
 
+    /// <summary>
+    /// Whether this is a language macshot offers, as opposed to one it would quietly
+    /// replace with English.
+    /// </summary>
+    /// <remarks>
+    /// For a caller that has somewhere better to fall back to than the default — a
+    /// <c>macshot://ocr-translate?target=…</c> with a code nobody recognises should
+    /// leave the language the user chose alone rather than reach past it to English.
+    /// </remarks>
+    public static bool IsKnown(string? code) =>
+        !string.IsNullOrWhiteSpace(code)
+        && All.Any(language => string.Equals(language.Code, code.Trim(), StringComparison.OrdinalIgnoreCase));
+
     /// <summary>The position of a code in <see cref="All"/>, for a picker to select.</summary>
     public static int IndexOf(string? code)
     {

@@ -52,6 +52,16 @@ public partial class App : Application
         }
 #endif
 
+        // Likewise a launch carrying a macshot:// URL, and before the lock for the same
+        // reason: the shell delivers a URL by starting the program again, so a running
+        // macshot would answer the link with "macshot is already running".
+        var url = UrlSchemeHost.CommandUrlIn(Environment.GetCommandLineArgs());
+        if (url is not null && UrlSchemeHost.Forward(url))
+        {
+            Exit();
+            return;
+        }
+
         // A second macshot is never what was wanted, and it is easy to start one by
         // accident precisely because the first has no window to notice. Two of them
         // means two notification-area icons, and the second losing the fight for the
@@ -59,6 +69,17 @@ public partial class App : Application
         // the user to look for a conflict that is macshot itself.
         if (!TryClaimTheOnlyInstance())
         {
+            // A URL that nothing took, with a macshot already running: that macshot has
+            // the setting off. Silence rather than the notice below, which is about
+            // someone starting a second macshot — not what this was, and not something
+            // the user did.
+            if (url is not null)
+            {
+                DiagnosticLog.Write($"'{url}' arrived and the running macshot is not answering URLs.");
+                Exit();
+                return;
+            }
+
             // Written unconditionally rather than traced: a launch that ends in nothing
             // happening is exactly the report that arrives with no other evidence, and
             // by definition the user had no chance to turn tracing on first.
@@ -72,8 +93,10 @@ public partial class App : Application
         }
 
         // No window at startup. macshot lives in the notification area and shows UI
-        // only once the user asks for a capture.
-        _controller = new CaptureController();
+        // only once the user asks for a capture. The URL, if this launch was one, is
+        // carried in: nothing was running to hand it to, so this process is what the
+        // link started, and dropping it here is the link doing nothing.
+        _controller = new CaptureController(url);
     }
 
     /// <summary>

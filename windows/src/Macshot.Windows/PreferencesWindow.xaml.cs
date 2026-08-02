@@ -165,6 +165,7 @@ public sealed partial class PreferencesWindow : Window
         BuildToolsPage();
         BuildGlobalShortcutRows();
         BuildShortcutRows();
+        BuildUrlSchemeCommands();
         Load(_settings.Current);
         PlaceOnScreen();
 
@@ -200,6 +201,48 @@ public sealed partial class PreferencesWindow : Window
         Grid.SetRow(child, row);
         Grid.SetColumn(child, index % 2);
         host.Children.Add(child);
+    }
+
+    /// <summary>
+    /// Fills the ⓘ beside the URL scheme box with the commands macshot answers.
+    /// </summary>
+    /// <remarks>
+    /// Built from the table the parser matches on rather than written out here, so this
+    /// cannot come to list a command macshot ignores — which would read as macshot being
+    /// broken rather than as the list being out of date.
+    /// </remarks>
+    private void BuildUrlSchemeCommands()
+    {
+        var commandStyle = (Style)((Grid)Content).Resources["CommandText"];
+        var descriptionStyle = (Style)((Grid)Content).Resources["CommandDescription"];
+
+        foreach (var command in UrlSchemeCommands.All)
+        {
+#if OFFLINE
+            // No translator in this build, so nothing to offer a link to. Core carries
+            // the whole table because it is compiled once for both variants; the row is
+            // left out here, which is where the other offline omissions are made.
+            if (command.Action is UrlSchemeAction.OcrTranslate)
+            {
+                continue;
+            }
+#endif
+
+            var row = UrlSchemeCommandRows.RowDefinitions.Count;
+            UrlSchemeCommandRows.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+            // The command itself is not translated — it is what has to be typed.
+            var text = new TextBlock { Text = command.Text, Style = commandStyle };
+            Grid.SetRow(text, row);
+            UrlSchemeCommandRows.Children.Add(text);
+
+            // Through L, and on macshot's own sentence: the page-wide pass has already
+            // run by the time this row exists.
+            var description = new TextBlock { Text = L(command.Description), Style = descriptionStyle };
+            Grid.SetRow(description, row);
+            Grid.SetColumn(description, 1);
+            UrlSchemeCommandRows.Children.Add(description);
+        }
     }
 
     private void BuildToolsPage()
@@ -1054,6 +1097,7 @@ public sealed partial class PreferencesWindow : Window
         // out from Task Manager's Startup tab, and the box has to say what is true.
         LaunchAtLoginCheck.IsChecked = StartupRegistration.IsEnabled();
         HideTrayIconCheck.IsChecked = settings.HideTrayIcon;
+        UrlSchemeCheck.IsChecked = settings.UrlSchemeEnabled;
 
         ThemeBox.ItemsSource = new List<string> { L("Default"), L("Light"), L("Dark") };
         ThemeBox.SelectedIndex = (int)settings.Theme;
@@ -1428,6 +1472,7 @@ public sealed partial class PreferencesWindow : Window
             BetaUpdates = BetaUpdatesCheck.IsChecked == true,
             LaunchAtLogin = LaunchAtLoginCheck.IsChecked == true,
             HideTrayIcon = HideTrayIconCheck.IsChecked == true,
+            UrlSchemeEnabled = UrlSchemeCheck.IsChecked == true,
             Theme = ThemeBox.SelectedIndex >= 0 ? (AppTheme)ThemeBox.SelectedIndex : AppTheme.System,
             Language = LanguageBox.SelectedIndex >= 0 && LanguageBox.SelectedIndex < AppLanguages.All.Count
                 ? AppLanguages.All[LanguageBox.SelectedIndex].Code

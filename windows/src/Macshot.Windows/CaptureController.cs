@@ -129,6 +129,14 @@ public sealed class CaptureController : IDisposable
     private readonly Upload.UploadService _uploads;
 #endif
     private readonly DispatcherQueue _dispatcher;
+
+    /// <summary>
+    /// The scheme registration and the pipe other launches hand URLs down. Held for the
+    /// life of the app, whether or not the setting is on: the setting is what it is told,
+    /// not whether it exists.
+    /// </summary>
+    private readonly UrlSchemeHost _urlScheme = new();
+
     private readonly MessageWindow _messageWindow;
     private readonly GlobalHotkeyService _hotkeys;
     private readonly TrayIconService _trayIcon;
@@ -169,7 +177,11 @@ public sealed class CaptureController : IDisposable
     private bool _reportedCaptureFallback;
     private bool _disposed;
 
-    public CaptureController()
+    /// <param name="startupUrl">
+    /// The <c>macshot://</c> URL this launch was started to carry out, when it was. There
+    /// was no macshot to hand it to, so this one does it as soon as it is ready.
+    /// </param>
+    public CaptureController(string? startupUrl = null)
     {
         _dispatcher = DispatcherQueue.GetForCurrentThread()
             ?? throw new InvalidOperationException("The capture controller must be created on the UI thread.");
@@ -256,6 +268,167 @@ public sealed class CaptureController : IDisposable
         // effect without restarting macshot — which, for a background app with no
         // window, is something the user would have to be told how to do.
         _settings.Changed += (_, settings) => ApplyHotkeys(settings);
+
+        // Marshalled here rather than in the host: the URL is read on a pipe thread, and
+        // everything it can ask for touches windows.
+        _urlScheme.CommandReceived += (_, command) => _dispatcher.TryEnqueue(() => Run(command));
+        _urlScheme.Apply(_settings.Current.UrlSchemeEnabled);
+        _settings.Changed += (_, settings) => _urlScheme.Apply(settings.UrlSchemeEnabled);
+
+        // Last, and only after everything a command can reach exists. Queued rather than
+        // run here, because this is still the constructor: a command that puts overlays
+        // up would be doing it with the controller half-built.
+        if (UrlSchemeCommands.Parse(startupUrl) is { } startupCommand)
+        {
+            _dispatcher.TryEnqueue(() => Run(startupCommand));
+        }
+    }
+
+    /// <summary>
+    /// Does what a <c>macshot://</c> URL asked for.
+    /// </summary>
+    /// <remarks>
+    /// macshot's <c>handleURLSchemeAction</c>. Every one of these arrives at the same
+    /// method the menu item does, rather than at a path of its own: a link that captured
+    /// slightly differently from the menu would be a second capture command to keep
+    /// working.
+    /// </remarks>
+    private void Run(UrlSchemeCommand command)
+    {
+        switch (command.Action)
+        {
+        case UrlSchemeAction.Capture:
+            Post(BeginAreaCaptureHonouringDelayAsync);
+            break;
+        case UrlSchemeAction.CaptureFullScreen:
+            Post(CaptureAllScreensAsync);
+            break;
+        case UrlSchemeAction.CaptureLastArea:
+            Post(() => BeginAreaCaptureAsync(restoreLastArea: true));
+            break;
+        case UrlSchemeAction.QuickCapture:
+            Post(() => BeginAreaCaptureAsync(CaptureIntent.Quick));
+            break;
+        case UrlSchemeAction.Ocr:
+            Post(() => BeginAreaCaptureAsync(CaptureIntent.Recognize));
+            break;
+#if !OFFLINE
+        case UrlSchemeAction.OcrTranslate:
+            Post(() => BeginAreaCaptureAsync(CaptureIntent.Translate, translateTarget: command.Argument));
+            break;
+#endif
+        case UrlSchemeAction.Record:
+            Post(BeginAreaRecordingAsync);
+            break;
+        case UrlSchemeAction.RecordFullScreen:
+            // Not the toggle the shortcut uses. A link that stopped the recording when
+            // one was running would be a link that means two different things, and the
+            // one to stop with is the next command along.
+            if (_recording is null)
+            {
+                Post(ToggleRecordingAsync);
+            }
+
+            break;
+        case UrlSchemeAction.StopRecording:
+            _recording?.Cancel();
+            break;
+        case UrlSchemeAction.ScrollCapture:
+            Post(() => BeginAreaCaptureAsync(CaptureIntent.Scroll));
+            break;
+        case UrlSchemeAction.History:
+            Post(ShowHistoryAsync);
+            break;
+        case UrlSchemeAction.Settings:
+            ShowPreferences();
+            break;
+        case UrlSchemeAction.Open:
+            if (command.Argument is { } file)
+            {
+                Post(() => OpenFileAsync(file));
+            }
+
+            break;
+        case UrlSchemeAction.Edit:
+            if (command.Argument is { } id)
+            {
+                Post(() => EditPastCaptureAsync(id));
+            }
+
+            break;
+        default:
+            // The offline build's ocr-translate, and nothing else: Core carries the whole
+            // table because it is compiled once for both variants.
+            break;
+        }
+    }
+
+    /// <summary>
+    /// Opens the image at <paramref name="path"/> in the editor — what
+    /// <c>macshot://open?file=…</c> asks for.
+    /// </summary>
+    /// <remarks>
+    /// Reported rather than swallowed. The user wrote the path into a link, and a link
+    /// that does nothing gives them nothing to correct.
+    /// </remarks>
+    private async Task OpenFileAsync(string path)
+    {
+        try
+        {
+            await ShowEditorAsync(await ImageLoader.LoadAsync(path));
+        }
+        catch (Exception exception)
+        {
+            FailureReport.Notice(
+                _messageWindow.Handle,
+                $"macshot could not open '{path}': {exception.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Opens a past capture in the editor by name — what <c>macshot://edit?id=…</c> asks
+    /// for.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The id is the capture's file name without its extension, which is the timestamp
+    /// macshot's history names its files by. macOS has a UUID per entry to use instead;
+    /// here the name is already the identity, and inventing a second one would mean
+    /// nothing on disk could be pointed at.
+    /// </para>
+    /// <para>
+    /// Whatever the history is currently keeping is searched, so an id from a capture
+    /// that has since been dropped finds nothing — and says so, because the alternative
+    /// is a link that quietly opens the wrong picture or none.
+    /// </para>
+    /// </remarks>
+    private async Task EditPastCaptureAsync(string id)
+    {
+        var entry = ScreenshotHistory
+            .Recent(int.MaxValue, _settings.Current)
+            .FirstOrDefault(past => string.Equals(
+                Path.GetFileNameWithoutExtension(past.Path),
+                id,
+                StringComparison.OrdinalIgnoreCase));
+
+        if (entry is null)
+        {
+            FailureReport.Notice(
+                _messageWindow.Handle,
+                $"macshot has no capture called '{id}' in its history.");
+            return;
+        }
+
+        try
+        {
+            await ReopenAsync(entry);
+        }
+        catch (Exception exception)
+        {
+            FailureReport.Notice(
+                _messageWindow.Handle,
+                $"macshot could not open '{entry.Path}': {exception.Message}");
+        }
     }
 
     /// <summary>
@@ -457,9 +630,15 @@ public sealed class CaptureController : IDisposable
     /// — macshot's <c>pendingRestoreLastArea</c>. Nothing remembered means an ordinary
     /// capture, which is macshot's fallback too.
     /// </param>
+    /// <param name="translateTarget">
+    /// The language <see cref="CaptureIntent.Translate"/> translates into, or null for
+    /// the one the settings name. Only <c>macshot://ocr-translate?target=…</c> passes
+    /// one.
+    /// </param>
     public async Task BeginAreaCaptureAsync(
         CaptureIntent intent = CaptureIntent.Capture,
-        bool restoreLastArea = false)
+        bool restoreLastArea = false,
+        string? translateTarget = null)
     {
         if (_overlays.Count > 0)
         {
@@ -504,6 +683,7 @@ public sealed class CaptureController : IDisposable
                 _screenCapture.TryCaptureWindowAsync)
             {
                 Intent = intent,
+                TranslateTarget = translateTarget,
             };
             overlay.CaptureCompleted += OnCaptureCompleted;
             overlay.SelectionCommitted += OnSelectionCommitted;
@@ -684,6 +864,7 @@ public sealed class CaptureController : IDisposable
             pin.Close();
         }
 
+        _urlScheme.Dispose();
         _screenCapture.Dispose();
         _recorder.Dispose();
         _trayIcon.Dispose();

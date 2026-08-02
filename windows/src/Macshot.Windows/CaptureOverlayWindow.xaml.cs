@@ -1090,6 +1090,11 @@ public sealed partial class CaptureOverlayWindow : Window
         case CaptureIntent.Recognize:
             _ = ReadTextAsync();
             break;
+#if !OFFLINE
+        case CaptureIntent.Translate:
+            _ = TranslateAsync();
+            break;
+#endif
         case CaptureIntent.Scroll:
             RequestScrollCapture();
             break;
@@ -2278,6 +2283,17 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </remarks>
     public CaptureIntent Intent { get; set; }
 
+    /// <summary>
+    /// The language <see cref="CaptureIntent.Translate"/> translates into, or null for
+    /// the one the settings name.
+    /// </summary>
+    /// <remarks>
+    /// macshot's <c>autoTranslateOverlayLang</c>: <c>macshot://ocr-translate?target=…</c>
+    /// names a language for that one capture without disturbing the saved default, which
+    /// is what lets a launcher hold two links for two languages.
+    /// </remarks>
+    public string? TranslateTarget { get; set; }
+
     /// <summary>Asks for the region to be recorded rather than captured.</summary>
     private void RequestRecording()
     {
@@ -2614,7 +2630,16 @@ public sealed partial class CaptureOverlayWindow : Window
         Hint(L("Translating..."));
         try
         {
-            Hint(await TranslationPlacement.RunAsync(AnnotationCanvas, _settings.Current, CancellationToken.None));
+            // The saved settings with one field replaced, rather than a second argument
+            // threaded through the placement: the target language is the only thing a
+            // caller may override, and a copy of the record says so without giving
+            // everything else two ways in. A code nobody recognises is ignored, which
+            // leaves the language the user chose rather than reaching past it to English.
+            var settings = TranslationLanguages.IsKnown(TranslateTarget)
+                ? _settings.Current with { TranslateTargetLanguage = TranslateTarget! }
+                : _settings.Current;
+
+            Hint(await TranslationPlacement.RunAsync(AnnotationCanvas, settings, CancellationToken.None));
         }
         catch (Exception exception)
         {

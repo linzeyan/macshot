@@ -62,6 +62,22 @@
                 <Setter Property="MinWidth" Value="0" />
             </Style>
 
+            <!-- The two halves of a row in the URL-scheme list: the command, as something
+                 to copy, and what it does. Styles rather than properties set where the
+                 rows are built, so the secondary colour comes from the theme the same way
+                 every other caption on the page gets it. -->
+            <Style x:Key="CommandText" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="11" />
+                <Setter Property="FontFamily" Value="Consolas" />
+                <Setter Property="IsTextSelectionEnabled" Value="True" />
+            </Style>
+
+            <Style x:Key="CommandDescription" TargetType="TextBlock">
+                <Setter Property="FontSize" Value="11" />
+                <Setter Property="TextWrapping" Value="Wrap" />
+                <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
+            </Style>
+
             <Style x:Key="Row" TargetType="StackPanel">
                 <Setter Property="Orientation" Value="Horizontal" />
                 <Setter Property="Spacing" Value="8" />
@@ -182,6 +198,56 @@
                         <TextBlock
                             Text="Hotkeys still work. To show the icon again, re-launch macshot."
                             Style="{StaticResource Caption}" />
+                        <!-- macshot's place for this row: after the icon and before the
+                             updates (SettingsWindowController.swift:479). The tick box and
+                             the ⓘ beside it are macshot's pair too — the commands are a
+                             table of fourteen, which is a popover's worth and not a
+                             caption's. Clicked rather than hovered, as macshot's is,
+                             because here the text in it is for copying. -->
+                        <StackPanel Orientation="Horizontal" Spacing="4" Margin="188,0,0,0">
+                            <CheckBox
+                                x:Name="UrlSchemeCheck"
+                                Content="Enable macshot:// URL scheme"
+                                FontSize="13"
+                                MinWidth="0"
+                                Checked="Setting_Toggled"
+                                Unchecked="Setting_Toggled" />
+                            <Button
+                                x:Name="UrlSchemeInfoButton"
+                                Padding="6,2,6,2"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                VerticalAlignment="Center">
+                                <FontIcon
+                                    Glyph="&#xE946;"
+                                    FontSize="14"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <Button.Flyout>
+                                    <Flyout>
+                                        <StackPanel Spacing="4" MaxWidth="460">
+                                            <TextBlock
+                                                Text="Supported URL Scheme Commands"
+                                                FontSize="13"
+                                                FontWeight="SemiBold" />
+                                            <TextBlock
+                                                Text="Trigger macshot from Raycast, Alfred, Shortcuts, or any tool that opens URLs."
+                                                FontSize="11"
+                                                TextWrapping="Wrap"
+                                                Margin="0,0,0,8"
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                            <!-- Filled in code from the same table the
+                                                 parser matches on, so this cannot list a
+                                                 command macshot does not answer. -->
+                                            <Grid
+                                                x:Name="UrlSchemeCommandRows"
+                                                ColumnDefinitions="Auto,*"
+                                                RowSpacing="4"
+                                                ColumnSpacing="16" />
+                                        </StackPanel>
+                                    </Flyout>
+                                </Button.Flyout>
+                            </Button>
+                        </StackPanel>
                         <CheckBox
                             x:Name="AutomaticUpdatesCheck"
                             Content="Check for updates automatically"

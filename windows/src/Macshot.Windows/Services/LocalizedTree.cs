@@ -95,6 +95,14 @@ public static class LocalizedTree
                 Walk(control.Content as DependencyObject, depth + 1);
             }
 
+            // A flyout hangs off the button rather than sitting inside it, so the walk
+            // has to be told about it by name. Without this a page comes up translated
+            // with one panel in it still in English — and only for whoever opens it.
+            if (control is Button { Flyout: Flyout flyout })
+            {
+                Walk(flyout.Content, depth + 1);
+            }
+
             break;
 
         case ItemsControl items:

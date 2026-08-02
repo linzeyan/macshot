@@ -27,6 +27,19 @@ public enum CaptureIntent
     /// <summary>Read the text and the codes in it — macshot's "Capture OCR &amp; QR".</summary>
     Recognize,
 
+    /// <summary>
+    /// Translate the text in it and lay the translation over it — macshot's
+    /// <c>autoTranslateOverlayMode</c>, which only <c>macshot://ocr-translate</c> sets.
+    /// </summary>
+    /// <remarks>
+    /// The one intent that leaves the toolbar up, as macshot's does: a translation is a
+    /// guess at what the words mean and it is drawn onto the picture, so it is something
+    /// to look at and correct before the capture is delivered. Reading text out into a
+    /// window has nothing to correct, which is why <see cref="Recognize"/> does not
+    /// wait.
+    /// </remarks>
+    Translate,
+
     /// <summary>Scroll the window behind it and stitch — macshot's "Scroll Capture".</summary>
     Scroll,
 

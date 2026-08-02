@@ -337,6 +337,20 @@ public sealed record CaptureSettings
     /// </remarks>
     public bool HideTrayIcon { get; init; }
 
+    /// <summary>
+    /// Whether other programs may drive macshot through <c>macshot://</c> URLs.
+    /// macshot's <c>urlSchemeEnabled</c>, on by default as its is.
+    /// </summary>
+    /// <remarks>
+    /// Where macshot's setting only decides whether an arriving URL is answered, this one
+    /// also decides whether the scheme is registered at all: on Windows nothing owns a
+    /// scheme until an app claims it in the registry, and claiming one macshot has been
+    /// told not to answer would leave every <c>macshot://</c> link in the user's launcher
+    /// silently doing nothing. Unregistered, the shell says there is no app for it, which
+    /// is both true and something the user can act on.
+    /// </remarks>
+    public bool UrlSchemeEnabled { get; init; } = true;
+
     /// <summary>Which light or dark macshot's own windows are drawn in.</summary>
     public AppTheme Theme { get; init; } = AppTheme.System;
 
