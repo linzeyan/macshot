@@ -68,6 +68,30 @@ public sealed record AnnotationStyle(
     /// </summary>
     public const double OutlineSpread = 6;
 
+    /// <summary>
+    /// How much a loupe enlarges what is under it by default. Two, as on macOS: enough to
+    /// read a hairline, little enough that the circle still shows its surroundings rather
+    /// than four fat pixels.
+    /// </summary>
+    public const double DefaultLoupeMagnification = 2;
+
+    /// <summary>
+    /// The weakest magnification worth having. Below this the circle is a circle drawn on
+    /// the screenshot for no reason, and the tool would be offering the user a way to
+    /// produce one.
+    /// </summary>
+    public const double MinLoupeMagnification = 1.1;
+
+    /// <summary>macshot's ceiling. Past it the loupe shows pixels rather than content.</summary>
+    public const double MaxLoupeMagnification = 6;
+
+    /// <summary>
+    /// How dark a spotlight takes everything outside it to begin with — macshot's own
+    /// <c>0.55</c> (<c>Annotation.swift:170</c>). Strong enough that the eye goes to the
+    /// bright part first, weak enough that what surrounds it can still be read.
+    /// </summary>
+    public const double DefaultDimOpacity = 0.55;
+
     public static AnnotationStyle Default { get; } = new(new AnnotationColor(76, 194, 255), 3);
 
     /// <summary>
@@ -127,14 +151,61 @@ public sealed record AnnotationStyle(
     /// </remarks>
     public AnnotationColor? Outline { get; init; }
 
+    /// <summary>
+    /// How dark everything outside a spotlight is taken: 0 leaves the capture as it was
+    /// and 1 is black. Read by <see cref="AnnotationTool.Highlight"/> and by nothing else.
+    /// </summary>
+    /// <remarks>
+    /// Its own number rather than <see cref="Opacity"/>, which says how translucent a mark
+    /// is drawn. A spotlight's mark is the hairline round it, so sharing the one number
+    /// would tie the two together — asking for a fainter border would lift the dim, and
+    /// the tool's only real control would have a side effect nobody asked for. macshot
+    /// keeps <c>dimOpacity</c> apart from the colour's alpha for the same reason.
+    /// </remarks>
+    public double DimOpacity { get; init; } = DefaultDimOpacity;
+
+    /// <summary>
+    /// What a numbered badge counts in. On the style rather than on the annotation
+    /// because it is picked before the badge is placed and remembered after it, which is
+    /// what every other tool setting here is.
+    /// </summary>
+    public NumberFormat NumberFormat { get; init; } = NumberFormat.Decimal;
+
+    /// <summary>
+    /// Whether the ruler reports its span in points rather than in captured pixels.
+    /// </summary>
+    /// <remarks>
+    /// macshot's <c>measureInPoints</c>. Both answers are true at once and neither is the
+    /// obviously useful one: a designer working to a layout wants the points a rule was
+    /// specified in, and anyone checking a screenshot against an asset wants the pixels it
+    /// actually occupies. Which one a reading means has to be said, so the tool says it.
+    /// </remarks>
+    public bool MeasureInPoints { get; init; }
+
+    /// <summary>
+    /// How much the loupe enlarges what is under it.
+    /// </summary>
+    /// <remarks>
+    /// A number rather than the fixed 2 it used to be, because what is being magnified
+    /// decides it: a code sample needs barely any, and a one-pixel misalignment needs as
+    /// much as the tool will give.
+    /// </remarks>
+    public double LoupeMagnification { get; init; } = DefaultLoupeMagnification;
+
     public void Validate()
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(StrokeWidth);
         ArgumentOutOfRangeException.ThrowIfNegative(CornerRadius);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(FontSize);
+        ArgumentOutOfRangeException.ThrowIfLessThan(LoupeMagnification, 1);
         if (Opacity is < 0 or > 1)
         {
             throw new ArgumentOutOfRangeException(nameof(Opacity));
+        }
+
+        if (DimOpacity is < 0 or > 1)
+        {
+            throw new ArgumentOutOfRangeException(nameof(DimOpacity));
         }
     }
 }
@@ -157,6 +228,24 @@ public sealed record Annotation(
     /// <see cref="AnnotationTool.Pencil"/>. Empty for every other tool.
     /// </summary>
     public IReadOnlyList<CapturePoint> Points { get; init; } = [];
+
+    /// <summary>
+    /// How hard the pen was pressed at each sample in <see cref="Points"/>, from 0 to 1,
+    /// or empty for a stroke of one width.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// macshot's <c>pressures</c>. Parallel to <see cref="Points"/> rather than carried on
+    /// each point, because every other tool has points and none of them has a pressure —
+    /// a nullable field on <see cref="CapturePoint"/> would double the size of every
+    /// rectangle in the document to describe something only the pencil can produce.
+    /// </para>
+    /// <para>
+    /// Empty is not the same as all-0.5: it means the stroke was drawn with the pressure
+    /// option off, and its width must not be touched at all.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<double> Pressures { get; init; } = [];
 
     public string? Text { get; init; }
 
@@ -207,10 +296,17 @@ public sealed record Annotation(
         return new Annotation(Guid.NewGuid(), tool, start, end, style ?? AnnotationStyle.Default);
     }
 
+    /// <param name="pressures">
+    /// How hard the pen was pressed at each sample, or null for a stroke of one width.
+    /// A list that does not match <paramref name="points"/> is ignored rather than
+    /// refused: pressure is an embellishment, and losing it is better than losing the
+    /// stroke the user drew.
+    /// </param>
     public static Annotation CreateFreeform(
         AnnotationTool tool,
         IEnumerable<CapturePoint> points,
-        AnnotationStyle? style = null)
+        AnnotationStyle? style = null,
+        IEnumerable<double>? pressures = null)
     {
         ArgumentNullException.ThrowIfNull(points);
 
@@ -220,9 +316,11 @@ public sealed record Annotation(
             throw new ArgumentException("A freeform annotation needs at least one sample.", nameof(points));
         }
 
+        var weights = pressures?.ToArray() ?? [];
         return new Annotation(Guid.NewGuid(), tool, samples[0], samples[^1], style ?? AnnotationStyle.Default)
         {
             Points = samples,
+            Pressures = weights.Length == samples.Length ? weights : [],
         };
     }
 
@@ -317,8 +415,12 @@ public sealed record Annotation(
         var tolerance = threshold + Style.StrokeWidth / 2;
         var bounds = BoundingRect;
 
+        // The spotlight is grabbed inside its bounds as well, though what it covers is
+        // everything else: the lit rectangle is the mark, and asking the user to find its
+        // hairline would be asking them to aim at the one part of it that is a pixel wide.
         if (IsRegionEffect || Tool is AnnotationTool.Text or AnnotationTool.Number
-            or AnnotationTool.Stamp or AnnotationTool.Loupe or AnnotationTool.TranslateOverlay)
+            or AnnotationTool.Stamp or AnnotationTool.Loupe or AnnotationTool.TranslateOverlay
+            or AnnotationTool.Highlight)
         {
             return Contains(bounds, point, tolerance);
         }

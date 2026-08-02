@@ -119,6 +119,38 @@ public sealed class AnnotationDocument
         return true;
     }
 
+    /// <summary>
+    /// Swaps one annotation for several, without recording an undo step.
+    /// </summary>
+    /// <remarks>
+    /// The batch counterpart of <see cref="Amend(Annotation)"/>, and for the same reason:
+    /// a censor region set to cover only the text inside it is one drag that resolves into
+    /// several boxes once the pixels have been read. The drag already recorded its step, so
+    /// the resolution must not record a second one — Ctrl+Z would otherwise put the region
+    /// back and need pressing again to take it away.
+    /// </remarks>
+    public bool Amend(Guid id, IEnumerable<Annotation> replacements)
+    {
+        ArgumentNullException.ThrowIfNull(replacements);
+
+        var index = _annotations.FindIndex(existing => existing.Id == id);
+        if (index < 0)
+        {
+            return false;
+        }
+
+        var batch = replacements.ToArray();
+        if (Array.Exists(batch, annotation => annotation is null))
+        {
+            throw new ArgumentException("The batch contains a null annotation.", nameof(replacements));
+        }
+
+        _annotations.RemoveAt(index);
+        _annotations.InsertRange(index, batch);
+        Changed?.Invoke(this, EventArgs.Empty);
+        return true;
+    }
+
     public bool Clear()
     {
         if (_annotations.Count == 0)

@@ -50,6 +50,29 @@ public sealed class AnnotationHandlesTests
     }
 
     [TestMethod]
+    public void Spotlight_OffersItsCornersButNoRotation()
+    {
+        // An area, not a line: it used to offer the two ends of a stroke, which on a
+        // region that has four corners to adjust is two handles in the wrong places. The
+        // rotation is left off because the rasterizer punches the lit region out of the
+        // frame's own rows and columns — a turned spotlight would show its ring at one
+        // angle and its light at another.
+        var spotlight = Shape(AnnotationTool.Highlight, 10, 10, 60, 40);
+
+        var kinds = AnnotationHandles.For(spotlight).Select(handle => handle.Kind).ToArray();
+
+        CollectionAssert.AreEquivalent(
+            new[]
+            {
+                AnnotationHandleKind.TopLeft,
+                AnnotationHandleKind.TopRight,
+                AnnotationHandleKind.BottomLeft,
+                AnnotationHandleKind.BottomRight,
+            },
+            kinds);
+    }
+
+    [TestMethod]
     public void FreeformStroke_OffersNoHandlesBecauseNoTwoPointsDescribeIt()
     {
         var pencil = Annotation.CreateFreeform(

@@ -39,6 +39,10 @@ public sealed class AnnotationFileTests
                 Bold = true,
                 TextBackground = new AnnotationColor(1, 2, 3, 200),
                 TextOutline = new AnnotationColor(4, 5, 6, 210),
+                DimOpacity = 0.3,
+                NumberFormat = NumberFormat.Roman,
+                MeasureInPoints = true,
+                LoupeMagnification = 3.5,
             }) with
         {
             Rotation = 0.75,
@@ -70,11 +74,15 @@ public sealed class AnnotationFileTests
         Assert.AreEqual(original.Style.Bold, restored[0].Style.Bold);
         Assert.AreEqual(original.Style.TextBackground, restored[0].Style.TextBackground);
         Assert.AreEqual(original.Style.TextOutline, restored[0].Style.TextOutline);
+        Assert.AreEqual(original.Style.DimOpacity, restored[0].Style.DimOpacity);
         Assert.AreEqual(original.Rotation, restored[0].Rotation);
         Assert.AreEqual(original.Bend, restored[0].Bend);
         Assert.AreEqual(group, restored[0].GroupId);
         Assert.AreEqual("note", restored[0].Text);
         Assert.AreEqual(4, restored[0].NumberValue);
+        Assert.AreEqual(original.Style.NumberFormat, restored[0].Style.NumberFormat);
+        Assert.AreEqual(original.Style.MeasureInPoints, restored[0].Style.MeasureInPoints);
+        Assert.AreEqual(original.Style.LoupeMagnification, restored[0].Style.LoupeMagnification);
     }
 
     [TestMethod]
@@ -86,6 +94,23 @@ public sealed class AnnotationFileTests
         var restored = AnnotationFile.Read(AnnotationFile.Write([stroke]));
 
         CollectionAssert.AreEqual(points, restored[0].Points.ToArray());
+    }
+
+    /// <summary>
+    /// Pressure is one number per sample, and a file that kept the samples but not the
+    /// weights would reopen a pen stroke as an even line — the same silent loss the whole
+    /// field-by-field test above exists to prevent.
+    /// </summary>
+    [TestMethod]
+    public void RoundTrip_KeepsThePressureOfAPenStroke()
+    {
+        var points = Enumerable.Range(0, 8).Select(step => new CapturePoint(step, step)).ToArray();
+        var weights = Enumerable.Range(0, 8).Select(step => (step + 1) / 8.0).ToArray();
+        var stroke = Annotation.CreateFreeform(AnnotationTool.Pencil, points, pressures: weights);
+
+        var restored = AnnotationFile.Read(AnnotationFile.Write([stroke]));
+
+        CollectionAssert.AreEqual(weights, restored[0].Pressures.ToArray());
     }
 
     [TestMethod]
@@ -157,6 +182,25 @@ public sealed class AnnotationFileTests
             """;
 
         Assert.AreEqual(0, AnnotationFile.Read(Document).Count);
+    }
+
+    [TestMethod]
+    public void Read_GivesASpotlightFromBeforeItHadAStrengthTheOneMacshotStartsWith()
+    {
+        // A file written before the spotlight existed says nothing about its dim, and
+        // nothing reads back as zero — which is no dim at all, so the mark would reopen
+        // as a bare rectangle rather than as the spotlight it was saved as.
+        const string Document =
+            """
+            {"version":1,"annotations":[{"id":"00000000-0000-0000-0000-000000000001",
+            "tool":"Highlight","startX":0,"startY":0,"endX":10,"endY":10,
+            "color":"#FF000000","strokeWidth":3,"lineStyle":"Dashed","opacity":1,
+            "arrowStyle":"Filled","cornerRadius":0}]}
+            """;
+
+        var restored = AnnotationFile.Read(Document);
+
+        Assert.AreEqual(AnnotationStyle.DefaultDimOpacity, restored[0].Style.DimOpacity);
     }
 
     [TestMethod]

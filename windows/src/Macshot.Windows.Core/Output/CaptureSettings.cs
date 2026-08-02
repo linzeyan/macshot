@@ -486,6 +486,52 @@ public sealed record CaptureSettings
     public CensorMode CensorMode { get; init; } = Annotations.CensorMode.Pixelate;
 
     /// <summary>
+    /// Whether the censor tool covers only the text it finds inside the region rather
+    /// than the whole of it. macshot's <c>censorTextOnly</c>.
+    /// </summary>
+    /// <remarks>
+    /// Off by default. Covering the whole region is what a drag over an area plainly
+    /// means, and a tool that instead redacted three words inside it would be doing
+    /// something the gesture did not ask for until the user has chosen this.
+    /// </remarks>
+    public bool CensorTextOnly { get; init; }
+
+    /// <summary>What a numbered badge counts in.</summary>
+    public NumberFormat NumberFormat { get; init; } = Annotations.NumberFormat.Decimal;
+
+    /// <summary>
+    /// The number the first badge of a capture carries. macshot's <c>numberStartAt</c>,
+    /// which exists because a screenshot is often the second figure in a document and its
+    /// callouts have to carry on from the first.
+    /// </summary>
+    public int NumberStartAt { get; init; } = 1;
+
+    /// <summary>The largest number a sequence can be started at.</summary>
+    public const int MaxNumberStartAt = 999;
+
+    /// <summary>Whether the ruler reports points rather than captured pixels.</summary>
+    public bool MeasureInPoints { get; init; }
+
+    /// <summary>How much the loupe enlarges what is under it.</summary>
+    public double LoupeMagnification { get; init; } = AnnotationStyle.DefaultLoupeMagnification;
+
+    /// <summary>
+    /// Whether the highlighter snaps to the line of text it was drawn across. macshot's
+    /// <c>smartMarkerEnabled</c>, off by default: it costs an OCR pass per stroke, and a
+    /// marker that jumped somewhere the hand did not go would be alarming before it was
+    /// understood.
+    /// </summary>
+    public bool SmartMarker { get; init; }
+
+    /// <summary>
+    /// Whether a freehand stroke thins and thickens with pen pressure. macshot's
+    /// <c>pencilPressureEnabled</c>, off by default — a mouse reports one pressure for
+    /// every sample, so on most machines this changes nothing and the even stroke is the
+    /// honest default.
+    /// </summary>
+    public bool PencilPressure { get; init; }
+
+    /// <summary>
     /// Offers the previous selection again on the next capture. Off by default: a
     /// selection that reappears where the last one was is a surprise until you know
     /// the setting exists.
@@ -1114,6 +1160,12 @@ public sealed record CaptureSettings
             CensorMode: CensorMode,
             ShapeFill: AnnotationShapeFill)
         {
+            NumberFormat = NumberFormat,
+            MeasureInPoints = MeasureInPoints,
+            LoupeMagnification = Math.Clamp(
+                LoupeMagnification,
+                AnnotationStyle.MinLoupeMagnification,
+                AnnotationStyle.MaxLoupeMagnification),
             FontSize = Math.Clamp(
                 AnnotationFontSize,
                 AnnotationStyle.MinFontSize,
@@ -1146,6 +1198,9 @@ public sealed record CaptureSettings
             AnnotationShapeFill = style.ShapeFill,
             AnnotationCornerRadius = style.CornerRadius,
             CensorMode = style.CensorMode,
+            NumberFormat = style.NumberFormat,
+            MeasureInPoints = style.MeasureInPoints,
+            LoupeMagnification = style.LoupeMagnification,
             AnnotationFontSize = style.FontSize,
             AnnotationFontFamily = style.FontFamily,
             AnnotationBold = style.Bold,
@@ -1243,6 +1298,18 @@ public sealed record CaptureSettings
                 ? PencilSmoothing
                 : Annotations.PencilSmoothing.Smooth,
             CensorMode = Enum.IsDefined(CensorMode) ? CensorMode : Annotations.CensorMode.Pixelate,
+            NumberFormat = Enum.IsDefined(NumberFormat) ? NumberFormat : Annotations.NumberFormat.Decimal,
+            NumberStartAt = Math.Clamp(NumberStartAt, 1, MaxNumberStartAt),
+            // Below the minimum means the setting was never written — every file from
+            // before the loupe had a slider says zero — so it takes the default rather
+            // than being clamped up to the weakest magnification the slider offers.
+            // Above the maximum is a hand-edit asking for more than exists, and is
+            // clamped down to what the tool can actually do.
+            LoupeMagnification =
+                double.IsFinite(LoupeMagnification)
+                && LoupeMagnification >= AnnotationStyle.MinLoupeMagnification
+                    ? Math.Min(LoupeMagnification, AnnotationStyle.MaxLoupeMagnification)
+                    : AnnotationStyle.DefaultLoupeMagnification,
             DelaySeconds = CaptureDelayChosen ? Math.Clamp(DelaySeconds, MinDelaySeconds, MaxDelaySeconds) : 0,
             CaptureDelayChosen = true,
             HistorySize = Math.Clamp(HistorySize, 0, MaxHistorySize),

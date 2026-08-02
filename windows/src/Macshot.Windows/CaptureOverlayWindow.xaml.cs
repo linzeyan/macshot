@@ -631,7 +631,7 @@ public sealed partial class CaptureOverlayWindow : Window
                 return;
             }
 
-            _editor.PointerPressed(ToFrame(e), ToModifiers(e));
+            _editor.PointerPressed(ToFrame(e), ToModifiers(e), PenInput.Of(e));
             RenderAnnotations();
             return;
         }
@@ -706,7 +706,7 @@ public sealed partial class CaptureOverlayWindow : Window
         {
             if (e.Pointer.IsInContact)
             {
-                _editor.PointerMoved(ToFrame(e), ToModifiers(e));
+                _editor.PointerMoved(ToFrame(e), ToModifiers(e), PenInput.Of(e));
                 RenderAnnotations();
             }
 
@@ -905,12 +905,13 @@ public sealed partial class CaptureOverlayWindow : Window
 
         if (IsAnnotating)
         {
-            _editor.PointerReleased(ToFrame(e), ToModifiers(e));
+            var committed = _editor.PointerReleased(ToFrame(e), ToModifiers(e), PenInput.Of(e));
             RenderAnnotations();
 
-            // After the release, because a ruler's reading is only knowable once the
-            // drag that measures it has stopped.
-            AnnotationCanvas.LabelRulers();
+            // After the release, because what a ruler reads, what text a highlighter
+            // crossed and what words a redaction covers are none of them knowable until
+            // the drag that made the mark has stopped.
+            AnnotationCanvas.FinishedGesture(committed);
             return;
         }
 
@@ -2444,6 +2445,9 @@ public sealed partial class CaptureOverlayWindow : Window
             () => OverlayRoot.XamlRoot?.RasterizationScale ?? _monitor.Scale,
             message => Hint(message));
         AnnotationCanvas.StampEmoji = () => AnnotationToolbar.StampEmoji;
+        AnnotationCanvas.NumberStartAt = () => AnnotationToolbar.NumberStartAt;
+        AnnotationCanvas.SmartMarker = () => AnnotationToolbar.SmartMarker;
+        AnnotationCanvas.CensorTextOnly = () => AnnotationToolbar.CensorTextOnly;
         AnnotationCanvas.TypingEnded += (_, _) =>
         {
             OverlayRoot.Focus(FocusState.Programmatic);

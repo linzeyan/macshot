@@ -25,11 +25,29 @@ internal static class MeasureReading
     private const double FontSizePerStrokeUnit = 5;
 
     /// <summary>
-    /// What the ruler says. Whole pixels, because the span is a count of them and a
-    /// fractional answer would be reporting precision the screenshot does not have.
+    /// What the ruler says, in the unit the toolbar is set to.
     /// </summary>
-    public static string Format(double span) =>
-        string.Create(CultureInfo.CurrentCulture, $"{Math.Round(span)} px");
+    /// <remarks>
+    /// <para>
+    /// Whole units either way, because the span is a count of pixels and a fractional
+    /// answer would be reporting precision the screenshot does not have.
+    /// </para>
+    /// <para>
+    /// A point here is what a point is everywhere else on Windows: a ninety-sixth of an
+    /// inch, which is one pixel at 100% and half of one at 200%. Dividing by the scale the
+    /// capture was taken at is what turns the second into the first — the same conversion
+    /// macshot makes through the backing scale factor, and the reason the two builds agree
+    /// about a rule measured on the same screen.
+    /// </para>
+    /// </remarks>
+    public static string Format(double span, bool inPoints, double rasterizationScale)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(rasterizationScale);
+
+        return inPoints
+            ? string.Create(CultureInfo.CurrentCulture, $"{Math.Round(span / rasterizationScale)} pt")
+            : string.Create(CultureInfo.CurrentCulture, $"{Math.Round(span)} px");
+    }
 
     public static FrameworkElement Build(AnnotationStyle style, double span, double rasterizationScale)
     {
@@ -52,7 +70,7 @@ internal static class MeasureReading
             Background = new SolidColorBrush(fill),
             Child = new TextBlock
             {
-                Text = Format(span),
+                Text = Format(span, style.MeasureInPoints, rasterizationScale),
                 FontSize = fontSize,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = new SolidColorBrush(GlyphSpriteFactory.ReadableOn(fill)),

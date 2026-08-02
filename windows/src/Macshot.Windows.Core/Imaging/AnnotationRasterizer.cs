@@ -44,14 +44,8 @@ public static class AnnotationRasterizer
         AnnotationTool.Stamp,
         AnnotationTool.Measure,
         AnnotationTool.Loupe,
+        AnnotationTool.Highlight,
     ];
-
-    /// <summary>
-    /// How much a loupe enlarges what is under it. Two, as on macOS: enough to read a
-    /// hairline, little enough that the circle still shows its surroundings rather
-    /// than four fat pixels.
-    /// </summary>
-    private const double LoupeZoom = 2;
 
     /// <summary>The bar across each end of a measure, in stroke widths.</summary>
     private const double MeasureCapLength = 3;
@@ -61,6 +55,13 @@ public static class AnnotationRasterizer
     /// at any size a capture is taken at, and cheap because each one is only a point.
     /// </summary>
     private const int BendSegments = 24;
+
+    /// <summary>
+    /// Segments one leg of a sketchy arrow's chevron is flattened into. Fewer than the
+    /// shaft's, because a leg is a fraction of the shaft's length and the bow on it is a
+    /// single arc rather than a wander.
+    /// </summary>
+    private const int ChevronSegments = 12;
 
     /// <summary>
     /// How many places a banner arrow's taper is measured at. Fewer than macshot's 64
@@ -114,10 +115,37 @@ public static class AnnotationRasterizer
         }
 
         bgraPixels.CopyTo(destination);
-        foreach (var annotation in annotations)
+
+        // Walked more than once, so a lazy sequence is settled first. The preview hands in
+        // a Select over the document on every pointer move; enumerating that twice would
+        // rebuild every translated mark twice for the same frame.
+        var marks = annotations as IReadOnlyList<Annotation> ?? [.. annotations];
+        foreach (var mark in marks)
         {
-            annotation.Style.Validate();
-            DrawAnnotation(destination, width, height, annotation);
+            mark.Style.Validate();
+        }
+
+        // Region effects rewrite the pixels they cover, so they belong to the capture
+        // rather than to what is drawn on it; the spotlight dims that capture; the marks
+        // go on top of both. macshot's own order (OverlayView.swift:9481-9492), and the
+        // reason for it is that a dim laid over the marks would darken the very things
+        // that were drawn to be read.
+        foreach (var mark in marks)
+        {
+            if (mark.IsRegionEffect)
+            {
+                DrawAnnotation(destination, width, height, mark);
+            }
+        }
+
+        Spotlight(destination, width, height, marks);
+
+        foreach (var mark in marks)
+        {
+            if (!mark.IsRegionEffect)
+            {
+                DrawAnnotation(destination, width, height, mark);
+            }
         }
     }
 
@@ -130,8 +158,18 @@ public static class AnnotationRasterizer
             break;
         case AnnotationTool.Line:
         case AnnotationTool.Marker:
-        case AnnotationTool.Highlight:
             CompositeStrokes(pixels, width, height, [BuildShaftPath(annotation)], annotation);
+            break;
+        case AnnotationTool.Highlight:
+            // Only the hairline: what makes a spotlight a spotlight is the dim outside it,
+            // and that is one pass over every spotlight at once rather than anything this
+            // mark draws for itself. See <see cref="Spotlight"/>.
+            CompositeStrokes(
+                pixels,
+                width,
+                height,
+                [BuildRectanglePath(annotation.BoundingRect)],
+                SpotlightBorder(annotation));
             break;
         case AnnotationTool.Arrow:
             CompositeArrow(pixels, width, height, annotation);
@@ -149,7 +187,12 @@ public static class AnnotationRasterizer
 
             break;
         case AnnotationTool.Loupe:
-            PixelEffects.Magnify(pixels, width, height, annotation.BoundingRect, LoupeZoom);
+            PixelEffects.Magnify(
+                pixels,
+                width,
+                height,
+                annotation.BoundingRect,
+                annotation.Style.LoupeMagnification);
             CompositeStrokes(
                 pixels,
                 width,
@@ -351,6 +394,148 @@ public static class AnnotationRasterizer
     /// </summary>
     private static double BlurRadius(CaptureRegion region) =>
         Math.Max(10, Math.Min(region.Width, region.Height) * 0.03);
+
+    /// <summary>The hairline round a spotlight, in frame pixels — macshot's own 1.5.</summary>
+    private const double SpotlightBorderWidth = 1.5;
+
+    /// <summary>
+    /// How solid that hairline is. macshot draws it white at 0.6, which is enough to find
+    /// the edge of the light against a bright photograph and little enough that it does
+    /// not become a rectangle in its own right.
+    /// </summary>
+    private const double SpotlightBorderOpacity = 0.6;
+
+    private static readonly AnnotationColor SpotlightBorderColor = new(255, 255, 255);
+
+    /// <summary>
+    /// The style the ring round a spotlight is drawn in: white, thin, and the annotation's
+    /// own dash pattern.
+    /// </summary>
+    /// <remarks>
+    /// Fixed rather than taken from the drawing colour and the size slider, as macshot
+    /// fixes it (<c>Annotation.swift:2058</c>). The mark here is the region left bright —
+    /// a ring in the current colour at the current width would read as a rectangle
+    /// somebody drew round it, and a ring the colour of what it sits on would vanish.
+    /// </remarks>
+    private static Annotation SpotlightBorder(Annotation annotation) => annotation with
+    {
+        Style = annotation.Style with
+        {
+            Color = SpotlightBorderColor,
+            Opacity = SpotlightBorderOpacity,
+            StrokeWidth = SpotlightBorderWidth,
+
+            // A halo would be a second ring round the first, in a colour the tool never
+            // offered: the spotlight is not drawn in the style the halo belongs to.
+            Outline = null,
+        },
+    };
+
+    /// <summary>
+    /// Takes down everything outside the spotlights, in one pass over the union of them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// One pass rather than one per mark, which is what makes two overlapping spotlights
+    /// read as one lit region instead of dimming their surroundings twice over. A pixel
+    /// keeps the brightest claim any spotlight makes on it — the maximum, not the sum —
+    /// which is the union macshot punches with <c>destinationOut</c> rather than the
+    /// even-odd fill it warns against, where a point inside two rectangles would count as
+    /// outside them (<c>Annotation.swift:2077-2080</c>).
+    /// </para>
+    /// <para>
+    /// The whole set shares one strength, taken from the strongest spotlight, because the
+    /// dim is a single layer over the capture and a layer has one opacity. Two strengths
+    /// would need two layers, and the second would darken what the first already had.
+    /// </para>
+    /// </remarks>
+    private static void Spotlight(byte[] pixels, int width, int height, IReadOnlyList<Annotation> marks)
+    {
+        var lit = new List<CaptureRegion>();
+        var strength = 0d;
+
+        foreach (var mark in marks)
+        {
+            if (mark.Tool != AnnotationTool.Highlight)
+            {
+                continue;
+            }
+
+            strength = Math.Max(strength, mark.Style.DimOpacity);
+
+            // A spotlight dragged out and abandoned is a couple of pixels across. Lighting
+            // it would leave a speck of undimmed capture that cannot be aimed at to undo.
+            var bounds = mark.BoundingRect.Intersect(new CaptureRegion(0, 0, width, height));
+            if (bounds.Width > 1 && bounds.Height > 1)
+            {
+                lit.Add(bounds);
+            }
+        }
+
+        if (lit.Count == 0 || strength <= 0)
+        {
+            return;
+        }
+
+        // How much of each row every spotlight covers, worked out once for the row rather
+        // than again at every pixel along it.
+        var down = new double[lit.Count];
+
+        for (var y = 0; y < height; y++)
+        {
+            var reaches = false;
+            for (var index = 0; index < lit.Count; index++)
+            {
+                down[index] = Overlap(lit[index].Y, lit[index].Bottom, y);
+                reaches |= down[index] > 0;
+            }
+
+            for (var x = 0; x < width; x++)
+            {
+                var brightest = 0d;
+                if (reaches)
+                {
+                    for (var index = 0; index < lit.Count && brightest < 1; index++)
+                    {
+                        if (down[index] <= 0)
+                        {
+                            continue;
+                        }
+
+                        brightest = Math.Max(
+                            brightest,
+                            down[index] * Overlap(lit[index].X, lit[index].Right, x));
+                    }
+                }
+
+                var alpha = (1 - brightest) * strength;
+                if (alpha <= 0)
+                {
+                    continue;
+                }
+
+                var offset = ((y * width) + x) * 4;
+                pixels[offset] = Darken(pixels[offset], alpha);
+                pixels[offset + 1] = Darken(pixels[offset + 1], alpha);
+                pixels[offset + 2] = Darken(pixels[offset + 2], alpha);
+            }
+        }
+    }
+
+    /// <summary>
+    /// How much of the pixel at <paramref name="at"/> lies between the two edges, from
+    /// none of it to all of it. Fractional so the edge of the light is not a staircase on
+    /// a spotlight that was not dragged to a whole pixel.
+    /// </summary>
+    private static double Overlap(double from, double to, int at) =>
+        Math.Clamp(Math.Min(to, at + 1) - Math.Max(from, at), 0, 1);
+
+    /// <summary>
+    /// Mixes one channel towards black. The alpha byte is left alone: the dim says how
+    /// much light reaches the capture, not how much of the capture is there.
+    /// </summary>
+    private static byte Darken(byte channel, double alpha) =>
+        (byte)Math.Clamp(Math.Round(channel * (1 - alpha)), byte.MinValue, byte.MaxValue);
 
     private static CapturePoint[] BuildFreeformPath(Annotation annotation)
     {
@@ -601,6 +786,22 @@ public static class AnnotationRasterizer
             return;
         }
 
+        // Hand-drawn: every part of it is a wobble off the straight answer, so it shares
+        // no geometry with the arrows above. Its own branch for the reason the banner has
+        // one, and it drops the dash pattern for the same reason — a hand-drawn dashed
+        // line reads as a mistake rather than as a style.
+        if (style == ArrowStyle.Sketchy)
+        {
+            CompositeShape(
+                pixels,
+                width,
+                height,
+                SketchyArrow(annotation, shaft, pointing),
+                [],
+                annotation with { Style = annotation.Style with { LineStyle = LineStyle.Solid } });
+            return;
+        }
+
         var strokes = new List<CapturePoint[]> { shaft };
         var fills = new List<CapturePoint[]>();
 
@@ -701,6 +902,177 @@ public static class AnnotationRasterizer
             new CapturePoint(baseAt.X + (heading.Y * headHalf), baseAt.Y - (heading.X * headHalf)),
             .. right,
         ];
+    }
+
+    /// <summary>
+    /// A hand-drawn arrow: a shaft that wanders off the line it was aimed along, under an
+    /// open chevron whose two legs do not match.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// macshot's <c>drawSketchyArrow</c> (<c>Annotation.swift:1231</c>). Everything that
+    /// makes it look drawn rather than laid down is asymmetry — the legs differ in length,
+    /// in spread, in tilt and in which way they bow, and the nose overshoots the shaft the
+    /// way a pen flick does. A version that varied only the shaft would read as a wobbly
+    /// machine arrow, which is worse than a straight one.
+    /// </para>
+    /// <para>
+    /// The shaft stops short of the head rather than running into it. A chevron is drawn
+    /// over the end of a line by hand, not welded to it, and the small gap is most of what
+    /// sells the whole mark.
+    /// </para>
+    /// <para>
+    /// Returned as paths rather than composited here so the halo, the dash rules and the
+    /// single-mask compositing all stay in <see cref="CompositeShape"/>: laid separately,
+    /// the legs would blend twice against the shaft through a translucent colour.
+    /// </para>
+    /// </remarks>
+    private static IReadOnlyList<CapturePoint[]> SketchyArrow(
+        Annotation annotation,
+        CapturePoint[] shaft,
+        bool pointing)
+    {
+        var centre = pointing ? shaft : [.. shaft.Reverse()];
+        var length = PathLength(centre);
+        if (length <= 4)
+        {
+            return [centre];
+        }
+
+        var noise = new SketchyNoise(annotation.Id);
+        var stroke = Math.Max(1.2, annotation.Style.StrokeWidth);
+        var headLength = Math.Min(Math.Max(stroke * 4.3, 13), length * 0.27);
+        var gap = Math.Clamp(stroke * 0.28, 1.5, Math.Max(2, length * 0.025));
+        var shaftLength = Math.Max(0, length - headLength - gap);
+
+        // How far off the line the shaft strays. Bounded at both ends: proportional
+        // wobble on a heavy stroke would come out as a corkscrew, and none at all on a
+        // hairline would leave a straight arrow wearing a crooked head.
+        var wander = Math.Clamp(stroke * 0.18, 0.45, 1.8);
+        var slowPhase = noise.Next(0, Math.Tau);
+        var fastPhase = noise.Next(0, Math.Tau);
+
+        // One sample per six pixels, floored so a short arrow still curves and capped so
+        // a full-width one does not stamp a thousand discs for a wobble nobody can see.
+        var steps = Math.Clamp((int)(length / 6), 12, 140);
+
+        var wobbled = new CapturePoint[steps + 1];
+        for (var step = 0; step <= steps; step++)
+        {
+            var progress = (double)step / steps;
+            var at = PointAlong(centre, shaftLength * progress, out var along);
+
+            // Died away at both ends, so the arrow still starts where the hand pressed
+            // and still lines up with the head it is about to meet.
+            var taper = Math.Pow(Math.Sin(progress * Math.PI), 0.85);
+            var offset = ((Math.Sin((progress * 8.5) + slowPhase) * wander)
+                + (Math.Sin((progress * 19) + fastPhase) * wander * 0.24)) * taper;
+
+            wobbled[step] = new CapturePoint(
+                at.X - (along.Y * offset),
+                at.Y + (along.X * offset));
+        }
+
+        PointAlong(centre, length, out var heading);
+        var tip = centre[^1];
+
+        // The nose runs past where the drag stopped and a little to one side of it.
+        var overshoot = noise.Next(headLength * 0.04, headLength * 0.14);
+        var sideways = noise.Next(-headLength * 0.05, headLength * 0.05);
+        var nose = new CapturePoint(
+            tip.X + (heading.X * overshoot) - (heading.Y * sideways),
+            tip.Y + (heading.Y * overshoot) + (heading.X * sideways));
+
+        var spread = Math.Max(stroke * 2.6, 8);
+
+        // The legs are drawn one after the other from the same noise, which is what makes
+        // them differ: passed by value each would start from the same state and the head
+        // would come out symmetrical.
+        var longLeg = headLength * noise.Next(0.92, 1.18);
+        var longSpread = spread * noise.Next(0.95, 1.25);
+        var shortLeg = headLength * noise.Next(0.78, 1.08);
+        var shortSpread = spread * noise.Next(0.85, 1.15);
+
+        return
+        [
+            wobbled,
+            ChevronLeg(nose, heading, longLeg, longSpread, ref noise),
+            ChevronLeg(nose, heading, shortLeg, -shortSpread, ref noise),
+        ];
+    }
+
+    /// <summary>
+    /// One leg of a hand-drawn chevron: back from the nose, out to the side by
+    /// <paramref name="spread"/> — signed, so the two legs go opposite ways — and bowed.
+    /// </summary>
+    private static CapturePoint[] ChevronLeg(
+        CapturePoint nose,
+        CapturePoint heading,
+        double legLength,
+        double spread,
+        ref SketchyNoise noise)
+    {
+        // A tilt off the perfect mirror, so the two legs are not the same leg reflected.
+        var skew = noise.Next(-0.18, 0.18);
+        var end = new CapturePoint(
+            nose.X - (heading.X * legLength) - (heading.Y * spread) + (heading.X * skew * spread),
+            nose.Y - (heading.Y * legLength) + (heading.X * spread) + (heading.Y * skew * spread));
+
+        // Which way it bows is decided per leg. Mirrored, the head would read as a drawn
+        // shape rather than as two strokes made one after the other.
+        var bow = noise.Next(0.10, 0.22) * legLength * (noise.Coin() ? 1 : -1);
+
+        // Off the midpoint, so the curve peaks where a stroke made in one movement does.
+        var peak = noise.Next(0.40, 0.62);
+        var drift = noise.Next(-0.08, 0.08) * legLength;
+
+        var control = new CapturePoint(
+            nose.X + ((end.X - nose.X) * peak) - (heading.Y * bow) + (heading.X * drift),
+            nose.Y + ((end.Y - nose.Y) * peak) + (heading.X * bow) + (heading.Y * drift));
+
+        var leg = new CapturePoint[ChevronSegments + 1];
+        for (var step = 0; step <= ChevronSegments; step++)
+        {
+            leg[step] = QuadraticAt(nose, control, end, (double)step / ChevronSegments);
+        }
+
+        return leg;
+    }
+
+    /// <summary>
+    /// The same wobble every time, for one arrow.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// macshot's <c>SketchyRNG</c> — xorshift32, seeded per annotation. A shared
+    /// <see cref="Random"/> would reshuffle the arrow on every render, and the preview
+    /// redraws on each pointer move: the arrow would boil for the whole length of a drag
+    /// and come out of the export as a third shape again.
+    /// </para>
+    /// <para>
+    /// Seeded from the annotation's own id rather than from a stored number, so the wobble
+    /// survives a <c>with</c> expression, a reopened file, and a copy — all of which keep
+    /// the id — without another field to remember in three places.
+    /// </para>
+    /// </remarks>
+    private struct SketchyNoise(Guid seed)
+    {
+        // Never zero: xorshift is stuck at zero forever, and Guid.Empty is a real value
+        // an annotation built by hand in a test can carry.
+        private uint _state = (uint)seed.GetHashCode() | 1u;
+
+        public double Next(double from, double to) =>
+            from + ((double)Step() / uint.MaxValue * (to - from));
+
+        public bool Coin() => (Step() & 1) == 0;
+
+        private uint Step()
+        {
+            _state ^= _state << 13;
+            _state ^= _state >> 17;
+            _state ^= _state << 5;
+            return _state;
+        }
     }
 
     /// <summary>How far it is from one end of a polyline to the other.</summary>
@@ -976,7 +1348,15 @@ public static class AnnotationRasterizer
 
             foreach (var path in paths)
             {
-                StrokePath(mask, path, laid);
+                // Pressure applies to the path it was sampled along and to no other, so
+                // the test is the count rather than a flag. The halo pass gets the same
+                // paths, and so tapers with the mark instead of ringing a thinned stroke
+                // with a stroke of full width.
+                StrokePath(
+                    mask,
+                    path,
+                    laid,
+                    annotation.Pressures.Count == path.Length ? annotation.Pressures : null);
             }
 
             foreach (var fill in fills)
@@ -1005,14 +1385,24 @@ public static class AnnotationRasterizer
         mask.Composite(pixels, width, style.Color, style.Opacity);
     }
 
-    private static void StrokePath(CoverageMask mask, CapturePoint[] path, AnnotationStyle style)
+    /// <param name="pressures">
+    /// One weight per point, or null for an even stroke. Ignored for a dashed or dotted
+    /// line, as macshot ignores it (<c>Annotation.swift:728</c>): a dash is already a
+    /// width that starts and stops, and varying it as well leaves a row of unrelated
+    /// blobs.
+    /// </param>
+    private static void StrokePath(
+        CoverageMask mask,
+        CapturePoint[] path,
+        AnnotationStyle style,
+        IReadOnlyList<double>? pressures = null)
     {
         if (path.Length == 0)
         {
             return;
         }
 
-        var polyline = new Polyline(path);
+        var polyline = new Polyline(path, style.LineStyle == LineStyle.Solid ? pressures : null);
         var radius = Math.Max(0.5, style.StrokeWidth / 2);
 
         // Half a radius between stamps keeps the stroke gap-free without stamping
@@ -1071,11 +1461,11 @@ public static class AnnotationRasterizer
         for (var distance = from; distance < to; distance += step)
         {
             var point = polyline.PointAt(distance);
-            mask.AddDisc(point.X, point.Y, radius);
+            mask.AddDisc(point.X, point.Y, radius * polyline.WidthAt(distance));
         }
 
         var end = polyline.PointAt(to);
-        mask.AddDisc(end.X, end.Y, radius);
+        mask.AddDisc(end.X, end.Y, radius * polyline.WidthAt(to));
     }
 
     private static bool TryGetPathBounds(IReadOnlyList<CapturePoint[]> paths, out CaptureRegion bounds)
@@ -1105,12 +1495,28 @@ public static class AnnotationRasterizer
     /// <summary>A polyline that can be sampled by arc length, which is what dashing needs.</summary>
     private sealed class Polyline
     {
+        /// <summary>
+        /// The smallest share of the stroke width the lightest touch still draws —
+        /// macshot's <c>minFraction</c>. A pen barely touching the glass has to leave a
+        /// mark, or the start of every stroke goes missing.
+        /// </summary>
+        private const double MinPressureWidth = 0.2;
+
+        /// <summary>
+        /// The curve raw pressure is bent through. Under one, so the difference between a
+        /// light and a medium touch is small and a deliberate press stands out —
+        /// otherwise a stroke drawn at a comfortable weight reads as half-hearted.
+        /// </summary>
+        private const double PressureCurve = 0.6;
+
         private readonly CapturePoint[] _points;
         private readonly double[] _cumulative;
+        private readonly IReadOnlyList<double>? _pressures;
 
-        internal Polyline(CapturePoint[] points)
+        internal Polyline(CapturePoint[] points, IReadOnlyList<double>? pressures = null)
         {
             _points = points;
+            _pressures = pressures?.Count == points.Length ? pressures : null;
             _cumulative = new double[points.Length];
             for (var index = 1; index < points.Length; index++)
             {
@@ -1121,6 +1527,27 @@ public static class AnnotationRasterizer
         }
 
         internal double Length => _cumulative.Length == 0 ? 0 : _cumulative[^1];
+
+        /// <summary>
+        /// What share of the full stroke width to lay down at this distance, from
+        /// <see cref="MinPressureWidth"/> to 1. Always 1 for a stroke drawn without
+        /// pressure, so the caller has nothing to branch on.
+        /// </summary>
+        /// <remarks>
+        /// Interpolated between the two samples either side rather than stepped at each
+        /// one. A pen reports pressure at whatever rate the digitizer runs, and stepping
+        /// would show those samples as visible collars along the stroke.
+        /// </remarks>
+        internal double WidthAt(double distance)
+        {
+            if (_pressures is null)
+            {
+                return 1;
+            }
+
+            return MinPressureWidth
+                + (Math.Pow(Math.Clamp(SampleAt(distance), 0, 1), PressureCurve) * (1 - MinPressureWidth));
+        }
 
         internal CapturePoint PointAt(double distance)
         {
@@ -1153,6 +1580,37 @@ public static class AnnotationRasterizer
             return new CapturePoint(
                 start.X + (end.X - start.X) * progress,
                 start.Y + (end.Y - start.Y) * progress);
+        }
+
+        /// <summary>The pressure a given distance along, blended across the segment it falls in.</summary>
+        private double SampleAt(double distance)
+        {
+            var pressures = _pressures!;
+            if (pressures.Count == 1 || distance <= 0)
+            {
+                return pressures[0];
+            }
+
+            if (distance >= Length)
+            {
+                return pressures[^1];
+            }
+
+            var segment = Array.BinarySearch(_cumulative, distance);
+            if (segment < 0)
+            {
+                segment = ~segment;
+            }
+
+            segment = Math.Clamp(segment, 1, pressures.Count - 1);
+            var segmentLength = _cumulative[segment] - _cumulative[segment - 1];
+            if (segmentLength <= 0)
+            {
+                return pressures[segment];
+            }
+
+            var progress = (distance - _cumulative[segment - 1]) / segmentLength;
+            return pressures[segment - 1] + ((pressures[segment] - pressures[segment - 1]) * progress);
         }
     }
 }

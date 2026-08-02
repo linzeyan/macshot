@@ -9,12 +9,30 @@ public sealed class AnnotationToolOptionsTests
     [TestMethod]
     public void EveryDrawnTool_TakesTheSizeControl()
     {
-        // Every tool that draws a mark, which is all of them but the censor: its two
-        // strengths are chosen for the user rather than set.
-        foreach (var tool in AnnotationRasterizer.SupportedTools.Where(tool => tool != AnnotationTool.Censor))
+        // Every tool that draws a mark. The censor is out because its two strengths are
+        // chosen for the user rather than set, and the spotlight because what it puts on
+        // the capture is a hairline round a region — the region is what was dragged, and
+        // the hairline is the same width whatever the slider says.
+        var drawn = AnnotationRasterizer.SupportedTools
+            .Where(tool => tool is not (AnnotationTool.Censor or AnnotationTool.Highlight));
+
+        foreach (var tool in drawn)
         {
             Assert.IsTrue(AnnotationToolOptions.UsesSize(tool), $"{tool} should take a size");
         }
+    }
+
+    [TestMethod]
+    public void TheSpotlight_TakesNeitherAColourNorASize()
+    {
+        // Its whole mark is decided for it: black outside, a white hairline round the
+        // light, both at the strengths macshot draws them. A colour swatch and a width
+        // slider on this tool would be two controls that change nothing at all.
+        Assert.IsFalse(AnnotationToolOptions.UsesColor(AnnotationTool.Highlight));
+        Assert.IsFalse(AnnotationToolOptions.UsesSize(AnnotationTool.Highlight));
+
+        // The one thing about that hairline the user does choose, as macshot lets them.
+        Assert.IsTrue(AnnotationToolOptions.UsesLineStyle(AnnotationTool.Highlight));
     }
 
     [TestMethod]

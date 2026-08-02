@@ -4,16 +4,10 @@ namespace Macshot.Windows.Core.Annotations;
 /// What the ends of an arrow look like.
 /// </summary>
 /// <remarks>
-/// <para>
-/// The four here are the ones that say something different: a solid head, a drawn one,
-/// a head at each end for a mark that ties two things together, and a bar across the
-/// tail for a mark that has to say where it starts as well as where it points.
-/// </para>
-/// <para>
-/// macOS also offers a thick arrow. It is left out because the width slider is already
-/// on the toolbar and does the same thing more finely — an option that duplicates a
-/// control beside it teaches the user that neither is worth reading.
-/// </para>
+/// macshot's six, each saying something the others do not: a solid head, a banner cut
+/// from one piece, a drawn head, a head at each end for a mark that ties two things
+/// together, a bar across the tail for a mark that has to say where it starts as well as
+/// where it points, and one that looks drawn by hand.
 /// </remarks>
 public enum ArrowStyle
 {
@@ -39,4 +33,23 @@ public enum ArrowStyle
 
     /// <summary>A filled head at the far end and a bar across the near one.</summary>
     Tail,
+
+    /// <summary>
+    /// A wobbling shaft under an open chevron with uneven legs: an arrow that reads as
+    /// drawn on the screenshot by hand rather than laid on it by a machine.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Last, where macshot puts it. The order is the order of the segments in the toolbar,
+    /// and a style inserted anywhere else would sit in a different place in the two
+    /// products' pickers.
+    /// </para>
+    /// <para>
+    /// The wobble is not random each time it is drawn — it is derived from the
+    /// annotation's own id, so the same arrow comes out the same in the preview, in the
+    /// delivered image, and after the file is reopened. An arrow that reshuffled itself on
+    /// every render would flicker for the whole length of a drag.
+    /// </para>
+    /// </remarks>
+    Sketchy,
 }
