@@ -47,7 +47,6 @@ public static class AnnotationToolOptions
         or AnnotationTool.Line
         or AnnotationTool.Arrow
         or AnnotationTool.Marker
-        or AnnotationTool.Highlight
         or AnnotationTool.Measure
         or AnnotationTool.Loupe
         or AnnotationTool.Rectangle
@@ -100,6 +99,19 @@ public static class AnnotationToolOptions
     /// at, which is on screen at the time.
     /// </summary>
     public static bool UsesDimStrength(AnnotationTool tool) => IsSpotlight(tool);
+
+    /// <summary>
+    /// Whether the spotlight's own border control applies — solid or dashed, and nothing
+    /// else.
+    /// </summary>
+    /// <remarks>
+    /// Its own two-way control rather than the general dash picker, which is why
+    /// <see cref="UsesLineStyle"/> passes the spotlight over. Dotted is missing on purpose:
+    /// the ring sits on whatever the capture happens to show, and a dotted hairline at
+    /// 0.6 opacity over a photograph is a row of specks rather than an edge. macshot offers
+    /// the same two (<c>ToolOptionsRowView.swift:406-430</c>).
+    /// </remarks>
+    public static bool UsesSpotlightBorder(AnnotationTool tool) => IsSpotlight(tool);
 
     /// <summary>
     /// Whether the highlighter's snap-to-text option applies.

@@ -31,8 +31,11 @@ public sealed class AnnotationToolOptionsTests
         Assert.IsFalse(AnnotationToolOptions.UsesColor(AnnotationTool.Highlight));
         Assert.IsFalse(AnnotationToolOptions.UsesSize(AnnotationTool.Highlight));
 
-        // The one thing about that hairline the user does choose, as macshot lets them.
-        Assert.IsTrue(AnnotationToolOptions.UsesLineStyle(AnnotationTool.Highlight));
+        // The one thing about that hairline the user does choose, as macshot lets them —
+        // through the spotlight's own two-way control rather than the general dash picker,
+        // which offers a dotted ring the tool has no use for.
+        Assert.IsTrue(AnnotationToolOptions.UsesSpotlightBorder(AnnotationTool.Highlight));
+        Assert.IsFalse(AnnotationToolOptions.UsesLineStyle(AnnotationTool.Highlight));
     }
 
     /// <summary>

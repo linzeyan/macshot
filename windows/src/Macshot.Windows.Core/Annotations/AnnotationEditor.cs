@@ -113,6 +113,17 @@ public sealed class AnnotationEditor
     public bool PenPressure { get; set; }
 
     /// <summary>
+    /// How the ring round a spotlight is drawn. Dashed by default, as macshot's is.
+    /// </summary>
+    /// <remarks>
+    /// Its own setting rather than a read of <see cref="Style"/>, because the spotlight's
+    /// border and the dash picker the other tools share are two different choices that
+    /// happen to be spelled with the same enum. Routing it through the style would mean the
+    /// last spotlight drawn decided what a dashed line meant for every tool after it.
+    /// </remarks>
+    public LineStyle SpotlightBorder { get; set; } = LineStyle.Dashed;
+
+    /// <summary>
     /// Whether marks line up with the marks already there — macshot's
     /// <c>snapGuidesEnabled</c>, on by default. Set by the host from the settings.
     /// </summary>
@@ -231,7 +242,14 @@ public sealed class AnnotationEditor
             return false;
         }
 
-        Draft = Annotation.Create(_tool, point, point, Style);
+        // The spotlight's ring takes its own border rather than the row's dash picker,
+        // which is what macshot stamps on it as it is created
+        // (HighlightToolHandler.swift:32-33).
+        Draft = Annotation.Create(
+            _tool,
+            point,
+            point,
+            _tool == AnnotationTool.Highlight ? Style with { LineStyle = SpotlightBorder } : Style);
         return false;
     }
 

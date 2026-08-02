@@ -203,6 +203,13 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// number macshot shows and the only one anybody would say out loud.
     /// </summary>
     private readonly TextBlock _dimValue = OptionValue(38, string.Empty);
+
+    /// <summary>
+    /// Solid or dashed for the spotlight's ring, which is the whole of what macshot lets
+    /// the user choose about it. Its own control rather than <see cref="_lineStyle"/>, so
+    /// that picking a dash for the spotlight does not pick one for the pencil.
+    /// </summary>
+    private readonly StyleSegments _spotlightBorder = new();
     private readonly Button _font = new() { VerticalAlignment = VerticalAlignment.Center, FontSize = 10, Padding = new Thickness(8, 2, 8, 2) };
     private readonly FontPickerView _fontChoices = new();
     private readonly StyleSegments _weight = new();
@@ -479,6 +486,17 @@ public sealed partial class AnnotationToolbarView : UserControl
         {
             ShowDimValue();
             ApplyStyle();
+            RestyleSpotlights();
+        };
+
+        _spotlightBorder.SelectionChanged += (_, index) =>
+        {
+            if (_editor is { } editor)
+            {
+                editor.SpotlightBorder = index == 1 ? LineStyle.Dashed : LineStyle.Solid;
+            }
+
+            Remember(current => current with { SpotlightBorderDashed = index == 1 });
             RestyleSpotlights();
         };
 
@@ -1255,6 +1273,8 @@ public sealed partial class AnnotationToolbarView : UserControl
         _spotlightDim.Visibility = dimmed;
         _dimValue.Visibility = dimmed;
 
+        _spotlightBorder.Visibility = Show(AnnotationToolOptions.UsesSpotlightBorder(tool));
+
         var typesetting = Show(tool == AnnotationTool.Text);
         _font.Visibility = typesetting;
         _weight.Visibility = typesetting;
@@ -1305,8 +1325,8 @@ public sealed partial class AnnotationToolbarView : UserControl
         $"{Math.Round(_spotlightDim.Value * 100)}%");
 
     /// <summary>
-    /// Takes every spotlight already on the canvas to the strength the slider was just
-    /// dragged to.
+    /// Brings every spotlight already on the canvas to what the row now says — both its
+    /// strength and its border.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -1332,16 +1352,17 @@ public sealed partial class AnnotationToolbarView : UserControl
         }
 
         var strength = editor.Style.DimOpacity;
+        var border = editor.SpotlightBorder;
         var stale = editor.Document.Annotations
             .Where(mark => mark.Tool == AnnotationTool.Highlight
-                && mark.Style.DimOpacity != strength)
+                && (mark.Style.DimOpacity != strength || mark.Style.LineStyle != border))
             .ToList();
 
         foreach (var spotlight in stale)
         {
             editor.Document.Amend(spotlight with
             {
-                Style = spotlight.Style with { DimOpacity = strength },
+                Style = spotlight.Style with { DimOpacity = strength, LineStyle = border },
             });
         }
 
@@ -1503,6 +1524,15 @@ public sealed partial class AnnotationToolbarView : UserControl
         _arrowStyle.SetSegments([.. Enum.GetValues<ArrowStyle>().Select(style =>
             new StyleSegment(StylePreviews.Arrow(style), null, StylePreviews.ArrowSegmentWidth))]);
 
+        // The same two previews the dash picker draws, so a solid ring and a solid line are
+        // shown by the same picture — this is a narrower choice, not a different one.
+        _spotlightBorder.SetSegments(
+        [
+            new StyleSegment(StylePreviews.Line(LineStyle.Solid), null, StylePreviews.LineSegmentWidth),
+            new StyleSegment(StylePreviews.Line(LineStyle.Dashed), null, StylePreviews.LineSegmentWidth),
+        ]);
+        ToolTipService.SetToolTip(_spotlightBorder, "How the edge of the spotlight is drawn");
+
         // Here and nowhere else, because it is a choice made while drawing — which is
         // where macshot puts it, next to the pencil. Worded, as macshot's is: the
         // difference between two smoothings is invisible at 22 points.
@@ -1592,10 +1622,10 @@ public sealed partial class AnnotationToolbarView : UserControl
         AddGroup(_sizeLabel, _size, _sizeValue);
         AddGroup(_zoomLabel, _loupeZoom, _zoomValue);
 
-        // Before the line style, which is the spotlight's border: macshot's row for this
-        // tool is the dim and then the border and nothing else
-        // (ToolOptionsRowView.swift:133-141).
+        // The spotlight's two, in macshot's order: the dim, then the border, and for this
+        // tool the row holds nothing else (ToolOptionsRowView.swift:133-141).
         AddGroup(_dimLabel, _spotlightDim, _dimValue);
+        AddGroup(_spotlightBorder);
         AddGroup(_lineStyle);
         AddGroup(_arrowStyle);
         AddGroup(_shapeFill);
@@ -1744,6 +1774,10 @@ public sealed partial class AnnotationToolbarView : UserControl
             editor.Smoothing = settings.Current.PencilSmoothing;
             _smoothing.SelectedIndex = (int)editor.Smoothing;
             editor.SnapGuides = settings.Current.SnapGuides;
+            editor.SpotlightBorder = settings.Current.SpotlightBorderDashed
+                ? LineStyle.Dashed
+                : LineStyle.Solid;
+            _spotlightBorder.SelectedIndex = settings.Current.SpotlightBorderDashed ? 1 : 0;
             editor.PenPressure = settings.Current.PencilPressure;
             _pencilPressure.IsChecked = editor.PenPressure;
             _smartMarker.IsChecked = settings.Current.SmartMarker;

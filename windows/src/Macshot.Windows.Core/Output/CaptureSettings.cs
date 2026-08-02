@@ -519,6 +519,13 @@ public sealed record CaptureSettings
     public double DimOpacity { get; init; } = AnnotationStyle.DefaultDimOpacity;
 
     /// <summary>
+    /// Whether the ring round a spotlight is dashed. macshot's <c>highlightBorderDashed</c>,
+    /// on by default: a dashed ring reads as the edge of a light rather than as a rectangle
+    /// somebody drew, which is the whole difference between the two marks.
+    /// </summary>
+    public bool SpotlightBorderDashed { get; init; } = true;
+
+    /// <summary>
     /// Whether the highlighter snaps to the line of text it was drawn across. macshot's
     /// <c>smartMarkerEnabled</c>, off by default: it costs an OCR pass per stroke, and a
     /// marker that jumped somewhere the hand did not go would be alarming before it was

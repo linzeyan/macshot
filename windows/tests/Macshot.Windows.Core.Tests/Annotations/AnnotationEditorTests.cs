@@ -332,6 +332,40 @@ public sealed class AnnotationEditorTests
         Assert.AreEqual(90, editor.SelectionShown?.BoundingRect.Right ?? 0, 1e-9);
     }
 
+    /// <summary>
+    /// A spotlight is drawn with a dashed ring whatever the dash picker was left on, and
+    /// takes its own border once that is changed.
+    /// </summary>
+    /// <remarks>
+    /// The two are different choices spelled with the same enum. A spotlight that came out
+    /// solid because the last arrow was drawn solid would read as a rectangle somebody drew
+    /// on the capture rather than as the edge of a light — and the row would offer no way
+    /// back to the look the tool is supposed to have.
+    /// </remarks>
+    [TestMethod]
+    public void TheSpotlight_TakesItsOwnBorderRatherThanTheRowsDash()
+    {
+        var editor = NewEditor(AnnotationTool.Highlight);
+        editor.Style = editor.Style with { LineStyle = LineStyle.Dotted };
+
+        Drag(editor, new CapturePoint(10, 10), new CapturePoint(90, 60));
+
+        Assert.AreEqual(LineStyle.Dashed, editor.Document.Annotations[0].Style.LineStyle);
+
+        // Clear of the first one: a press inside a mark already there grabs it to be
+        // moved, and this drag has to draw rather than drag.
+        editor.SpotlightBorder = LineStyle.Solid;
+        Drag(editor, new CapturePoint(200, 200), new CapturePoint(260, 250));
+
+        Assert.AreEqual(LineStyle.Solid, editor.Document.Annotations[1].Style.LineStyle);
+
+        // And nothing else was rerouted: a tool that does take the row's dash still gets it.
+        editor.Tool = AnnotationTool.Line;
+        Drag(editor, new CapturePoint(400, 400), new CapturePoint(460, 460));
+
+        Assert.AreEqual(LineStyle.Dotted, editor.Document.Annotations[2].Style.LineStyle);
+    }
+
     /// <summary>Clicks a mark with the select tool, which is what arms its handles.</summary>
     private static void Select(AnnotationEditor editor, CapturePoint point)
     {
