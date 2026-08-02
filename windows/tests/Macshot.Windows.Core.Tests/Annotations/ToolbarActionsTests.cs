@@ -123,12 +123,13 @@ public sealed class ToolbarActionsTests
     {
         var overlay = ToolbarActions.Actions(editorMode: false).Select(item => item.Command).ToArray();
 
-        // rightSettingsActions ends ... record, scrollCapture, share
-        // (ToolbarDefinitions.swift:103), so share is last and recording comes first of
-        // the two that need a live screen.
-        Assert.AreEqual(ToolbarCommand.Share, overlay[^1], "macshot ends the strip with it");
+        // rightToolbarActions ends ... translate, scrollCapture, record
+        // (ToolbarDefinitions.swift:90-97), so recording is last and scroll capture is
+        // the one before it. This used to assert the order of rightSettingsActions, which
+        // is the list the preferences page enumerates rather than the one the strip is
+        // built from.
+        Assert.AreEqual(ToolbarCommand.Record, overlay[^1], "macshot ends the strip with it");
         Assert.AreEqual(ToolbarCommand.ScrollCapture, overlay[^2]);
-        Assert.AreEqual(ToolbarCommand.Record, overlay[^3]);
         Assert.IsTrue(
             Array.IndexOf(overlay, ToolbarCommand.ScrollCapture) > Array.IndexOf(overlay, ToolbarCommand.ReadText),
             "both follow the output actions, the way macshot orders them");
@@ -141,16 +142,17 @@ public sealed class ToolbarActionsTests
     }
 
     [TestMethod]
-    public void Share_EndsTheStrip_InBothHosts()
+    public void Share_FollowsSave_InBothHosts()
     {
-        // Last in macshot's rightSettingsActions, and offered wherever there are finished
-        // pixels — the editor has those too. This strip used to lead with it, on the
-        // strength of a comment that had the list the wrong way round.
+        // First of macshot's rightToolbarActions, which puts it straight after Save, and
+        // offered wherever there are finished pixels — the editor has those too. This
+        // strip had it last, on the strength of a comment naming the wrong list.
         foreach (var editorMode in new[] { false, true })
         {
             var items = ToolbarActions.Actions(editorMode).Select(item => item.Command).ToArray();
+            var save = Array.IndexOf(items, ToolbarCommand.Save);
 
-            Assert.AreEqual(ToolbarCommand.Share, items[^1], $"editorMode {editorMode}");
+            Assert.AreEqual(ToolbarCommand.Share, items[save + 1], $"editorMode {editorMode}");
         }
     }
 

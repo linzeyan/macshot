@@ -266,9 +266,13 @@ public static class ToolbarActions
         items.Add(new ToolbarItem(ToolbarCommand.Copy, "Copy"));
         items.Add(new ToolbarItem(ToolbarCommand.Save, "Save"));
 
-        // macshot's rightSettingsActions, in its order (ToolbarDefinitions.swift:103):
-        // upload, pin, ocr, autoRedact, translate, record, scrollCapture, share. Share
-        // is last there, not second — this strip used to lead with it.
+        // macshot's rightToolbarActions, in its order (ToolbarDefinitions.swift:90–97):
+        // share, upload, pin, ocr, translate, scrollCapture, record. This strip was built
+        // from rightSettingsActions (:103) instead, which is the list the *preferences*
+        // page enumerates and is in another order — so Share sat at the end where macshot
+        // has it second, and recording came before scroll capture.
+        Offer(new ToolbarItem(ToolbarCommand.Share, "Share"));
+
         if (upload)
         {
             Offer(new ToolbarItem(ToolbarCommand.Upload, "Upload"));
@@ -276,7 +280,12 @@ public static class ToolbarActions
 
         Offer(new ToolbarItem(ToolbarCommand.Pin, "Pin"));
         Offer(new ToolbarItem(ToolbarCommand.ReadText, "OCR & QR"));
+
+        // macshot draws no button for this one: its auto-redact is the right-click on the
+        // censor tool, and there is no right-click mode menu here. It keeps the place
+        // macshot's settings list gives it, beside the recognition it is a use of.
         Offer(new ToolbarItem(ToolbarCommand.Redact, "Auto-Redact sensitive data"));
+
         if (translation)
         {
             Offer(new ToolbarItem(ToolbarCommand.Translate, "Translate"));
@@ -286,11 +295,9 @@ public static class ToolbarActions
         {
             // Both aim at a live screen: there is no window behind an image in the editor
             // to scroll, and nothing there to record.
-            Offer(new ToolbarItem(ToolbarCommand.Record, "Record"));
             Offer(new ToolbarItem(ToolbarCommand.ScrollCapture, "Scroll Capture"));
+            Offer(new ToolbarItem(ToolbarCommand.Record, "Record"));
         }
-
-        Offer(new ToolbarItem(ToolbarCommand.Share, "Share"));
 
         return items;
 
