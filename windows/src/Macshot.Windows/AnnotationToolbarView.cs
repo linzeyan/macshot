@@ -198,32 +198,47 @@ public sealed partial class AnnotationToolbarView : UserControl
     private readonly TextBlock _startLabel = OptionLabel(L("Start:"));
 
     /// <summary>
-    /// What the first badge of the capture counts from. A <see cref="NumberBox"/> rather
-    /// than macshot's bare stepper, because Windows' stepper is one: typing 17 beats
-    /// clicking an arrow sixteen times, and a screenshot that carries on from figure 16 is
-    /// the case this exists for.
+    /// What the first badge of the capture counts from: macshot's stepper and the figure
+    /// beside it (<c>ToolOptionsRowView.swift:881-897</c>), 19 + 22 wide and 22 tall.
     /// </summary>
     /// <remarks>
-    /// Sized to the three digits it can hold and no wider. macshot spends 50 on the whole
-    /// control — a 19-wide stepper and the figure beside it
-    /// (<c>ToolOptionsRowView.swift:881-897</c>) — and the 84 this used to ask for was a
-    /// box with half its width empty, which on a row where every other control is drawn to
-    /// its content read as a text field somebody had left in.
+    /// <para>
+    /// Two arrows and a label rather than a <see cref="NumberBox"/>, which is what this was
+    /// and what neither narrowing nor restyling could make fit. A NumberBox is a text field
+    /// first: it will not go under WinUI's text-control height, so a row 34 tall clipped
+    /// the digits out of sight; its compact spin buttons appear on focus, so clicking it
+    /// moved everything to its right; and even at its narrowest it asks for twice what
+    /// macshot spends on the whole control.
+    /// </para>
+    /// <para>
+    /// What is lost with the text field is typing the number, and macshot cannot do that
+    /// either — its stepper is bare too. <see cref="RepeatButton"/> rather than
+    /// <see cref="Button"/> is what keeps that honest: held down it repeats, the way an
+    /// <c>NSStepper</c> does, so counting up to 16 is a press rather than sixteen clicks.
+    /// </para>
     /// </remarks>
-    private readonly NumberBox _numberStart = new()
+    private readonly RepeatButton _startUp = StepArrow("\uE70E");
+
+    private readonly RepeatButton _startDown = StepArrow("\uE70D");
+
+    /// <summary>The column the two arrows are stacked in \u2014 19 \u00D7 22, the stepper itself.</summary>
+    private readonly StackPanel _startStepper = new()
     {
-        Minimum = 1,
-        Maximum = CaptureSettings.MaxNumberStartAt,
-        SmallChange = 1,
-        LargeChange = 10,
-        Width = 58,
-        Height = 24,
-        MinWidth = 0,
-        Padding = new Thickness(6, 0, 0, 0),
-        FontSize = OptionValueSize,
-        SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact,
+        Orientation = Orientation.Vertical,
         VerticalAlignment = VerticalAlignment.Center,
     };
+
+    /// <summary>
+    /// The figure, drawn in the format the badges are counted in — macshot shows "iv" here
+    /// when the badges are roman, not "4" (<c>ToolOptionsRowView.swift:890</c>).
+    /// </summary>
+    private readonly TextBlock _startValue = OptionValue(28, string.Empty);
+
+    /// <summary>
+    /// What the stepper holds. Its own field because the control it used to live in is
+    /// gone, and a label is a place to show a number rather than a place to keep one.
+    /// </summary>
+    private int _numberStartAt = 1;
 
     private readonly StyleSegments _measureUnit = new();
 
@@ -595,7 +610,7 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// one; the toolbar owns it because it is the row's control, and the canvas has no
     /// settings file of its own.
     /// </summary>
-    public int NumberStartAt => double.IsNaN(_numberStart.Value) ? 1 : (int)_numberStart.Value;
+    public int NumberStartAt => _numberStartAt;
 
     /// <summary>Whether a highlighter stroke should land on the text it was drawn across.</summary>
     public bool SmartMarker => _smartMarker.IsChecked == true;
@@ -689,19 +704,17 @@ public sealed partial class AnnotationToolbarView : UserControl
             RestyleSpotlights();
         };
 
-        _numberFormat.SelectionChanged += (_, _) => ApplyStyle();
-
-        _numberStart.ValueChanged += (_, _) =>
+        _numberFormat.SelectionChanged += (_, _) =>
         {
-            // Cleared or half-typed, the box reports NaN. Left alone rather than snapped
-            // back to 1, which would fight a user in the middle of typing "12".
-            if (double.IsNaN(_numberStart.Value))
-            {
-                return;
-            }
+            ApplyStyle();
 
-            Remember(current => current with { NumberStartAt = (int)_numberStart.Value });
+            // The figure is drawn in whichever format was just chosen, so it has to be
+            // redrawn when that changes — the number has not, but what it looks like has.
+            ShowStartValue();
         };
+
+        _startUp.Click += (_, _) => StepStart(1);
+        _startDown.Click += (_, _) => StepStart(-1);
 
         // Out to the host, because the pixels these read are the host's: the whole
         // screenshot under an overlay, the image being edited in an editor. Both are
@@ -758,13 +771,29 @@ public sealed partial class AnnotationToolbarView : UserControl
         _placedAround = (selection, screen, avoid);
 
         var hasOptions = _optionsRow.Visibility == Visibility.Visible;
+        if (hasOptions)
+        {
+            // Measured, rather than left at zero for the placement to widen to the tool
+            // strip. Zero was a promise that the row never needs more than the strip above
+            // it, and the stamp row broke it: with seventeen emoji, the size slider and the
+            // two buttons after them it runs past the strip, and everything past it was
+            // simply cut off. The width set last time is cleared first, or that is what the
+            // measure hands back.
+            _optionsRow.Width = double.NaN;
+            _optionsRow.Measure(new global::Windows.Foundation.Size(
+                double.PositiveInfinity,
+                OptionsRowHeight));
+        }
+
         var sizes = new ToolbarSizes(
             // Zero rather than the strip's own size while it is hidden: an empty strip
             // still reports a slab's worth of padding, and the action strip would be
             // placed clear of something that is not on screen.
             _tools.Visibility == Visibility.Visible ? _tools.Size : default,
             _actions.Size,
-            hasOptions ? new CaptureRegion(0, 0, 0, OptionsRowHeight) : default);
+            hasOptions
+                ? new CaptureRegion(0, 0, _optionsRow.DesiredSize.Width, OptionsRowHeight)
+                : default);
 
         var layout = EditorMode
             ? FixedCorners(screen, sizes)
@@ -917,11 +946,15 @@ public sealed partial class AnnotationToolbarView : UserControl
             sizes.Actions.Width,
             sizes.Actions.Height);
 
+        // The wider of the two and centred under the strip, the same rule the overlay's
+        // placement uses: a row that needs more than the strip above it gets it rather than
+        // losing whatever did not fit.
+        var rowWidth = Math.Max(sizes.OptionsRow.Width, tools.Width);
         var optionsRow = sizes.OptionsRow.Height > 0
             ? new CaptureRegion(
-                tools.X,
+                tools.X + ((tools.Width - rowWidth) / 2),
                 tools.Bottom + ToolbarPlacement.RowGap,
-                tools.Width,
+                rowWidth,
                 sizes.OptionsRow.Height)
             : default;
 
@@ -1495,7 +1528,8 @@ public sealed partial class AnnotationToolbarView : UserControl
         var counted = Show(AnnotationToolOptions.UsesNumberFormat(tool));
         _numberFormat.Visibility = counted;
         _startLabel.Visibility = counted;
-        _numberStart.Visibility = counted;
+        _startStepper.Visibility = counted;
+        _startValue.Visibility = counted;
 
         _measureUnit.Visibility = Show(AnnotationToolOptions.UsesMeasureUnit(tool));
         _clampRuler.Visibility = Show(AnnotationToolOptions.UsesMeasureClamp(tool));
@@ -1768,6 +1802,55 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// The number after a slider: right-aligned in a fixed box with tabular figures, so
     /// the controls after it do not shuffle sideways as the slider is dragged.
     /// </summary>
+    /// <summary>
+    /// One half of the stepper: 19 wide, 11 tall, so the pair is the 19 × 22 macshot gives
+    /// an <c>NSStepper</c>.
+    /// </summary>
+    private static RepeatButton StepArrow(string glyph) => new()
+    {
+        Content = new FontIcon
+        {
+            Glyph = glyph,
+
+            // 6, because the arrow has 11 points of height to sit in and Fluent's chevrons
+            // are drawn with room around them at their nominal size.
+            FontSize = 6,
+            FontFamily = new FontFamily("Segoe Fluent Icons"),
+        },
+        Width = 19,
+        Height = 11,
+        MinWidth = 0,
+        MinHeight = 0,
+        Padding = new Thickness(0),
+        CornerRadius = new CornerRadius(0),
+
+        // Held rather than clicked is how a stepper is used to reach 16. WinUI's own
+        // defaults are half a second then four a second, which is slower than the arrow
+        // on a NumberBox and slower than macshot's.
+        Delay = 400,
+        Interval = 60,
+    };
+
+    /// <summary>Moves the badge count by <paramref name="by"/>, within what it may hold.</summary>
+    private void StepStart(int by)
+    {
+        var moved = Math.Clamp(_numberStartAt + by, 1, CaptureSettings.MaxNumberStartAt);
+        if (moved == _numberStartAt)
+        {
+            return;
+        }
+
+        _numberStartAt = moved;
+        ShowStartValue();
+        Remember(current => current with { NumberStartAt = moved });
+    }
+
+    /// <summary>Draws the count in the format the badges are being drawn in.</summary>
+    private void ShowStartValue() =>
+        _startValue.Text = (_numberFormat.SelectedIndex >= 0
+            ? (NumberFormat)_numberFormat.SelectedIndex
+            : NumberFormat.Decimal).Format(_numberStartAt);
+
     private static TextBlock OptionValue(double width, string unit = "px")
     {
         var value = new TextBlock
@@ -2063,7 +2146,11 @@ public sealed partial class AnnotationToolbarView : UserControl
         // this is one sequence for every tool, so the badge's groups have to be somewhere
         // the shapes do not mind. They are: nothing but the badge ever shows them.
         AddGroup(_numberFormat);
-        AddGroup(_startLabel, _numberStart);
+        // The stepper is one item on the row rather than two, so that hiding it hides both
+        // arrows — the row decides whether a group is showing by asking what is in it.
+        _startStepper.Children.Add(_startUp);
+        _startStepper.Children.Add(_startDown);
+        AddGroup(_startLabel, _startStepper, _startValue);
         AddGroup(_outline);
         AddGroup(_flipArrow);
         AddGroup(_smoothing);
@@ -2249,7 +2336,8 @@ public sealed partial class AnnotationToolbarView : UserControl
             }
 
             _numberFormat.SelectedIndex = (int)_loadedStyle.NumberFormat;
-            _numberStart.Value = settings.Current.NumberStartAt;
+            _numberStartAt = settings.Current.NumberStartAt;
+            ShowStartValue();
 
             _measureUnit.SelectedIndex = _loadedStyle.MeasureInPoints ? 1 : 0;
 

@@ -22,7 +22,7 @@
                  text on the system and reads as a rendering fault rather than a heading.
                  The tracking is because these are put into capitals at runtime, and
                  capitals set at their lowercase spacing close up into a block. -->
-            <Style x:Key="SectionHeading" TargetType="TextBlock">
+            <Style x:Key="SectionHeading" TargetType="TextBlock" BasedOn="{StaticResource MacshotTextStyle}">
                 <Setter Property="FontSize" Value="12" />
                 <Setter Property="FontWeight" Value="SemiBold" />
                 <Setter Property="CharacterSpacing" Value="60" />
@@ -35,7 +35,7 @@
                  sized to the longest label on the page: the labels then line up across
                  pages as well as down one, which is what makes the whole window read as
                  one form rather than six. -->
-            <Style x:Key="RowLabel" TargetType="TextBlock">
+            <Style x:Key="RowLabel" TargetType="TextBlock" BasedOn="{StaticResource MacshotTextStyle}">
                 <Setter Property="Width" Value="180" />
                 <!-- 13, macOS's body size, not WinUI's 14. Every control on the page is
                      set to 13 for the same reason: the form has to read as one form, and
@@ -48,7 +48,7 @@
 
             <!-- Anything sitting in a row beside a label: matched to the label rather than
                  left at WinUI's default. -->
-            <Style x:Key="RowText" TargetType="TextBlock">
+            <Style x:Key="RowText" TargetType="TextBlock" BasedOn="{StaticResource MacshotTextStyle}">
                 <Setter Property="FontSize" Value="13" />
                 <Setter Property="VerticalAlignment" Value="Center" />
             </Style>
@@ -57,7 +57,7 @@
                  the control above it rather than to the label beside it. 12 for the same
                  reason the heading is: it is the size Windows sets a caption at, and the
                  secondary colour is already doing the work of making it subordinate. -->
-            <Style x:Key="Caption" TargetType="TextBlock">
+            <Style x:Key="Caption" TargetType="TextBlock" BasedOn="{StaticResource MacshotTextStyle}">
                 <Setter Property="Margin" Value="188,0,0,0" />
                 <Setter Property="FontSize" Value="12" />
                 <Setter Property="TextWrapping" Value="Wrap" />
@@ -84,7 +84,7 @@
                 <Setter Property="IsTextSelectionEnabled" Value="True" />
             </Style>
 
-            <Style x:Key="CommandDescription" TargetType="TextBlock">
+            <Style x:Key="CommandDescription" TargetType="TextBlock" BasedOn="{StaticResource MacshotTextStyle}">
                 <Setter Property="FontSize" Value="12" />
                 <Setter Property="TextWrapping" Value="Wrap" />
                 <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />

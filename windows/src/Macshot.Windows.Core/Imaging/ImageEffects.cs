@@ -342,14 +342,20 @@ public static class ImageEffects
 
                 var dx = pointX - discCentreX;
                 var dy = pointY - discCentreY;
-                if ((dx * dx) + (dy * dy) <= discRadius * discRadius)
+                var disc = Coverage(discRadius + 0.5 - Math.Sqrt((dx * dx) + (dy * dy)));
+                if (disc > 0)
                 {
-                    colour = Blend(colour, new AnnotationColor(255, 255, 255), 0.8);
+                    colour = Blend(colour, new AnnotationColor(255, 255, 255), 0.8 * disc);
                 }
-                else if (pointX >= barLeft && pointX <= barRight
-                    && pointY >= barTop && pointY <= barBottom)
+
+                // Both shapes, not one or the other: with a soft edge a pixel can be part
+                // of two things, and an else would give whichever was tested first the
+                // whole pixel.
+                var bar = Coverage(Math.Min(pointX + 0.5, barRight) - Math.Max(pointX - 0.5, barLeft))
+                    * Coverage(Math.Min(pointY + 0.5, barBottom) - Math.Max(pointY - 0.5, barTop));
+                if (bar > 0)
                 {
-                    colour = Blend(colour, new AnnotationColor(51, 51, 51), 0.6);
+                    colour = Blend(colour, new AnnotationColor(51, 51, 51), 0.6 * bar);
                 }
 
                 var offset = ((y * size) + x) * 4;
@@ -362,6 +368,18 @@ public static class ImageEffects
 
         return (size, size, Apply(size, size, pixels, new ImageEffectsOptions(preset)));
     }
+
+    /// <summary>
+    /// How much of a pixel a shape covers, from how far the pixel's centre is inside it.
+    /// </summary>
+    /// <remarks>
+    /// The swatch is drawn by hand rather than by a graphics context, so nothing was
+    /// anti-aliasing it: a plain inside-or-out test gave the disc a visibly stepped edge at
+    /// the size the grid shows it. This is the one-pixel linear ramp a rasterizer would
+    /// apply — not exact coverage of a circle, but indistinguishable from it at any size a
+    /// swatch is drawn, and it costs one subtraction.
+    /// </remarks>
+    private static double Coverage(double inside) => Math.Clamp(inside, 0, 1);
 
     private static AnnotationColor Blend(AnnotationColor from, AnnotationColor to, double amount) => new(
         (byte)Math.Round(from.Red + ((to.Red - from.Red) * amount)),

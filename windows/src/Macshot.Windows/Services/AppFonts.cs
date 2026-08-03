@@ -84,6 +84,19 @@ internal static class AppFonts
     /// re-run when the language changes. macshot rebuilds its windows on that anyway.
     /// </para>
     /// </remarks>
+    /// <summary>
+    /// The key a XAML-declared <see cref="TextBlock"/> style names to keep this face.
+    /// </summary>
+    /// <remarks>
+    /// A named style replaces the implicit one outright rather than adding to it, so every
+    /// <c>Style x:Key="…" TargetType="TextBlock"</c> in the app is a hole in the coverage
+    /// below — which is how the whole preferences window kept WinUI's default face while
+    /// the toolbar had macshot's. Those styles say <c>BasedOn="{StaticResource
+    /// MacshotTextStyle}"</c> and the hole closes; a lookup reaches this because it walks
+    /// out to the application's dictionary.
+    /// </remarks>
+    public const string TextStyleKey = "MacshotTextStyle";
+
     public static void Install(ResourceDictionary resources)
     {
         ArgumentNullException.ThrowIfNull(resources);
@@ -91,10 +104,19 @@ internal static class AppFonts
         resources["ContentControlThemeFontFamily"] = Family;
         resources["TextControlThemeFontFamily"] = Family;
 
-        var labels = new Style(typeof(TextBlock));
-        labels.Setters.Add(new Setter(TextBlock.FontFamilyProperty, Family));
-        labels.Setters.Add(new Setter(TextBlock.CharacterSpacingProperty, Spacing));
-        resources[typeof(TextBlock)] = labels;
+        resources[typeof(TextBlock)] = TextStyle();
+
+        // A second instance rather than the one above: applying a style seals it, and a
+        // sealed style is a fine thing to derive from but a confusing thing to share.
+        resources[TextStyleKey] = TextStyle();
+    }
+
+    private static Style TextStyle()
+    {
+        var style = new Style(typeof(TextBlock));
+        style.Setters.Add(new Setter(TextBlock.FontFamilyProperty, Family));
+        style.Setters.Add(new Setter(TextBlock.CharacterSpacingProperty, Spacing));
+        return style;
     }
 
     /// <summary>

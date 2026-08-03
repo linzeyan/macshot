@@ -130,6 +130,33 @@ public sealed class ImageEffectsTests
         Assert.AreEqual(pixels[0], pixels[2], "a mono swatch has no colour left in it");
     }
 
+    [TestMethod]
+    public void ASwatchsDisc_HasASoftEdgeRatherThanAStaircase()
+    {
+        // Nothing anti-aliases this drawing but the drawing itself, and a stepped circle is
+        // what the grid shows eight of. The edge is soft when a pixel on it is neither the
+        // gradient behind nor the near-white disc but somewhere between the two.
+        const int Size = 64;
+        var (_, _, pixels) = ImageEffects.Swatch(ImageEffectPreset.None, Size);
+
+        // The row through the disc's centre, crossing its left edge at x = 9.6.
+        var row = 33;
+        double Brightness(int x)
+        {
+            var offset = ((row * Size) + x) * 4;
+            return pixels[offset] + pixels[offset + 1] + pixels[offset + 2];
+        }
+
+        var outside = Brightness(6);
+        var inside = Brightness(13);
+        Assert.IsTrue(inside - outside > 90, "the disc should be plainly lighter than the gradient");
+
+        var between = Enumerable.Range(7, 6).Any(x =>
+            Brightness(x) - outside > 15 && inside - Brightness(x) > 15);
+
+        Assert.IsTrue(between, "no pixel on the disc's edge was part disc and part gradient");
+    }
+
     private static byte[] Frame(byte red, byte green, byte blue, byte alpha = 255)
     {
         var pixels = new byte[Width * Height * 4];
