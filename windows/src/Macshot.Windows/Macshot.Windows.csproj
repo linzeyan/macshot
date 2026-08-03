@@ -6,6 +6,14 @@
     <UseWinUI>true</UseWinUI>
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
+
+    <!-- Not about MSIX, despite the name, and not optional. It is what brings in the
+         packaging targets that hand the XAML compiler's output — every .xbf and the app's
+         own .pri — to publish. Without it `dotnet build` produces them and `dotnet publish`
+         silently leaves all nineteen behind, so the published app starts, shows its tray
+         icon, and throws XamlParseException out of the first window it is asked to open.
+         The build output ran; only what shipped was broken. -->
+    <EnableMsixTooling>true</EnableMsixTooling>
     <!-- A self-contained Windows App SDK app must resolve a concrete architecture. A
          solution build comes through as AnyCPU, which the SDK rejects, so there is a
          default here; the release workflow overrides it to publish win-arm64 as well.
