@@ -1,7 +1,7 @@
 # macshot for Windows
 
 A port of [macshot](https://github.com/sw33tLie/macshot) — a native macOS screenshot and
-annotation tool — to Windows. C#, .NET 8, WinUI 3 (Windows App SDK). No Electron, no web
+annotation tool — to Windows. C#, .NET 10, WinUI 3 (Windows App SDK). No Electron, no web
 views, no WPF.
 
 **This branch carries only the Windows product.** The Swift app lives on `main`. It is
@@ -74,12 +74,12 @@ was skipped, say so — "done" is wrong if anything was silently left out.
 
 | Target | Where it can be built |
 | --- | --- |
-| `Macshot.Windows.Core` and its tests | Anywhere — plain `net8.0` |
+| `Macshot.Windows.Core` and its tests | Anywhere — plain `net10.0` |
 | `Macshot.Windows` (WinUI 3) | Windows only |
 
 ```bash
-# On this Mac — Core only. Roll-forward is needed when the SDK is newer than 8.
-DOTNET_ROLL_FORWARD=LatestMajor dotnet test windows/tests/Macshot.Windows.Core.Tests/Macshot.Windows.Core.Tests.csproj
+# On this Mac — Core only.
+dotnet test windows/tests/Macshot.Windows.Core.Tests/Macshot.Windows.Core.Tests.csproj
 ```
 
 ```powershell
@@ -120,7 +120,7 @@ windows/
 │   ├── sync-upstream-strings.sh    # Refresh the Mac app's translations from main
 │   └── extract_meshes.py
 │
-├── src/Macshot.Windows.Core/       # net8.0, no Windows references, unit-tested
+├── src/Macshot.Windows.Core/       # net10.0, no Windows references, unit-tested
 │   ├── Annotations/                # Model, tools, toolbar layout, stamps, shortcuts
 │   ├── Capture/                    # Regions, monitors, snapping, recording plans, HUD placement
 │   ├── Imaging/                    # Rasterizing, effects, beautify, scroll stitching

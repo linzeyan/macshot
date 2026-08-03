@@ -30,14 +30,20 @@
 #     /grant "Administrators:F" /grant "SYSTEM:F"
 #
 #   # 3. Toolchain
-#   winget install --id Microsoft.DotNet.SDK.8 -e
+#   winget install --id Microsoft.DotNet.SDK.10 -e
 #   winget install --id Git.Git -e
 #
 #   # 4. The clone. Any branch; this script overwrites the tree on every run.
 #   git clone -b windows https://github.com/linzeyan/macshot.git C:\src\macshot
 #
-# Leave the guest's default shell as cmd.exe (the OpenSSH default) — git's transport and
-# every command below are written for it. Then, on the Mac, add to ~/.ssh/config:
+#   # 5. Git's own bash as the ssh shell. Not optional: git's transport sends
+#   #    `git-receive-pack 'C:/path'` and assumes the remote strips those quotes. cmd.exe
+#   #    does not, so the repository is looked for at a path with quote marks in its name
+#   #    and every push fails with "does not appear to be a git repository".
+#   New-ItemProperty -Path HKLM:\SOFTWARE\OpenSSH -Name DefaultShell `
+#     -Value "C:\Program Files\Git\bin\bash.exe" -PropertyType String -Force
+#
+# Then, on the Mac, add to ~/.ssh/config:
 #
 #   Host macshot-vm
 #     HostName 192.168.64.x        # UTM > the VM > Network: use Shared Network, then
@@ -79,7 +85,7 @@ fi
 # A ref outside refs/heads/, so the guest never has it checked out and the push cannot be
 # refused for updating the current branch. The guest resets onto it instead.
 echo "→ sending $(git rev-parse --short HEAD) to $VM"
-git push --quiet --force "ssh://$VM/$ROOT" "HEAD:refs/vm/head"
+git push --quiet --force "$VM:$ROOT" "HEAD:refs/vm/head"
 
 # clean without -x: bin/ and obj/ are ignored, and wiping them turns every run into a
 # cold build. The guest's tree is disposable in every other respect.

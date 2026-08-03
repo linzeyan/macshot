@@ -10,11 +10,11 @@ This branch is the Windows port. The macOS app it is a port of lives on `main`.
 
 ## Development setup
 
-1. Windows 11, with the .NET 8 SDK and the Windows App SDK
+1. Windows 11, with the .NET 10 SDK and the Windows App SDK
 2. `dotnet build windows/Macshot.Windows.sln`
 3. `dotnet run --project windows/src/Macshot.Windows`
 
-`Macshot.Windows.Core` targets plain `net8.0` and builds anywhere, macOS and Linux
+`Macshot.Windows.Core` targets plain `net10.0` and builds anywhere, macOS and Linux
 included. `Macshot.Windows` needs Windows.
 
 ## Guidelines

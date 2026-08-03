@@ -25,7 +25,7 @@
     Publishes and then starts macshot. Implies -Publish.
 
 .PARAMETER FrameworkDependent
-    Publishes against an installed .NET 8 Desktop Runtime instead of bundling one.
+    Publishes against an installed .NET 10 Desktop Runtime instead of bundling one.
     Much smaller output, but the machine running it needs that runtime.
 
 .EXAMPLE

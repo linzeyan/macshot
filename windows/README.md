@@ -1,6 +1,6 @@
 # macshot for Windows
 
-A native Windows port of [macshot](https://github.com/sw33tLie/macshot). C#, .NET 8,
+A native Windows port of [macshot](https://github.com/sw33tLie/macshot). C#, .NET 10,
 WinUI 3 (Windows App SDK). The `windows` branch carries only this; `main` stays the
 macOS product, and this tree is not built from it.
 
@@ -11,7 +11,7 @@ installer do not.
 ## Requirements
 
 - Windows 10 20H1 (10.0.19041) or newer, x64 or arm64
-- [.NET SDK 8.0](https://dotnet.microsoft.com/download) or newer
+- [.NET SDK 10.0](https://dotnet.microsoft.com/download) or newer
 
 Visual Studio is not needed. Everything else, including the Windows App SDK, is
 restored from NuGet on the first build.
@@ -35,7 +35,7 @@ Other switches:
 | `.\windows\build.ps1` | Builds Release, the same way CI does. |
 | `.\windows\build.ps1 -Test` | Builds and runs the unit tests. |
 | `.\windows\build.ps1 -Publish` | Publishes without starting it. |
-| `.\windows\build.ps1 -FrameworkDependent -Publish` | Much smaller output, but needs the .NET 8 Desktop Runtime installed. |
+| `.\windows\build.ps1 -FrameworkDependent -Publish` | Much smaller output, but needs the .NET 10 Desktop Runtime installed. |
 | `.\windows\build.ps1 -Configuration Debug -Run` | Debug build. |
 
 If PowerShell refuses to run the script, it is the execution policy rather than

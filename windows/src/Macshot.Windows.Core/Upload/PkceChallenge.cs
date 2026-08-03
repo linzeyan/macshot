@@ -48,13 +48,6 @@ public static class PkceChallenge
     /// <summary>
     /// Base64 in the URL alphabet with the padding dropped.
     /// </summary>
-    /// <remarks>
-    /// Written out rather than using <c>Base64Url.EncodeToString</c>, which arrives in
-    /// .NET 9; this project targets .NET 8.
-    /// </remarks>
     private static string Base64Url(byte[] bytes) =>
-        Convert.ToBase64String(bytes)
-            .Replace('+', '-')
-            .Replace('/', '_')
-            .TrimEnd('=');
+        System.Buffers.Text.Base64Url.EncodeToString(bytes);
 }

@@ -38,7 +38,7 @@ jobs:
 
       - uses: actions/setup-dotnet@v5
         with:
-          dotnet-version: 8.0.x
+          dotnet-version: 10.0.x
 
       # The tag says what the build calls itself. Everything downstream reads this: the
       # file names, the release title, and — through -p:Version — the About page and the
