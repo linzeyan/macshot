@@ -4,23 +4,24 @@
 
 ## Overview
 
-macshot is a free, open-source screenshot and screen recording tool for macOS. It is designed to run entirely on your device. We do not operate any servers, and we do not collect, store, or have access to any of your data.
+macshot is a free, open-source screenshot and screen recording tool. This is the Windows build; the macOS build is documented the same way on `main`. It is designed to run entirely on your device. We do not operate any servers, and we do not collect, store, or have access to any of your data.
 
 ## What macshot does NOT do
 
 - **No telemetry or analytics** — macshot does not phone home, track usage, or send any data to us.
 - **No data collection** — we do not collect personal information, usage statistics, crash reports, or any other data.
-- **No server-side storage** — we do not operate any servers. All screenshots, recordings, and settings are stored locally on your Mac.
+- **No server-side storage** — we do not operate any servers. All screenshots, recordings, and settings are stored locally on your PC.
 - **No access to your uploads** — when you upload to Google Drive, files go directly to your own Google Drive account. We cannot see, access, or download your files. When you upload to imgbb, files go directly to imgbb's servers under their privacy policy.
 
 ## Data stored on your device
 
-macshot stores the following data locally on your Mac:
+macshot stores the following data locally on your PC:
 
 - **Screenshots and recordings** — saved to your chosen folder (default: Pictures).
-- **Screenshot history** — recent captures stored in `~/Library/Application Support/com.sw33tlie.macshot/history/`. You control the history size in Preferences (set to 0 to disable).
-- **Preferences** — settings stored in macOS UserDefaults.
-- **Google Drive OAuth tokens** — if you sign in to Google Drive, authentication tokens are stored in `~/Library/Application Support/com.sw33tlie.macshot/gdrive_tokens.json` with owner-only permissions (0600). Tokens are used solely to upload files to your own Google Drive. You can sign out at any time in Preferences, which deletes the token file.
+- **Screenshot history** — recent captures stored in `%LOCALAPPDATA%\\macshot\\history\\`. You control the history size in Preferences (set to 0 to disable).
+- **Preferences** — settings stored in `%LOCALAPPDATA%\\macshot\\settings.json`.
+- **Diagnostic log** — `%LOCALAPPDATA%\\macshot\\macshot.log`, written locally and never sent anywhere.
+- **Google Drive OAuth tokens** — if you sign in to Google Drive, authentication tokens are stored in `%LOCALAPPDATA%\\macshot\\gdrive_tokens.json`. Tokens are used solely to upload files to your own Google Drive. You can sign out at any time in Preferences, which deletes the token file.
 
 ## Third-party services
 
@@ -38,18 +39,21 @@ macshot integrates with the following optional third-party services. Use of thes
 - **Data sent:** The image file you choose to upload.
 - **imgbb's privacy policy:** [https://imgbb.com/privacy](https://imgbb.com/privacy)
 
-### Sparkle (auto-updates)
-- **Purpose:** Check for and install macshot updates.
-- **Data sent:** A request to `https://raw.githubusercontent.com/sw33tLie/macshot/main/appcast.xml` to check for new versions. No personal data is included in the request.
+### GitHub (update check)
+- **Purpose:** Check whether a newer macshot has been released.
+- **Data sent:** An unauthenticated request to `https://api.github.com/repos/linzeyan/macshot/releases`. No personal data is included, and nothing is downloaded or installed without you asking for it.
 
 ## Permissions
 
-macshot requests **Screen Recording** permission from macOS. This permission is required to capture screenshots and record your screen. macOS controls this permission — you can revoke it at any time in System Settings > Privacy & Security > Screen Recording.
+macshot captures the screen through the Windows Graphics Capture API. Windows controls
+this — you can review and revoke it under Settings > Privacy & security > App permissions.
+The **offline build** of macshot ships without any upload or translation code compiled in
+at all, so it cannot reach the network even if asked to.
 
 ## Open source
 
-macshot is fully open source. You can inspect the complete source code at [https://github.com/sw33tLie/macshot](https://github.com/sw33tLie/macshot) to verify these claims.
+macshot is fully open source. You can inspect the complete source code at [https://github.com/linzeyan/macshot](https://github.com/linzeyan/macshot) to verify these claims.
 
 ## Contact
 
-If you have questions about this privacy policy, open an issue at [https://github.com/sw33tLie/macshot/issues](https://github.com/sw33tLie/macshot/issues).
+If you have questions about this privacy policy, open an issue at [https://github.com/linzeyan/macshot/issues](https://github.com/linzeyan/macshot/issues).

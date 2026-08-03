@@ -1,20 +1,16 @@
 # macshot for Windows
 
-A native Windows port of [macshot](https://github.com/sw33tLie/macshot), on the
-`windows` branch. C#, .NET 8, WinUI 3 (Windows App SDK). `main` stays the macOS
-product; this tree is not built from it.
+A native Windows port of [macshot](https://github.com/sw33tLie/macshot). C#, .NET 8,
+WinUI 3 (Windows App SDK). The `windows` branch carries only this; `main` stays the
+macOS product, and this tree is not built from it.
 
-Still in progress. Capture, annotation, editing, recognition, recording,
-delivery, uploads and video trimming work; the video editor's effects band, HEIC
-and WebP encoding, and an installer do not. None of
-it has been run on Windows hardware yet — CI compiles the WinUI half and the
-portable half is unit-tested, which is not the same thing. See
-`docs/windows-port/` in the repository for the roadmap and the feature-parity
-matrix.
+Still in progress. Capture, annotation, editing, recognition, recording, delivery,
+uploads and video trimming work; the video editor's effects band, HEIC encoding, and an
+installer do not.
 
 ## Requirements
 
-- Windows 10 20H1 (10.0.19041) or newer
+- Windows 10 20H1 (10.0.19041) or newer, x64 or arm64
 - [.NET SDK 8.0](https://dotnet.microsoft.com/download) or newer
 
 Visual Studio is not needed. Everything else, including the Windows App SDK, is
@@ -23,9 +19,8 @@ restored from NuGet on the first build.
 ## Build and run
 
 ```powershell
-git clone https://github.com/sw33tLie/macshot.git
+git clone -b windows https://github.com/linzeyan/macshot.git
 cd macshot
-git switch windows
 .\windows\build.ps1 -Run
 ```
 
@@ -96,10 +91,12 @@ and test Core:
 dotnet test windows/tests/Macshot.Windows.Core.Tests/Macshot.Windows.Core.Tests.csproj -c Release
 ```
 
-Anything you change under `src/Macshot.Windows` is unverified until CI is green.
-Some of it is valid-looking C# and XAML that only the Windows markup compiler
-rejects — a `Window` has no `Resources`, a member must not share a name with one
-`Window` already has, and a public property of a type XAML instantiates cannot be
-`init`. Those and the rest are in
-[`docs/windows-port/build.md`](../docs/windows-port/build.md), under "Traps that
-only a Windows build finds"; each one there cost a CI round trip to learn.
+Anything you change under `src/Macshot.Windows` is unverified until it has been
+compiled on Windows. Some of it is valid-looking C# and XAML that only the Windows
+markup compiler rejects — a `Window` has no `Resources`, a member must not share a name
+with one `Window` already has, and a public property of a type XAML instantiates cannot
+be `init`. Those and the rest are in [CLAUDE.md](../CLAUDE.md), under "Traps that only a
+Windows build finds"; each one cost a CI round trip to learn.
+
+From a Mac, `tools/vm-build.sh` compiles the WinUI half on a Windows VM and prints the
+errors locally. Its header has the one-time setup.

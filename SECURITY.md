@@ -14,20 +14,19 @@ heads-up or if you can't use GitHub. Please don't put PoCs or exploit details in
 public issues, and don't test against infrastructure you don't own.
 
 I aim to respond within 48 hours, usually much faster. High/Critical issues get a
-fix or a concrete plan within days, not weeks, and fixes reach users quickly via
-Sparkle auto-update.
+fix or a concrete plan within days, not weeks.
 
 ## Out of scope
 
 Auto-redact regex misses (best-effort, documented as such), issues
-requiring a compromised machine or physical access, vulnerabilities in Sparkle/
-macOS/dependencies themselves (report upstream, but tell me so I can ship the
-bumped version), and DoS of the app's UI.
+requiring a compromised machine or physical access, vulnerabilities in Windows or in
+the dependencies themselves (report upstream, but tell me so I can ship the bumped
+version), and DoS of the app's UI.
 
 ## Supported versions
 
-Only the latest release of each variant (normal and Offline). Sparkle keeps
-almost everyone current within days.
+Only the latest release of each variant (normal and Offline), and only for the
+architecture it was built for — x64 and arm64 ship separately.
 
 ## Credit
 

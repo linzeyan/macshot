@@ -10,10 +10,11 @@ namespace Macshot.Windows.Services;
 /// <remarks>
 /// <para>
 /// macshot's <c>LanguageManager</c> and its <c>L(…)</c>, with the same forty languages
-/// and the same resolution order. The translations are not re-authored here: the
-/// <c>.strings</c> files under <c>macshot/*.lproj</c> are linked into this assembly as
-/// embedded resources by the project file, so a language contributed to the Mac app
-/// arrives in this one with no second pull request.
+/// and the same resolution order. The translations are not re-authored here: the Mac
+/// app's <c>.strings</c> files are vendored under <c>Strings/upstream/</c> and embedded
+/// by the project file, so a language contributed to the Mac app arrives in this one by
+/// running <c>windows/tools/sync-upstream-strings.sh</c> rather than by translating it
+/// twice.
 /// </para>
 /// <para>
 /// Static, and read from every thread that draws. It is written once at startup and

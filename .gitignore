@@ -1,8 +1,12 @@
-build/
+# .NET
+bin/
+obj/
+[Bb]uild/
+*.user
+.vs/
+
+# Editors and OS
 .DS_Store
-*.xcuserstate
-xcuserdata/
-DerivedData/
 *.swp
 *.swo
 *~

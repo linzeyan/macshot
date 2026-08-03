@@ -1,6 +1,6 @@
-# Contributing to macshot
+# Contributing to macshot for Windows
 
-Thanks for your interest in contributing! macshot is open to bug fixes, improvements, and new features.
+This branch is the Windows port. The macOS app it is a port of lives on `main`.
 
 ## Before you start
 
@@ -10,26 +10,35 @@ Thanks for your interest in contributing! macshot is open to bug fixes, improvem
 
 ## Development setup
 
-1. Open `macshot.xcodeproj` in Xcode
-2. Build & Run (Cmd+R)
-3. Grant Screen Recording permission when prompted
+1. Windows 11, with the .NET 8 SDK and the Windows App SDK
+2. `dotnet build windows/Macshot.Windows.sln`
+3. `dotnet run --project windows/src/Macshot.Windows`
 
-The project uses synchronized file groups — just create `.swift` files in `macshot/` and Xcode picks them up.
+`Macshot.Windows.Core` targets plain `net8.0` and builds anywhere, macOS and Linux
+included. `Macshot.Windows` needs Windows.
 
 ## Guidelines
 
-- **Pure AppKit.** No SwiftUI (except `BeautifyRenderer` which requires it for mesh gradients). No Electron, no web views.
-- **No new dependencies** unless absolutely necessary. Prefer Apple frameworks.
-- **Minimum target is macOS 12.3.** Use `@available` guards for newer APIs.
-- **Test on single and multi-monitor setups** if your change touches coordinates, overlays, or screen capture.
-- **Don't add features to the PR beyond what it claims to fix/add.** Keep PRs focused.
-- **Match existing code style.** No SwiftLint, no formatter — just follow what's already there.
+- **This is a port, not a rewrite.** The macOS app is the specification: same layout,
+  same defaults, same wording, same behaviour. Where the two disagree, the Mac is right
+  and this is the bug. Cite the Swift file and line in a comment when a number comes
+  from it — `git worktree add ../macshot-mac main` puts the reference on disk.
+- **Logic goes in `Macshot.Windows.Core`, which is unit-tested.** Anything decidable
+  without a window belongs there: geometry, formatting, parsing, state machines.
+  `Macshot.Windows` is the part that draws.
+- **Pure WinUI 3.** No WPF, no WinForms, no web views.
+- **No new dependencies** unless there is no framework way to do it.
+- **Comments say why, not what.** A comment restating the line above it is noise. One
+  recording the trade-off, the platform quirk, or the macOS number behind a constant is
+  why the file is still readable a year later.
+- **Match the existing style.** Warnings are errors; the analyzers are the style guide.
 
 ## PR checklist
 
-- [ ] Builds without warnings
-- [ ] Tested manually (there are no unit tests)
-- [ ] Doesn't break existing behavior
+- [ ] `dotnet build windows/Macshot.Windows.sln --configuration Release` is clean
+- [ ] `dotnet test windows/tests/Macshot.Windows.Core.Tests` passes
+- [ ] New logic in Core has a test saying *why* the behaviour matters
+- [ ] Anything visual was compared against the macOS app side by side
 - [ ] Commit message describes *what* and *why*
 
 ## Questions?
