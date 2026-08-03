@@ -109,7 +109,7 @@ internal sealed partial class ResolutionBox : UserControl
             field.LostFocus += (_, _) => Commit(field);
         }
 
-        ToolTipService.SetToolTip(_presets, "Shapes and sizes");
+        ToolTipService.SetToolTip(_presets, AppFonts.Tip("Shapes and sizes"));
     }
 
     /// <summary>Raised when a typed size is committed, with Enter or by looking away.</summary>

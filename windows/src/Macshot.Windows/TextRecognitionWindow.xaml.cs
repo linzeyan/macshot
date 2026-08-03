@@ -205,7 +205,7 @@ public sealed partial class TextRecognitionWindow : Window
                 TextTrimming = TextTrimming.CharacterEllipsis,
                 TextWrapping = TextWrapping.NoWrap,
             };
-            ToolTipService.SetToolTip(value, code.Value);
+            ToolTipService.SetToolTip(value, AppFonts.Tip(code.Value));
             row.Children.Add(value);
 
             var copy = new Button { Content = L("Copy"), FontSize = 12, Padding = new Thickness(10, 2, 10, 2) };

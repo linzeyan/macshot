@@ -237,7 +237,7 @@ internal sealed class ColorPickerView : UserControl
             };
 
             var which = index;
-            ToolTipService.SetToolTip(slot, "Click to use, right-click to save the colour in hand");
+            ToolTipService.SetToolTip(slot, AppFonts.Tip("Click to use, right-click to save the colour in hand"));
 
             slot.PointerPressed += (_, args) =>
             {

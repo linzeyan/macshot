@@ -4,7 +4,8 @@ using Microsoft.UI.Xaml.Controls;
 namespace Macshot.Windows.Services;
 
 /// <summary>
-/// Translates the strings already written into a XAML page, in place.
+/// Translates the strings already written into a XAML page, in place — and sets what it
+/// walks in macshot's face while it is there.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -59,8 +60,15 @@ public static class LocalizedTree
 
         if (ToolTipService.GetToolTip(node) is string tip)
         {
-            ToolTipService.SetToolTip(node, Localization.L(tip));
+            ToolTipService.SetToolTip(node, AppFonts.Tip(Localization.L(tip)));
         }
+
+        // The same walk, because it reaches every control on the page and nothing else
+        // does. A control takes its face from a theme resource but there is no theme
+        // resource for a weight, so without this the buttons, tick boxes and combos on a
+        // page stay at the default while every label around them changes — which is what
+        // the whole preferences window looked like.
+        AppFonts.AdoptWeight(node);
 
         switch (node)
         {

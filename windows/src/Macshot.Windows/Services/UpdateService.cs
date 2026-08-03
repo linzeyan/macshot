@@ -1,5 +1,6 @@
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Reflection;
 using Macshot.Windows.Core.Output;
 
 namespace Macshot.Windows.Services;
@@ -54,8 +55,34 @@ internal static class UpdateService
     private static readonly HttpClient Client = CreateClient();
 
     /// <summary>The running version, as the release tags spell it.</summary>
-    public static string CurrentVersion =>
-        typeof(UpdateService).Assembly.GetName().Version?.ToString(3) ?? string.Empty;
+    /// <remarks>
+    /// The informational version rather than the assembly version, because that is the one
+    /// that still has the pre-release part in it: an AssemblyVersion is four numbers and
+    /// cannot hold "-beta.3", so a beta build comparing itself against the tags would call
+    /// itself 3.8.0 and be offered 3.8.0 as an update to 3.8.0. The release workflow sets
+    /// both. Trimmed at '+' because the build metadata a source-linked build appends is
+    /// not part of the version anybody released.
+    /// </remarks>
+    public static string CurrentVersion
+    {
+        get
+        {
+            var assembly = typeof(UpdateService).Assembly;
+            var informational = assembly
+                .GetCustomAttributes(typeof(AssemblyInformationalVersionAttribute), false)
+                .OfType<AssemblyInformationalVersionAttribute>()
+                .FirstOrDefault()?
+                .InformationalVersion;
+
+            if (informational is { Length: > 0 })
+            {
+                var metadata = informational.IndexOf('+', StringComparison.Ordinal);
+                return metadata < 0 ? informational : informational[..metadata];
+            }
+
+            return assembly.GetName().Version?.ToString(3) ?? string.Empty;
+        }
+    }
 
     /// <summary>
     /// The release this build should be offered, or null when there is none.

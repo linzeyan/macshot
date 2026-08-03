@@ -6,11 +6,18 @@
     <UseWinUI>true</UseWinUI>
     <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
-    <!-- A self-contained Windows App SDK app must resolve a concrete architecture.
-         A solution build comes through as AnyCPU, which the SDK rejects. ARM64 is
-         deliberately left for the distribution milestone rather than carried as an
-         unbuilt second RID here. -->
-    <RuntimeIdentifier>win-x64</RuntimeIdentifier>
+    <!-- A self-contained Windows App SDK app must resolve a concrete architecture. A
+         solution build comes through as AnyCPU, which the SDK rejects, so there is a
+         default here; the release workflow overrides it to publish win-arm64 as well.
+         Conditional rather than fixed, because -r on the command line sets this property
+         and a fixed value would silently win over it. -->
+    <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
+
+    <!-- What the About page shows and what the update check compares against a release
+         tag. The release workflow passes the tag's version; this is what a build off a
+         working tree calls itself, and it is deliberately below any published version so
+         a development build is never offered to itself as an update. -->
+    <Version Condition="'$(Version)' == ''">0.0.0</Version>
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>

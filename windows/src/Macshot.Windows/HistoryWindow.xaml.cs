@@ -109,7 +109,7 @@ public sealed partial class HistoryWindow : Window
         // Every string in the XAML is already the English text macshot keys by,
         // so the panel is translated in place rather than written twice.
         this.Localize();
-        ToolTipService.SetToolTip(Trash, L("Clear History"));
+        ToolTipService.SetToolTip(Trash, AppFonts.Tip(L("Clear History")));
         BuildFilters();
 
         Activated += HistoryWindow_Activated;

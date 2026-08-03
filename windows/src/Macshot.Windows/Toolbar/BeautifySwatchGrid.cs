@@ -1,3 +1,4 @@
+using Macshot.Windows.Services;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Macshot.Windows.Core.Imaging;
 using Microsoft.UI.Xaml;
@@ -116,7 +117,7 @@ internal sealed class BeautifySwatchGrid : Grid
 
         // The name is what a swatch cannot say — several of the 48 are near neighbours —
         // and a tooltip says it without giving 48 rows of text.
-        ToolTipService.SetToolTip(ring, BeautifyRenderer.Styles[styleIndex].Name);
+        ToolTipService.SetToolTip(ring, AppFonts.Tip(BeautifyRenderer.Styles[styleIndex].Name));
 
         ring.PointerPressed += (_, _) =>
         {

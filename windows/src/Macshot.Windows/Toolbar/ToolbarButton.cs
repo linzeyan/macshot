@@ -1,4 +1,5 @@
 using Macshot.Windows.Core.Annotations;
+using Macshot.Windows.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -71,7 +72,7 @@ internal sealed partial class ToolbarButton : UserControl
         Height = ToolbarPalette.ButtonSize;
         base.Content = _surface;
 
-        ToolTipService.SetToolTip(this, Hint(item));
+        ToolTipService.SetToolTip(this, AppFonts.Tip(Hint(item)));
 
         PointerEntered += (_, _) => { _isHovered = true; Repaint(); };
         PointerExited += (_, _) => { _isHovered = false; _isPressed = false; Repaint(); };
@@ -108,7 +109,7 @@ internal sealed partial class ToolbarButton : UserControl
 
         if (hintChanged)
         {
-            ToolTipService.SetToolTip(this, Hint(item));
+            ToolTipService.SetToolTip(this, AppFonts.Tip(Hint(item)));
         }
 
         Repaint();

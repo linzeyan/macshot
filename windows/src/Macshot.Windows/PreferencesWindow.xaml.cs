@@ -440,7 +440,7 @@ public sealed partial class PreferencesWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
         };
 
-        ToolTipService.SetToolTip(button, tooltip);
+        ToolTipService.SetToolTip(button, AppFonts.Tip(tooltip));
         return button;
     }
 
@@ -703,7 +703,7 @@ public sealed partial class PreferencesWindow : Window
             VerticalAlignment = VerticalAlignment.Center,
         };
 
-        ToolTipService.SetToolTip(button, tooltip);
+        ToolTipService.SetToolTip(button, AppFonts.Tip(tooltip));
         button.Click += (_, _) =>
         {
             _menuOrder = CaptureMenuItems.Move(_menuOrder, index, by);
@@ -1903,8 +1903,14 @@ public sealed partial class PreferencesWindow : Window
     }
 
     /// <summary>What this build calls itself, shown on the About page and stamped into an export.</summary>
+    /// <remarks>
+    /// The same string the update check compares against the published tags, so the page
+    /// cannot say one version while the check believes another — and it keeps the
+    /// pre-release part, which is the whole difference between a beta and the release it
+    /// is a beta of.
+    /// </remarks>
     private static string Version =>
-        typeof(PreferencesWindow).Assembly.GetName().Version?.ToString(3) ?? "unknown";
+        UpdateService.CurrentVersion is { Length: > 0 } running ? running : "unknown";
 
     /// <summary>Fills in the About page: icon, name, version, and the offline note.</summary>
     private void ShowAbout()

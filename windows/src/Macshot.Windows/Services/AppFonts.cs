@@ -170,6 +170,49 @@ internal static class AppFonts
     }
 
     /// <summary>
+    /// A tooltip in macshot's face, for <c>ToolTipService.SetToolTip</c> to be handed
+    /// instead of a bare string.
+    /// </summary>
+    /// <remarks>
+    /// Handed a string, WinUI wraps it in a <see cref="ToolTip"/> of its own, and that
+    /// tooltip is parented to the popup root rather than to the button it belongs to — so
+    /// it inherits from the window and never sees what <see cref="Adopt"/> put on the
+    /// toolbar. Which is why every tooltip in the app was still at the default weight after
+    /// the rest of the interface had changed. Building it here is the only place the
+    /// setting can be made.
+    /// </remarks>
+    public static ToolTip Tip(object? content) => new()
+    {
+        Content = content,
+        FontFamily = Family,
+        CharacterSpacing = Spacing,
+        FontWeight = Weight,
+    };
+
+    /// <summary>
+    /// Gives <paramref name="node"/> the app's weight, unless it was given one of its own.
+    /// </summary>
+    /// <remarks>
+    /// The catch-all for controls, which is where the coverage kept falling short: a
+    /// button, a tick box or a combo takes its <em>face</em> from a theme resource, and
+    /// WinUI has no theme resource for a weight. Anything that asked for a weight in markup
+    /// or in code keeps it — a local value is a decision somebody made, and a heading set
+    /// semibold on purpose should not be flattened by a rule about Chinese.
+    /// </remarks>
+    public static void AdoptWeight(DependencyObject? node)
+    {
+        if (node is not Control control)
+        {
+            return;
+        }
+
+        if (control.ReadLocalValue(Control.FontWeightProperty) == DependencyProperty.UnsetValue)
+        {
+            control.FontWeight = Weight;
+        }
+    }
+
+    /// <summary>
     /// Sets one control and everything under it in macshot's face.
     /// </summary>
     /// <remarks>
