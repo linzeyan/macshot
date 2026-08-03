@@ -69,6 +69,12 @@
                 <Setter Property="Margin" Value="188,0,0,0" />
                 <Setter Property="FontSize" Value="13" />
                 <Setter Property="MinWidth" Value="0" />
+                <!-- WinUI puts a tick box's label at the top of the control and pads it
+                     8,5,0,0, which leaves the words sitting visibly above the box they
+                     belong to. Centred against the box instead. The minimum height is left
+                     alone: on a settings page that is the size of the thing you click. -->
+                <Setter Property="VerticalContentAlignment" Value="Center" />
+                <Setter Property="Padding" Value="8,0,0,0" />
             </Style>
 
             <!-- The two halves of a row in the URL-scheme list: the command, as something
@@ -324,6 +330,8 @@
                                 Content="Enable macshot:// URL scheme"
                                 FontSize="13"
                                 MinWidth="0"
+                                VerticalContentAlignment="Center"
+                                Padding="8,0,0,0"
                                 Checked="Setting_Toggled"
                                 Unchecked="Setting_Toggled" />
                             <Button

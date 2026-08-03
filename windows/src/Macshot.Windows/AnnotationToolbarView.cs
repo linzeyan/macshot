@@ -1828,6 +1828,7 @@ public sealed partial class AnnotationToolbarView : UserControl
     {
         Content = label,
         FontSize = OptionValueSize,
+        FontWeight = AppFonts.Weight,
         MinWidth = 0,
         MinHeight = 0,
         Padding = new Thickness(8, 0, 0, 0),
@@ -1949,6 +1950,11 @@ public sealed partial class AnnotationToolbarView : UserControl
     {
         Content = label,
         FontSize = OptionValueSize,
+
+        // Set rather than inherited. A button's label is drawn by the ContentPresenter its
+        // template puts there, and what that ends up at is not something to take on trust:
+        // these four stayed at the default weight while every label beside them changed.
+        FontWeight = AppFonts.Weight,
         MinWidth = 0,
         Padding = new Thickness(8, 2, 8, 2),
         VerticalAlignment = VerticalAlignment.Center,
