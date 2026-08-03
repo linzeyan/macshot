@@ -27,19 +27,44 @@ public sealed class StampChoicesTests
     }
 
     /// <summary>
-    /// The quick set opens the picker's list, in the same order.
+    /// A tab shows the first emoji of the group behind it.
     /// </summary>
     /// <remarks>
-    /// Not merely a containment: the picker is a grid, and a user who learned where the
-    /// tick is on the row would have to find it again somewhere else in the grid if the
-    /// two orders drifted apart. Anything added later goes after them.
+    /// The picker has no words on it — the tab is a picture of what is inside, which is how
+    /// macshot labels them and what lets the picker need no translating. That only works
+    /// while the picture is actually taken from the group: a tab drawn with an emoji the
+    /// group does not hold is a label that lies, and nothing else in the app would catch
+    /// it. The rule is "the first" rather than "any of them" because the first is what the
+    /// group leads with, so the tab and the top-left cell agree.
     /// </remarks>
     [TestMethod]
-    public void ThePicker_StartsWithTheRowInTheRowsOrder()
+    public void EachTab_ShowsTheFirstEmojiOfItsOwnGroup()
     {
-        CollectionAssert.AreEqual(
-            StampChoices.Quick.ToArray(),
-            StampChoices.All.Take(StampChoices.Quick.Count).ToArray());
+        foreach (var category in StampChoices.Categories)
+        {
+            Assert.AreEqual(
+                category.Emoji[0],
+                category.Tab,
+                "a tab has to be a picture of what is behind it");
+        }
+    }
+
+    /// <summary>
+    /// Every group has something in it.
+    /// </summary>
+    /// <remarks>
+    /// An empty group is a tab that opens onto nothing, which reads as the picker having
+    /// failed to load rather than as a group nobody filled in.
+    /// </remarks>
+    [TestMethod]
+    public void NoGroupIsEmpty()
+    {
+        Assert.IsTrue(StampChoices.Categories.Count > 0);
+
+        foreach (var category in StampChoices.Categories)
+        {
+            Assert.IsTrue(category.Emoji.Count > 0, $"the {category.Tab} group is empty");
+        }
     }
 
     /// <summary>

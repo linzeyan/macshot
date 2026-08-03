@@ -12,18 +12,17 @@ namespace Macshot.Windows.Services;
 /// Windows has two defaults for this and WinUI picks neither well on its own. Left to
 /// <c>XamlAutoFontFamily</c>, Latin text lands in plain Segoe UI — the older, tighter face
 /// — while Chinese falls through to whatever DirectWrite reaches for, which on most
-/// machines is 微軟正黑體 at its regular weight. Against macshot's dark strip that regular
-/// weight is heavy enough that a row of Chinese labels reads as bold beside the Latin next
-/// to it, which is the opposite of what the two are meant to look like.
+/// machines is 微軟正黑體 — but only where DirectWrite happens to reach for it, which is not
+/// every control and not every window.
 /// </para>
 /// <para>
-/// So both are named: Segoe UI Variable Text for the Latin, 微軟正黑體 Light behind it for
+/// So both are named: Segoe UI Variable Text for the Latin, 微軟正黑體 behind it for
 /// everything Segoe cannot draw. A comma-separated <see cref="FontFamily"/> is resolved in
 /// order per glyph, so a label reading "64px" beside one reading "大小" is set in the two
 /// faces at once without either being asked for by name at the call site.
 /// </para>
 /// <para>
-/// The tracking is the other half. A Light CJK face at 10 points on a dark background sets
+/// The tracking is the other half. A CJK face at 10 points on a dark background sets
 /// solid — the strokes of adjacent glyphs run together — and a hair of tracking is what
 /// opens it back up. It is applied only where the interface is actually Chinese: the same
 /// tracking on Latin text at this size reads as a spacing bug rather than as air, and
@@ -49,7 +48,7 @@ internal static class AppFonts
     /// where the variable family does not exist.
     /// </remarks>
     public static FontFamily Family { get; } =
-        new("Segoe UI Variable Text, Microsoft JhengHei Light, Segoe UI");
+        new("Segoe UI Variable Text, Microsoft JhengHei, Segoe UI");
 
     /// <summary>
     /// The tracking for the language in use, in thousandths of an em: a hair for Chinese
@@ -63,6 +62,19 @@ internal static class AppFonts
         Localization.Language.StartsWith("zh", StringComparison.OrdinalIgnoreCase)
             ? ChineseTracking
             : 0;
+
+    /// <summary>
+    /// The key a XAML-declared <see cref="TextBlock"/> style names to keep this face.
+    /// </summary>
+    /// <remarks>
+    /// A named style replaces the implicit one outright rather than adding to it, so every
+    /// <c>Style x:Key="…" TargetType="TextBlock"</c> in the app is a hole in the coverage
+    /// below — which is how the whole preferences window kept WinUI's default face while
+    /// the toolbar had macshot's. Those styles say <c>BasedOn="{StaticResource
+    /// MacshotTextStyle}"</c> and the hole closes; a lookup reaches this because it walks
+    /// out to the application's dictionary.
+    /// </remarks>
+    public const string TextStyleKey = "MacshotTextStyle";
 
     /// <summary>
     /// Makes macshot's face the app's, for everything built after this returns.
@@ -84,19 +96,6 @@ internal static class AppFonts
     /// re-run when the language changes. macshot rebuilds its windows on that anyway.
     /// </para>
     /// </remarks>
-    /// <summary>
-    /// The key a XAML-declared <see cref="TextBlock"/> style names to keep this face.
-    /// </summary>
-    /// <remarks>
-    /// A named style replaces the implicit one outright rather than adding to it, so every
-    /// <c>Style x:Key="…" TargetType="TextBlock"</c> in the app is a hole in the coverage
-    /// below — which is how the whole preferences window kept WinUI's default face while
-    /// the toolbar had macshot's. Those styles say <c>BasedOn="{StaticResource
-    /// MacshotTextStyle}"</c> and the hole closes; a lookup reaches this because it walks
-    /// out to the application's dictionary.
-    /// </remarks>
-    public const string TextStyleKey = "MacshotTextStyle";
-
     public static void Install(ResourceDictionary resources)
     {
         ArgumentNullException.ThrowIfNull(resources);

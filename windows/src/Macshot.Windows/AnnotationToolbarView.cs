@@ -101,13 +101,7 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// drawn from where the hand starts to where it stops, and what it should point at is
     /// often where the hand started.
     /// </summary>
-    private readonly CheckBox _flipArrow = new()
-    {
-        Content = L("Flip"),
-        FontSize = OptionValueSize,
-        MinWidth = 0,
-        VerticalAlignment = VerticalAlignment.Center,
-    };
+    private readonly CheckBox _flipArrow = OptionCheck(L("Flip"));
     private readonly StyleSegments _smoothing = new();
 
     /// <summary>
@@ -115,13 +109,7 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// what the stroke's path is and this decides how wide it is along that path, and a
     /// four-choice row mixing the two would be answering two questions at once.
     /// </summary>
-    private readonly CheckBox _pencilPressure = new()
-    {
-        Content = L("Pressure"),
-        FontSize = OptionValueSize,
-        MinWidth = 0,
-        VerticalAlignment = VerticalAlignment.Center,
-    };
+    private readonly CheckBox _pencilPressure = OptionCheck(L("Pressure"));
 
     /// <summary>
     /// macshot's Smart marker: the stroke lands on the line of text it was drawn across
@@ -129,13 +117,7 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// holding a straight line at a constant height, which is the one thing a mouse is
     /// worst at.
     /// </summary>
-    private readonly CheckBox _smartMarker = new()
-    {
-        Content = L("Smart"),
-        FontSize = OptionValueSize,
-        MinWidth = 0,
-        VerticalAlignment = VerticalAlignment.Center,
-    };
+    private readonly CheckBox _smartMarker = OptionCheck(L("Smart"));
 
     private readonly StyleSegments _censorMode = new();
     private readonly TextBlock _drawLabel = OptionLabel(L("Draw:"));
@@ -247,13 +229,7 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// annotated. On by default there and here — a span that runs past the edge is
     /// measuring pixels that will be cropped out of the file.
     /// </summary>
-    private readonly CheckBox _clampRuler = new()
-    {
-        Content = L("Limit to selection"),
-        FontSize = OptionValueSize,
-        MinWidth = 0,
-        VerticalAlignment = VerticalAlignment.Center,
-    };
+    private readonly CheckBox _clampRuler = OptionCheck(L("Limit to selection"));
 
     /// <summary>
     /// What the two number keys do while the ruler is in hand, written on the row.
@@ -407,7 +383,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         Padding = new Thickness(6, 2, 6, 2),
         VerticalAlignment = VerticalAlignment.Center,
     };
-    private readonly GridView _stampChoices = new() { MaxWidth = 240, SelectionMode = ListViewSelectionMode.Single, RequestedTheme = ElementTheme.Dark };
+    private readonly EmojiPickerView _stampChoices = new();
 
     /// <summary>
     /// The hairlines between groups of controls, each paired with the group it introduces
@@ -750,7 +726,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         _shapeFill.SelectionChanged += (_, _) => ApplyStyle();
         _flipArrow.Checked += (_, _) => ApplyStyle();
         _flipArrow.Unchecked += (_, _) => ApplyStyle();
-        _stampChoices.SelectionChanged += StampChoice_Changed;
+        _stampChoices.Picked += (_, emoji) => ChooseStamp(emoji);
         _smoothing.SelectionChanged += (_, index) =>
         {
             if (!_isLoadingStyle && index >= 0 && _editor is { } bound)
@@ -1803,6 +1779,27 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// the controls after it do not shuffle sideways as the slider is dragged.
     /// </summary>
     /// <summary>
+    /// A tick box on the options row, sitting on the row's centre line.
+    /// </summary>
+    /// <remarks>
+    /// WinUI pads a <see cref="CheckBox"/> 8,5,0,0 and gives it 32 of minimum height — a
+    /// shape drawn for a settings page, where a tick box is a row of its own. On a strip 34
+    /// tall that top-weighted padding put the box and its label visibly above centre, which
+    /// is what every one of these looked like. Cleared, and the content centred in what is
+    /// left rather than left at the default's top.
+    /// </remarks>
+    private static CheckBox OptionCheck(string label) => new()
+    {
+        Content = label,
+        FontSize = OptionValueSize,
+        MinWidth = 0,
+        MinHeight = 0,
+        Padding = new Thickness(8, 0, 0, 0),
+        VerticalContentAlignment = VerticalAlignment.Center,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
+    /// <summary>
     /// One half of the stepper: 19 wide, 11 tall, so the pair is the 19 × 22 macshot gives
     /// an <c>NSStepper</c>.
     /// </summary>
@@ -2067,10 +2064,15 @@ public sealed partial class AnnotationToolbarView : UserControl
         _spotlightDim.StepFrequency = 0.01;
         ToolTipService.SetToolTip(_spotlightDim, "How far down the spotlight takes the rest");
 
-        // Populated from StampGlyph.Choices so the picker and the renderer cannot offer
-        // different sets.
-        _stampChoices.ItemsSource = StampGlyph.Choices;
-        _stamp.Content = StampEmoji;
+        // A fixed face rather than whatever is chosen, which is macshot's smiling-face
+        // button (ToolOptionsRowView.swift:1200-1202). Showing the current emoji made this
+        // read as an eighteenth quick stamp instead of as the way to the other hundred.
+        _stamp.Content = new TextBlock
+        {
+            Text = "\U0001F642",
+            FontSize = 14,
+            FontFamily = new FontFamily("Segoe UI Emoji"),
+        };
         _stamp.Flyout = new Flyout { Content = _stampChoices };
 
         ToolTipService.SetToolTip(_stamp, L("More Emojis"));
@@ -2369,14 +2371,6 @@ public sealed partial class AnnotationToolbarView : UserControl
         }
     }
 
-    private void StampChoice_Changed(object sender, SelectionChangedEventArgs e)
-    {
-        if (_stampChoices.SelectedItem is string emoji)
-        {
-            ChooseStamp(emoji);
-        }
-    }
-
     /// <summary>
     /// Takes <paramref name="emoji"/> as the mark the stamp tool places, from the row or
     /// from the picker behind it.
@@ -2384,7 +2378,6 @@ public sealed partial class AnnotationToolbarView : UserControl
     private void ChooseStamp(string emoji)
     {
         StampEmoji = emoji;
-        _stamp.Content = emoji;
         _stamp.Flyout?.Hide();
 
         // An emoji chosen after a picture is a choice of the emoji. Held, the picture would
