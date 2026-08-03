@@ -54,7 +54,7 @@
                     x:Name="ZoomText"
                     Text="100%"
                     FontSize="11"
-                    FontWeight="{StaticResource MacshotMediumWeight}"
+                    FontWeight="Medium"
                     Foreground="#FFFFFF"
                     TextAlignment="Center"
                     VerticalAlignment="Center" />

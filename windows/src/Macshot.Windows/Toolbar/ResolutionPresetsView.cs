@@ -174,7 +174,7 @@ internal sealed partial class ResolutionPresetsView : UserControl
         Height = HeaderHeight,
         Padding = new Thickness(RowIndent, 0, 2, 0),
         FontSize = HeaderFontSize,
-        FontWeight = AppFonts.Heavier(FontWeights.SemiBold),
+        FontWeight = AppFonts.Heavier(text, FontWeights.SemiBold),
         Foreground = ToolbarPalette.IconBrush(0.5),
     };
 

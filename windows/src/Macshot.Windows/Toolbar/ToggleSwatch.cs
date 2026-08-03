@@ -43,7 +43,7 @@ internal sealed class ToggleSwatch : StackPanel
         {
             Content = name,
             FontSize = 10,
-            FontWeight = AppFonts.Heavier(FontWeights.Medium),
+            FontWeight = AppFonts.Heavier(name, FontWeights.Medium),
             Padding = new Thickness(6, 0, 6, 0),
             MinWidth = 0,
             Height = 22,

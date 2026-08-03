@@ -205,7 +205,7 @@ public sealed partial class HistoryWindow : Window
                 CornerRadius = new CornerRadius(HistoryPanelLayout.TabHeight / 2),
                 BorderThickness = new Thickness(0),
                 FontSize = 13,
-                FontWeight = AppFonts.Heavier(Microsoft.UI.Text.FontWeights.Medium),
+                FontWeight = AppFonts.Heavier(name, Microsoft.UI.Text.FontWeights.Medium),
                 Tag = name,
             };
 
@@ -255,6 +255,21 @@ public sealed partial class HistoryWindow : Window
             Child = new Image { Source = tile.Thumbnail, Stretch = Stretch.Uniform },
         };
 
+        var hintText = new TextBlock
+        {
+            Text = L("Click to copy · Drag to app"),
+            FontSize = 10,
+            FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+            Foreground = HintInk,
+            TextAlignment = TextAlignment.Center,
+            TextWrapping = TextWrapping.Wrap,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+            Margin = new Thickness(8, 0, 8, 0),
+        };
+
+        AppFonts.Weigh(hintText);
+
         // Over the picture rather than under the card, because it says what clicking the
         // picture does and there is no room under it that is not the label.
         var hint = new Border
@@ -263,25 +278,14 @@ public sealed partial class HistoryWindow : Window
             Background = HintScrim,
             Visibility = Visibility.Collapsed,
             Margin = preview.Margin,
-            Child = new TextBlock
-            {
-                Text = L("Click to copy · Drag to app"),
-                FontSize = 10,
-                FontWeight = AppFonts.Heavier(Microsoft.UI.Text.FontWeights.SemiBold),
-                Foreground = HintInk,
-                TextAlignment = TextAlignment.Center,
-                TextWrapping = TextWrapping.Wrap,
-                HorizontalAlignment = HorizontalAlignment.Center,
-                VerticalAlignment = VerticalAlignment.Center,
-                Margin = new Thickness(8, 0, 8, 0),
-            },
+            Child = hintText,
         };
 
         var label = new TextBlock
         {
             Text = tile.Caption,
             FontSize = 11,
-            FontWeight = AppFonts.Heavier(Microsoft.UI.Text.FontWeights.Medium),
+            FontWeight = AppFonts.Heavier(tile.Caption, Microsoft.UI.Text.FontWeights.Medium),
             Foreground = LabelInk,
             TextAlignment = TextAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Center,

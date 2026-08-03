@@ -80,7 +80,7 @@
                 Canvas.Top="6"
                 Text="00:00"
                 FontSize="13"
-                FontWeight="{StaticResource MacshotSemiBoldWeight}"
+                FontWeight="SemiBold"
                 Foreground="#FFFFFF" />
 
             <!-- Three lines, which is what says a panel with no title bar can be moved.

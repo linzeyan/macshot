@@ -160,11 +160,6 @@ public sealed partial class AnnotationToolbarView : UserControl
     {
         Content = L("PII"),
         FontSize = OptionValueSize,
-
-        // Set here and not through RedactButton, because this one is a SplitButton and
-        // cannot come out of that factory — which is exactly how it was the last of the
-        // four left at the default weight after the other three were fixed.
-        FontWeight = AppFonts.Weight,
         MinWidth = 0,
         Padding = new Thickness(8, 2, 8, 2),
         VerticalAlignment = VerticalAlignment.Center,
@@ -256,7 +251,7 @@ public sealed partial class AnnotationToolbarView : UserControl
     {
         Text = L("Hold 1 auto-vertical  ·  Hold 2 auto-horizontal"),
         FontSize = OptionLabelSize,
-        FontWeight = AppFonts.Heavier(FontWeights.Medium),
+        FontWeight = FontWeights.Medium,
         Foreground = ToolbarPalette.IconBrush(0.3),
         VerticalAlignment = VerticalAlignment.Center,
     };
@@ -337,7 +332,7 @@ public sealed partial class AnnotationToolbarView : UserControl
     {
         Width = 26,
         FontSize = OptionValueSize,
-        FontWeight = AppFonts.Heavier(FontWeights.Medium),
+        FontWeight = FontWeights.Medium,
         TextAlignment = TextAlignment.Center,
         VerticalAlignment = VerticalAlignment.Center,
     };
@@ -737,6 +732,12 @@ public sealed partial class AnnotationToolbarView : UserControl
         _redactPii.Click += (_, _) => CommandInvoked?.Invoke(this, ToolbarCommand.Redact);
         _redactFaces.Click += (_, _) => CommandInvoked?.Invoke(this, ToolbarCommand.RedactFaces);
         _redactPeople.Click += (_, _) => CommandInvoked?.Invoke(this, ToolbarCommand.RedactPeople);
+
+        // The two the shared factories cannot weigh: a SplitButton does not come out of
+        // RedactButton, and a field initializer cannot read the text it is setting. Both
+        // are weighed off their own label, so the string is written once.
+        AppFonts.Weigh(_redactPii);
+        AppFonts.Weigh(_measureHint);
 
         _measureUnit.SelectionChanged += (_, _) => ApplyStyle();
 
@@ -1811,7 +1812,7 @@ public sealed partial class AnnotationToolbarView : UserControl
     {
         Text = text,
         FontSize = OptionLabelSize,
-        FontWeight = AppFonts.Heavier(FontWeights.Medium),
+        FontWeight = AppFonts.Heavier(text, FontWeights.Medium),
         VerticalAlignment = VerticalAlignment.Center,
     };
 
@@ -1833,7 +1834,7 @@ public sealed partial class AnnotationToolbarView : UserControl
     {
         Content = label,
         FontSize = OptionValueSize,
-        FontWeight = AppFonts.Weight,
+        FontWeight = AppFonts.Heavier(label, FontWeights.Normal),
         MinWidth = 0,
         MinHeight = 0,
         Padding = new Thickness(8, 0, 0, 0),
@@ -1897,7 +1898,7 @@ public sealed partial class AnnotationToolbarView : UserControl
             Width = width,
             Tag = unit,
             FontSize = OptionValueSize,
-            FontWeight = AppFonts.Heavier(FontWeights.Medium),
+            FontWeight = FontWeights.Medium,
             TextAlignment = TextAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -1926,7 +1927,7 @@ public sealed partial class AnnotationToolbarView : UserControl
             MinWidth = 0,
             Padding = new Thickness(0),
             FontSize = 12,
-            FontWeight = AppFonts.Heavier(FontWeights.SemiBold),
+            FontWeight = FontWeights.SemiBold,
             VerticalAlignment = VerticalAlignment.Center,
         };
 
@@ -1959,7 +1960,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         // Set rather than inherited. A button's label is drawn by the ContentPresenter its
         // template puts there, and what that ends up at is not something to take on trust:
         // these four stayed at the default weight while every label beside them changed.
-        FontWeight = AppFonts.Weight,
+        FontWeight = AppFonts.Heavier(label, FontWeights.Normal),
         MinWidth = 0,
         Padding = new Thickness(8, 2, 8, 2),
         VerticalAlignment = VerticalAlignment.Center,

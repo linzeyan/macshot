@@ -373,7 +373,7 @@ internal sealed class ColorPickerView : UserControl
         _opacity.Children.Add(_opacityTrack);
 
         _opacityLabel.FontSize = 8;
-        _opacityLabel.FontWeight = AppFonts.Heavier(FontWeights.Medium);
+        _opacityLabel.FontWeight = FontWeights.Medium;
         _opacityLabel.Foreground = ToolbarPalette.IconBrush(0.8);
         _opacityLabel.TextAlignment = TextAlignment.Right;
         _opacityLabel.Width = ContentWidth - 2;

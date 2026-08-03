@@ -1,3 +1,4 @@
+using Macshot.Windows.Core.Localization;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -29,6 +30,14 @@ namespace Macshot.Windows.Services;
 /// opens it back up. It is applied only where the interface is actually Chinese: the same
 /// tracking on Latin text at this size reads as a spacing bug rather than as air, and
 /// WinUI has no way to ask for it per script.
+/// </para>
+/// <para>
+/// The weight — <see cref="Heavier"/> — is decided per string rather than per interface,
+/// which is the finer rule of the two and is deliberate. Tracking a Latin word that sits
+/// in an otherwise Chinese row is a hair nobody sees; setting it bold is not, and a window
+/// that put "System Default" and every format name in the Chinese weight was the version
+/// of this that had to be taken back. Where the string is at hand it is passed in; where
+/// it is not, <see cref="Weigh"/> reads it off the control.
 /// </para>
 /// </remarks>
 internal static class AppFonts
@@ -66,33 +75,19 @@ internal static class AppFonts
             : 0;
 
     /// <summary>
-    /// The weight the interface is set in: bold where it is Chinese, regular elsewhere.
+    /// Bold for Chinese, and <paramref name="normally"/> for everything else.
     /// </summary>
     /// <remarks>
     /// Asked for as "微軟正黑體 UI Bold", which is a weight inside that family rather than a
-    /// family of its own — DirectWrite will not resolve it from the name, so it is set here.
-    /// It goes on the whole interface and not on the Chinese alone, for the reason the
-    /// tracking does: WinUI has no way to ask for a weight per script, and a row reading
-    /// "大小 · 64px" with the two halves at different weights looks like a rendering fault
-    /// rather than like a choice. Which is why this is conditional at all — a Latin
-    /// interface stays regular rather than going bold for a decision that was about Chinese.
+    /// family of its own — DirectWrite will not resolve it from a name, so it is set here.
+    /// Per string and not per interface: setting it for the whole window because the
+    /// language was Chinese put "System Default" and every other English string in the
+    /// Chinese weight, which is not what a mixed row is meant to look like.
     /// </remarks>
-    public static global::Windows.UI.Text.FontWeight Weight => Heavier(FontWeights.Normal);
-
-    /// <summary>
-    /// Bold where the interface is Chinese, and <paramref name="normally"/> everywhere else.
-    /// </summary>
-    /// <remarks>
-    /// For the labels that ask for a weight of their own — macshot sets its row labels
-    /// medium and its headings semibold — because a local value beats the style below and
-    /// those are exactly the labels the Chinese is on. Passing the old weight through keeps
-    /// a Latin interface as it was: this was a decision about how Chinese sets, not a
-    /// decision to make everything heavier.
-    /// </remarks>
-    public static global::Windows.UI.Text.FontWeight Heavier(global::Windows.UI.Text.FontWeight normally) =>
-        Localization.Language.StartsWith("zh", StringComparison.OrdinalIgnoreCase)
-            ? FontWeights.Bold
-            : normally;
+    public static global::Windows.UI.Text.FontWeight Heavier(
+        string? text,
+        global::Windows.UI.Text.FontWeight normally) =>
+        ChineseText.Contains(text) ? FontWeights.Bold : normally;
 
     /// <summary>
     /// The key a XAML-declared <see cref="TextBlock"/> style names to keep this face.
@@ -106,22 +101,6 @@ internal static class AppFonts
     /// out to the application's dictionary.
     /// </remarks>
     public const string TextStyleKey = "MacshotTextStyle";
-
-    /// <summary>
-    /// The keys XAML names for the two weights macshot sets its own labels in.
-    /// </summary>
-    /// <remarks>
-    /// Markup cannot call <see cref="Heavier"/>, and a literal <c>FontWeight="Medium"</c> in
-    /// a page is a local value that beats everything below — which is why the hud, the
-    /// toasts, the thumbnail and the preferences headings all stayed at their own weight
-    /// while the rest of the interface changed. Resolved once at startup, so a page saying
-    /// <c>{StaticResource MacshotMediumWeight}</c> gets bold under a Chinese interface and
-    /// the medium it asked for under any other.
-    /// </remarks>
-    public const string MediumWeightKey = "MacshotMediumWeight";
-
-    /// <inheritdoc cref="MediumWeightKey"/>
-    public const string SemiBoldWeightKey = "MacshotSemiBoldWeight";
 
     /// <summary>
     /// Makes macshot's face the app's, for everything built after this returns.
@@ -156,8 +135,6 @@ internal static class AppFonts
         // sealed style is a fine thing to derive from but a confusing thing to share.
         resources[TextStyleKey] = TextStyle();
 
-        resources[MediumWeightKey] = Heavier(FontWeights.Medium);
-        resources[SemiBoldWeightKey] = Heavier(FontWeights.SemiBold);
     }
 
     private static Style TextStyle()
@@ -165,7 +142,6 @@ internal static class AppFonts
         var style = new Style(typeof(TextBlock));
         style.Setters.Add(new Setter(TextBlock.FontFamilyProperty, Family));
         style.Setters.Add(new Setter(TextBlock.CharacterSpacingProperty, Spacing));
-        style.Setters.Add(new Setter(TextBlock.FontWeightProperty, Weight));
         return style;
     }
 
@@ -186,29 +162,30 @@ internal static class AppFonts
         Content = content,
         FontFamily = Family,
         CharacterSpacing = Spacing,
-        FontWeight = Weight,
+        FontWeight = Heavier(content as string, FontWeights.Normal),
     };
 
     /// <summary>
-    /// Gives <paramref name="node"/> the app's weight, unless it was given one of its own.
+    /// Sets <paramref name="node"/> in the Chinese weight when what it says is Chinese.
     /// </summary>
     /// <remarks>
-    /// The catch-all for controls, which is where the coverage kept falling short: a
-    /// button, a tick box or a combo takes its <em>face</em> from a theme resource, and
-    /// WinUI has no theme resource for a weight. Anything that asked for a weight in markup
-    /// or in code keeps it — a local value is a decision somebody made, and a heading set
-    /// semibold on purpose should not be flattened by a rule about Chinese.
+    /// The catch-all for a page's controls, which is where the coverage kept falling short:
+    /// a button, a tick box or a combo takes its face from a theme resource, and WinUI has
+    /// no theme resource for a weight. Nothing is done to anything that is not
+    /// Chinese, so a label deliberately set semibold keeps it, and an English string in a
+    /// Chinese window is left in the face and weight Segoe draws it in.
     /// </remarks>
-    public static void AdoptWeight(DependencyObject? node)
+    public static void Weigh(DependencyObject? node)
     {
-        if (node is not Control control)
+        switch (node)
         {
-            return;
-        }
+        case TextBlock label when ChineseText.Contains(label.Text):
+            label.FontWeight = FontWeights.Bold;
+            break;
 
-        if (control.ReadLocalValue(Control.FontWeightProperty) == DependencyProperty.UnsetValue)
-        {
-            control.FontWeight = Weight;
+        case ContentControl control when control.Content is string content && ChineseText.Contains(content):
+            control.FontWeight = FontWeights.Bold;
+            break;
         }
     }
 
@@ -232,6 +209,5 @@ internal static class AppFonts
 
         control.FontFamily = Family;
         control.CharacterSpacing = Spacing;
-        control.FontWeight = Weight;
     }
 }

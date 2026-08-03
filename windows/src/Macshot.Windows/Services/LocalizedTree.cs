@@ -63,13 +63,6 @@ public static class LocalizedTree
             ToolTipService.SetToolTip(node, AppFonts.Tip(Localization.L(tip)));
         }
 
-        // The same walk, because it reaches every control on the page and nothing else
-        // does. A control takes its face from a theme resource but there is no theme
-        // resource for a weight, so without this the buttons, tick boxes and combos on a
-        // page stay at the default while every label around them changes — which is what
-        // the whole preferences window looked like.
-        AppFonts.AdoptWeight(node);
-
         switch (node)
         {
         case TextBlock text:
@@ -153,5 +146,11 @@ public static class LocalizedTree
         }
 
         // ScrollViewer is a ContentControl, so its content is reached by the case above.
+
+        // After the translation and not before it: the weight follows the text, and the
+        // text this page was written with is English. The same walk does it because it
+        // reaches every control on the page and nothing else does — a control takes its
+        // face from a theme resource, but there is no theme resource for a weight.
+        AppFonts.Weigh(node);
     }
 }

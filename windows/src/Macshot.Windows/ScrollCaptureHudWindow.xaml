@@ -13,7 +13,7 @@
                 x:Name="ProgressText"
                 Foreground="#FFFFFF"
                 FontSize="12"
-                FontWeight="{StaticResource MacshotMediumWeight}"
+                FontWeight="Medium"
                 Text="Scrolling..." />
             <TextBlock
                 x:Name="StopHintText"
@@ -34,7 +34,7 @@
             MinWidth="0"
             CornerRadius="12"
             FontSize="12"
-            FontWeight="{StaticResource MacshotSemiBoldWeight}"
+            FontWeight="SemiBold"
             VerticalAlignment="Center"
             Click="Stop_Click" />
     </Grid>

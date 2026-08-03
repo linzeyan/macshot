@@ -245,14 +245,36 @@ public sealed partial class PreferencesWindow : Window
         }
     }
 
+    /// <summary>
+    /// A tick box for one tool or one button, in the shape the markup's rows are in.
+    /// </summary>
+    /// <param name="label">
+    /// Already translated: these rows are built after the page-wide pass has run, so
+    /// nothing else will translate them.
+    /// </param>
+    /// <remarks>
+    /// Every setting of this is a departure from WinUI's default, which is a settings-page
+    /// shape for a taller row: content aligned to the top and padded down from it, so the
+    /// words sit above the box rather than beside it. 13 to match the markup's rows rather
+    /// than WinUI's 14 — these sit in the same column as the tick boxes the markup declares,
+    /// which is also why the alignment has to be set here: a keyed style in the markup is
+    /// not something a control built in code picks up.
+    /// </remarks>
+    private static CheckBox Toggle(string label) => new()
+    {
+        Content = label,
+        MinWidth = 0,
+        FontSize = 13,
+        Padding = new Thickness(8, 0, 0, 0),
+        VerticalContentAlignment = VerticalAlignment.Center,
+        FontWeight = AppFonts.Heavier(label, Microsoft.UI.Text.FontWeights.Normal),
+    };
+
     private void BuildToolsPage()
     {
         foreach (var tool in ToolbarActions.ToolOrder)
         {
-            // 13 to match the markup's rows rather than WinUI's 14: these sit in the same
-            // column as the tick boxes the markup declares. Translated here rather than by
-            // the page-wide pass, which has already run by the time this row exists.
-            var toggle = new CheckBox { Content = L(ToolbarActions.Tooltip(tool)), MinWidth = 0, FontSize = 13 };
+            var toggle = Toggle(L(ToolbarActions.Tooltip(tool)));
             toggle.Checked += Setting_Changed;
             toggle.Unchecked += Setting_Changed;
             _toolToggles[tool] = toggle;
@@ -276,7 +298,7 @@ public sealed partial class PreferencesWindow : Window
                 }
 #endif
 
-                var toggle = new CheckBox { Content = L(action.Label), MinWidth = 0, FontSize = 13 };
+                var toggle = Toggle(L(action.Label));
                 toggle.Checked += Setting_Changed;
                 toggle.Unchecked += Setting_Changed;
                 _actionToggles[action.Id] = toggle;

@@ -220,7 +220,7 @@ internal sealed partial class ResolutionBox : UserControl
             MinHeight = FieldHeight,
             Padding = new Thickness(4, 0, 4, 0),
             FontSize = FieldFontSize,
-            FontWeight = AppFonts.Heavier(FontWeights.Medium),
+            FontWeight = FontWeights.Medium,
             TextAlignment = TextAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center,
