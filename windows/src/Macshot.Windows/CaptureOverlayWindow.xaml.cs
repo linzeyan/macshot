@@ -1817,7 +1817,7 @@ public sealed partial class CaptureOverlayWindow : Window
             }
         };
         AnnotationToolbar.CommandInvoked += (_, command) => RunToolbarCommand(command);
-        AnnotationToolbar.FrameStyleChosen += (_, index) => FrameStyleChosen(index);
+        AnnotationToolbar.FrameStyleChosen += (_, _) => FrameStyleChosen();
         AnnotationToolbar.FrameOptionsChanged += (_, _) => FrameOptionsChanged();
     }
 
@@ -2292,14 +2292,13 @@ public sealed partial class CaptureOverlayWindow : Window
         AnnotationToolbar.Beautified = armed;
         ShowFrame();
 
+        // Nothing is said about it. macshot announces neither the frame arriving nor its
+        // going, and the reason shows once the pill has somewhere to be: it would stand
+        // over the capture for as long as it lasted, saying what the user can already see
+        // has happened to the picture underneath it.
         if (arriving)
         {
             MoveChromeToFrame();
-
-            Hint(armed
-                ? L("Framed in {0}", BeautifyRenderer.Styles[_settings.Current.ToBeautifyOptions().StyleIndex].Name)
-                : "Frame removed");
-
             return;
         }
 
@@ -2461,7 +2460,7 @@ public sealed partial class CaptureOverlayWindow : Window
     /// background, watching nothing change, and then having to find the button that turns
     /// on the thing already chosen.
     /// </remarks>
-    private void FrameStyleChosen(int styleIndex)
+    private void FrameStyleChosen()
     {
         if (!IsAnnotating)
         {
@@ -2475,8 +2474,6 @@ public sealed partial class CaptureOverlayWindow : Window
         // The picker writes the style down before this runs, so the repaint reads the
         // background that was just chosen rather than the one before it.
         ShowFrameFromSettings();
-
-        Hint(L("Framed in {0}", BeautifyRenderer.Styles[styleIndex].Name));
     }
 
     /// <summary>
@@ -3763,14 +3760,15 @@ public sealed partial class CaptureOverlayWindow : Window
 
     /// <summary>
     /// Puts the pill where what it is about is: the middle of the screen while nothing is
-    /// chosen, and just above the region once something is.
+    /// chosen, and under the region once something is.
     /// </summary>
     /// <remarks>
     /// Both placements are macOS's, and so is each one's shape — the middle of an empty
     /// screen can carry a larger pill than a line sitting against a rectangle the user is
-    /// dragging. Measured rather than worked out from constants, unlike the toolbar and the
-    /// size box: what a sentence comes to is the whole variable here, and there is no
-    /// arithmetic that answers it.
+    /// dragging. The size it comes to is measured rather than worked out from constants,
+    /// unlike the toolbar and the size box: what a sentence measures is the whole variable
+    /// here, and there is no arithmetic that answers it. Where it then goes is arithmetic,
+    /// and lives in <see cref="HintPlacement"/> with the rest of the overlay's placement.
     /// </remarks>
     private void PlaceHint()
     {
@@ -3794,45 +3792,42 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
 
-        // Above the region, or below it when there is no room above — and never off the
-        // side, which a wide sentence about a region against the screen's edge would be.
-        var top = region.Y - size.Height - HintGap;
-        if (top < screen.Y + HintGap)
-        {
-            top = region.Bottom + HintGap;
-        }
+        // Everything the overlay has already placed, so the pill is the one that gives way.
+        // It is the only piece of chrome here that can move without taking a meaning with
+        // it: the size box says what the region measures and the strips say what the tools
+        // are, and neither reads the same somewhere else.
+        var placed = new List<CaptureRegion>(4) { _sizeBoxBounds };
+        placed.AddRange(AnnotationToolbar.Occupies);
 
-        Canvas.SetLeft(HintPill, Math.Clamp(
-            region.X + ((region.Width - size.Width) / 2),
-            screen.X + HintEdge,
-            Math.Max(screen.X + HintEdge, screen.Right - size.Width - HintEdge)));
-        Canvas.SetTop(HintPill, Math.Min(top, Math.Max(screen.Y, screen.Bottom - size.Height - HintGap)));
+        var pill = HintPlacement.For(
+            region, screen, new CaptureRegion(0, 0, size.Width, size.Height), placed);
+
+        Canvas.SetLeft(HintPill, pill.X);
+        Canvas.SetTop(HintPill, pill.Y);
     }
-
-    /// <summary>How far the pill keeps off the region it describes.</summary>
-    private const double HintGap = 8;
-
-    /// <summary>
-    /// How far the pill keeps off the side of the screen. Less than the gap it keeps from
-    /// the region: this one is only there to stop a wide sentence about a region against
-    /// the screen's edge being cut off, so it gives up as little of the middle as it can.
-    /// </summary>
-    private const double HintEdge = 4;
 
     /// <summary>
     /// What the pill is about, in the units it is placed in, or null when that is the
     /// whole screen because nothing has been chosen or dragged out yet.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Through the viewport, like the rest of the chrome: the pill is outside the zoom
     /// transform, so where it goes is where the region appears on screen rather than where
     /// it is on the capture.
+    /// </para>
+    /// <para>
+    /// The frame's edge rather than the region's, the way the toolbar takes it. What the
+    /// pill says is about the tool that is running and not about the pixels, so it belongs
+    /// outside the gradient — the opposite of the size box, which is the reading of those
+    /// pixels and stays tight against them.
+    /// </para>
     /// </remarks>
     private CaptureRegion? HintAnchor()
     {
         if (_selection is { } chosen)
         {
-            return _viewport.ToView(ToLayout(chosen));
+            return _viewport.ToView(ToLayout(ChromeAnchor(chosen)));
         }
 
         return _selectionStart is { } start && _marqueeAt is { } now
