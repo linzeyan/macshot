@@ -367,6 +367,31 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// </summary>
     private readonly ToggleSwatch _textGlyphStroke = new(L("Stroke"));
     private readonly Button _stamp = new() { VerticalAlignment = VerticalAlignment.Center };
+
+    /// <summary>
+    /// Puts a picture on the capture instead of an emoji — macshot's Load Image
+    /// (<c>ToolOptionsRowView.swift:1210-1221</c>).
+    /// </summary>
+    /// <remarks>
+    /// The row's last control, after the way to the rest of the emoji, because it is the
+    /// answer when none of them is the mark wanted: a logo, a signature, a cropped piece
+    /// of another screenshot. A Fluent glyph rather than one of macshot's drawn icons,
+    /// since this sits among WinUI buttons rather than on an icon strip.
+    /// </remarks>
+    private readonly Button _stampImage = new()
+    {
+        // Named, not left to the theme resource, because AppFonts puts the app's family on
+        // this control's root and an inherited text font would leave the glyph a blank box.
+        Content = new FontIcon
+        {
+            Glyph = "\uE91B",
+            FontSize = 14,
+            FontFamily = new FontFamily("Segoe Fluent Icons"),
+        },
+        MinWidth = 0,
+        Padding = new Thickness(6, 2, 6, 2),
+        VerticalAlignment = VerticalAlignment.Center,
+    };
     private readonly GridView _stampChoices = new() { MaxWidth = 240, SelectionMode = ListViewSelectionMode.Single, RequestedTheme = ElementTheme.Dark };
 
     /// <summary>
@@ -555,6 +580,15 @@ public sealed partial class AnnotationToolbarView : UserControl
 
     /// <summary>The emoji the stamp tool places.</summary>
     public string StampEmoji { get; private set; } = StampGlyph.Default;
+
+    /// <summary>
+    /// The picture the stamp tool places instead of the emoji, once one has been loaded.
+    /// </summary>
+    /// <remarks>
+    /// Null means the emoji, so the two do not need a mode between them: whichever was
+    /// chosen last is the one the tool places, which is what picking either of them says.
+    /// </remarks>
+    public CapturedFrame? StampPicture { get; private set; }
 
     /// <summary>
     /// What the first badge of this capture counts from. Read by the canvas when it places
@@ -1436,6 +1470,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         _cornerValue.Visibility = rounds;
         var stamping = Show(AnnotationToolOptions.UsesStamp(tool));
         _stamp.Visibility = stamping;
+        _stampImage.Visibility = stamping;
         foreach (var pick in _quickStamps)
         {
             pick.Visibility = stamping;
@@ -1852,7 +1887,6 @@ public sealed partial class AnnotationToolbarView : UserControl
         ToolTipService.SetToolTip(_shapeFill, "How the shape is filled");
         ShowShapeFillSegments(oval: false);
         ToolTipService.SetToolTip(_arrowStyle, "Arrow ends");
-        ToolTipService.SetToolTip(_stamp, "Stamp");
 
         // Drawn rather than named: macshot's segments carry a picture of the mark you are
         // about to make, which is both quicker to read than "Dashed" and one click rather
@@ -1956,6 +1990,10 @@ public sealed partial class AnnotationToolbarView : UserControl
         _stamp.Content = StampEmoji;
         _stamp.Flyout = new Flyout { Content = _stampChoices };
 
+        ToolTipService.SetToolTip(_stamp, L("More Emojis"));
+        ToolTipService.SetToolTip(_stampImage, L("Load Image"));
+        _stampImage.Click += (_, _) => CommandInvoked?.Invoke(this, ToolbarCommand.LoadStampImage);
+
         foreach (var emoji in StampGlyph.Quick)
         {
             var pick = QuickStamp(emoji);
@@ -2052,7 +2090,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         // (ToolOptionsRowView.swift:1183-1208): the seventeen you can reach, then the way
         // to the rest.
         AddGroup([.. _quickStamps]);
-        AddGroup(_stamp);
+        AddGroup(_stamp, _stampImage);
     }
 
     /// <summary>
@@ -2261,8 +2299,24 @@ public sealed partial class AnnotationToolbarView : UserControl
         _stamp.Content = emoji;
         _stamp.Flyout?.Hide();
 
+        // An emoji chosen after a picture is a choice of the emoji. Held, the picture would
+        // keep being placed and every emoji on the row would look broken.
+        StampPicture = null;
+
         // Picking a stamp is asking to stamp: leaving the previous tool active would
         // make the choice look like it did nothing.
+        SelectTool(AnnotationTool.Stamp);
+    }
+
+    /// <summary>
+    /// Takes <paramref name="picture"/> as the mark the stamp tool places, after the host
+    /// has asked for one and been given a file.
+    /// </summary>
+    public void UseStampPicture(CapturedFrame picture)
+    {
+        ArgumentNullException.ThrowIfNull(picture);
+
+        StampPicture = picture;
         SelectTool(AnnotationTool.Stamp);
     }
 

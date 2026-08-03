@@ -2084,6 +2084,10 @@ public sealed partial class CaptureOverlayWindow : Window
                 _ = RedactPeopleAsync();
                 return;
 
+            case ToolbarCommand.LoadStampImage:
+                _ = LoadStampImageAsync();
+                return;
+
             case ToolbarCommand.Translate:
 #if !OFFLINE
                 _ = TranslateAsync();
@@ -2680,6 +2684,7 @@ public sealed partial class CaptureOverlayWindow : Window
             () => OverlayRoot.XamlRoot?.RasterizationScale ?? _monitor.Scale,
             message => Hint(message));
         AnnotationCanvas.StampEmoji = () => AnnotationToolbar.StampEmoji;
+        AnnotationCanvas.StampPicture = () => AnnotationToolbar.StampPicture;
         AnnotationCanvas.NumberStartAt = () => AnnotationToolbar.NumberStartAt;
         AnnotationCanvas.SmartMarker = () => AnnotationToolbar.SmartMarker;
         AnnotationCanvas.CensorTextOnly = () => AnnotationToolbar.CensorTextOnly;
@@ -2925,6 +2930,37 @@ public sealed partial class CaptureOverlayWindow : Window
             region.Y + subject.Y,
             subject.Width,
             subject.Height)]);
+    }
+
+    /// <summary>
+    /// Asks for a picture and hands it to the stamp tool to place — macshot's Load Image.
+    /// </summary>
+    /// <remarks>
+    /// Run from the window rather than from the toolbar because a file dialog needs a
+    /// window to belong to, and the toolbar is a control without one. A dismissed dialog
+    /// leaves the previous stamp in place: cancelling the choice is not clearing it.
+    /// </remarks>
+    private async Task LoadStampImageAsync()
+    {
+        if (!IsAnnotating)
+        {
+            return;
+        }
+
+        try
+        {
+            if (await ClipboardImages.PickAsync(WinRT.Interop.WindowNative.GetWindowHandle(this)) is { } picture)
+            {
+                AnnotationToolbar.UseStampPicture(picture);
+            }
+        }
+        catch (Exception exception)
+        {
+            // A file that will not decode is the file's fault, and the row is where the
+            // press was: the capture carries on with whatever stamp it already had.
+            DiagnosticLog.Write($"Could not load the stamp image: {exception}");
+            Hint(exception.Message);
+        }
     }
 
     /// <summary>

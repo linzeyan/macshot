@@ -292,6 +292,10 @@ public sealed partial class EditorWindow : Window
                 _ = RedactPeopleAsync();
                 return;
 
+            case ToolbarCommand.LoadStampImage:
+                _ = LoadStampImageAsync();
+                return;
+
             case ToolbarCommand.Translate:
 #if !OFFLINE
                 _ = TranslateAsync();
@@ -353,6 +357,7 @@ public sealed partial class EditorWindow : Window
             () => EditorRoot.XamlRoot?.RasterizationScale ?? 1,
             message => HintText.Text = message);
         AnnotationCanvas.StampEmoji = () => AnnotationToolbar.StampEmoji;
+        AnnotationCanvas.StampPicture = () => AnnotationToolbar.StampPicture;
         AnnotationCanvas.NumberStartAt = () => AnnotationToolbar.NumberStartAt;
         AnnotationCanvas.SmartMarker = () => AnnotationToolbar.SmartMarker;
         AnnotationCanvas.CensorTextOnly = () => AnnotationToolbar.CensorTextOnly;
@@ -1134,6 +1139,32 @@ public sealed partial class EditorWindow : Window
         }
 
         AddRedactions([subject]);
+    }
+
+    /// <summary>
+    /// Asks for a picture and hands it to the stamp tool to place — macshot's Load Image.
+    /// </summary>
+    /// <remarks>
+    /// Run from the window rather than from the toolbar because a file dialog needs a
+    /// window to belong to, and the toolbar is a control without one. A dismissed dialog
+    /// leaves the previous stamp in place: cancelling the choice is not clearing it.
+    /// </remarks>
+    private async Task LoadStampImageAsync()
+    {
+        try
+        {
+            if (await ClipboardImages.PickAsync(WinRT.Interop.WindowNative.GetWindowHandle(this)) is { } picture)
+            {
+                AnnotationToolbar.UseStampPicture(picture);
+            }
+        }
+        catch (Exception exception)
+        {
+            // A file that will not decode is the file's fault: the editor carries on with
+            // whatever stamp it already had.
+            DiagnosticLog.Write($"Could not load the stamp image: {exception}");
+            HintText.Text = exception.Message;
+        }
     }
 
     /// <summary>Puts one redaction over each box, as the single undo step one press earns.</summary>

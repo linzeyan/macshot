@@ -87,6 +87,12 @@ public sealed partial class AnnotationCanvasView : UserControl
     public Func<string> StampEmoji { get; set; } = () => StampGlyph.Default;
 
     /// <summary>
+    /// The picture the stamp tool places instead of its emoji, or null while none has been
+    /// loaded. Asked for the same way and for the same reason as the emoji beside it.
+    /// </summary>
+    public Func<CapturedFrame?> StampPicture { get; set; } = () => null;
+
+    /// <summary>
     /// What the first badge of this capture counts from. Asked for rather than held,
     /// because the toolbar owns the control and the answer can change between two clicks.
     /// </summary>
@@ -642,6 +648,19 @@ public sealed partial class AnnotationCanvasView : UserControl
         }
 
         var style = editor.Style;
+
+        if (StampPicture() is { } picture)
+        {
+            var image = StampGlyph.BuildPicture(picture, style, SpriteScale);
+            var stamped = await GlyphSpriteFactory.RenderAsync(SpriteHost, image);
+
+            // No Text: the emoji field describes the mark, and a picture has no character
+            // that stands for it. The sprite carries the pixels, as it does for every
+            // other stamp.
+            Commit(Annotation.CreateSprite(AnnotationTool.Stamp, Centred(point, stamped), stamped, style));
+            return;
+        }
+
         var emoji = StampEmoji();
 
         var glyph = StampGlyph.Build(emoji, style, SpriteScale);

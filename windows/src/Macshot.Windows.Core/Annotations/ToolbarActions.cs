@@ -80,6 +80,15 @@ public enum ToolbarCommand
     /// </remarks>
     RedactPeople,
 
+    /// <summary>
+    /// Choose a picture for the stamp tool to place, instead of one of the emoji.
+    /// </summary>
+    /// <remarks>
+    /// Out to the host rather than handled on the row, because a file dialog needs a
+    /// window to belong to and the toolbar is a control that does not have one.
+    /// </remarks>
+    LoadStampImage,
+
     /// <summary>Lay a translation over the text in it.</summary>
     Translate,
 
