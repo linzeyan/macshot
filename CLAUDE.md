@@ -36,18 +36,26 @@ cost the toolbar ~114pt of overspend, which showed up as the vertical strip cove
 stamp row. When a layout has to match, **ask for the macOS measurement in rendered
 points**, not for the file it came from.
 
-### There is no visual feedback loop, so do not guess
+### Ask the VM, do not guess
 
-The WinUI half cannot be compiled on macOS at all, and nothing anywhere renders it. The
-Core suite passing says nothing about how the app looks. Two consequences:
+The WinUI half cannot be compiled on macOS at all, and the Core suite passing says nothing
+about how the app looks. Both questions are answerable without a human in the loop:
 
-1. **Get a compile before committing.** `windows/tools/vm-build.sh` drives the Windows VM;
-   `.github/workflows/windows-build.yml` is the fallback. An unverified WinUI change is
-   unfinished, not done.
-2. **Never bet on a framework behaviour that cannot be checked here.** "The weight will
-   inherit through the `ContentPresenter`" was such a bet, it was wrong, and it took three
-   round trips through the user's screenshots to find out. Set the thing explicitly
-   instead.
+```bash
+windows/tools/vm-build.sh                 # does it compile? ~15s, warnings as errors
+windows/tools/vm-build.sh --test          # …and do the tests pass on Windows
+windows/tools/vm-build.sh --offline       # …does the variant compile on its own
+windows/tools/vm-shot.sh --keys '^+x'     # what does it look like? → a PNG to read
+```
+
+Use them. Before this existed, every layout, weight and alignment bug cost a full round
+trip through a person with a screenshot tool, and that is most of why the toolbar took as
+many commits as it did.
+
+**An unverified WinUI change is unfinished, not done.** And never bet on a framework
+behaviour instead of checking it — "the weight will inherit through the
+`ContentPresenter`" was such a bet, it was wrong, and it took three round trips to find
+out. `.github/workflows/windows-build.yml` is the fallback when the VM is down.
 
 ### Change the class of thing, not the instance
 
@@ -91,9 +99,22 @@ dotnet test  windows/Macshot.Windows.sln -c Release --no-build
 
 ### The Windows VM
 
-`windows/tools/vm-build.sh` compiles the WinUI half on the UTM guest and prints the errors
-here. One-time setup is documented in the header of that script. Run it before every
-commit that touches `windows/src/Macshot.Windows/`.
+A UTM guest reachable over ssh as `macshot-vm`. `vm-build.sh` compiles there and prints
+the errors here; `vm-shot.sh` photographs its desktop, optionally pressing something
+first, and writes a PNG that can be read directly. One-time setup is in the header of
+`vm-build.sh`; `vm-shot.sh` needs nothing beyond it.
+
+Two things about the guest are load-bearing and cost a round trip each to learn:
+
+- **Its ssh shell must be git's bash.** Git's transport sends `git-receive-pack 'C:/path'`
+  and assumes the remote strips those quotes; cmd.exe does not, so every push fails.
+- **A capture must run in the interactive session.** An ssh session has its own window
+  station with no desktop on it, so a screenshot taken from there is blank and
+  `CopyFromScreen` throws on the way. `vm-shot.sh` goes through a scheduled task
+  registered with `/IT`, which is what puts it on the screen that exists.
+
+And when running anything with `/switches` over ssh, prefix `MSYS_NO_PATHCONV=1` — git's
+bash rewrites `/create` into `C:/Program Files/Git/create` otherwise.
 
 ### Reading CI failures without log access
 
@@ -117,6 +138,7 @@ windows/
 ├── build.ps1                       # Build / test / publish / run, on Windows
 ├── tools/
 │   ├── vm-build.sh                 # Compile on the Windows VM, from here
+│   ├── vm-shot.sh                  # Photograph the VM's desktop, from here
 │   ├── sync-upstream-strings.sh    # Refresh the Mac app's translations from main
 │   └── extract_meshes.py
 │
