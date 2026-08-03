@@ -955,7 +955,8 @@ public sealed partial class EditorWindow : Window
                     frame.Width,
                     frame.Height,
                     frame.BgraPixels,
-                    options);
+                    options,
+                    EditorRoot.XamlRoot?.RasterizationScale ?? 1);
                 return new CapturedFrame(frame.VirtualX, frame.VirtualY, width, height, pixels);
             },
             $"Framed in {BeautifyRenderer.Styles[styleIndex].Name} • Ctrl+Z to undo");

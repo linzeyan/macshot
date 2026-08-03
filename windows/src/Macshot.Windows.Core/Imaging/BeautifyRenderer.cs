@@ -309,13 +309,30 @@ public static class BeautifyRenderer
     /// How wide the frame is around the capture, in the capture's own pixels.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The one place the padding becomes a whole number of pixels. Anything that has to
     /// know where the frame lands asks here rather than rounding again, because a preview
     /// that rounded the other way would be a frame one pixel out from the one the file
-    /// gets. It does not depend on the capture's size: the padding is points.
+    /// gets. It does not depend on the capture's size.
+    /// </para>
+    /// <para>
+    /// <paramref name="scale"/> is how many of those pixels there are to a point. macshot
+    /// measures the frame in points against an image that is itself in points, so on a
+    /// Retina display a 48-point frame is 96 pixels wide in the file. This port captures
+    /// device pixels, so the same 48 has to be multiplied out — left at 1 on a 175%
+    /// display it drew a frame little more than half the width of the Mac's, which is also
+    /// what stopped the size box fitting inside it.
+    /// </para>
     /// </remarks>
-    public static int PaddingFor(BeautifyOptions? options = null) =>
-        (int)Math.Round((options ?? BeautifyOptions.Default).Normalized().Padding);
+    public static int PaddingFor(BeautifyOptions? options = null, double scale = 1) =>
+        (int)Math.Round((options ?? BeautifyOptions.Default).Normalized().Padding * Sane(scale));
+
+    /// <summary>
+    /// A usable pixels-per-point, so a display that has not reported one yet cannot make
+    /// the frame vanish or grow without bound.
+    /// </summary>
+    private static double Sane(double scale) =>
+        double.IsFinite(scale) && scale > 0 ? Math.Clamp(scale, 0.25, 8) : 1;
 
     /// <summary>
     /// Where the frame lands around a region of the capture.
@@ -327,7 +344,10 @@ public static class BeautifyRenderer
     /// grips, what a click lands on — is left measuring against the same rectangle it
     /// always did.
     /// </remarks>
-    public static CaptureRegion FrameAround(CaptureRegion selection, BeautifyOptions? options = null)
+    public static CaptureRegion FrameAround(
+        CaptureRegion selection,
+        BeautifyOptions? options = null,
+        double scale = 1)
     {
         var width = (int)selection.Width;
         var height = (int)selection.Height;
@@ -339,7 +359,7 @@ public static class BeautifyRenderer
             return selection;
         }
 
-        var padding = PaddingFor(options);
+        var padding = PaddingFor(options, scale);
 
         return new CaptureRegion(
             selection.X - padding,
@@ -360,7 +380,8 @@ public static class BeautifyRenderer
         int width,
         int height,
         ReadOnlySpan<byte> bgraPixels,
-        BeautifyOptions? options = null)
+        BeautifyOptions? options = null,
+        double scale = 1)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
@@ -370,7 +391,7 @@ public static class BeautifyRenderer
             throw new ArgumentException("The pixel buffer does not match the frame dimensions.", nameof(bgraPixels));
         }
 
-        return Compose(width, height, bgraPixels, options);
+        return Compose(width, height, bgraPixels, options, scale);
     }
 
     /// <summary>
@@ -399,12 +420,13 @@ public static class BeautifyRenderer
     public static (int Width, int Height, byte[] Pixels) Backdrop(
         int width,
         int height,
-        BeautifyOptions? options = null)
+        BeautifyOptions? options = null,
+        double scale = 1)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
 
-        return Compose(width, height, default, options);
+        return Compose(width, height, default, options, scale);
     }
 
     /// <summary>
@@ -415,7 +437,8 @@ public static class BeautifyRenderer
         int width,
         int height,
         ReadOnlySpan<byte> bgraPixels,
-        BeautifyOptions? options)
+        BeautifyOptions? options,
+        double scale)
     {
         var framing = bgraPixels.Length > 0;
         var resolved = (options ?? BeautifyOptions.Default).Normalized();
@@ -423,9 +446,12 @@ public static class BeautifyRenderer
             ? new BeautifyStyle("None", 0, new AnnotationColor(0, 0, 0))
             : Styles[resolved.StyleIndex];
 
-        var padding = PaddingFor(resolved);
-        var radius = resolved.CornerRadius;
-        var shadow = resolved.ShadowRadius;
+        // All three are points, and all three become pixels the same way: a corner drawn
+        // at half the padding's scale would not follow the frame it is cut into.
+        var pixelsPerPoint = Sane(scale);
+        var padding = PaddingFor(resolved, scale);
+        var radius = resolved.CornerRadius * pixelsPerPoint;
+        var shadow = resolved.ShadowRadius * pixelsPerPoint;
 
         var outputWidth = width + (padding * 2);
         var outputHeight = height + (padding * 2);

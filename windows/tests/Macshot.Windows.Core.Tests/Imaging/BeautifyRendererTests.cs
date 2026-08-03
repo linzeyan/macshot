@@ -325,6 +325,51 @@ public sealed class BeautifyRendererTests
     }
 
     /// <summary>
+    /// The frame is a width in points, so a capture of denser pixels gets more of them.
+    /// </summary>
+    /// <remarks>
+    /// macshot measures the frame against an image that is itself in points, so a 48-point
+    /// frame on a Retina capture is 96 pixels wide in the file. This port captures device
+    /// pixels, and rasterizing the same 48 as 48 pixels drew a frame little over half the
+    /// Mac's on a 175% display — thin enough that the size box, which hangs off the capture
+    /// inside the frame, no longer fitted in it and fell outside the gradient instead.
+    /// </remarks>
+    [TestMethod]
+    public void PaddingFor_IsPointsTurnedIntoWhicheverPixelsTheCaptureHas()
+    {
+        var options = new BeautifyOptions(Padding: 48);
+
+        Assert.AreEqual(48, BeautifyRenderer.PaddingFor(options));
+        Assert.AreEqual(84, BeautifyRenderer.PaddingFor(options, 1.75));
+        Assert.AreEqual(96, BeautifyRenderer.PaddingFor(options, 2));
+
+        // And the frame that grows by it grows by the same number, so a preview placed
+        // from one and drawn by the other cannot disagree.
+        var framed = BeautifyRenderer.FrameAround(new CaptureRegion(10, 20, 200, 100), options, 2);
+
+        Assert.AreEqual(200 + (96 * 2), framed.Width);
+        Assert.AreEqual(10 - 96, framed.X);
+    }
+
+    /// <summary>
+    /// A scale a display has not reported yet must not take the frame away.
+    /// </summary>
+    /// <remarks>
+    /// XamlRoot hands back 0 before a window is shown, and a capture framed with it would
+    /// be delivered with no frame at all while the row said the frame was on.
+    /// </remarks>
+    [TestMethod]
+    public void PaddingFor_IgnoresAScaleNoDisplayCouldHave()
+    {
+        var options = new BeautifyOptions(Padding: 48);
+
+        foreach (var nonsense in new[] { 0, -1, double.NaN, double.PositiveInfinity })
+        {
+            Assert.AreEqual(48, BeautifyRenderer.PaddingFor(options, nonsense), $"scale {nonsense}");
+        }
+    }
+
+    /// <summary>
     /// A frame asked for on a big capture is the same frame on a small one.
     /// </summary>
     /// <remarks>

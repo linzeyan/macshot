@@ -35,6 +35,9 @@ internal sealed partial class ResolutionBox : UserControl
 {
     private const double FieldWidth = 56;
     private const double FieldHeight = 22;
+
+    /// <summary>The rounding on a field, a point tighter than the box's — <c>:79</c>.</summary>
+    private const double FieldRadius = 5;
     private const double Gap = 4;
     private const double Pad = 6;
     private const double TimesWidth = 12;
@@ -53,12 +56,30 @@ internal sealed partial class ResolutionBox : UserControl
     private readonly TextBox _width = Field();
     private readonly TextBox _height = Field();
     private readonly ResolutionPresetsView _presetsView = new();
+    /// <summary>
+    /// The way to the shapes and the common sizes. Borderless with the icon carrying the
+    /// whole button, as macshot draws it (<c>ResolutionBoxView.swift:50-56</c>): a bezel
+    /// here would be the only framed control in a box whose other three are not.
+    /// </summary>
     private readonly Button _presets = new()
     {
         Width = PresetsWidth,
         Height = FieldHeight,
+        MinWidth = 0,
+        MinHeight = 0,
         Padding = new Thickness(0),
-        Content = "⌄",
+        BorderThickness = new Thickness(0),
+        Background = ToolbarPalette.TransparentBrush,
+
+        // macshot's "aspectratio" symbol. A chevron said "there is a menu"; this says what
+        // the menu is for, which is the difference between the two products at a glance.
+        Content = new FontIcon
+        {
+            Glyph = "\uE799",
+            FontSize = 14,
+            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons"),
+        },
+        Foreground = ToolbarPalette.IconBrush(),
         VerticalAlignment = VerticalAlignment.Center,
     };
 
@@ -217,13 +238,29 @@ internal sealed partial class ResolutionBox : UserControl
         {
             Width = FieldWidth,
             Height = FieldHeight,
-            MinHeight = FieldHeight,
+
+            // Both minimums cleared. A TextBox carries a settings-page shape — 64 of
+            // minimum width, and a minimum height above 22 — and a minimum beats an
+            // explicit Width, so the box drew 194 wide against macshot's 178 while telling
+            // the placement it was 178. What the placement is told and what is drawn have
+            // to be one number, or the box is positioned for a size it does not have.
+            MinWidth = 0,
+            MinHeight = 0,
             Padding = new Thickness(4, 0, 4, 0),
             FontSize = FieldFontSize,
             FontWeight = FontWeights.Medium,
             TextAlignment = TextAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center,
+
+            // macshot draws the field itself rather than taking AppKit's bezel, for the
+            // reason it gives: the system chrome ignores the toolbar's theme
+            // (ResolutionBoxView.swift:73-81). WinUI's is worse here — a filled slab with
+            // an accent underline, drawn for a form rather than for a readout sitting on
+            // a screenshot.
+            Background = ToolbarPalette.IconBrush(0.12),
+            BorderThickness = new Thickness(0),
+            CornerRadius = new CornerRadius(FieldRadius),
         };
 
         // The whole reason macshot sets a monospaced-digit font here: the numbers are

@@ -2362,7 +2362,8 @@ public sealed partial class CaptureOverlayWindow : Window
         var (width, height, pixels) = BeautifyRenderer.Backdrop(
             (int)region.Width,
             (int)region.Height,
-            options);
+            options,
+            _monitor.Scale);
 
         var bitmap = new WriteableBitmap(width, height);
         using (var stream = bitmap.PixelBuffer.AsStream())
@@ -2370,7 +2371,7 @@ public sealed partial class CaptureOverlayWindow : Window
             stream.Write(pixels, 0, pixels.Length);
         }
 
-        var placed = ToLayout(BeautifyRenderer.FrameAround(region, options));
+        var placed = ToLayout(BeautifyRenderer.FrameAround(region, options, _monitor.Scale));
         Canvas.SetLeft(BeautifyFrame, placed.X);
         Canvas.SetTop(BeautifyFrame, placed.Y);
         BeautifyFrame.Width = placed.Width;
@@ -2396,7 +2397,8 @@ public sealed partial class CaptureOverlayWindow : Window
             return region;
         }
 
-        var framed = BeautifyRenderer.FrameAround(region, _settings.Current.ToBeautifyOptions());
+        var framed = BeautifyRenderer.FrameAround(
+            region, _settings.Current.ToBeautifyOptions(), _monitor.Scale);
         if (_frameAnchorProgress >= 1)
         {
             return _beautify ? framed : region;
@@ -2501,7 +2503,8 @@ public sealed partial class CaptureOverlayWindow : Window
             finished.Width,
             finished.Height,
             finished.BgraPixels,
-            _settings.Current.ToBeautifyOptions());
+            _settings.Current.ToBeautifyOptions(),
+            _monitor.Scale);
 
         return new CapturedFrame(finished.VirtualX, finished.VirtualY, width, height, pixels);
     }
