@@ -160,6 +160,11 @@ public sealed partial class AnnotationToolbarView : UserControl
     {
         Content = L("PII"),
         FontSize = OptionValueSize,
+
+        // Set here and not through RedactButton, because this one is a SplitButton and
+        // cannot come out of that factory — which is exactly how it was the last of the
+        // four left at the default weight after the other three were fixed.
+        FontWeight = AppFonts.Weight,
         MinWidth = 0,
         Padding = new Thickness(8, 2, 8, 2),
         VerticalAlignment = VerticalAlignment.Center,
