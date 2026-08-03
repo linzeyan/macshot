@@ -81,7 +81,13 @@ public sealed partial class AnnotationToolbarView : UserControl
     private readonly EffectsPickerView _effectsPicker = new();
     private readonly BeautifySwatchGrid _frames = new();
     private readonly TextBlock _sizeLabel = OptionLabel();
-    private readonly Slider _size = OptionSlider(100, MinStroke, MaxStroke);
+    /// <summary>macshot's stroke slider — <c>ToolOptionsRowView.swift:313</c>.</summary>
+    private const double StrokeSliderWidth = 100;
+
+    /// <summary>And the narrower one it gives the stamp row — <c>:1166</c>.</summary>
+    private const double StampSliderWidth = 80;
+
+    private readonly Slider _size = OptionSlider(StrokeSliderWidth, MinStroke, MaxStroke);
     private readonly TextBlock _sizeValue = OptionValue(28);
     private readonly StyleSegments _lineStyle = new();
     private readonly TextBlock _cornerLabel = OptionLabel(L("Rounded"));
@@ -351,13 +357,36 @@ public sealed partial class AnnotationToolbarView : UserControl
     private readonly List<Button> _quickStamps = [];
 
     /// <summary>
+    /// The seventeen packed edge to edge, as one item on the row.
+    /// </summary>
+    /// <remarks>
+    /// A panel of their own rather than seventeen children of the row, for two reasons that
+    /// point the same way: the row spaces its children 4 apart and macshot packs these with
+    /// none (<c>ToolOptionsRowView.swift:1184-1192</c>), and the row decides whether a group
+    /// is showing by asking what is in it, which is cheaper to answer with one thing.
+    /// </remarks>
+    private readonly StackPanel _quickStampRun = new()
+    {
+        Orientation = Orientation.Horizontal,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
+    /// <summary>
     /// The line drawn round each glyph, which is a different thing from the line round the
     /// pill: this one follows the letters. It is what makes a label readable over a
     /// screenshot that is pale in one half and dark in the other, where no fill colour
     /// works and a pill would cover the thing being pointed at.
     /// </summary>
     private readonly ToggleSwatch _textGlyphStroke = new(L("Stroke"));
-    private readonly Button _stamp = new() { VerticalAlignment = VerticalAlignment.Center };
+    private readonly Button _stamp = new()
+    {
+        Width = 28,
+        Height = 26,
+        MinWidth = 0,
+        MinHeight = 0,
+        Padding = new Thickness(0),
+        VerticalAlignment = VerticalAlignment.Center,
+    };
 
     /// <summary>
     /// Puts a picture on the capture instead of an emoji — macshot's Load Image
@@ -379,8 +408,11 @@ public sealed partial class AnnotationToolbarView : UserControl
             FontSize = 14,
             FontFamily = new FontFamily("Segoe Fluent Icons"),
         },
+        Width = 28,
+        Height = 26,
         MinWidth = 0,
-        Padding = new Thickness(6, 2, 6, 2),
+        MinHeight = 0,
+        Padding = new Thickness(0),
         VerticalAlignment = VerticalAlignment.Center,
     };
     private readonly EmojiPickerView _stampChoices = new();
@@ -1480,10 +1512,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         var stamping = Show(AnnotationToolOptions.UsesStamp(tool));
         _stamp.Visibility = stamping;
         _stampImage.Visibility = stamping;
-        foreach (var pick in _quickStamps)
-        {
-            pick.Visibility = stamping;
-        }
+        _quickStampRun.Visibility = stamping;
 
         _smoothing.Visibility = Show(AnnotationEditor.IsFreeform(tool));
         _pencilPressure.Visibility = Show(AnnotationToolOptions.UsesPressure(tool));
@@ -1695,6 +1724,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         {
             if (tool == AnnotationTool.Loupe)
             {
+                _size.Width = StrokeSliderWidth;
                 _size.Minimum = AnnotationStyle.MinLoupeSize;
                 _size.Maximum = AnnotationStyle.MaxLoupeSize;
                 _size.Value = Math.Clamp(
@@ -1704,6 +1734,11 @@ public sealed partial class AnnotationToolbarView : UserControl
             }
             else if (tool == AnnotationTool.Stamp)
             {
+                // 80, not the 100 the stroke slider gets: macshot builds the stamp row its
+                // own narrower slider (ToolOptionsRowView.swift:1166 against :313), and on
+                // the one row that also carries seventeen emoji those 20 points are the
+                // difference between fitting under the tool strip and running past it.
+                _size.Width = StampSliderWidth;
                 _size.Minimum = AnnotationStyle.MinStampSize;
                 _size.Maximum = AnnotationStyle.MaxStampSize;
                 _size.Value = Math.Clamp(
@@ -1713,6 +1748,7 @@ public sealed partial class AnnotationToolbarView : UserControl
             }
             else
             {
+                _size.Width = StrokeSliderWidth;
                 _size.Minimum = MinStroke;
                 _size.Maximum = MaxStroke;
                 _size.Value = Math.Clamp(editor.Style.StrokeWidth, MinStroke, MaxStroke);
@@ -2178,7 +2214,15 @@ public sealed partial class AnnotationToolbarView : UserControl
         // The quick row first and the picker behind its own rule, which is macshot's order
         // (ToolOptionsRowView.swift:1183-1208): the seventeen you can reach, then the way
         // to the rest.
-        AddGroup([.. _quickStamps]);
+        // Seventeen 4-point gaps is 68 points, and the row has to end no wider than the
+        // tool strip above it or the action strip down the side of the screen covers its
+        // tail — which is exactly what it did.
+        foreach (var pick in _quickStamps)
+        {
+            _quickStampRun.Children.Add(pick);
+        }
+
+        AddGroup(_quickStampRun);
         AddGroup(_stamp, _stampImage);
     }
 
