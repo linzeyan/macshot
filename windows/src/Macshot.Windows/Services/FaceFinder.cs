@@ -4,6 +4,10 @@ using Windows.Graphics.Imaging;
 using Windows.Media;
 using Windows.Media.FaceAnalysis;
 
+// Imported rather than written out at the call, because inside Macshot.Windows.Services a
+// leading "Windows." binds to Macshot.Windows and there is no Security under it.
+using Windows.Security.Cryptography;
+
 namespace Macshot.Windows.Services;
 
 /// <summary>
@@ -84,7 +88,7 @@ internal static class FaceFinder
         }
 
         using var gray = SoftwareBitmap.CreateCopyFromBuffer(
-            Windows.Security.Cryptography.CryptographicBuffer.CreateFromByteArray(luminance),
+            CryptographicBuffer.CreateFromByteArray(luminance),
             BitmapPixelFormat.Gray8,
             frame.Width,
             frame.Height);

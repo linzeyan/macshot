@@ -1,4 +1,3 @@
-using System.IO;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Services;
