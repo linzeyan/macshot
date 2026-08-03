@@ -284,6 +284,14 @@ public sealed partial class EditorWindow : Window
                 _ = RedactAllTextAsync();
                 return;
 
+            case ToolbarCommand.RedactFaces:
+                _ = RedactFacesAsync();
+                return;
+
+            case ToolbarCommand.RedactPeople:
+                _ = RedactPeopleAsync();
+                return;
+
             case ToolbarCommand.Translate:
 #if !OFFLINE
                 _ = TranslateAsync();
@@ -1077,6 +1085,78 @@ public sealed partial class EditorWindow : Window
     /// </remarks>
     private AnnotationStyle RedactionStyle() =>
         _editor.Tool == AnnotationTool.Censor ? _editor.Style : AutoRedactor.DefaultStyle;
+
+    /// <summary>
+    /// Covers every face in the image — the redaction the two text passes cannot make.
+    /// </summary>
+    /// <remarks>
+    /// The image itself rather than a crop of it: the editor is already showing exactly
+    /// what will be written, so <c>_frame</c> and the document share one coordinate space
+    /// and a box found in the pixels is a box on the canvas.
+    /// </remarks>
+    private async Task RedactFacesAsync()
+    {
+        var faces = await FaceFinder.FindAsync(_frame);
+        if (faces.Count == 0)
+        {
+            HintText.Text = L("No faces detected in the selected area");
+            return;
+        }
+
+        AddRedactions(faces);
+    }
+
+    /// <summary>
+    /// Covers the people in the image, and not only their faces.
+    /// </summary>
+    /// <remarks>
+    /// Through the subject model, because Windows has no human-rectangles pass — see
+    /// <c>CaptureOverlayWindow.RedactPeopleAsync</c> for what that costs and why it is
+    /// still the right answer for a redaction.
+    /// </remarks>
+    private async Task RedactPeopleAsync()
+    {
+        CapturedFrame lifted;
+        try
+        {
+            lifted = await BackgroundRemover.CutOutAsync(_frame);
+        }
+        catch (InvalidOperationException failure)
+        {
+            HintText.Text = failure.Message;
+            return;
+        }
+
+        if (SubjectBounds.Of(lifted.BgraPixels, lifted.Width, lifted.Height) is not { } subject)
+        {
+            HintText.Text = L("No people detected in the selected area");
+            return;
+        }
+
+        AddRedactions([subject]);
+    }
+
+    /// <summary>Puts one redaction over each box, as the single undo step one press earns.</summary>
+    private void AddRedactions(IReadOnlyList<CaptureRegion> boxes)
+    {
+        var style = RedactionStyle();
+        var covered = boxes
+            .Select(box => Annotation.Create(
+                AnnotationTool.Censor,
+                new CapturePoint(box.X, box.Y),
+                new CapturePoint(box.Right, box.Bottom),
+                style))
+            .ToList();
+
+        if (covered.Count == 0)
+        {
+            return;
+        }
+
+        _editor.Document.AddRange(covered);
+        AnnotationCanvas.Render();
+        HintText.Text = L("Redacted {0} • Ctrl+Z to undo", covered.Count);
+    }
 
 #if !OFFLINE
     /// <summary>

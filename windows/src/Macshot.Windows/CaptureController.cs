@@ -232,6 +232,11 @@ public sealed class CaptureController : IDisposable
         Localization.Use(_settings.Current.Language);
         _settings.Changed += (_, settings) => Localization.Use(settings.Language);
 
+        // After the language and before the first window, because the tracking depends on
+        // the first and the face has to be in place for the second. Nothing built by this
+        // point draws text: the tray menu is painted by Win32, not by XAML.
+        AppFonts.Install(Application.Current.Resources);
+
         DiagnosticLog.Verbose(
             $"macshot starting: {BuildVariant.DisplayName}, settings at {_settings.Path}");
 

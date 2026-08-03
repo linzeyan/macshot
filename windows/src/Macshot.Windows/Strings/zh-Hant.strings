@@ -30,6 +30,8 @@
 "imgbb cannot take videos — choose another provider in Settings" = "imgbb 無法接受影片 — 請在「設定」中選擇其他服務";
 "Light" = "淺色";
 "Move the region with the pointer • Click to place it • Esc to leave it" = "以指標移動範圍 • 點按以放置 • Esc 保持原位";
+"No faces detected in the selected area" = "選取範圍中未偵測到臉孔";
+"No people detected in the selected area" = "選取範圍中未偵測到人物";
 "No personal data found in the image" = "影像中找不到個人資料";
 "No personal data found in the selection" = "選取範圍中找不到個人資料";
 "No text was recognized." = "未辨識到文字。";

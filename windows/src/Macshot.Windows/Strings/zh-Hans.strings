@@ -30,6 +30,8 @@
 "imgbb cannot take videos — choose another provider in Settings" = "imgbb 无法接受视频 — 请在“设置”中选择其他服务";
 "Light" = "浅色";
 "Move the region with the pointer • Click to place it • Esc to leave it" = "用指针移动范围 • 点按以放置 • Esc 保持原位";
+"No faces detected in the selected area" = "选取范围中未检测到人脸";
+"No people detected in the selected area" = "选取范围中未检测到人物";
 "No personal data found in the image" = "图像中找不到个人资料";
 "No personal data found in the selection" = "选取范围中找不到个人资料";
 "No text was recognized." = "未识别到文字。";

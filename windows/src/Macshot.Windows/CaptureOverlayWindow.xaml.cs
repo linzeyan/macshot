@@ -228,6 +228,24 @@ public sealed partial class CaptureOverlayWindow : Window
     private CapturedFrame? _capturedWindow;
 
     /// <summary>
+    /// Which axis the held auto-measure key is asking for — true for 1 and the vertical
+    /// run, false for 2 and the horizontal — or null while neither is held.
+    /// </summary>
+    private bool? _autoSpanVertical;
+
+    /// <summary>
+    /// Where the pointer last was, in the capture's own coordinates.
+    /// </summary>
+    /// <remarks>
+    /// Kept because the auto-measure offer is recomputed from a key press as well as from
+    /// a pointer move, and a key press carries no position. Windows has no equivalent of
+    /// <c>mouseLocationOutsideOfEventStream</c> that is safe to ask from a keyboard event:
+    /// the screen position would have to be mapped back through this window's own
+    /// scaling, which is what <see cref="ToFrame"/> already did on the last move.
+    /// </remarks>
+    private CapturePoint? _pointerAt;
+
+    /// <summary>
     /// What the window the region came from calls itself, for the <c>{window}</c>
     /// filename token. Null for a region that was dragged out.
     /// </summary>
@@ -594,6 +612,14 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
 
+        // A click with a ruler being offered takes the offer, and means nothing else: the
+        // user is holding a key that has put a measurement under the pointer, so starting
+        // to drag a second one by hand is not what the click was for.
+        if (_autoSpanVertical is not null && TakeAutoSpan())
+        {
+            return;
+        }
+
         // A press while the ring is open answers it, whatever else that press would have
         // meant: the ring is in front of everything and the user is aiming at it.
         if (_colorWheel.IsShown)
@@ -665,6 +691,15 @@ public sealed partial class CaptureOverlayWindow : Window
 
     private void SelectionCanvas_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
+        // First, and before any of the early returns below: the auto-measure offer needs
+        // this whatever else the pointer is currently doing, and it is the one reader that
+        // is driven by the keyboard rather than by this event.
+        _pointerAt = ToFrame(e);
+        if (_autoSpanVertical is not null)
+        {
+            UpdateAutoSpan();
+        }
+
         if (_panningFrom is { } panFrom && e.Pointer.IsInContact)
         {
             var now = e.GetCurrentPoint(OverlayRoot).Position;
@@ -1712,6 +1747,17 @@ public sealed partial class CaptureOverlayWindow : Window
                 RenderAnnotations();
                 return;
 
+            // Ahead of the single-key tool shortcuts below, which is where a bare 1 would
+            // otherwise land. Only with the ruler in hand, so the digits still pick tools
+            // for every other one.
+            case VirtualKey.Number1 or VirtualKey.NumberPad1
+                or VirtualKey.Number2 or VirtualKey.NumberPad2
+                when IsAnnotating && !control && !shift && !IsDown(VirtualKey.Menu)
+                    && _editor.Tool == AnnotationTool.Measure:
+                e.Handled = true;
+                OfferAutoSpan(e.Key is VirtualKey.Number1 or VirtualKey.NumberPad1);
+                return;
+
             default:
                 // A single key is a shortcut only once a region is chosen: before that
                 // there is no toolbar to shadow, and P would arm a pencil the user cannot
@@ -2028,6 +2074,14 @@ public sealed partial class CaptureOverlayWindow : Window
 
             case ToolbarCommand.RedactAllText:
                 _ = RedactAllTextAsync();
+                return;
+
+            case ToolbarCommand.RedactFaces:
+                _ = RedactFacesAsync();
+                return;
+
+            case ToolbarCommand.RedactPeople:
+                _ = RedactPeopleAsync();
                 return;
 
             case ToolbarCommand.Translate:
@@ -2795,6 +2849,114 @@ public sealed partial class CaptureOverlayWindow : Window
         _editor.Tool == AnnotationTool.Censor ? _editor.Style : AutoRedactor.DefaultStyle;
 
     /// <summary>
+    /// Covers every face found in the region.
+    /// </summary>
+    /// <remarks>
+    /// The one automatic redaction that does not go through the text engine: it reads the
+    /// pixels of the region rather than the words in it. macshot's Faces button
+    /// (<c>AutoRedactor.swift:126-169</c>).
+    /// </remarks>
+    private async Task RedactFacesAsync()
+    {
+        var region = _editor.SnapRegion;
+        if (region.IsEmpty)
+        {
+            return;
+        }
+
+        var frame = PixelsFor(region);
+        var faces = await FaceFinder.FindAsync(frame);
+
+        if (faces.Count == 0)
+        {
+            // Named rather than borrowed from the text pass: "no text" on a photograph of
+            // three people would send the user looking for a fault that is not there.
+            Hint(L("No faces detected in the selected area"));
+            return;
+        }
+
+        AddRedactions(faces.Select(face => new CaptureRegion(
+            region.X + face.X,
+            region.Y + face.Y,
+            face.Width,
+            face.Height)));
+    }
+
+    /// <summary>
+    /// Covers the people found in the region, and not only their faces.
+    /// </summary>
+    /// <remarks>
+    /// Windows has no human-rectangles pass to answer this with, so it goes through the
+    /// same subject model Remove Background uses and covers what that lifts. Two
+    /// consequences, both stated to the user rather than hidden: it needs a Copilot+ PC,
+    /// and it comes back with one box round everything it lifted rather than one per
+    /// person. For a redaction the second errs the safe way — it covers more than it was
+    /// asked to, never less.
+    /// </remarks>
+    private async Task RedactPeopleAsync()
+    {
+        var region = _editor.SnapRegion;
+        if (region.IsEmpty)
+        {
+            return;
+        }
+
+        CapturedFrame lifted;
+        try
+        {
+            lifted = await BackgroundRemover.CutOutAsync(PixelsFor(region));
+        }
+        catch (InvalidOperationException failure)
+        {
+            // The model's own reason, which already says whether the machine cannot run it
+            // or it found nothing. Both are answers to the press rather than faults.
+            Hint(failure.Message);
+            return;
+        }
+
+        if (SubjectBounds.Of(lifted.BgraPixels, lifted.Width, lifted.Height) is not { } subject)
+        {
+            Hint(L("No people detected in the selected area"));
+            return;
+        }
+
+        AddRedactions([new CaptureRegion(
+            region.X + subject.X,
+            region.Y + subject.Y,
+            subject.Width,
+            subject.Height)]);
+    }
+
+    /// <summary>
+    /// Puts one redaction over each of <paramref name="boxes"/>, as one undo step.
+    /// </summary>
+    /// <remarks>
+    /// One AddRange rather than a loop, for the reason the text passes use one: the user
+    /// pressed a button once, so Ctrl+Z should take the whole run back rather than
+    /// uncovering the faces one at a time.
+    /// </remarks>
+    private void AddRedactions(IEnumerable<CaptureRegion> boxes)
+    {
+        var style = RedactionStyle();
+        var covered = boxes
+            .Select(box => Annotation.Create(
+                AnnotationTool.Censor,
+                new CapturePoint(box.X, box.Y),
+                new CapturePoint(box.Right, box.Bottom),
+                style))
+            .ToList();
+
+        if (covered.Count == 0)
+        {
+            return;
+        }
+
+        _editor.Document.AddRange(covered);
+        RenderAnnotations();
+        Hint(L("Redacted {0} • Ctrl+Z to undo • Enter to finish", covered.Count));
+    }
+
+    /// <summary>
     /// Lifts the subject out of the region and delivers it with a transparent background.
     /// </summary>
     /// <remarks>
@@ -3147,6 +3309,121 @@ public sealed partial class CaptureOverlayWindow : Window
 
         _ = CompleteAsync();
         return true;
+    }
+
+    /// <summary>
+    /// Puts the ruler the held key is asking for on the canvas, and keeps it there while
+    /// the key is down.
+    /// </summary>
+    /// <remarks>
+    /// The offer follows the pointer, so it is recomputed from <see cref="_pointerAt"/> on
+    /// every move as well as on the press that starts it — which is what makes it usable:
+    /// the run under the pointer is what the user is looking for, and they find it by
+    /// moving the pointer over the thing they want measured rather than by aiming at its
+    /// edges. macshot does the same (<c>OverlayView.swift:1130-1133</c>).
+    /// </remarks>
+    private void OfferAutoSpan(bool vertical)
+    {
+        _autoSpanVertical = vertical;
+        UpdateAutoSpan();
+    }
+
+    /// <summary>Recomputes the offered ruler, or takes it back where there is nothing to offer.</summary>
+    private void UpdateAutoSpan()
+    {
+        if (_autoSpanVertical is not { } vertical || _pointerAt is not { } pointer)
+        {
+            return;
+        }
+
+        // The desktop's own pixels rather than the preview's: the preview is the region
+        // only, and the run being measured commonly reaches past the edge of it — which is
+        // the reading the user wants when they are measuring a margin they are about to
+        // crop to.
+        var run = AutoMeasure.Run(
+            _desktopFrame.BgraPixels,
+            _desktopFrame.Width,
+            _desktopFrame.Height,
+            (int)Math.Round(pointer.X) - _desktopFrame.VirtualX,
+            (int)Math.Round(pointer.Y) - _desktopFrame.VirtualY,
+            vertical);
+
+        if (run is not { } span)
+        {
+            // The pointer is off the captured desktop, which happens between two monitors
+            // of different heights. Nothing to measure, and nothing to leave showing.
+            if (_editor.ClearSpan())
+            {
+                RenderAnnotations();
+            }
+
+            return;
+        }
+
+        var origin = vertical ? _desktopFrame.VirtualY : _desktopFrame.VirtualX;
+        double from = origin + span.Start;
+        double to = origin + span.End;
+
+        // The scan reads the whole desktop, so the switch beside it has to be honoured
+        // here rather than by the editor's own clamp — and only when the pointer is inside
+        // the region, so a run being measured outside it is still reported whole.
+        // macshot's rule (OverlayView.swift:4022-4026).
+        var region = _editor.SnapRegion;
+        if (_editor.ClampRulerToRegion && !region.IsEmpty && region.Contains(pointer.X, pointer.Y))
+        {
+            var near = vertical ? region.Y : region.X;
+            var far = vertical ? region.Bottom : region.Right;
+            from = Math.Clamp(from, near, far);
+            to = Math.Clamp(to, near, far);
+        }
+
+        _editor.ProposeSpan(
+            vertical ? new CapturePoint(pointer.X, from) : new CapturePoint(from, pointer.Y),
+            vertical ? new CapturePoint(pointer.X, to) : new CapturePoint(to, pointer.Y));
+
+        RenderAnnotations();
+    }
+
+    /// <summary>
+    /// Takes the offered ruler, and immediately offers the next one.
+    /// </summary>
+    /// <returns>Whether there was an offer, and so whether this click meant this.</returns>
+    /// <remarks>
+    /// A click rather than the key release commits it, so several runs can be measured
+    /// without letting go — which is the case this is for: the reason to measure one gap
+    /// on a screenshot is usually to compare it with the gap below it. macshot commits on
+    /// the same click (<c>OverlayView.swift:5458-5468</c>).
+    /// </remarks>
+    private bool TakeAutoSpan()
+    {
+        if (_editor.CommitSpan() is not { } taken)
+        {
+            return false;
+        }
+
+        // The same call the end of a drag makes, and for the same reason: a ruler carries
+        // no reading until something renders one onto it, and that is where it happens.
+        AnnotationCanvas.FinishedGesture(taken);
+        UpdateAutoSpan();
+        RenderAnnotations();
+        return true;
+    }
+
+    private void OverlayRoot_KeyUp(object sender, KeyRoutedEventArgs e)
+    {
+        if (_autoSpanVertical is null
+            || e.Key is not (VirtualKey.Number1 or VirtualKey.NumberPad1
+                or VirtualKey.Number2 or VirtualKey.NumberPad2))
+        {
+            return;
+        }
+
+        e.Handled = true;
+        _autoSpanVertical = null;
+        if (_editor.ClearSpan())
+        {
+            RenderAnnotations();
+        }
     }
 
     private CapturePoint ToFrame(PointerRoutedEventArgs e)

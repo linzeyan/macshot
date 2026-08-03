@@ -161,14 +161,7 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// a whole panel of somebody else's data, where naming what is sensitive would be work
     /// the user should not have to do and a pattern that missed one would be a leak.
     /// </summary>
-    private readonly Button _redactAllText = new()
-    {
-        Content = L("All Text"),
-        FontSize = OptionValueSize,
-        MinWidth = 0,
-        Padding = new Thickness(8, 2, 8, 2),
-        VerticalAlignment = VerticalAlignment.Center,
-    };
+    private readonly Button _redactAllText = RedactButton(L("All Text"));
 
     /// <summary>
     /// Covers what looks like a secret, with the kinds it looks for behind the arrow.
@@ -184,6 +177,23 @@ public sealed partial class AnnotationToolbarView : UserControl
         VerticalAlignment = VerticalAlignment.Center,
     };
 
+    /// <summary>
+    /// Covers every face in the region. macshot's Faces
+    /// (<c>ToolOptionsRowView.swift:1272-1273</c>), and the one automatic redaction that
+    /// the two text passes beside it cannot do at all: no amount of pattern-matching over
+    /// a transcript finds a face in a screenshot of a call.
+    /// </summary>
+    private readonly Button _redactFaces = RedactButton(L("Faces"));
+
+    /// <summary>
+    /// Covers every person, not only their face — macshot's People (<c>:1275-1276</c>).
+    /// </summary>
+    /// <remarks>
+    /// The wider of the two on purpose, and not redundant beside it: someone is
+    /// identifiable from a uniform, a lanyard or a tattoo with their face already covered.
+    /// </remarks>
+    private readonly Button _redactPeople = RedactButton(L("People"));
+
     private readonly StyleSegments _numberFormat = new();
     private readonly TextBlock _startLabel = OptionLabel(L("Start:"));
 
@@ -193,13 +203,23 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// clicking an arrow sixteen times, and a screenshot that carries on from figure 16 is
     /// the case this exists for.
     /// </summary>
+    /// <remarks>
+    /// Sized to the three digits it can hold and no wider. macshot spends 50 on the whole
+    /// control — a 19-wide stepper and the figure beside it
+    /// (<c>ToolOptionsRowView.swift:881-897</c>) — and the 84 this used to ask for was a
+    /// box with half its width empty, which on a row where every other control is drawn to
+    /// its content read as a text field somebody had left in.
+    /// </remarks>
     private readonly NumberBox _numberStart = new()
     {
         Minimum = 1,
         Maximum = CaptureSettings.MaxNumberStartAt,
         SmallChange = 1,
         LargeChange = 10,
-        Width = 84,
+        Width = 58,
+        Height = 24,
+        MinWidth = 0,
+        Padding = new Thickness(6, 0, 0, 0),
         FontSize = OptionValueSize,
         SpinButtonPlacementMode = NumberBoxSpinButtonPlacementMode.Compact,
         VerticalAlignment = VerticalAlignment.Center,
@@ -217,6 +237,25 @@ public sealed partial class AnnotationToolbarView : UserControl
         Content = L("Limit to selection"),
         FontSize = OptionValueSize,
         MinWidth = 0,
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
+    /// <summary>
+    /// What the two number keys do while the ruler is in hand, written on the row.
+    /// </summary>
+    /// <remarks>
+    /// macshot's own hint (<c>ToolOptionsRowView.swift:1139</c>), at the third of the icon
+    /// colour it uses for one — quieter than a label, which is right for something that is
+    /// telling rather than asking. It is the only place either product says these keys
+    /// exist, so a ruler that answered them without saying so would be a feature nobody
+    /// found.
+    /// </remarks>
+    private readonly TextBlock _measureHint = new()
+    {
+        Text = L("Hold 1 auto-vertical  ·  Hold 2 auto-horizontal"),
+        FontSize = OptionLabelSize,
+        FontWeight = FontWeights.Medium,
+        Foreground = ToolbarPalette.IconBrush(0.3),
         VerticalAlignment = VerticalAlignment.Center,
     };
 
@@ -400,6 +439,11 @@ public sealed partial class AnnotationToolbarView : UserControl
             RequestedTheme = ElementTheme.Dark,
             Child = _optionsContent,
         };
+
+        // The whole toolbar in one call: WinUI passes both of these down the tree, and the
+        // strips and the options row are all inside this control. The popovers are not —
+        // they hang off the popup root — and take theirs from the application's dictionary.
+        AppFonts.Adopt(this);
 
         BuildOptionsRow();
 
@@ -631,6 +675,8 @@ public sealed partial class AnnotationToolbarView : UserControl
         // redaction tool is the moment they would take an offer to do the whole job.
         _redactAllText.Click += (_, _) => CommandInvoked?.Invoke(this, ToolbarCommand.RedactAllText);
         _redactPii.Click += (_, _) => CommandInvoked?.Invoke(this, ToolbarCommand.Redact);
+        _redactFaces.Click += (_, _) => CommandInvoked?.Invoke(this, ToolbarCommand.RedactFaces);
+        _redactPeople.Click += (_, _) => CommandInvoked?.Invoke(this, ToolbarCommand.RedactPeople);
 
         _measureUnit.SelectionChanged += (_, _) => ApplyStyle();
 
@@ -1408,6 +1454,8 @@ public sealed partial class AnnotationToolbarView : UserControl
         _autoLabel.Visibility = automatic;
         _redactAllText.Visibility = automatic;
         _redactPii.Visibility = automatic;
+        _redactFaces.Visibility = automatic;
+        _redactPeople.Visibility = automatic;
 
         var counted = Show(AnnotationToolOptions.UsesNumberFormat(tool));
         _numberFormat.Visibility = counted;
@@ -1416,6 +1464,7 @@ public sealed partial class AnnotationToolbarView : UserControl
 
         _measureUnit.Visibility = Show(AnnotationToolOptions.UsesMeasureUnit(tool));
         _clampRuler.Visibility = Show(AnnotationToolOptions.UsesMeasureClamp(tool));
+        _measureHint.Visibility = _clampRuler.Visibility;
 
         var magnified = Show(AnnotationToolOptions.UsesLoupeMagnification(tool));
         _zoomLabel.Visibility = magnified;
@@ -1736,6 +1785,24 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// own delay and interval, so holding one walks the size the way holding it does there
     /// rather than moving it a single point per press.
     /// </summary>
+    /// <summary>
+    /// One of the automatic redactions on the censor row, at the size macshot gives all
+    /// four (<c>ToolOptionsRowView.swift:1260-1262</c>).
+    /// </summary>
+    /// <remarks>
+    /// A factory rather than four declarations, because the point of macshot's own
+    /// <c>addRedactButton</c> is that they are the same size: they are alternatives to one
+    /// another, and four buttons of four widths would read as four unrelated commands.
+    /// </remarks>
+    private static Button RedactButton(string label) => new()
+    {
+        Content = label,
+        FontSize = OptionValueSize,
+        MinWidth = 0,
+        Padding = new Thickness(8, 2, 8, 2),
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
     private static RepeatButton FontSizeButton(string sign) => new()
     {
         Content = sign,
@@ -1751,10 +1818,22 @@ public sealed partial class AnnotationToolbarView : UserControl
         Interval = 50,
     };
 
+    /// <summary>
+    /// One slider on the options row, at macshot's width and centred on it.
+    /// </summary>
+    /// <remarks>
+    /// No height is set, and that is the point. WinUI lays a Slider out as three stacked
+    /// rows — a spacer, the track, a spacer — sized from <c>SliderPreContentMargin</c> and
+    /// its post twin. Given less height than those three need, the Grid pays the leading
+    /// row in full and starves the trailing one, which puts the track below the middle of
+    /// the control and hangs the thumb off the bottom. macshot's own 20 was copied here as
+    /// a Height and produced exactly that: every slider on the row sitting low, clipped
+    /// underneath. Left to size itself the track is centred in its own box, and the box is
+    /// centred on the row, which is what the 20 was for.
+    /// </remarks>
     private static Slider OptionSlider(double width, double minimum, double maximum) => new()
     {
         Width = width,
-        Height = 20,
         Minimum = minimum,
         Maximum = maximum,
         StepFrequency = 1,
@@ -1954,12 +2033,12 @@ public sealed partial class AnnotationToolbarView : UserControl
         AddGroup(_smartMarker);
         AddGroup(_censorMode);
         AddGroup(_drawLabel, _censorScope);
-        AddGroup(_autoLabel, _redactAllText, _redactPii);
+        AddGroup(_autoLabel, _redactAllText, _redactPii, _redactFaces, _redactPeople);
 
         // One group, so no hairline comes between them: macshot runs the unit straight into
         // the switch with nothing between (ToolOptionsRowView.swift:1125-1136), because the
         // two are the whole of what it asks about a ruler.
-        AddGroup(_measureUnit, _clampRuler);
+        AddGroup(_measureUnit, _clampRuler, _measureHint);
 
         // The label's own row, group for group as macshot builds it: the face beside the
         // four style switches, then the alignment, then the size, then the three colours —
@@ -2089,15 +2168,23 @@ public sealed partial class AnnotationToolbarView : UserControl
             _flipArrow.IsChecked = _loadedStyle.ArrowReversed;
             _outline.Show(_loadedStyle.Outline is not null, ToUiColor(
                 _loadedStyle.Outline ?? new AnnotationColor(255, 255, 255)));
+            // Every slider filled in first, and every readout written after — in that
+            // order, and not interleaved. A readout written before its slider was loaded
+            // reports the slider's Minimum, which is how the spotlight's dim came up
+            // reading 10% on a capture where it was set to 55: the box was written while
+            // the slider still sat at the bottom of its range, and the assignment that
+            // moved it raised nothing to correct the box with, because a value change
+            // during a load is suppressed on purpose.
             _size.Value = _loadedStyle.StrokeWidth;
             _cornerRadius.Value = _loadedStyle.CornerRadius;
+            _loupeZoom.Value = _loadedStyle.LoupeMagnification;
+            _spotlightDim.Value = _loadedStyle.DimOpacity;
+
             ShowSliderValue(_size, _sizeValue);
             ShowSliderValue(_cornerRadius, _cornerValue);
-
-            // Written here rather than left to the slider's own event: a stored dim that
-            // happens to equal what the slider already reads raises nothing, and the box
-            // beside it would stay blank until the user dragged it.
+            ShowZoomValue();
             ShowDimValue();
+
             _colorPicker.Color = ToUiColor(_loadedStyle.Color);
 
             // Read here rather than by the editor itself, so Core stays free of the
@@ -2127,9 +2214,6 @@ public sealed partial class AnnotationToolbarView : UserControl
             _numberStart.Value = settings.Current.NumberStartAt;
 
             _measureUnit.SelectedIndex = _loadedStyle.MeasureInPoints ? 1 : 0;
-            _loupeZoom.Value = _loadedStyle.LoupeMagnification;
-        _spotlightDim.Value = _loadedStyle.DimOpacity;
-            ShowZoomValue();
 
             _fontChoices.Show(_loadedStyle.FontFamily);
             _font.Content = string.IsNullOrWhiteSpace(_loadedStyle.FontFamily)

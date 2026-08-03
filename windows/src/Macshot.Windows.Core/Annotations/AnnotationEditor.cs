@@ -159,6 +159,20 @@ public sealed class AnnotationEditor
     /// <summary>The annotation currently being drawn or dragged, for live preview.</summary>
     public Annotation? Draft { get; private set; }
 
+    /// <summary>
+    /// The ruler the auto-measure keys are offering: drawn on the canvas, not in the
+    /// document, until it is taken.
+    /// </summary>
+    /// <remarks>
+    /// Its own property rather than <see cref="Draft"/>, because it is not a gesture. No
+    /// button is down while it is showing, it survives the pointer moving anywhere, and it
+    /// is replaced wholesale on each move rather than extended from an origin — so putting
+    /// it in Draft would have every gesture-shaped question in this class
+    /// (<see cref="IsDragging"/>, cancel, commit-on-release) answering about something the
+    /// user is not dragging.
+    /// </remarks>
+    public Annotation? AutoSpan { get; private set; }
+
     public Annotation? Selected { get; private set; }
 
     /// <summary>
@@ -200,7 +214,57 @@ public sealed class AnnotationEditor
             {
                 yield return Draft;
             }
+
+            // Last, so the offer is drawn over everything it might be measuring rather
+            // than under it.
+            if (AutoSpan is not null)
+            {
+                yield return AutoSpan;
+            }
         }
+    }
+
+    /// <summary>
+    /// Offers a ruler between two points without committing it.
+    /// </summary>
+    /// <remarks>
+    /// Rebuilt rather than amended on each call: the two ends both move as the pointer
+    /// does, so there is nothing of the previous offer worth keeping.
+    /// </remarks>
+    public void ProposeSpan(CapturePoint from, CapturePoint to) =>
+        AutoSpan = Annotation.Create(AnnotationTool.Measure, from, to, Style);
+
+    /// <summary>
+    /// Puts the offered ruler on the canvas and clears the offer.
+    /// </summary>
+    /// <returns>What was committed, or null when there was nothing offered.</returns>
+    /// <remarks>
+    /// The offer is cleared rather than left showing, and the caller makes a fresh one at
+    /// the pointer's position. Leaving it would draw the committed ruler twice, and the
+    /// copy on top would move away from the one underneath at the next mouse move.
+    /// </remarks>
+    public Annotation? CommitSpan()
+    {
+        if (AutoSpan is not { } offered)
+        {
+            return null;
+        }
+
+        AutoSpan = null;
+        _document.Add(offered);
+        return offered;
+    }
+
+    /// <summary>Takes the offer back. True when there was one to take back.</summary>
+    public bool ClearSpan()
+    {
+        if (AutoSpan is null)
+        {
+            return false;
+        }
+
+        AutoSpan = null;
+        return true;
     }
 
     /// <summary>

@@ -60,6 +60,26 @@ public enum ToolbarCommand
     /// </remarks>
     RedactAllText,
 
+    /// <summary>
+    /// Cover every face found in the region.
+    /// </summary>
+    /// <remarks>
+    /// Its own command beside the two that read words, because a face is not text and no
+    /// amount of pattern-matching over a transcript finds one. It is the redaction asked
+    /// for most often on a screenshot of a meeting, and the one the text passes cannot do
+    /// at all.
+    /// </remarks>
+    RedactFaces,
+
+    /// <summary>Cover every person found in the region, and not only their face.</summary>
+    /// <remarks>
+    /// Not a wider <see cref="RedactFaces"/>: someone is identifiable from a uniform, a
+    /// badge or a tattoo with their face already covered, and that is the case this exists
+    /// for. macshot answers it with a human-rectangles pass; Windows has no such thing in
+    /// the box, so this leans on the same subject model the Remove Background button does.
+    /// </remarks>
+    RedactPeople,
+
     /// <summary>Lay a translation over the text in it.</summary>
     Translate,
 
@@ -296,11 +316,11 @@ public static class ToolbarActions
         Offer(new ToolbarItem(ToolbarCommand.Pin, "Pin"));
         Offer(new ToolbarItem(ToolbarCommand.ReadText, "OCR & QR"));
 
-        // macshot draws no button for this one: its auto-redact is the right-click on the
-        // censor tool, and there is no right-click mode menu here. It keeps the place
-        // macshot's settings list gives it, beside the recognition it is a use of.
-        Offer(new ToolbarItem(ToolbarCommand.Redact, "Auto-Redact sensitive data"));
-
+        // No button for the automatic redactions, because macshot draws none: its
+        // makeToolbarButton answers nil for autoRedact (ToolbarDefinitions.swift:165-166)
+        // and rightToolbarActions does not list it (:90-97). They are reached from the
+        // censor tool's own options row, which is where both products put them — a strip
+        // button this one had and that one did not was the port inventing a control.
         if (translation)
         {
             Offer(new ToolbarItem(ToolbarCommand.Translate, "Translate"));

@@ -19,6 +19,43 @@ public sealed class AnnotationEditorTests
     }
 
     [TestMethod]
+    public void ProposeSpan_DrawsTheRulerWithoutPuttingItInTheDocument()
+    {
+        // The whole point of the auto-measure offer: it is visible, so the user can see
+        // what they would be committing to, and it is not in the document, so letting go
+        // of the key leaves nothing behind and costs no undo step.
+        var editor = NewEditor(AnnotationTool.Measure);
+
+        editor.ProposeSpan(new CapturePoint(30, 10), new CapturePoint(30, 90));
+
+        Assert.AreEqual(0, editor.Document.Annotations.Count);
+        CollectionAssert.Contains(editor.VisibleAnnotations.ToList(), editor.AutoSpan);
+
+        Assert.IsTrue(editor.ClearSpan());
+        Assert.IsNull(editor.AutoSpan);
+        Assert.AreEqual(0, editor.VisibleAnnotations.Count());
+        Assert.IsFalse(editor.ClearSpan(), "there was nothing left to take back");
+    }
+
+    [TestMethod]
+    public void CommitSpan_TakesTheOfferOnceAndHandsBackWhatItAdded()
+    {
+        // Committed and cleared in one step. Left showing, the offer would be drawn on top
+        // of the ruler it just became and would slide off it at the next mouse move.
+        var editor = NewEditor(AnnotationTool.Measure);
+        editor.ProposeSpan(new CapturePoint(30, 10), new CapturePoint(30, 90));
+
+        var taken = editor.CommitSpan();
+
+        Assert.IsNotNull(taken);
+        Assert.AreEqual(AnnotationTool.Measure, taken.Tool);
+        Assert.AreEqual(new CapturePoint(30, 90), taken.End);
+        Assert.IsNull(editor.AutoSpan);
+        CollectionAssert.AreEqual(new[] { taken }, editor.Document.Annotations.ToArray());
+        Assert.IsNull(editor.CommitSpan(), "a second click must not commit the same ruler twice");
+    }
+
+    [TestMethod]
     public void Click_DoesNotLeaveAZeroSizeAnnotationBehind()
     {
         // A stray click would otherwise add an invisible annotation that still

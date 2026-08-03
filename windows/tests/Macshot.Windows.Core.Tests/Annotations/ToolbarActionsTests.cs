@@ -159,17 +159,16 @@ public sealed class ToolbarActionsTests
     [TestMethod]
     public void Translate_FollowsReadingTheText_AndIsAbsentWithoutATranslator()
     {
-        // macshot's own order: pin, ocr, autoRedact, translate, then the two that aim at
-        // a live screen. Redact sits between the two that read words because it is one of
-        // them — it finds what to cover by recognising it.
+        // macshot's own order: share, upload, pin, ocr, translate, then the two that aim
+        // at a live screen (ToolbarDefinitions.swift:90-97). Translate follows OCR with
+        // nothing between: the automatic redactions are on the censor tool's options row
+        // in both products, and macshot draws no strip button for them at all.
         var overlay = ToolbarActions.Actions(editorMode: false).Select(item => item.Command).ToArray();
 
         Assert.AreEqual(
             Array.IndexOf(overlay, ToolbarCommand.ReadText) + 1,
-            Array.IndexOf(overlay, ToolbarCommand.Redact));
-        Assert.AreEqual(
-            Array.IndexOf(overlay, ToolbarCommand.Redact) + 1,
             Array.IndexOf(overlay, ToolbarCommand.Translate));
+        CollectionAssert.DoesNotContain(overlay, ToolbarCommand.Redact);
 
         // The offline build has no translator compiled into it, so a button for one
         // would be a button that does nothing.

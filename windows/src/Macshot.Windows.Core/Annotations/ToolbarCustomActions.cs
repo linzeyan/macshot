@@ -57,7 +57,6 @@ public static class ToolbarCustomActions
         new("upload", "Upload", ToolbarCommand.Upload),
         new("pin", "Pin (floating window)", ToolbarCommand.Pin),
         new("ocr", "OCR & QR", ToolbarCommand.ReadText),
-        new("autoRedact", "Auto-Redact sensitive data", ToolbarCommand.Redact),
         new("translate", "Translate", ToolbarCommand.Translate),
         new("record", "Record screen", ToolbarCommand.Record),
         new("scrollCapture", "Scroll Capture", ToolbarCommand.ScrollCapture),

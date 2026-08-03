@@ -208,10 +208,14 @@ internal sealed class EffectsPickerView : StackPanel
         _rings[(int)_preset].BorderBrush = ToolbarPalette.AccentBrush;
     }
 
+    /// <summary>
+    /// One adjustment's slider. Its height is left to WinUI for the reason
+    /// <c>AnnotationToolbarView.OptionSlider</c> gives: a Slider told to be shorter than
+    /// its template's three rows puts its track below its own centre.
+    /// </summary>
     private static Slider NewSlider(double minimum, double maximum, double step) => new()
     {
         Width = SliderWidth,
-        Height = 20,
         Minimum = minimum,
         Maximum = maximum,
         StepFrequency = step,
@@ -241,7 +245,9 @@ internal sealed class EffectsPickerView : StackPanel
     {
         var row = new Grid
         {
-            Height = SliderRowHeight,
+            // A floor rather than a height: the slider now sizes itself, and a row fixed
+            // to macshot's 24 would have four of them overlapping each other's thumbs.
+            MinHeight = SliderRowHeight,
             ColumnDefinitions =
             {
                 new ColumnDefinition { Width = new GridLength(LabelWidth) },

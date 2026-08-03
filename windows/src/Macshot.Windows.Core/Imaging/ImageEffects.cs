@@ -300,9 +300,28 @@ public static class ImageEffects
     /// capture will be — a swatch drawn by other means is a promise the result may not
     /// keep.
     /// </summary>
+    /// <remarks>
+    /// A gradient with two shapes laid on it, which is macshot's own sample
+    /// (<c>ImageEffects.swift:131-148</c>): a near-white disc on the left and a near-black
+    /// bar on the right. The gradient alone — which is all this drew — shows what a preset
+    /// does to hue and nothing at all about what it does to the ends of the range, so Noir,
+    /// Mono, Chrome and Fade all came out as the same grey square and the grid was eight
+    /// swatches saying nothing. The disc and the bar are where the difference between
+    /// crushing the blacks and lifting them is visible.
+    /// </remarks>
     public static (int Width, int Height, byte[] Pixels) Swatch(ImageEffectPreset preset, int size)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(size);
+
+        // macshot's fractions of the swatch, read in its bottom-left space and flipped
+        // here because these pixels run top-down.
+        var discRadius = size * 0.175;
+        var discCentreX = (size * 0.15) + discRadius;
+        var discCentreY = size - ((size * 0.3) + discRadius);
+        var barLeft = size * 0.55;
+        var barRight = barLeft + (size * 0.3);
+        var barBottom = size - (size * 0.2);
+        var barTop = barBottom - (size * 0.5);
 
         var pixels = new byte[size * size * 4];
         for (var y = 0; y < size; y++)
@@ -315,6 +334,23 @@ public static class ImageEffects
                 var colour = along < 0.5
                     ? Blend(new AnnotationColor(51, 128, 230), new AnnotationColor(230, 153, 77), along * 2)
                     : Blend(new AnnotationColor(230, 153, 77), new AnnotationColor(77, 204, 128), (along - 0.5) * 2);
+
+                // Pixel centres, so the disc's edge is where its radius says rather than
+                // half a pixel inside it.
+                var pointX = x + 0.5;
+                var pointY = y + 0.5;
+
+                var dx = pointX - discCentreX;
+                var dy = pointY - discCentreY;
+                if ((dx * dx) + (dy * dy) <= discRadius * discRadius)
+                {
+                    colour = Blend(colour, new AnnotationColor(255, 255, 255), 0.8);
+                }
+                else if (pointX >= barLeft && pointX <= barRight
+                    && pointY >= barTop && pointY <= barBottom)
+                {
+                    colour = Blend(colour, new AnnotationColor(51, 51, 51), 0.6);
+                }
 
                 var offset = ((y * size) + x) * 4;
                 pixels[offset] = colour.Blue;
