@@ -8,8 +8,15 @@ on:
       # Negations are applied in order, so the excludes sit between the tree and
       # the workflow itself: prose under windows/ cannot start a build, and a
       # change to this file always can.
+      #
+      # The scripts are excluded for the same reason the prose is — CI runs
+      # dotnet against the solution and never invokes any of them, so a change
+      # to one cannot alter the result. Leaving them in bought a Windows runner
+      # every time a comment in vm-shot.sh was reworded.
       - windows/**
       - '!windows/**.md'
+      - '!windows/tools/**'
+      - '!windows/build.ps1'
       - .github/workflows/windows-build.yml
   pull_request:
     branches:
@@ -18,8 +25,15 @@ on:
       # Negations are applied in order, so the excludes sit between the tree and
       # the workflow itself: prose under windows/ cannot start a build, and a
       # change to this file always can.
+      #
+      # The scripts are excluded for the same reason the prose is — CI runs
+      # dotnet against the solution and never invokes any of them, so a change
+      # to one cannot alter the result. Leaving them in bought a Windows runner
+      # every time a comment in vm-shot.sh was reworded.
       - windows/**
       - '!windows/**.md'
+      - '!windows/tools/**'
+      - '!windows/build.ps1'
       - .github/workflows/windows-build.yml
 
 jobs:

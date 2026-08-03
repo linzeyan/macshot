@@ -2049,11 +2049,16 @@ public sealed partial class AnnotationToolbarView : UserControl
         // how much of a redaction survives is not a thing to leave to a slider.
         //
         // The four names are left in English, which is macshot's own choice for this one
-        // control: it builds these segments from CensorMode.label, a plain string, where
-        // every other label on its row goes through the strings file. They name the effect
-        // rather than describe it — a reader who knows what a pixelated screenshot looks
-        // like knows which segment says Pixelate — and translating them here would have
-        // the two products showing different words for the same four buttons.
+        // control: CensorMode.label returns them as plain Swift strings with no L() around
+        // them (Annotation.swift:121-127), where every other label on its row goes through
+        // the strings file. Translating them here would have the two products showing
+        // different words for the same four buttons.
+        //
+        // The strings file does carry Pixelate, Blur, Solid and Erase, which is what makes
+        // this look like an oversight on a search. Those entries are for the video editor's
+        // effects band (EffectsBandView.swift:374-376), which names the same effects in a
+        // place macshot does translate. Checked twice now; the second time is why this
+        // paragraph exists.
         ToolTipService.SetToolTip(_censorMode, AppFonts.Tip("How the region is covered"));
         _censorMode.SetSegments([.. Enum.GetValues<CensorMode>().Select(mode =>
             new StyleSegment(null, mode.ToString(), 0))]);

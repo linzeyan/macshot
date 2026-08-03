@@ -312,6 +312,8 @@ start the macOS pipeline on `main`, and vice versa.
 ## Known gaps
 
 - The video editor's effects band, HEIC encoding, and an installer are not done.
-- `Pixelate / Blur / Solid / Erase` on the censor options row are untranslated.
+- The beautify options row has no background-blur slider. macOS has one
+  (`ToolOptionsRowView.swift:1311`), and its label is already translated in every
+  language, so the gap is the control rather than its wording.
 - `docs/` is a symlink to a private directory outside the repository — the parity matrices
   and roadmap live there and resolve on Ricky's machine only.
