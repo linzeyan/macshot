@@ -312,12 +312,7 @@ start the macOS pipeline on `main`, and vice versa.
 ## Known gaps
 
 - The video editor's effects band, HEIC encoding, and an installer are not done.
-- The beautify options row is short two of macOS's controls, both because nothing is
-  behind them yet. The W/R segments (`ToolOptionsRowView.swift:1286-1296`) choose between
-  a plain card and one drawn as a window with a title bar and traffic lights, which
-  `BeautifyRenderer` does not draw — and which the overlay's preview would need teaching
-  about, since a title bar makes the frame's inset asymmetric where everything there
-  assumes it grows evenly. The Blur slider (`:1311`) applies only to a custom image
-  background, which the port cannot load.
+- The beautify options row is short one of macOS's controls: the Blur slider (`:1311`)
+  applies only to a custom image background, which the port cannot load.
 - `docs/` is a symlink to a private directory outside the repository — the parity matrices
   and roadmap live there and resolve on Ricky's machine only.

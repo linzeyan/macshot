@@ -88,6 +88,22 @@ public sealed record BeautifyStyle(string Name, double Angle, params AnnotationC
         (byte)Math.Clamp(Math.Round(from + ((to - from) * progress)), 0, byte.MaxValue);
 }
 
+/// <summary>Which of the two cards a capture is mounted on.</summary>
+/// <remarks>
+/// The raw values are macshot's (<c>BeautifyRenderer.swift:4-7</c>) and are stored, so they
+/// have to keep meaning the same thing in both products. Window is the default there
+/// (<c>OverlayView.swift:441-442</c>), which is worth saying because a frame is much more
+/// often wanted around a window than around a bare rectangle.
+/// </remarks>
+public enum BeautifyMode
+{
+    /// <summary>A macOS window: a title bar with traffic lights above the capture.</summary>
+    Window = 0,
+
+    /// <summary>The capture alone, corners rounded.</summary>
+    Rounded = 1,
+}
+
 /// <summary>How a capture is framed: which background, how much of it, and how soft.</summary>
 /// <remarks>
 /// Every measurement is a fraction of the capture's shorter side rather than a pixel
@@ -112,8 +128,19 @@ public sealed record BeautifyOptions(
     double CornerRadius = 10,
     double ShadowRadius = 20,
     double ShadowOpacity = 0.35,
-    bool Enabled = false)
+    bool Enabled = false,
+    BeautifyMode Mode = BeautifyMode.Window)
 {
+    /// <summary>
+    /// How tall the window mode's title bar is, in points
+    /// (<c>BeautifyRenderer.swift:741</c>).
+    /// </summary>
+    /// <remarks>
+    /// The one measurement here that is not a slider, and the one that makes the frame
+    /// asymmetric: everything else grows the card evenly, and this only grows it upwards.
+    /// </remarks>
+    public const double TitleBarHeight = 28;
+
     /// <summary>
     /// The narrowest frame the row can ask for — macshot's slider starts here
     /// (<c>ToolOptionsRowView.swift:1301</c>). Not a clamp on this record, which draws any
@@ -150,6 +177,11 @@ public sealed record BeautifyOptions(
             CornerRadius = Math.Clamp(CornerRadius, 0, MaximumCornerRadius),
             ShadowRadius = Math.Clamp(ShadowRadius, 0, MaximumShadowRadius),
             ShadowOpacity = Math.Clamp(ShadowOpacity, 0, 1),
+
+            // A stored number that names no mode falls back to the default rather than
+            // drawing a title bar of some third height, which is what an unchecked cast
+            // would let a hand-edited settings file ask for.
+            Mode = Enum.IsDefined(Mode) ? Mode : BeautifyMode.Window,
         };
     }
 }
@@ -335,14 +367,38 @@ public static class BeautifyRenderer
         double.IsFinite(scale) && scale > 0 ? Math.Clamp(scale, 0.25, 8) : 1;
 
     /// <summary>
+    /// How much taller than the capture the card is: the title bar in window mode, and
+    /// nothing in rounded mode.
+    /// </summary>
+    /// <remarks>
+    /// Rounded to whole pixels for <see cref="PaddingFor"/>'s reason — it is an offset into
+    /// a pixel buffer, and half a pixel of it would put the capture on a half-pixel row and
+    /// soften every line in the screenshot.
+    /// </remarks>
+    public static int TitleBarFor(BeautifyOptions? options = null, double scale = 1)
+    {
+        var resolved = (options ?? BeautifyOptions.Default).Normalized();
+        return resolved.Mode == BeautifyMode.Window
+            ? (int)Math.Round(BeautifyOptions.TitleBarHeight * Sane(scale))
+            : 0;
+    }
+
+    /// <summary>
     /// Where the frame lands around a region of the capture.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The region grows outwards and does not move: the capture stays on the pixels it
     /// was chosen from, which is what lets a preview be drawn beside a selection rather
     /// than through it. Everything that hangs off the selection — the marks on it, the
     /// grips, what a click lands on — is left measuring against the same rectangle it
     /// always did.
+    /// </para>
+    /// <para>
+    /// Evenly, except upwards in window mode, where the title bar goes. It is the only
+    /// asymmetry in the whole feature, and the reason this returns a region rather than a
+    /// single inset every caller could apply itself.
+    /// </para>
     /// </remarks>
     public static CaptureRegion FrameAround(
         CaptureRegion selection,
@@ -360,12 +416,13 @@ public static class BeautifyRenderer
         }
 
         var padding = PaddingFor(options, scale);
+        var titleBar = TitleBarFor(options, scale);
 
         return new CaptureRegion(
             selection.X - padding,
-            selection.Y - padding,
+            selection.Y - padding - titleBar,
             selection.Width + (padding * 2),
-            selection.Height + (padding * 2));
+            selection.Height + (padding * 2) + titleBar);
     }
 
     /// <summary>
@@ -453,8 +510,15 @@ public static class BeautifyRenderer
         var radius = resolved.CornerRadius * pixelsPerPoint;
         var shadow = resolved.ShadowRadius * pixelsPerPoint;
 
-        var outputWidth = width + (padding * 2);
-        var outputHeight = height + (padding * 2);
+        // The card, which in window mode is taller than the capture by a title bar. Every
+        // rounded corner, both shadows and the clip are the card's, so once these two are
+        // the card's size the rest of the scan needs no second case for window mode.
+        var titleBar = TitleBarFor(resolved, scale);
+        var cardWidth = width;
+        var cardHeight = height + titleBar;
+
+        var outputWidth = cardWidth + (padding * 2);
+        var outputHeight = cardHeight + (padding * 2);
         var output = new byte[checked(outputWidth * outputHeight * 4)];
 
         // The shadow falls downwards, the way a card lifted off the page would cast
@@ -486,13 +550,18 @@ public static class BeautifyRenderer
 
                 // Negative inside the card, positive outside. One pixel of feather
                 // across the edge is what turns a stair-stepped corner into a drawn one.
-                var distance = RoundedBoxDistance(pixelX, pixelY, width, height, radius);
+                var distance = RoundedBoxDistance(pixelX, pixelY, cardWidth, cardHeight, radius);
                 var coverage = 1 - Smoothstep(-0.5, 0.5, distance);
 
-                // Nothing of the frame shows through the card, so the preview does not
+                // The title bar belongs to the frame rather than to the capture, so it is
+                // drawn in both passes: the preview has to show it, or arming the frame
+                // would put a window's chrome on the file that the overlay never showed.
+                var onTitleBar = titleBar > 0 && pixelY < titleBar;
+
+                // Nothing else of the frame shows through the card, so the preview does not
                 // pay for the ground the capture stands on — which is most of the image.
                 // The buffer is already zeroed, and zero premultiplied is clear.
-                if (!framing && coverage >= 1)
+                if (!framing && !onTitleBar && coverage >= 1)
                 {
                     continue;
                 }
@@ -515,11 +584,11 @@ public static class BeautifyRenderer
                     var ambient = 1 - Smoothstep(
                         0,
                         shadow,
-                        RoundedBoxDistance(pixelX, pixelY - shadowOffset, width, height, radius));
+                        RoundedBoxDistance(pixelX, pixelY - shadowOffset, cardWidth, cardHeight, radius));
                     var contact = 1 - Smoothstep(
                         0,
                         contactBlur,
-                        RoundedBoxDistance(pixelX, pixelY - contactOffset, width, height, radius));
+                        RoundedBoxDistance(pixelX, pixelY - contactOffset, cardWidth, cardHeight, radius));
 
                     var strength = Over(
                         ambient * resolved.ShadowOpacity,
@@ -535,10 +604,19 @@ public static class BeautifyRenderer
                 var alpha = byte.MaxValue;
                 if (coverage > 0)
                 {
-                    if (framing)
+                    if (onTitleBar)
+                    {
+                        // Opaque in both passes, and blended with the background only
+                        // where the card's own rounded edge feathers through it.
+                        var chrome = TitleBarPixel(pixelX, pixelY, titleBar, pixelsPerPoint);
+                        blue = Blend(blue, chrome.Blue, coverage);
+                        green = Blend(green, chrome.Green, coverage);
+                        red = Blend(red, chrome.Red, coverage);
+                    }
+                    else if (framing)
                     {
                         var sourceX = Math.Clamp((int)pixelX, 0, width - 1);
-                        var sourceY = Math.Clamp((int)pixelY, 0, height - 1);
+                        var sourceY = Math.Clamp((int)(pixelY - titleBar), 0, height - 1);
                         var from = ((sourceY * width) + sourceX) * 4;
 
                         blue = Blend(blue, bgraPixels[from], coverage);
@@ -569,6 +647,98 @@ public static class BeautifyRenderer
 
         return (outputWidth, outputHeight, output);
     }
+
+    /// <summary>
+    /// The window chrome at a point on the title bar: the band, and a traffic light where
+    /// one falls.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Card space, so <paramref name="y"/> runs from the top of the card and the band is
+    /// everything above <paramref name="titleBar"/>.
+    /// </para>
+    /// <para>
+    /// Two things macshot draws are deliberately not drawn here, because neither of them
+    /// can be seen. The window's own <c>white 0.97</c> fill is covered edge to edge by the
+    /// capture (<c>contentRect</c> is exactly the card below the bar), and the separator is
+    /// laid at <c>titleBarRect.minY - 0.5</c>, which is inside <c>contentRect</c> and so
+    /// goes under the screenshot drawn after it (<c>BeautifyRenderer.swift:791</c> against
+    /// <c>:820-821</c>). Reproducing either would put a line on this port that the Mac does
+    /// not show — and in the preview, where there is no capture over them, it would show.
+    /// </para>
+    /// </remarks>
+    private static AnnotationColor TitleBarPixel(
+        double x, double y, int titleBar, double pixelsPerPoint)
+    {
+        var radius = TrafficLightRadius * pixelsPerPoint;
+        var centreY = titleBar / 2.0;
+
+        var colour = TitleBarFill;
+
+        for (var index = 0; index < TrafficLights.Length; index++)
+        {
+            var centreX = (TrafficLightInset + (index * TrafficLightSpacing)) * pixelsPerPoint;
+            var offsetX = x - centreX;
+            var offsetY = y - centreY;
+            var away = Math.Sqrt((offsetX * offsetX) + (offsetY * offsetY));
+
+            var inside = 1 - Smoothstep(-0.5, 0.5, away - radius);
+            if (inside <= 0)
+            {
+                continue;
+            }
+
+            var (fill, ring) = TrafficLights[index];
+            colour = new AnnotationColor(
+                Blend(colour.Red, fill.Red, inside),
+                Blend(colour.Green, fill.Green, inside),
+                Blend(colour.Blue, fill.Blue, inside));
+
+            // macshot strokes a half-point line on a path inset by half a point, so the
+            // ring sits just inside the rim rather than on it — which is what keeps a
+            // light from reading as a flat disc against a light title bar.
+            var ringCentre = radius - (0.5 * pixelsPerPoint);
+            var ringHalf = 0.25 * pixelsPerPoint;
+            var onRing = (1 - Smoothstep(ringHalf - 0.5, ringHalf + 0.5, Math.Abs(away - ringCentre)))
+                * inside;
+
+            if (onRing > 0)
+            {
+                colour = new AnnotationColor(
+                    Blend(colour.Red, ring.Red, onRing),
+                    Blend(colour.Green, ring.Green, onRing),
+                    Blend(colour.Blue, ring.Blue, onRing));
+            }
+
+            // The lights are 12 points across and 20 apart, so no pixel is on two of them.
+            break;
+        }
+
+        return colour;
+    }
+
+    /// <summary>The title bar's band, <c>white 0.94</c> (<c>BeautifyRenderer.swift:786</c>).</summary>
+    private static readonly AnnotationColor TitleBarFill = new(240, 240, 240);
+
+    /// <summary>How far in from the card's left edge the first light's centre is, in points.</summary>
+    private const double TrafficLightInset = 14;
+
+    /// <summary>Centre to centre, in points.</summary>
+    private const double TrafficLightSpacing = 20;
+
+    /// <summary>In points.</summary>
+    private const double TrafficLightRadius = 6;
+
+    /// <summary>
+    /// Close, minimise, zoom: the fill and the darker ring inside its rim
+    /// (<c>BeautifyRenderer.swift:799-806</c>).
+    /// </summary>
+    private static readonly (AnnotationColor Fill, AnnotationColor Ring)[] TrafficLights =
+    [
+        (new AnnotationColor(255, 97, 89), new AnnotationColor(217, 64, 56)),
+        (new AnnotationColor(255, 191, 64), new AnnotationColor(217, 153, 38)),
+        (new AnnotationColor(77, 204, 89), new AnnotationColor(51, 166, 64)),
+    ];
 
     /// <summary>How far the ambient shadow falls, as a fraction of how soft it is.</summary>
     private const double AmbientOffsetRatio = 0.4;

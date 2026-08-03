@@ -39,7 +39,7 @@ public sealed class BeautifyRendererTests
                 10,
                 10,
                 Solid(10, 10, 40, 40, 40),
-                new BeautifyOptions(StyleIndex: styleIndex));
+                new BeautifyOptions(StyleIndex: styleIndex, Mode: BeautifyMode.Rounded));
 
             // Square in, square out, so the same relative position on both is the same
             // place on the gradient. The corner is far enough from the capture that the
@@ -61,6 +61,16 @@ public sealed class BeautifyRendererTests
             "a 28-point square of one colour would tell the user nothing about the style");
     }
 
+    /// <summary>
+    /// Window mode is the default, so a test about anything else has to say so.
+    /// </summary>
+    /// <remarks>
+    /// Stated rather than assumed, in this test and the several below it that pass
+    /// <c>Mode: Rounded</c>. macshot defaults to the window card, which makes the output
+    /// 28 points taller than the capture and moves every row in it — so a test measuring
+    /// padding, corners, shadow or the background would be reading the title bar's effect
+    /// as well as its own subject unless it names the plain card.
+    /// </remarks>
     [TestMethod]
     public void Render_GrowsTheFrameByThePaddingOnEverySide()
     {
@@ -68,7 +78,7 @@ public sealed class BeautifyRendererTests
             200,
             100,
             Solid(200, 100, 255, 255, 255),
-            new BeautifyOptions(Padding: 10));
+            new BeautifyOptions(Padding: 10, Mode: BeautifyMode.Rounded));
 
         // Ten points on each edge.
         Assert.AreEqual(220, width);
@@ -82,7 +92,7 @@ public sealed class BeautifyRendererTests
             80,
             80,
             Solid(80, 80, 10, 20, 30),
-            new BeautifyOptions(Padding: 10, CornerRadius: 0, ShadowRadius: 0));
+            new BeautifyOptions(Padding: 10, CornerRadius: 0, ShadowRadius: 0, Mode: BeautifyMode.Rounded));
 
         // Ten pixels of padding, so the capture's own top-left pixel lands at (10, 10)
         // and nothing here resamples it.
@@ -106,7 +116,7 @@ public sealed class BeautifyRendererTests
     [TestMethod]
     public void Render_RoundsTheCornersOff()
     {
-        var options = new BeautifyOptions(Padding: 10, CornerRadius: 20, ShadowRadius: 0);
+        var options = new BeautifyOptions(Padding: 10, CornerRadius: 20, ShadowRadius: 0, Mode: BeautifyMode.Rounded);
 
         var (width, _, pixels) = BeautifyRenderer.Render(80, 80, Solid(80, 80, 255, 255, 255), options);
 
@@ -145,7 +155,7 @@ public sealed class BeautifyRendererTests
     public void Render_DeepensTheShadowWhereTheCardMeetsTheBackground()
     {
         const double opacity = 0.5;
-        var lit = new BeautifyOptions(Padding: 20, CornerRadius: 0, ShadowRadius: 0, ShadowOpacity: 0);
+        var lit = new BeautifyOptions(Padding: 20, CornerRadius: 0, ShadowRadius: 0, ShadowOpacity: 0, Mode: BeautifyMode.Rounded);
         var shaded = lit with { ShadowRadius = 8, ShadowOpacity = opacity };
 
         var (width, _, withoutShadow) = BeautifyRenderer.Render(80, 80, Solid(80, 80, 255, 255, 255), lit);
@@ -222,7 +232,7 @@ public sealed class BeautifyRendererTests
             20,
             20,
             original,
-            new BeautifyOptions(Padding: 0, CornerRadius: 0, ShadowRadius: 0));
+            new BeautifyOptions(Padding: 0, CornerRadius: 0, ShadowRadius: 0, Mode: BeautifyMode.Rounded));
 
         Assert.AreEqual(20, width);
         Assert.AreEqual(20, height);
@@ -393,7 +403,7 @@ public sealed class BeautifyRendererTests
     public void FrameAround_GrowsTheSelectionOutwardsAndLeavesItWhereItWas()
     {
         var selection = new CaptureRegion(300, 200, 200, 100);
-        var frame = BeautifyRenderer.FrameAround(selection, new BeautifyOptions(Padding: 10));
+        var frame = BeautifyRenderer.FrameAround(selection, new BeautifyOptions(Padding: 10, Mode: BeautifyMode.Rounded));
 
         // Ten points on every edge.
         Assert.AreEqual(new CaptureRegion(290, 190, 220, 120), frame);
@@ -403,6 +413,138 @@ public sealed class BeautifyRendererTests
         // lands on — is untouched by the frame going on.
         Assert.AreEqual(selection.X, frame.X + 10);
         Assert.AreEqual(selection.Y, frame.Y + 10);
+    }
+
+    /// <summary>
+    /// The title bar makes the frame grow unevenly, which nothing else in the feature does.
+    /// </summary>
+    /// <remarks>
+    /// Everything placed around the frame — the toolbar, the preview bitmap, the size box —
+    /// is positioned from this region, and every one of them was written when the only
+    /// answer was "the selection, bigger by the same amount all round". A window card that
+    /// reported itself symmetric would hang its own title bar over the capture rather than
+    /// above it.
+    /// </remarks>
+    [TestMethod]
+    public void FrameAround_GivesTheTitleBarItsRoomAboveTheCaptureAlone()
+    {
+        var selection = new CaptureRegion(300, 200, 200, 100);
+        var window = BeautifyRenderer.FrameAround(selection, new BeautifyOptions(Padding: 10));
+
+        Assert.AreEqual(300 - 10, window.X, "the sides are the padding alone");
+        Assert.AreEqual(200 - 10 - 28, window.Y, "and the top is the padding and the bar");
+        Assert.AreEqual(200 + 20, window.Width);
+        Assert.AreEqual(100 + 20 + 28, window.Height);
+        Assert.AreEqual(selection.Bottom + 10, window.Bottom, "the bottom is the padding alone");
+    }
+
+    /// <summary>
+    /// The bar is a height in points, like every other measurement in the frame.
+    /// </summary>
+    /// <remarks>
+    /// A bar left in device pixels would be two thirds of its proper height on a 175%
+    /// display and the traffic lights inside it would be drawn for a bar that size, which
+    /// is the same class of bug that once made the whole frame too narrow to hold the size
+    /// box.
+    /// </remarks>
+    [TestMethod]
+    public void TitleBarFor_IsPointsTurnedIntoWhicheverPixelsTheCaptureHas()
+    {
+        var window = new BeautifyOptions();
+
+        Assert.AreEqual(28, BeautifyRenderer.TitleBarFor(window));
+        Assert.AreEqual(49, BeautifyRenderer.TitleBarFor(window, 1.75));
+        Assert.AreEqual(56, BeautifyRenderer.TitleBarFor(window, 2));
+
+        Assert.AreEqual(
+            0,
+            BeautifyRenderer.TitleBarFor(new BeautifyOptions(Mode: BeautifyMode.Rounded), 2),
+            "the plain card has no bar at any scale");
+    }
+
+    /// <summary>
+    /// The window card draws a macOS title bar, and it is above the capture rather than
+    /// over it.
+    /// </summary>
+    /// <remarks>
+    /// The whole point of the mode. The capture has to come out of the file byte for byte
+    /// as it went in — a bar drawn over its top 28 rows would eat a menu bar or a tab strip
+    /// out of every screenshot taken of a window.
+    /// </remarks>
+    [TestMethod]
+    public void Render_PutsTheTitleBarAboveTheCaptureAndNotOverIt()
+    {
+        var options = new BeautifyOptions(Padding: 10, CornerRadius: 0, ShadowRadius: 0);
+
+        var (width, height, pixels) = BeautifyRenderer.Render(
+            200, 100, Solid(200, 100, 10, 20, 30), options);
+
+        Assert.AreEqual(200 + 20, width);
+        Assert.AreEqual(100 + 20 + 28, height, "the capture, the padding and the bar");
+
+        // The band, clear of the lights, which sit against the left edge.
+        Assert.AreEqual((240, 240, 240), At(pixels, width, 150, 10 + 14));
+
+        // And the capture, whole, starting the row after the bar ends.
+        Assert.AreEqual((10, 20, 30), At(pixels, width, 150, 10 + 28));
+        Assert.AreEqual((10, 20, 30), At(pixels, width, 150, 10 + 28 + 99));
+    }
+
+    /// <summary>
+    /// The three lights are what makes the card read as a window rather than as a border.
+    /// </summary>
+    /// <remarks>
+    /// Checked as three distinct hues at macshot's own centres rather than as exact
+    /// colours: the fill is blended with the ring over the rim, so the middle of each light
+    /// is the only place the colour is its own — and that is also the only place the user
+    /// is looking.
+    /// </remarks>
+    [TestMethod]
+    public void Render_DrawsTheThreeTrafficLightsOnTheTitleBar()
+    {
+        var options = new BeautifyOptions(Padding: 10, CornerRadius: 0, ShadowRadius: 0);
+
+        var (width, _, pixels) = BeautifyRenderer.Render(
+            200, 100, Solid(200, 100, 10, 20, 30), options);
+
+        // macshot's centres: 14 in from the card's left edge, then every 20.
+        var (blue, green, red) = At(pixels, width, 10 + 14, 10 + 14);
+        Assert.IsTrue(red > green && red > blue, $"close is red, got ({red}, {green}, {blue})");
+
+        (blue, green, red) = At(pixels, width, 10 + 34, 10 + 14);
+        Assert.IsTrue(red > 200 && green > 150 && blue < 120, $"minimise is amber, got ({red}, {green}, {blue})");
+
+        (blue, green, red) = At(pixels, width, 10 + 54, 10 + 14);
+        Assert.IsTrue(green > red && green > blue, $"zoom is green, got ({red}, {green}, {blue})");
+    }
+
+    /// <summary>
+    /// The preview has to show the title bar, because the file will have one.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="BeautifyRenderer.Backdrop"/> leaves the capture's own area clear so the
+    /// capture already on screen shows through it. The bar is not the capture's area — it
+    /// is frame, sitting above it — so leaving it clear too would arm a frame the overlay
+    /// never showed and hand back a file with a window's chrome that nobody had seen.
+    /// </remarks>
+    [TestMethod]
+    public void Backdrop_DrawsTheTitleBarBecauseItIsFrameRatherThanCapture()
+    {
+        var options = new BeautifyOptions(Padding: 10, CornerRadius: 0, ShadowRadius: 0);
+
+        var (width, height, pixels) = BeautifyRenderer.Backdrop(200, 100, options);
+
+        Assert.AreEqual(100 + 20 + 28, height);
+
+        Assert.AreEqual(
+            byte.MaxValue,
+            pixels[((((10 + 14) * width) + 150) * 4) + 3],
+            "the band is opaque");
+
+        Assert.AreEqual(
+            0,
+            pixels[((((10 + 28 + 50) * width) + 150) * 4) + 3],
+            "and the capture's own area is still left clear");
     }
 
     [TestMethod]

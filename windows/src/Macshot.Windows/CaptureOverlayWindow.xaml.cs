@@ -1087,6 +1087,7 @@ public sealed partial class CaptureOverlayWindow : Window
         _capturedWindow = capturedWindow;
         _capturedWindowTitle = windowTitle;
         _regionIsAdjustable = capturedWindow is null;
+        AnnotationToolbar.SnappedWindow = windowTitle is not null;
         SnapHighlight.Visibility = Visibility.Collapsed;
 
         // Brings the marquee onto the region actually taken, which is the whole
@@ -2273,6 +2274,41 @@ public sealed partial class CaptureOverlayWindow : Window
     /// the padding, the corner, the shadow, the background and the switch all arrive the
     /// same way, and the export reads them from the same place.
     /// </remarks>
+    /// <summary>
+    /// How this region is framed: the settings, with the card the region can actually take.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A snapped window already carries a real title bar in its pixels, so window mode
+    /// would draw a second one above the first. macshot renders that region through a
+    /// separate path that lays down no synthetic chrome at all
+    /// (<c>BeautifyRenderer.swift:480-492</c>) and takes the W/R segments off the row;
+    /// forcing the mode here is the same picture, and it is what the hidden segments have
+    /// to mean — a control that is not there cannot be the only thing preventing the wrong
+    /// frame.
+    /// </para>
+    /// <para>
+    /// The corner goes the same way and for the same reason: those pixels arrive already
+    /// rounded to the shell's own radius, so the card has to be cut to match or the frame
+    /// shows a sliver of gradient inside each corner. macshot uses 10 there
+    /// (<c>OverlayView.swift:3018</c>), which is macOS's window corner; Windows 11 rounds
+    /// its own at 8.
+    /// </para>
+    /// </remarks>
+    private BeautifyOptions FrameOptions
+    {
+        get
+        {
+            var options = _settings.Current.ToBeautifyOptions();
+            return _capturedWindowTitle is null
+                ? options
+                : options with { Mode = BeautifyMode.Rounded, CornerRadius = ShellWindowCorner };
+        }
+    }
+
+    /// <summary>What Windows 11 rounds a top-level window's corners to, in points.</summary>
+    private const double ShellWindowCorner = 8;
+
     private void FrameOptionsChanged()
     {
         if (!IsAnnotating)
@@ -2357,7 +2393,7 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
 
-        var options = _settings.Current.ToBeautifyOptions();
+        var options = FrameOptions;
         var (width, height, pixels) = BeautifyRenderer.Backdrop(
             (int)region.Width,
             (int)region.Height,
@@ -2397,7 +2433,7 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         var framed = BeautifyRenderer.FrameAround(
-            region, _settings.Current.ToBeautifyOptions(), _monitor.Scale);
+            region, FrameOptions, _monitor.Scale);
         if (_frameAnchorProgress >= 1)
         {
             return _beautify ? framed : region;
@@ -2500,7 +2536,7 @@ public sealed partial class CaptureOverlayWindow : Window
             finished.Width,
             finished.Height,
             finished.BgraPixels,
-            _settings.Current.ToBeautifyOptions(),
+            FrameOptions,
             _monitor.Scale);
 
         return new CapturedFrame(finished.VirtualX, finished.VirtualY, width, height, pixels);

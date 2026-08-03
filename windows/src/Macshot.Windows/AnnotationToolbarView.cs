@@ -77,6 +77,9 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// <summary>And its background swatch — <c>:1318</c>.</summary>
     private const int FrameSwatchExtent = 22;
 
+    /// <summary>And its W/R segments — <c>:1290</c>.</summary>
+    private const double FrameModeWidth = 56;
+
     private readonly Canvas _surface = new();
     private readonly ToolbarStrip _tools = new(Orientation.Horizontal);
     private readonly ToolbarStrip _actions = new(Orientation.Vertical);
@@ -429,6 +432,12 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// readout after. No number beside them because the frame is the readout: unlike a
     /// stroke width, every one of these three is visible in full the moment it moves.
     /// </summary>
+    /// <summary>
+    /// Window or Rounded: whether the card is drawn as a macOS window with a title bar
+    /// above the capture (<c>ToolOptionsRowView.swift:1286-1296</c>), 56 wide in two.
+    /// </summary>
+    private readonly StyleSegments _frameMode = new() { Width = FrameModeWidth };
+
     private readonly TextBlock _framePaddingLabel = OptionLabel(L("Padding"));
 
     private readonly Slider _framePadding = OptionSlider(
@@ -1610,7 +1619,7 @@ public sealed partial class AnnotationToolbarView : UserControl
             {
                 foreach (var control in group)
                 {
-                    control.Visibility = Show(_frameControls.Contains(control));
+                    control.Visibility = Show(_frameControls.Contains(control) && FramedHere(control));
                 }
             }
 
@@ -2408,14 +2417,27 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// other — so where they sit among the rest cannot be seen.
     /// </para>
     /// <para>
-    /// Two of macshot's controls are missing, and both because the port has nothing behind
-    /// them: the W/R segments choose between a plain card and one drawn as a window with a
-    /// title bar, which this renderer does not draw, and the Blur slider applies only to a
-    /// custom image background, which it cannot load.
+    /// One of macshot's controls is missing, because the port has nothing behind it: the
+    /// Blur slider applies only to a custom image background, which it cannot load.
     /// </para>
     /// </remarks>
     private void BuildFrameOptions()
     {
+        _frameMode.SetSegments(
+        [
+            // Not through L(). macshot's own labels are the bare letters
+            // (<c>ToolOptionsRowView.swift:1287</c>), and a single character makes a
+            // terrible key: every language would be sharing one entry called "W".
+            new StyleSegment(null, "W", FrameModeWidth / 2),
+            new StyleSegment(null, "R", FrameModeWidth / 2),
+        ]);
+
+        ToolTipService.SetToolTip(
+            _frameMode, AppFonts.Tip("Draw the capture as a window, or on its own"));
+
+        _frameMode.SelectionChanged += (_, index) => FrameModeChosen(
+            index == 0 ? BeautifyMode.Window : BeautifyMode.Rounded);
+
         ToolTipService.SetToolTip(_framePadding, AppFonts.Tip("How much background shows around the capture"));
         ToolTipService.SetToolTip(_frameRadius, AppFonts.Tip("How far the capture's corners are rounded off"));
         ToolTipService.SetToolTip(_frameShadow, AppFonts.Tip("How far the capture's shadow spreads"));
@@ -2449,12 +2471,14 @@ public sealed partial class AnnotationToolbarView : UserControl
         _frameOn.Checked += (_, _) => FrameArmed(true);
         _frameOn.Unchecked += (_, _) => FrameArmed(false);
 
+        AddGroup(_frameMode);
         AddGroup(_framePaddingLabel, _framePadding, _frameRadiusLabel, _frameRadius, _frameShadowLabel, _frameShadow);
         AddGroup(_frameStyle);
         AddGroup(_frameOn);
 
         _frameControls.AddRange(
         [
+            _frameMode,
             _framePaddingLabel,
             _framePadding,
             _frameRadiusLabel,
@@ -2502,6 +2526,25 @@ public sealed partial class AnnotationToolbarView : UserControl
     }
 
     /// <summary>
+    /// Whether a control of the frame's row applies to the region in hand.
+    /// </summary>
+    /// <remarks>
+    /// A snapped window arrives with its own chrome already in the pixels, so a synthetic
+    /// title bar would put a second one above it and a corner radius would round corners
+    /// that are already round. macshot leaves both controls out for that region
+    /// (<c>ToolOptionsRowView.swift:1286</c> and <c>:1302</c>) rather than showing them
+    /// doing nothing.
+    /// </remarks>
+    private bool FramedHere(FrameworkElement control) =>
+        !SnappedWindow
+        || (control != _frameMode && control != _frameRadius && control != _frameRadiusLabel);
+
+    /// <summary>
+    /// Whether the region came from clicking a window rather than from a drag.
+    /// </summary>
+    public bool SnappedWindow { get; set; }
+
+    /// <summary>
     /// Fills the frame's row from the settings, and paints the swatch as the background
     /// currently in use.
     /// </summary>
@@ -2527,7 +2570,25 @@ public sealed partial class AnnotationToolbarView : UserControl
             _loadingFrame = false;
         }
 
+        // Set rather than raised: SelectedIndex repaints without calling back, so filling
+        // the row from the settings cannot be mistaken for the user choosing a mode.
+        _frameMode.SelectedIndex = options.Mode == BeautifyMode.Window ? 0 : 1;
+
         _frameSwatch.Background = BeautifySwatchGrid.Paint(options.StyleIndex, FrameSwatchExtent);
+    }
+
+    /// <summary>
+    /// Records the card the user picked and repaints the frame around it.
+    /// </summary>
+    /// <remarks>
+    /// Not guarded by <c>_loadingFrame</c> the way the sliders are: this only ever runs
+    /// from a press, because <see cref="SyncFrameOptions"/> moves the segments through
+    /// <see cref="StyleSegments.SelectedIndex"/>, which does not raise.
+    /// </remarks>
+    private void FrameModeChosen(BeautifyMode mode)
+    {
+        Remember(current => current with { BeautifyMode = mode });
+        FrameOptionsChanged?.Invoke(this, EventArgs.Empty);
     }
 
     /// <summary>

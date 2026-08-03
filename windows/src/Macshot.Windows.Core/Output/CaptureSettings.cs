@@ -1146,13 +1146,22 @@ public sealed record CaptureSettings
     /// </remarks>
     public bool BeautifyEnabled { get; init; } = BeautifyOptions.Default.Enabled;
 
+    /// <summary>Whether the frame draws a window's title bar above the capture.</summary>
+    /// <remarks>
+    /// The row's W/R segments. Stored as the mode rather than as a bool so the number in
+    /// the file is macshot's own raw value (<c>BeautifyRenderer.swift:4-7</c>), and a third
+    /// card added later does not have to break the file format to be named.
+    /// </remarks>
+    public BeautifyMode BeautifyMode { get; init; } = BeautifyOptions.Default.Mode;
+
     public BeautifyOptions ToBeautifyOptions() => new BeautifyOptions(
         BeautifyStyleIndex,
         BeautifyPadding,
         BeautifyCornerRadius,
         BeautifyShadowRadius,
         BeautifyOptions.Default.ShadowOpacity,
-        BeautifyEnabled).Normalized();
+        BeautifyEnabled,
+        BeautifyMode).Normalized();
 
     /// <summary>
     /// Where the Upload button sends a capture. macshot's <c>uploadProvider</c>.
@@ -1576,6 +1585,7 @@ public sealed record CaptureSettings
                 BeautifyCornerRadius, BeautifyOptions.Default.CornerRadius, 0, BeautifyOptions.MaximumCornerRadius),
             BeautifyShadowRadius = Clamp(
                 BeautifyShadowRadius, BeautifyOptions.Default.ShadowRadius, 0, BeautifyOptions.MaximumShadowRadius),
+            BeautifyMode = Enum.IsDefined(BeautifyMode) ? BeautifyMode : BeautifyOptions.Default.Mode,
         };
     }
 
