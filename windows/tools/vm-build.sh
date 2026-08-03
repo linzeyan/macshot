@@ -91,9 +91,24 @@ git push --quiet --force "$VM:$ROOT" "HEAD:refs/vm/head"
 # cold build. The guest's tree is disposable in every other respect.
 ssh "$VM" "git -C $ROOT reset --quiet --hard refs/vm/head && git -C $ROOT clean -qfd"
 
-if ! git diff --quiet HEAD; then
+# Through a scratch index rather than `git diff HEAD`, because that one cannot see a file
+# git has never been told about — and a new file is what a port adds most often. It was
+# exactly this: a new enum stayed on the Mac while every file that referred to it went
+# over, and the guest reported it missing. `add -A` here writes to the copy, so the real
+# index and anything staged in it are untouched.
+scratch="$(mktemp -t macshot-vm-index)"
+trap 'rm -f "$scratch"' EXIT
+cp "$(git rev-parse --git-dir)/index" "$scratch"
+
+if ! GIT_INDEX_FILE="$scratch" git add -A 2>/dev/null; then
+    echo "cannot read the working tree." >&2
+    exit 1
+fi
+
+if ! GIT_INDEX_FILE="$scratch" git diff --cached --quiet HEAD; then
     echo "→ applying uncommitted changes"
-    git diff HEAD --binary | ssh "$VM" "git -C $ROOT apply --whitespace=nowarn -"
+    GIT_INDEX_FILE="$scratch" git diff --cached HEAD --binary \
+        | ssh "$VM" "git -C $ROOT apply --whitespace=nowarn -"
 fi
 
 case "$action" in

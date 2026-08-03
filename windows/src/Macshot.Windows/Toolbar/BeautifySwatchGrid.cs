@@ -86,15 +86,29 @@ internal sealed class BeautifySwatchGrid : Grid
         _rings[_selected].BorderBrush = ToolbarPalette.AccentBrush;
     }
 
-    private Border Swatch(int styleIndex)
+    /// <summary>
+    /// A style painted at <paramref name="extent"/>, for anything that has to show one.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than beside each caller because the grid and the button on the frame's
+    /// options row have to agree on what a style looks like: the one on the row is how you
+    /// know which of the forty-eight is on, and a second way of painting it is a second
+    /// thing to keep in step with the export.
+    /// </remarks>
+    internal static ImageBrush Paint(int styleIndex, int extent)
     {
-        var (width, height, pixels) = BeautifyRenderer.Swatch(styleIndex, Extent);
+        var (width, height, pixels) = BeautifyRenderer.Swatch(styleIndex, extent);
         var bitmap = new WriteableBitmap(width, height);
         using (var stream = bitmap.PixelBuffer.AsStream())
         {
             stream.Write(pixels, 0, pixels.Length);
         }
 
+        return new ImageBrush { ImageSource = bitmap, Stretch = Stretch.UniformToFill };
+    }
+
+    private Border Swatch(int styleIndex)
+    {
         var ring = new Border
         {
             // The ring is drawn outside the swatch rather than over it, the way macshot
@@ -111,7 +125,7 @@ internal sealed class BeautifySwatchGrid : Grid
 
                 // The bitmap goes in as a brush rather than as a child Image, because a
                 // child would square off the corners the radius rounded.
-                Background = new ImageBrush { ImageSource = bitmap, Stretch = Stretch.UniformToFill },
+                Background = Paint(styleIndex, Extent),
             },
         };
 

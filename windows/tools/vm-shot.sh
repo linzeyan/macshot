@@ -11,7 +11,13 @@
 #   windows/tools/vm-shot.sh                     # the desktop as it is
 #   windows/tools/vm-shot.sh --keys '^+x'        # press Ctrl+Shift+X, then photograph
 #   windows/tools/vm-shot.sh --keys '{ESC}'      # …and this dismisses it again
+#   windows/tools/vm-shot.sh --click 640,400     # click there, then photograph
+#   windows/tools/vm-shot.sh --drag 100,100,500,400  # drag a region, then photograph
+#   windows/tools/vm-shot.sh --start 'C:\\x.exe'  # launch it, then photograph
 #   windows/tools/vm-shot.sh --wait 3 out.png    # wait longer; write somewhere specific
+#
+# One action per call, so they compose: launch, shoot, press, shoot, click, shoot. What is
+# on screen persists between calls, which is what makes a sequence of them a session.
 #
 # SendKeys notation: ^ is Ctrl, + is Shift, % is Alt, {ESC} {ENTER} {TAB} {F1} and so on.
 #
@@ -30,6 +36,9 @@ VM="${MACSHOT_VM:-macshot-vm}"
 TASK=macshot-vm-shot
 
 keys=""
+click=""
+drag=""
+start=""
 wait_for=1
 destination=""
 
@@ -37,6 +46,18 @@ while [ $# -gt 0 ]; do
     case "$1" in
     --keys)
         keys="$2"
+        shift 2
+        ;;
+    --click)
+        click="$2"
+        shift 2
+        ;;
+    --drag)
+        drag="$2"
+        shift 2
+        ;;
+    --start)
+        start="$2"
         shift 2
         ;;
     --wait)
@@ -67,16 +88,73 @@ remote_image="$home/vm-shot.png"
 ssh "$VM" "cat > '$remote_script'" <<'PS1'
 Add-Type -AssemblyName System.Windows.Forms, System.Drawing
 
+# Before anything asks how big the screen is. PowerShell is not DPI-aware, so on a scaled
+# display Windows lies to it: the capture comes back at the virtualized size, softened by
+# the scaler, which is the one thing a picture taken to judge layout must not be. It also
+# keeps the pointer's coordinates and the image's the same numbers.
+Add-Type -Namespace VmShot -Name Dpi -MemberDefinition @"
+[DllImport("user32.dll")] public static extern bool SetProcessDPIAware();
+"@
+[VmShot.Dpi]::SetProcessDPIAware() | Out-Null
+
 # Read rather than taken as parameters: a scheduled task's command line is fixed when the
 # task is registered, so anything that varies per run has to arrive some other way.
 $arguments = Get-Content (Join-Path $env:USERPROFILE "vm-shot.args") -ErrorAction SilentlyContinue
 $Keys = if ($arguments.Count -ge 1) { $arguments[0] } else { "" }
 $Wait = if ($arguments.Count -ge 2 -and $arguments[1]) { [double]$arguments[1] } else { 1 }
+$Click = if ($arguments.Count -ge 3) { $arguments[2] } else { "" }
+$Start = if ($arguments.Count -ge 4) { $arguments[3] } else { "" }
+$Drag = if ($arguments.Count -ge 5) { $arguments[4] } else { "" }
+
+if ($Start) {
+    Start-Process -FilePath $Start
+}
 
 if ($Keys) {
     # Whatever the user was last looking at is what has focus, which for a tray app with
     # a global hotkey is exactly right: the keystroke has to reach the shell, not macshot.
     [System.Windows.Forms.SendKeys]::SendWait($Keys)
+}
+
+# Out here rather than in the branch that first needed it: it was declared inside the click
+# and used by the drag as well, so a drag on its own threw on a type nobody had added — and
+# the failure looked exactly like a desktop that had not changed.
+Add-Type -Namespace VmShot -Name Pointer -MemberDefinition @"
+[DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
+[DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint x, uint y, uint data, int extra);
+"@
+
+if ($Click) {
+    # Moved, then given a moment, then pressed. An overlay that tracks the pointer places
+    # its chrome from the moves, and a press in the same breath as the move arrives before
+    # the window has been told where the pointer now is.
+    $at = $Click.Split(",")
+    [VmShot.Pointer]::SetCursorPos([int]$at[0], [int]$at[1]) | Out-Null
+    Start-Sleep -Milliseconds 120
+    [VmShot.Pointer]::mouse_event(0x0002, 0, 0, 0, 0)
+    [VmShot.Pointer]::mouse_event(0x0004, 0, 0, 0, 0)
+}
+
+if ($Drag) {
+    # In steps rather than one jump. A rubber-band selection is built from the moves, and
+    # a press followed by a single move to the far corner is a gesture some of the app
+    # never sees happening.
+    $at = $Drag.Split(",")
+    $fromX = [int]$at[0]; $fromY = [int]$at[1]; $toX = [int]$at[2]; $toY = [int]$at[3]
+    [VmShot.Pointer]::SetCursorPos($fromX, $fromY) | Out-Null
+    Start-Sleep -Milliseconds 120
+    [VmShot.Pointer]::mouse_event(0x0002, 0, 0, 0, 0)
+    Start-Sleep -Milliseconds 200
+
+    foreach ($step in 1..20) {
+        [VmShot.Pointer]::SetCursorPos(
+            $fromX + [int](($toX - $fromX) * $step / 20),
+            $fromY + [int](($toY - $fromY) * $step / 20)) | Out-Null
+        Start-Sleep -Milliseconds 40
+    }
+
+    Start-Sleep -Milliseconds 200
+    [VmShot.Pointer]::mouse_event(0x0004, 0, 0, 0, 0)
 }
 
 Start-Sleep -Seconds $Wait
@@ -106,7 +184,9 @@ fi
 
 # The task takes no arguments, so what to press is left where the helper reads it. A
 # scheduled task's command line is fixed at registration; this is not.
-ssh "$VM" "printf '%s\n%s\n' '$keys' '$wait_for' > '$home/vm-shot.args'" 2>/dev/null || true
+ssh "$VM" \
+    "printf '%s\n%s\n%s\n%s\n%s\n' '$keys' '$wait_for' '$click' '$start' '$drag' > '$home/vm-shot.args'" \
+    2>/dev/null || true
 
 ssh "$VM" "rm -f '$remote_image'; MSYS_NO_PATHCONV=1 schtasks /run /tn $TASK" >/dev/null
 

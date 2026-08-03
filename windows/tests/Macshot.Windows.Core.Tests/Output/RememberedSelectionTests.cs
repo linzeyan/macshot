@@ -151,12 +151,29 @@ public sealed class RememberedSelectionTests
         {
             BeautifyStyleIndex = 9999,
             BeautifyPadding = double.NaN,
-            BeautifyShadowRadius = 12,
+            BeautifyShadowRadius = 1200,
         }).Normalized();
 
         Assert.AreEqual(BeautifyRenderer.Styles.Count - 1, normalized.BeautifyStyleIndex);
         Assert.AreEqual(BeautifyOptions.Default.Padding, normalized.BeautifyPadding);
-        Assert.AreEqual(0.25, normalized.BeautifyShadowRadius);
+        Assert.AreEqual(BeautifyOptions.MaximumShadowRadius, normalized.BeautifyShadowRadius);
+    }
+
+    /// <summary>
+    /// A frame nought pixels wide is not a frame, however the file came to ask for one.
+    /// </summary>
+    /// <remarks>
+    /// These three were once stored as fractions of the capture's shorter side, so a
+    /// settings file written by that build says the padding is 0.08 — which rounds to no
+    /// frame at all, leaving the Beautify button apparently doing nothing and every slider
+    /// on its row pinned to the end. The floor is the one the row itself starts at.
+    /// </remarks>
+    [TestMethod]
+    public void Normalized_LiftsAPaddingTooNarrowToBeAFrame()
+    {
+        var normalized = (CaptureSettings.Default with { BeautifyPadding = 0.08 }).Normalized();
+
+        Assert.AreEqual(BeautifyOptions.MinimumPadding, normalized.BeautifyPadding);
     }
 
     [TestMethod]
@@ -165,11 +182,11 @@ public sealed class RememberedSelectionTests
         var options = (CaptureSettings.Default with
         {
             BeautifyStyleIndex = 3,
-            BeautifyPadding = 0.2,
+            BeautifyPadding = 72,
         }).ToBeautifyOptions();
 
         Assert.AreEqual(3, options.StyleIndex);
-        Assert.AreEqual(0.2, options.Padding);
+        Assert.AreEqual(72, options.Padding);
     }
 
     [TestMethod]

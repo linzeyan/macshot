@@ -68,9 +68,9 @@ public sealed class BeautifyRendererTests
             200,
             100,
             Solid(200, 100, 255, 255, 255),
-            new BeautifyOptions(Padding: 0.1));
+            new BeautifyOptions(Padding: 10));
 
-        // The shorter side is 100, so a tenth of it is ten pixels on each edge.
+        // Ten points on each edge.
         Assert.AreEqual(220, width);
         Assert.AreEqual(120, height);
     }
@@ -82,7 +82,7 @@ public sealed class BeautifyRendererTests
             80,
             80,
             Solid(80, 80, 10, 20, 30),
-            new BeautifyOptions(Padding: 0.125, CornerRadius: 0, ShadowRadius: 0));
+            new BeautifyOptions(Padding: 10, CornerRadius: 0, ShadowRadius: 0));
 
         // Ten pixels of padding, so the capture's own top-left pixel lands at (10, 10)
         // and nothing here resamples it.
@@ -97,7 +97,7 @@ public sealed class BeautifyRendererTests
             80,
             80,
             Solid(80, 80, 255, 255, 255),
-            new BeautifyOptions(StyleIndex: 0, Padding: 0.125, ShadowRadius: 0));
+            new BeautifyOptions(StyleIndex: 0, Padding: 10, ShadowRadius: 0));
 
         // The very corner of the output is background, never capture.
         Assert.AreNotEqual((255, 255, 255), At(pixels, width, 0, 0));
@@ -106,12 +106,12 @@ public sealed class BeautifyRendererTests
     [TestMethod]
     public void Render_RoundsTheCornersOff()
     {
-        var options = new BeautifyOptions(Padding: 0.125, CornerRadius: 0.25, ShadowRadius: 0);
+        var options = new BeautifyOptions(Padding: 10, CornerRadius: 20, ShadowRadius: 0);
 
         var (width, _, pixels) = BeautifyRenderer.Render(80, 80, Solid(80, 80, 255, 255, 255), options);
 
-        // The capture's own corner sits at (10, 10). With a radius of a quarter of the
-        // shorter side that corner is outside the rounded card, so it is background.
+        // The capture's own corner sits at (10, 10). With a twenty-point radius that
+        // corner is outside the rounded card, so it is background.
         Assert.AreNotEqual((255, 255, 255), At(pixels, width, 10, 10));
 
         // The middle of the top edge is still inside it.
@@ -121,8 +121,8 @@ public sealed class BeautifyRendererTests
     [TestMethod]
     public void Render_CastsAShadowBelowTheCard()
     {
-        var lit = new BeautifyOptions(Padding: 0.2, CornerRadius: 0, ShadowRadius: 0, ShadowOpacity: 0);
-        var shaded = lit with { ShadowRadius = 0.1, ShadowOpacity = 1 };
+        var lit = new BeautifyOptions(Padding: 16, CornerRadius: 0, ShadowRadius: 0, ShadowOpacity: 0);
+        var shaded = lit with { ShadowRadius = 8, ShadowOpacity = 1 };
 
         var (width, height, withoutShadow) = BeautifyRenderer.Render(80, 80, Solid(80, 80, 255, 255, 255), lit);
         var (_, _, withShadow) = BeautifyRenderer.Render(80, 80, Solid(80, 80, 255, 255, 255), shaded);
@@ -145,14 +145,14 @@ public sealed class BeautifyRendererTests
     public void Render_DeepensTheShadowWhereTheCardMeetsTheBackground()
     {
         const double opacity = 0.5;
-        var lit = new BeautifyOptions(Padding: 0.25, CornerRadius: 0, ShadowRadius: 0, ShadowOpacity: 0);
-        var shaded = lit with { ShadowRadius = 0.1, ShadowOpacity = opacity };
+        var lit = new BeautifyOptions(Padding: 20, CornerRadius: 0, ShadowRadius: 0, ShadowOpacity: 0);
+        var shaded = lit with { ShadowRadius = 8, ShadowOpacity = opacity };
 
         var (width, _, withoutShadow) = BeautifyRenderer.Render(80, 80, Solid(80, 80, 255, 255, 255), lit);
         var (_, _, withShadow) = BeautifyRenderer.Render(80, 80, Solid(80, 80, 255, 255, 255), shaded);
 
-        // The padding is a quarter of 80, so the card runs to row 99 and row 100 is the
-        // first background row under its bottom edge.
+        // Twenty points of padding, so the card runs to row 99 and row 100 is the first
+        // background row under its bottom edge.
         var clear = At(withoutShadow, width, width / 2, 100);
         var under = At(withShadow, width, width / 2, 100);
 
@@ -201,15 +201,15 @@ public sealed class BeautifyRendererTests
     {
         var normalized = new BeautifyOptions(
             StyleIndex: 9999,
-            Padding: 4,
+            Padding: 4000,
             CornerRadius: -1,
-            ShadowRadius: 8,
+            ShadowRadius: 800,
             ShadowOpacity: 3).Normalized();
 
         Assert.AreEqual(BeautifyRenderer.Styles.Count - 1, normalized.StyleIndex);
-        Assert.AreEqual(0.5, normalized.Padding);
+        Assert.AreEqual(BeautifyOptions.MaximumPadding, normalized.Padding);
         Assert.AreEqual(0, normalized.CornerRadius);
-        Assert.AreEqual(0.25, normalized.ShadowRadius);
+        Assert.AreEqual(BeautifyOptions.MaximumShadowRadius, normalized.ShadowRadius);
         Assert.AreEqual(1, normalized.ShadowOpacity);
     }
 
@@ -301,24 +301,56 @@ public sealed class BeautifyRendererTests
         Assert.AreEqual(255, style.Sample(0.5).Red);
     }
 
+    /// <summary>
+    /// The padding is a width, not a proportion.
+    /// </summary>
+    /// <remarks>
+    /// This is the rule the port originally had backwards: padding was a fraction of the
+    /// shorter side, so the frame grew with the picture and the same slider position gave
+    /// a hairline round a screenshot of a dialog and a hand's breadth round one of a whole
+    /// display. macshot's is points (<c>OverlayView.swift:443</c>, and a slider from 16 to
+    /// 96), and a port whose numbers mean something different from the app it is a port of
+    /// disagrees with it at every setting rather than at none.
+    /// </remarks>
     [TestMethod]
-    public void PaddingFor_IsTheFractionOfTheShorterSideInWholePixels()
+    public void PaddingFor_IsAWidthInPoints_NotAShareOfTheCapture()
     {
-        Assert.AreEqual(10, BeautifyRenderer.PaddingFor(200, 100, new BeautifyOptions(Padding: 0.1)));
-        Assert.AreEqual(10, BeautifyRenderer.PaddingFor(100, 200, new BeautifyOptions(Padding: 0.1)));
+        var options = new BeautifyOptions(Padding: 48);
+
+        Assert.AreEqual(48, BeautifyRenderer.PaddingFor(options));
 
         // Rounded rather than truncated, which is the difference between a frame that
         // matches the file and one a pixel short of it.
-        Assert.AreEqual(4, BeautifyRenderer.PaddingFor(100, 100, new BeautifyOptions(Padding: 0.035)));
+        Assert.AreEqual(33, BeautifyRenderer.PaddingFor(new BeautifyOptions(Padding: 32.6)));
+    }
+
+    /// <summary>
+    /// A frame asked for on a big capture is the same frame on a small one.
+    /// </summary>
+    /// <remarks>
+    /// The consequence of the rule above, stated where it is visible: two captures framed
+    /// at one setting have to carry the same border, or "48" on the slider is not a width
+    /// anybody can learn.
+    /// </remarks>
+    [TestMethod]
+    public void FrameAround_AddsTheSameBorderWhateverTheCaptureIs()
+    {
+        var options = new BeautifyOptions(Padding: 48);
+
+        var small = BeautifyRenderer.FrameAround(new CaptureRegion(0, 0, 100, 80), options);
+        var large = BeautifyRenderer.FrameAround(new CaptureRegion(0, 0, 3000, 2000), options);
+
+        Assert.AreEqual(100 + 96, small.Width);
+        Assert.AreEqual(3000 + 96, large.Width);
     }
 
     [TestMethod]
     public void FrameAround_GrowsTheSelectionOutwardsAndLeavesItWhereItWas()
     {
         var selection = new CaptureRegion(300, 200, 200, 100);
-        var frame = BeautifyRenderer.FrameAround(selection, new BeautifyOptions(Padding: 0.1));
+        var frame = BeautifyRenderer.FrameAround(selection, new BeautifyOptions(Padding: 10));
 
-        // The shorter side is 100, so ten pixels on every edge.
+        // Ten points on every edge.
         Assert.AreEqual(new CaptureRegion(290, 190, 220, 120), frame);
 
         // The point of the whole design: the capture has not moved, so everything that
@@ -334,7 +366,7 @@ public sealed class BeautifyRendererTests
         // The preview is placed with FrameAround and the file is made by Render. If the
         // two ever disagree the preview becomes a promise the file breaks, so they are
         // checked against each other rather than each against a number.
-        foreach (var padding in new[] { 0.0, 0.035, 0.08, 0.2, 0.5 })
+        foreach (var padding in new[] { 0.0, 5, 16, 48, BeautifyOptions.MaximumPadding })
         {
             var options = new BeautifyOptions(Padding: padding);
             var (width, height, _) = BeautifyRenderer.Render(200, 130, Solid(200, 130, 0, 0, 0), options);
@@ -354,7 +386,7 @@ public sealed class BeautifyRendererTests
     [TestMethod]
     public void Backdrop_IsTheSameSizeAsTheExport()
     {
-        var options = new BeautifyOptions(Padding: 0.125);
+        var options = new BeautifyOptions(Padding: 10);
 
         var (framedWidth, framedHeight, _) = BeautifyRenderer.Render(80, 80, Solid(80, 80, 0, 0, 0), options);
         var (previewWidth, previewHeight, _) = BeautifyRenderer.Backdrop(80, 80, options);
@@ -369,7 +401,7 @@ public sealed class BeautifyRendererTests
         var (width, height, pixels) = BeautifyRenderer.Backdrop(
             80,
             80,
-            new BeautifyOptions(Padding: 0.125, CornerRadius: 0.25, ShadowRadius: 0));
+            new BeautifyOptions(Padding: 10, CornerRadius: 20, ShadowRadius: 0));
 
         // The middle of the card is where the capture already is, so the frame gives all
         // of it away.
@@ -390,7 +422,7 @@ public sealed class BeautifyRendererTests
         // The one that matters: what the overlay shows is this backdrop composited over
         // the capture already on screen, and what the user gets is Render. If those two
         // are not the same picture, the preview is lying about the file.
-        var options = new BeautifyOptions(StyleIndex: 3, Padding: 0.15, CornerRadius: 0.2, ShadowRadius: 0.08);
+        var options = new BeautifyOptions(StyleIndex: 3, Padding: 6, CornerRadius: 8, ShadowRadius: 3.2);
         var capture = Solid(60, 40, 200, 120, 40);
 
         var (_, _, framed) = BeautifyRenderer.Render(60, 40, capture, options);
@@ -417,8 +449,8 @@ public sealed class BeautifyRendererTests
     [TestMethod]
     public void Backdrop_PaintsTheStyleThatWasAskedFor()
     {
-        var first = BeautifyRenderer.Backdrop(40, 40, new BeautifyOptions(StyleIndex: 0, Padding: 0.25));
-        var second = BeautifyRenderer.Backdrop(40, 40, new BeautifyOptions(StyleIndex: 1, Padding: 0.25));
+        var first = BeautifyRenderer.Backdrop(40, 40, new BeautifyOptions(StyleIndex: 0, Padding: 10));
+        var second = BeautifyRenderer.Backdrop(40, 40, new BeautifyOptions(StyleIndex: 1, Padding: 10));
 
         CollectionAssert.AreNotEqual(
             first.Pixels,
@@ -429,18 +461,18 @@ public sealed class BeautifyRendererTests
     [TestMethod]
     public void Backdrop_FollowsThePaddingCornerAndShadowItIsGiven()
     {
-        var baseline = new BeautifyOptions(Padding: 0.2, CornerRadius: 0.1, ShadowRadius: 0.05);
+        var baseline = new BeautifyOptions(Padding: 8, CornerRadius: 4, ShadowRadius: 2);
         var (_, _, plain) = BeautifyRenderer.Backdrop(40, 40, baseline);
 
         // Each of the three is a setting the user can change, and each has to reach the
         // preview rather than only the file.
         CollectionAssert.AreNotEqual(
             plain,
-            BeautifyRenderer.Backdrop(40, 40, baseline with { CornerRadius = 0.4 }).Pixels);
+            BeautifyRenderer.Backdrop(40, 40, baseline with { CornerRadius = 16 }).Pixels);
 
         CollectionAssert.AreNotEqual(
             plain,
-            BeautifyRenderer.Backdrop(40, 40, baseline with { ShadowRadius = 0.2 }).Pixels);
+            BeautifyRenderer.Backdrop(40, 40, baseline with { ShadowRadius = 8 }).Pixels);
 
         // Padding changes the size, which moves the frame rather than repainting it.
         Assert.AreNotEqual(

@@ -71,6 +71,12 @@ public sealed partial class AnnotationToolbarView : UserControl
 
     private const double MaxStroke = 32;
 
+    /// <summary>The frame row's sliders — macshot's 60 (<c>ToolOptionsRowView.swift:1374</c>).</summary>
+    private const double FrameSliderWidth = 60;
+
+    /// <summary>And its background swatch — <c>:1318</c>.</summary>
+    private const int FrameSwatchExtent = 22;
+
     private readonly Canvas _surface = new();
     private readonly ToolbarStrip _tools = new(Orientation.Horizontal);
     private readonly ToolbarStrip _actions = new(Orientation.Vertical);
@@ -418,11 +424,66 @@ public sealed partial class AnnotationToolbarView : UserControl
     private readonly EmojiPickerView _stampChoices = new();
 
     /// <summary>
+    /// The frame's own three sliders — macshot's <c>addBeautifySlider</c>
+    /// (<c>ToolOptionsRowView.swift:1362-1380</c>), 60 wide with the name in front and no
+    /// readout after. No number beside them because the frame is the readout: unlike a
+    /// stroke width, every one of these three is visible in full the moment it moves.
+    /// </summary>
+    private readonly TextBlock _framePaddingLabel = OptionLabel(L("Padding"));
+
+    private readonly Slider _framePadding = OptionSlider(
+        FrameSliderWidth, BeautifyOptions.MinimumPadding, BeautifyOptions.MaximumPadding);
+
+    private readonly TextBlock _frameRadiusLabel = OptionLabel(L("Radius"));
+
+    private readonly Slider _frameRadius = OptionSlider(
+        FrameSliderWidth, 0, BeautifyOptions.MaximumCornerRadius);
+
+    private readonly TextBlock _frameShadowLabel = OptionLabel(L("Shadow"));
+
+    private readonly Slider _frameShadow = OptionSlider(
+        FrameSliderWidth, 0, BeautifyOptions.MaximumShadowRadius);
+
+    /// <summary>
+    /// The background in use, and the way to the other forty-seven. macshot draws the
+    /// swatch and the chevron as two borderless buttons that do the same thing
+    /// (<c>ToolOptionsRowView.swift:1317-1343</c>); one button holding both is the same
+    /// picture, one press target, and no way for half of it to stop working.
+    /// </summary>
+    private readonly Border _frameSwatch = new()
+    {
+        Width = FrameSwatchExtent,
+        Height = FrameSwatchExtent,
+        CornerRadius = new CornerRadius(4),
+    };
+
+    private readonly Button _frameStyle = new()
+    {
+        MinWidth = 0,
+        MinHeight = 0,
+        Padding = new Thickness(3, 0, 3, 0),
+        VerticalAlignment = VerticalAlignment.Center,
+    };
+
+    /// <summary>
+    /// Whether there is a frame at all. macshot's is the only way to take one off — its
+    /// Beautify button arms the frame and opens this row but never disarms it
+    /// (<c>OverlayView.swift:8031-8044</c>), so the switch has to be here.
+    /// </summary>
+    private readonly CheckBox _frameOn = OptionCheck(L("On"));
+
+    /// <summary>
     /// The hairlines between groups of controls, each paired with the group it introduces
     /// so it can go when that group does. macshot's separator — 1 wide, 6 clear either
     /// side, at the icon colour's tenth — <c>ToolOptionsRowView.swift:288–293</c>.
     /// </summary>
     private readonly List<(Border Rule, FrameworkElement[] Group)> _optionGroups = [];
+
+    /// <summary>
+    /// Everything belonging to the frame's row, so both halves of
+    /// <see cref="ShowOptionsFor"/> can put one set up by putting the other away.
+    /// </summary>
+    private readonly List<FrameworkElement> _frameControls = [];
 
     private AnnotationEditor? _editor;
     private SettingsStore? _settings;
@@ -462,6 +523,19 @@ public sealed partial class AnnotationToolbarView : UserControl
     private bool _recordingSetup;
 
     private bool _beautified;
+
+    /// <summary>
+    /// Whether the row is showing the frame's settings instead of the tool's. macshot's
+    /// <c>showBeautifyInOptionsRow</c>: raised by the Beautify button, dropped by reaching
+    /// for any tool (<c>OverlayView.swift:7891</c>).
+    /// </summary>
+    private bool _frameOptions;
+
+    /// <summary>
+    /// Set while the row's controls are being filled from the settings, so writing a
+    /// slider's stored value into it is not read back as the user having moved it.
+    /// </summary>
+    private bool _loadingFrame;
 
     private bool _inverted;
 
@@ -531,6 +605,13 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// host can arm the frame and say which one it now is.
     /// </summary>
     public event EventHandler<int>? FrameStyleChosen;
+
+    /// <summary>
+    /// Raised when the frame's options row has been used. The settings are already
+    /// written when it fires — including whether there is to be a frame at all — so the
+    /// host repaints from them rather than being told what changed.
+    /// </summary>
+    public event EventHandler? FrameOptionsChanged;
 
     /// <summary>
     /// True in the editor window, which has no region to cancel or move and places its
@@ -1023,9 +1104,37 @@ public sealed partial class AnnotationToolbarView : UserControl
             return;
 
         default:
-            CommandInvoked?.Invoke(this, item.Command);
+            InvokeCommand(item.Command);
             return;
         }
+    }
+
+    /// <summary>
+    /// Hands a command to the host, having first done anything the toolbar itself owes it.
+    /// </summary>
+    /// <remarks>
+    /// Beautify is the one that owes anything: it opens the frame's settings on the options
+    /// row rather than toggling the frame, because macshot's arms the frame on the first
+    /// press of a session and never takes it off again (<c>OverlayView.swift:8031-8044</c>),
+    /// leaving that to the On switch on the row it opens. The editor has no such row —
+    /// there the frame is burned into the pixels the moment it is asked for — so there the
+    /// press goes straight out.
+    ///
+    /// Here rather than in the button's own branch because the same command arrives from
+    /// the keyboard as well, and a shortcut that armed the frame without showing its
+    /// settings would be a different button wearing the same name.
+    /// </remarks>
+    private void InvokeCommand(ToolbarCommand command)
+    {
+        if (command == ToolbarCommand.Beautify && !EditorMode)
+        {
+            _frameOptions = true;
+            CommandInvoked?.Invoke(this, command);
+            RefreshStrips();
+            return;
+        }
+
+        CommandInvoked?.Invoke(this, command);
     }
 
     /// <summary>
@@ -1238,11 +1347,11 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// The backgrounds, offered where the button that uses them is.
     /// </summary>
     /// <remarks>
-    /// macshot puts the picker on the options row that appears while the frame is armed.
-    /// The port has no options row for an action button, so it goes behind the right-click
-    /// — the same place Save keeps "Save as...", and the one gesture on this strip that is
-    /// already spoken for by nothing else. Picking a background arms the frame as well as
-    /// choosing it: nobody opens this to change a setting they cannot see the effect of.
+    /// Reached two ways, as macshot's is: from the swatch on the frame's options row, which
+    /// is where it lives, and from a right-click on the Beautify button, which is the one
+    /// gesture on that strip already spoken for by nothing else. Picking a background arms
+    /// the frame as well as choosing it: nobody opens this to change a setting they cannot
+    /// see the effect of.
     /// </remarks>
     private void ShowFramePicker(FrameworkElement anchor)
     {
@@ -1264,6 +1373,10 @@ public sealed partial class AnnotationToolbarView : UserControl
             _frames.Picked -= Chosen;
             flyout.Hide();
             Remember(current => current with { BeautifyStyleIndex = index });
+
+            // The swatch on the row is how you know which of the forty-eight is on, so it
+            // is repainted here rather than waiting for the row to be rebuilt.
+            SyncFrameOptions();
             FrameStyleChosen?.Invoke(this, index);
         }
 
@@ -1316,7 +1429,7 @@ public sealed partial class AnnotationToolbarView : UserControl
             return true;
         }
 
-        CommandInvoked?.Invoke(this, shortcut.Command);
+        InvokeCommand(shortcut.Command);
         return true;
     }
 
@@ -1390,6 +1503,11 @@ public sealed partial class AnnotationToolbarView : UserControl
         {
             return;
         }
+
+        // Reaching for a tool puts the tool's own controls back, as it does on the Mac
+        // (OverlayView.swift:7891). The frame stays exactly as it was — this hides its
+        // settings, it does not undo them.
+        _frameOptions = false;
 
         if (tool == AnnotationTool.ColorSampler)
         {
@@ -1482,6 +1600,30 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// </remarks>
     private void ShowOptionsFor(AnnotationTool tool)
     {
+        // The frame's controls stand in for the tool's rather than joining them, which is
+        // macshot's own arrangement — its row returns as soon as it has drawn them
+        // (ToolOptionsRowView.swift:113-119). They are settings for the picture as a whole,
+        // and the tool in hand has nothing to say about any of them.
+        if (_frameOptions)
+        {
+            foreach (var (_, group) in _optionGroups)
+            {
+                foreach (var control in group)
+                {
+                    control.Visibility = Show(_frameControls.Contains(control));
+                }
+            }
+
+            SyncFrameOptions();
+            ShowGroupRules();
+            return;
+        }
+
+        foreach (var control in _frameControls)
+        {
+            control.Visibility = Visibility.Collapsed;
+        }
+
         var sizes = Show(AnnotationToolOptions.UsesSize(tool));
         _sizeLabel.Visibility = sizes;
         _size.Visibility = sizes;
@@ -1573,8 +1715,20 @@ public sealed partial class AnnotationToolbarView : UserControl
         _textOutline.Visibility = typesetting;
         _textGlyphStroke.Visibility = typesetting;
 
-        // A group's hairline follows the group, and the first one showing loses its rule
-        // so the row never opens with a line hanging off its left edge.
+        ShowGroupRules();
+    }
+
+    /// <summary>
+    /// Draws the hairline in front of every group that has something in it, and hides the
+    /// row when nothing does.
+    /// </summary>
+    /// <remarks>
+    /// A group's hairline follows the group, and the first one showing loses its rule so
+    /// the row never opens with a line hanging off its left edge. The row itself goes when
+    /// it would be empty, rather than sitting under the tools as a bar of nothing.
+    /// </remarks>
+    private void ShowGroupRules()
+    {
         var seen = false;
         foreach (var (rule, group) in _optionGroups)
         {
@@ -1583,8 +1737,6 @@ public sealed partial class AnnotationToolbarView : UserControl
             seen |= showing;
         }
 
-        // The row itself goes when it would be empty, rather than sitting under the
-        // tools as a bar of nothing.
         _optionsRow.Visibility = Show(seen);
     }
 
@@ -2241,6 +2393,141 @@ public sealed partial class AnnotationToolbarView : UserControl
 
         AddGroup(_quickStampRun);
         AddGroup(_stamp, _stampImage);
+
+        BuildFrameOptions();
+    }
+
+    /// <summary>
+    /// The frame's own row, which stands in for the tool's while a frame is being set up.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// macshot's order (<c>ToolOptionsRowView.swift:1281-1361</c>): the three measurements,
+    /// then the background, then the switch. Its groups are added last here because they
+    /// never appear beside the tool's — <see cref="ShowOptionsFor"/> shows one set or the
+    /// other — so where they sit among the rest cannot be seen.
+    /// </para>
+    /// <para>
+    /// Two of macshot's controls are missing, and both because the port has nothing behind
+    /// them: the W/R segments choose between a plain card and one drawn as a window with a
+    /// title bar, which this renderer does not draw, and the Blur slider applies only to a
+    /// custom image background, which it cannot load.
+    /// </para>
+    /// </remarks>
+    private void BuildFrameOptions()
+    {
+        ToolTipService.SetToolTip(_framePadding, AppFonts.Tip("How much background shows around the capture"));
+        ToolTipService.SetToolTip(_frameRadius, AppFonts.Tip("How far the capture's corners are rounded off"));
+        ToolTipService.SetToolTip(_frameShadow, AppFonts.Tip("How far the capture's shadow spreads"));
+        ToolTipService.SetToolTip(_frameStyle, AppFonts.Tip(L("Gradient Style")));
+
+        _framePadding.ValueChanged += (_, _) => FrameOptionMoved();
+        _frameRadius.ValueChanged += (_, _) => FrameOptionMoved();
+        _frameShadow.ValueChanged += (_, _) => FrameOptionMoved();
+
+        // The chevron beside the swatch, at macshot's 9 points and its six-tenths.
+        _frameStyle.Content = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 2,
+            Children =
+            {
+                _frameSwatch,
+                new FontIcon
+                {
+                    Glyph = "\uE70D",
+                    FontSize = 9,
+                    FontFamily = new FontFamily("Segoe Fluent Icons"),
+                    Foreground = ToolbarPalette.IconBrush(0.6),
+                    VerticalAlignment = VerticalAlignment.Center,
+                },
+            },
+        };
+
+        _frameStyle.Click += (_, _) => ShowFramePicker(_frameStyle);
+
+        _frameOn.Checked += (_, _) => FrameArmed(true);
+        _frameOn.Unchecked += (_, _) => FrameArmed(false);
+
+        AddGroup(_framePaddingLabel, _framePadding, _frameRadiusLabel, _frameRadius, _frameShadowLabel, _frameShadow);
+        AddGroup(_frameStyle);
+        AddGroup(_frameOn);
+
+        _frameControls.AddRange(
+        [
+            _framePaddingLabel,
+            _framePadding,
+            _frameRadiusLabel,
+            _frameRadius,
+            _frameShadowLabel,
+            _frameShadow,
+            _frameStyle,
+            _frameOn,
+        ]);
+    }
+
+    /// <summary>Writes all three back and asks the host to repaint what they describe.</summary>
+    /// <remarks>
+    /// All three on every move rather than the one that moved: a drag raises this on every
+    /// frame, and three assignments cost less than working out which slider sent it.
+    /// Rounded, because a frame is drawn in whole pixels and the file stores what is drawn.
+    /// </remarks>
+    private void FrameOptionMoved()
+    {
+        if (_loadingFrame)
+        {
+            return;
+        }
+
+        Remember(current => current with
+        {
+            BeautifyPadding = Math.Round(_framePadding.Value),
+            BeautifyCornerRadius = Math.Round(_frameRadius.Value),
+            BeautifyShadowRadius = Math.Round(_frameShadow.Value),
+        });
+
+        FrameOptionsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Turns the frame on or off, which is what the row's last control is for.</summary>
+    private void FrameArmed(bool armed)
+    {
+        if (_loadingFrame)
+        {
+            return;
+        }
+
+        Remember(current => current with { BeautifyEnabled = armed });
+        FrameOptionsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Fills the frame's row from the settings, and paints the swatch as the background
+    /// currently in use.
+    /// </summary>
+    private void SyncFrameOptions()
+    {
+        if (_settings is not { } settings)
+        {
+            return;
+        }
+
+        var options = settings.Current.ToBeautifyOptions();
+
+        _loadingFrame = true;
+        try
+        {
+            _framePadding.Value = options.Padding;
+            _frameRadius.Value = options.CornerRadius;
+            _frameShadow.Value = options.ShadowRadius;
+            _frameOn.IsChecked = options.Enabled;
+        }
+        finally
+        {
+            _loadingFrame = false;
+        }
+
+        _frameSwatch.Background = BeautifySwatchGrid.Paint(options.StyleIndex, FrameSwatchExtent);
     }
 
     /// <summary>

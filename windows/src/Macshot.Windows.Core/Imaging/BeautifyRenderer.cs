@@ -95,13 +95,40 @@ public sealed record BeautifyStyle(string Name, double Angle, params AnnotationC
 /// around a 4K one, and the point of the feature is that the result looks the same
 /// whatever was captured.
 /// </remarks>
+/// <param name="Padding">How far the frame reaches past the capture, in points.</param>
+/// <param name="CornerRadius">How far the capture's corners are rounded, in points.</param>
+/// <param name="ShadowRadius">How far the shadow spreads, in points.</param>
+/// <remarks>
+/// The three sizes are points and not fractions of the capture, which is macshot's choice
+/// and worth stating because the port had it the other way round. A fraction makes the
+/// frame grow with the picture, so the same slider position gives a hairline round a
+/// screenshot of a dialog and a hand's breadth round one of a display — and the two
+/// products then disagree at every setting rather than at none. The numbers here are
+/// macshot's own defaults (<c>OverlayView.swift:443-455</c>) and its slider ranges.
+/// </remarks>
 public sealed record BeautifyOptions(
     int StyleIndex = 0,
-    double Padding = 0.08,
-    double CornerRadius = 0.02,
-    double ShadowRadius = 0.03,
-    double ShadowOpacity = 0.35)
+    double Padding = 48,
+    double CornerRadius = 10,
+    double ShadowRadius = 20,
+    double ShadowOpacity = 0.35,
+    bool Enabled = false)
 {
+    /// <summary>
+    /// The narrowest frame the row can ask for — macshot's slider starts here
+    /// (<c>ToolOptionsRowView.swift:1301</c>). Not a clamp on this record, which draws any
+    /// width it is handed; it is the floor a stored setting is held to.
+    /// </summary>
+    public const double MinimumPadding = 16;
+
+    public const double MaximumPadding = 96;
+
+    /// <summary>The far end of the corner slider, in points.</summary>
+    public const double MaximumCornerRadius = 30;
+
+    /// <summary>The far end of the shadow slider, in points.</summary>
+    public const double MaximumShadowRadius = 100;
+
     public static BeautifyOptions Default { get; } = new();
 
     /// <summary>
@@ -115,9 +142,13 @@ public sealed record BeautifyOptions(
             StyleIndex = BeautifyRenderer.Styles.Count == 0
                 ? 0
                 : Math.Clamp(StyleIndex, 0, BeautifyRenderer.Styles.Count - 1),
-            Padding = Math.Clamp(Padding, 0, 0.5),
-            CornerRadius = Math.Clamp(CornerRadius, 0, 0.5),
-            ShadowRadius = Math.Clamp(ShadowRadius, 0, 0.25),
+            // The far ends the sliders offer, so a settings file cannot ask for a frame
+            // the row has no way to ask back down again. The near end is not enforced:
+            // macshot's slider starts at 16 but its stored value is unclamped, and no
+            // padding at all is a thing the renderer can draw and callers do ask for.
+            Padding = Math.Clamp(Padding, 0, MaximumPadding),
+            CornerRadius = Math.Clamp(CornerRadius, 0, MaximumCornerRadius),
+            ShadowRadius = Math.Clamp(ShadowRadius, 0, MaximumShadowRadius),
             ShadowOpacity = Math.Clamp(ShadowOpacity, 0, 1),
         };
     }
@@ -278,19 +309,13 @@ public static class BeautifyRenderer
     /// How wide the frame is around the capture, in the capture's own pixels.
     /// </summary>
     /// <remarks>
-    /// The one place the padding fraction becomes a whole number of pixels. Anything
-    /// that has to know where the frame lands asks here rather than rounding again,
-    /// because a preview that rounded the other way would be a frame one pixel out from
-    /// the one the file gets.
+    /// The one place the padding becomes a whole number of pixels. Anything that has to
+    /// know where the frame lands asks here rather than rounding again, because a preview
+    /// that rounded the other way would be a frame one pixel out from the one the file
+    /// gets. It does not depend on the capture's size: the padding is points.
     /// </remarks>
-    public static int PaddingFor(int width, int height, BeautifyOptions? options = null)
-    {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
-
-        var resolved = (options ?? BeautifyOptions.Default).Normalized();
-        return (int)Math.Round(Math.Min(width, height) * resolved.Padding);
-    }
+    public static int PaddingFor(BeautifyOptions? options = null) =>
+        (int)Math.Round((options ?? BeautifyOptions.Default).Normalized().Padding);
 
     /// <summary>
     /// Where the frame lands around a region of the capture.
@@ -314,7 +339,7 @@ public static class BeautifyRenderer
             return selection;
         }
 
-        var padding = PaddingFor(width, height, options);
+        var padding = PaddingFor(options);
 
         return new CaptureRegion(
             selection.X - padding,
@@ -398,10 +423,9 @@ public static class BeautifyRenderer
             ? new BeautifyStyle("None", 0, new AnnotationColor(0, 0, 0))
             : Styles[resolved.StyleIndex];
 
-        var shortest = Math.Min(width, height);
-        var padding = PaddingFor(width, height, resolved);
-        var radius = shortest * resolved.CornerRadius;
-        var shadow = shortest * resolved.ShadowRadius;
+        var padding = PaddingFor(resolved);
+        var radius = resolved.CornerRadius;
+        var shadow = resolved.ShadowRadius;
 
         var outputWidth = width + (padding * 2);
         var outputHeight = height + (padding * 2);

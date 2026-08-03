@@ -1118,6 +1118,13 @@ public sealed partial class CaptureOverlayWindow : Window
             AnnotationToolbar.RecordingSetup = Intent is CaptureIntent.Record;
             AnnotationToolbar.ShowToolbar(true);
             _sizeBox.Visibility = Visibility.Visible;
+
+            // Before the chrome is placed, because a frame armed from the last capture
+            // moves the toolbar out to its edge and placing it twice would show the jump.
+            _beautify = _settings.Current.BeautifyEnabled;
+            AnnotationToolbar.Beautified = _beautify;
+            ShowFrame();
+
             RepositionChrome(region);
             Hint(string.Empty);
         }
@@ -1402,7 +1409,13 @@ public sealed partial class CaptureOverlayWindow : Window
         // is where the region appears on screen, not where it is on the capture. Around
         // the frame rather than the region once one is armed — the strips sit against the
         // edge of what is being made, and with a frame on, that edge is the frame's.
-        var selection = _viewport.ToView(ToLayout(ChromeAnchor(region)));
+        var anchor = _viewport.ToView(ToLayout(ChromeAnchor(region)));
+
+        // The box, though, stays on the capture — macshot hangs it off selectionRect and
+        // never off the expanded anchor (OverlayView.swift:2321 against 5077–5096). With a
+        // frame armed that puts it inside the gradient, tight against the pixels whose
+        // size it is reporting, rather than adrift out beyond the frame's edge.
+        var capture = _viewport.ToView(ToLayout(region));
         var screen = LayoutBounds;
 
         // The region's own size, not the frame's: this is the number the user is
@@ -1412,9 +1425,9 @@ public sealed partial class CaptureOverlayWindow : Window
         // The box first, so the toolbar knows what to keep clear of, and the box again
         // once the strips have settled. Each is placed around the other, and a single pass
         // would leave whichever went first sitting under the other.
-        PlaceSizeBox(selection, screen);
-        AnnotationToolbar.Reposition(selection, screen, _sizeBoxBounds);
-        PlaceSizeBox(selection, screen);
+        PlaceSizeBox(capture, screen);
+        AnnotationToolbar.Reposition(anchor, screen, _sizeBoxBounds);
+        PlaceSizeBox(capture, screen);
     }
 
     /// <summary>Where the size box last landed, in layout units.</summary>
@@ -1805,6 +1818,7 @@ public sealed partial class CaptureOverlayWindow : Window
         };
         AnnotationToolbar.CommandInvoked += (_, command) => RunToolbarCommand(command);
         AnnotationToolbar.FrameStyleChosen += (_, index) => FrameStyleChosen(index);
+        AnnotationToolbar.FrameOptionsChanged += (_, _) => FrameOptionsChanged();
     }
 
     /// <summary>
@@ -2099,7 +2113,7 @@ public sealed partial class CaptureOverlayWindow : Window
                 return;
 
             case ToolbarCommand.Beautify:
-                ToggleBeautify();
+                ArmBeautify();
                 return;
 
             case ToolbarCommand.RemoveBackground:
@@ -2236,21 +2250,65 @@ public sealed partial class CaptureOverlayWindow : Window
     /// macshot's own button is: the frame goes on at the end, over the marks, and until
     /// then it is shown around the region rather than baked into it.
     /// </remarks>
-    private void ToggleBeautify()
+    private void ArmBeautify()
+    {
+        if (!IsAnnotating || _beautify)
+        {
+            return;
+        }
+
+        // Written down rather than held for this capture alone: the row's On switch reads
+        // it back, and a frame that vanished between two captures while the switch still
+        // said On would be the row lying about what the file will look like.
+        _settings.Save(_settings.Current with { BeautifyEnabled = true });
+        ShowFrameFromSettings();
+    }
+
+    /// <summary>
+    /// Repaints the frame from the settings, arming or disarming it to match.
+    /// </summary>
+    /// <remarks>
+    /// The one way in for everything the frame's options row does. It reads rather than is
+    /// told, because the row writes its answer to the settings before it says anything —
+    /// the padding, the corner, the shadow, the background and the switch all arrive the
+    /// same way, and the export reads them from the same place.
+    /// </remarks>
+    private void FrameOptionsChanged()
     {
         if (!IsAnnotating)
         {
             return;
         }
 
-        _beautify = !_beautify;
-        AnnotationToolbar.Beautified = _beautify;
-        ShowFrame();
-        MoveChromeToFrame();
+        ShowFrameFromSettings();
+    }
 
-        Hint(_beautify
-            ? $"Framed in {BeautifyRenderer.Styles[_settings.Current.ToBeautifyOptions().StyleIndex].Name}"
-            : "Frame removed");
+    private void ShowFrameFromSettings()
+    {
+        var armed = _settings.Current.BeautifyEnabled;
+        var arriving = armed != _beautify;
+
+        _beautify = armed;
+        AnnotationToolbar.Beautified = armed;
+        ShowFrame();
+
+        if (arriving)
+        {
+            MoveChromeToFrame();
+
+            Hint(armed
+                ? L("Framed in {0}", BeautifyRenderer.Styles[_settings.Current.ToBeautifyOptions().StyleIndex].Name)
+                : "Frame removed");
+
+            return;
+        }
+
+        // A padding drag moves the strips without the frame arriving or leaving, and
+        // animating them from where they are to where they are is a flinch.
+        if (_selection is { } region)
+        {
+            RepositionChrome(region);
+        }
     }
 
     /// <summary>
@@ -2274,9 +2332,9 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </para>
     /// <para>
     /// Repainted whenever the picture in it would differ — the switch, a background
-    /// chosen from the picker, a region re-cropped. The three measurements are read from
-    /// the settings on each pass, so a file edited between captures arrives with the
-    /// next one; there is no control for them inside a capture to change under this.
+    /// chosen from the picker, a region re-cropped, a slider on the frame's options row.
+    /// The three measurements are read from the settings on each pass rather than held,
+    /// which is what lets that row change them without telling this anything.
     /// </para>
     /// </remarks>
     private void ShowFrame()
@@ -2408,21 +2466,13 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
 
-        var wasArmed = _beautify;
-        _beautify = true;
-        AnnotationToolbar.Beautified = true;
+        // Through the switch the row reads, not past it: picking a background while the
+        // row is open has to leave On ticked, and the picker is reachable from that row.
+        _settings.Save(_settings.Current with { BeautifyEnabled = true });
 
         // The picker writes the style down before this runs, so the repaint reads the
         // background that was just chosen rather than the one before it.
-        ShowFrame();
-
-        // Only when the frame is arriving. Picking a second background while one is
-        // already on moves the strips nowhere, and animating them from where they are to
-        // where they are is a flinch.
-        if (!wasArmed)
-        {
-            MoveChromeToFrame();
-        }
+        ShowFrameFromSettings();
 
         Hint(L("Framed in {0}", BeautifyRenderer.Styles[styleIndex].Name));
     }

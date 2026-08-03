@@ -1139,11 +1139,20 @@ public sealed record CaptureSettings
 
     public double BeautifyShadowRadius { get; init; } = BeautifyOptions.Default.ShadowRadius;
 
+    /// <summary>Whether a finished capture is framed at all.</summary>
+    /// <remarks>
+    /// The row's On switch, and off to begin with, as it is on the Mac. Beautifying is a
+    /// thing to ask for: a frame nobody asked for on every capture is a crop nobody wanted.
+    /// </remarks>
+    public bool BeautifyEnabled { get; init; } = BeautifyOptions.Default.Enabled;
+
     public BeautifyOptions ToBeautifyOptions() => new BeautifyOptions(
         BeautifyStyleIndex,
         BeautifyPadding,
         BeautifyCornerRadius,
-        BeautifyShadowRadius).Normalized();
+        BeautifyShadowRadius,
+        BeautifyOptions.Default.ShadowOpacity,
+        BeautifyEnabled).Normalized();
 
     /// <summary>
     /// Where the Upload button sends a capture. macshot's <c>uploadProvider</c>.
@@ -1551,9 +1560,22 @@ public sealed record CaptureSettings
             ToolbarAccentColor = Color(ToolbarAccentColor, ToolbarColors.DefaultAccent).ToHex(),
             ToolbarIconColor = Color(ToolbarIconColor, ToolbarColors.DefaultIcon).ToHex(),
             BeautifyStyleIndex = Math.Clamp(BeautifyStyleIndex, 0, Math.Max(0, BeautifyRenderer.Styles.Count - 1)),
-            BeautifyPadding = Clamp(BeautifyPadding, BeautifyOptions.Default.Padding, 0, 0.5),
-            BeautifyCornerRadius = Clamp(BeautifyCornerRadius, BeautifyOptions.Default.CornerRadius, 0, 0.5),
-            BeautifyShadowRadius = Clamp(BeautifyShadowRadius, BeautifyOptions.Default.ShadowRadius, 0, 0.25),
+            // The sliders' own ends, which are the frame's widths in points. They read as
+            // fractions of the capture until you notice that a padding of 0.5 is half a
+            // pixel, not half the picture — and a build that did store them as fractions
+            // leaves files saying 0.08, which rounds to a frame nought pixels wide. The
+            // padding takes the slider's floor rather than zero for that reason: it is the
+            // narrowest frame macshot itself can be asked for, so it is the narrowest one
+            // worth calling a frame.
+            BeautifyPadding = Clamp(
+                BeautifyPadding,
+                BeautifyOptions.Default.Padding,
+                BeautifyOptions.MinimumPadding,
+                BeautifyOptions.MaximumPadding),
+            BeautifyCornerRadius = Clamp(
+                BeautifyCornerRadius, BeautifyOptions.Default.CornerRadius, 0, BeautifyOptions.MaximumCornerRadius),
+            BeautifyShadowRadius = Clamp(
+                BeautifyShadowRadius, BeautifyOptions.Default.ShadowRadius, 0, BeautifyOptions.MaximumShadowRadius),
         };
     }
 

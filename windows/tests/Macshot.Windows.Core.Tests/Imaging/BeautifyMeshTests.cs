@@ -136,7 +136,7 @@ public sealed class BeautifyMeshTests
             8,
             8,
             new byte[8 * 8 * 4],
-            new BeautifyOptions(StyleIndex: 0, Padding: 0.5, ShadowRadius: 0));
+            new BeautifyOptions(StyleIndex: 0, Padding: 4, ShadowRadius: 0));
 
         // The first background pixel, taken from the mesh and from the linear fallback
         // the styles used to be drawn with. They disagree, which is the point of the
