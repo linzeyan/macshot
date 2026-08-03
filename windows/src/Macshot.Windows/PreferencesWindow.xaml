@@ -24,7 +24,7 @@
                  capitals set at their lowercase spacing close up into a block. -->
             <Style x:Key="SectionHeading" TargetType="TextBlock" BasedOn="{StaticResource MacshotTextStyle}">
                 <Setter Property="FontSize" Value="12" />
-                <Setter Property="FontWeight" Value="SemiBold" />
+                <Setter Property="FontWeight" Value="{StaticResource MacshotSemiBoldWeight}" />
                 <Setter Property="CharacterSpacing" Value="60" />
                 <Setter Property="Foreground" Value="{ThemeResource TextFillColorSecondaryBrush}" />
                 <!-- 4 here plus the section's own 6 is the 10 macOS puts after a heading. -->
@@ -342,7 +342,7 @@
                                             <TextBlock
                                                 Text="Supported URL Scheme Commands"
                                                 FontSize="13"
-                                                FontWeight="SemiBold" />
+                                                FontWeight="{StaticResource MacshotSemiBoldWeight}" />
                                             <!-- Not macshot's own sentence, which names
                                                  Raycast, Alfred and Shortcuts: three
                                                  launchers nobody reading this window has.
@@ -1131,7 +1131,7 @@
                             x:Name="AboutNameText"
                             HorizontalAlignment="Center"
                             FontSize="22"
-                            FontFamily="Segoe UI Variable Display, Segoe UI"
+                            FontFamily="Segoe UI Variable Display, Microsoft JhengHei UI, Segoe UI"
                             FontWeight="Bold" />
                         <TextBlock
                             x:Name="VersionText"

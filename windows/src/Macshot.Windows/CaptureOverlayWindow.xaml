@@ -125,7 +125,7 @@
                         x:Name="HintText"
                         Text="Click a window  ·  Drag for custom area  ·  F for full screen"
                         FontSize="13"
-                        FontWeight="Medium"
+                        FontWeight="{StaticResource MacshotMediumWeight}"
                         HorizontalAlignment="Center"
                         Foreground="White" />
 

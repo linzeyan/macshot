@@ -1,3 +1,4 @@
+using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
@@ -16,8 +17,9 @@ namespace Macshot.Windows.Services;
 /// every control and not every window.
 /// </para>
 /// <para>
-/// So both are named: Segoe UI Variable Text for the Latin, 微軟正黑體 behind it for
-/// everything Segoe cannot draw. A comma-separated <see cref="FontFamily"/> is resolved in
+/// So both are named: Segoe UI Variable Text for the Latin, 微軟正黑體 UI behind it for
+/// everything Segoe cannot draw — the UI cut rather than the plain one, which is the
+/// narrower of the two and the one Windows sets its own interface in. A comma-separated <see cref="FontFamily"/> is resolved in
 /// order per glyph, so a label reading "64px" beside one reading "大小" is set in the two
 /// faces at once without either being asked for by name at the call site.
 /// </para>
@@ -48,7 +50,7 @@ internal static class AppFonts
     /// where the variable family does not exist.
     /// </remarks>
     public static FontFamily Family { get; } =
-        new("Segoe UI Variable Text, Microsoft JhengHei, Segoe UI");
+        new("Segoe UI Variable Text, Microsoft JhengHei UI, Segoe UI");
 
     /// <summary>
     /// The tracking for the language in use, in thousandths of an em: a hair for Chinese
@@ -64,6 +66,35 @@ internal static class AppFonts
             : 0;
 
     /// <summary>
+    /// The weight the interface is set in: bold where it is Chinese, regular elsewhere.
+    /// </summary>
+    /// <remarks>
+    /// Asked for as "微軟正黑體 UI Bold", which is a weight inside that family rather than a
+    /// family of its own — DirectWrite will not resolve it from the name, so it is set here.
+    /// It goes on the whole interface and not on the Chinese alone, for the reason the
+    /// tracking does: WinUI has no way to ask for a weight per script, and a row reading
+    /// "大小 · 64px" with the two halves at different weights looks like a rendering fault
+    /// rather than like a choice. Which is why this is conditional at all — a Latin
+    /// interface stays regular rather than going bold for a decision that was about Chinese.
+    /// </remarks>
+    public static global::Windows.UI.Text.FontWeight Weight => Heavier(FontWeights.Normal);
+
+    /// <summary>
+    /// Bold where the interface is Chinese, and <paramref name="normally"/> everywhere else.
+    /// </summary>
+    /// <remarks>
+    /// For the labels that ask for a weight of their own — macshot sets its row labels
+    /// medium and its headings semibold — because a local value beats the style below and
+    /// those are exactly the labels the Chinese is on. Passing the old weight through keeps
+    /// a Latin interface as it was: this was a decision about how Chinese sets, not a
+    /// decision to make everything heavier.
+    /// </remarks>
+    public static global::Windows.UI.Text.FontWeight Heavier(global::Windows.UI.Text.FontWeight normally) =>
+        Localization.Language.StartsWith("zh", StringComparison.OrdinalIgnoreCase)
+            ? FontWeights.Bold
+            : normally;
+
+    /// <summary>
     /// The key a XAML-declared <see cref="TextBlock"/> style names to keep this face.
     /// </summary>
     /// <remarks>
@@ -75,6 +106,22 @@ internal static class AppFonts
     /// out to the application's dictionary.
     /// </remarks>
     public const string TextStyleKey = "MacshotTextStyle";
+
+    /// <summary>
+    /// The keys XAML names for the two weights macshot sets its own labels in.
+    /// </summary>
+    /// <remarks>
+    /// Markup cannot call <see cref="Heavier"/>, and a literal <c>FontWeight="Medium"</c> in
+    /// a page is a local value that beats everything below — which is why the hud, the
+    /// toasts, the thumbnail and the preferences headings all stayed at their own weight
+    /// while the rest of the interface changed. Resolved once at startup, so a page saying
+    /// <c>{StaticResource MacshotMediumWeight}</c> gets bold under a Chinese interface and
+    /// the medium it asked for under any other.
+    /// </remarks>
+    public const string MediumWeightKey = "MacshotMediumWeight";
+
+    /// <inheritdoc cref="MediumWeightKey"/>
+    public const string SemiBoldWeightKey = "MacshotSemiBoldWeight";
 
     /// <summary>
     /// Makes macshot's face the app's, for everything built after this returns.
@@ -108,6 +155,9 @@ internal static class AppFonts
         // A second instance rather than the one above: applying a style seals it, and a
         // sealed style is a fine thing to derive from but a confusing thing to share.
         resources[TextStyleKey] = TextStyle();
+
+        resources[MediumWeightKey] = Heavier(FontWeights.Medium);
+        resources[SemiBoldWeightKey] = Heavier(FontWeights.SemiBold);
     }
 
     private static Style TextStyle()
@@ -115,6 +165,7 @@ internal static class AppFonts
         var style = new Style(typeof(TextBlock));
         style.Setters.Add(new Setter(TextBlock.FontFamilyProperty, Family));
         style.Setters.Add(new Setter(TextBlock.CharacterSpacingProperty, Spacing));
+        style.Setters.Add(new Setter(TextBlock.FontWeightProperty, Weight));
         return style;
     }
 
@@ -138,5 +189,6 @@ internal static class AppFonts
 
         control.FontFamily = Family;
         control.CharacterSpacing = Spacing;
+        control.FontWeight = Weight;
     }
 }

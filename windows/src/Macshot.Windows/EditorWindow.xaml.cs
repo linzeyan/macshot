@@ -381,7 +381,7 @@ public sealed partial class EditorWindow : Window
         _sizeLabel = new TextBlock
         {
             FontSize = 11,
-            FontWeight = FontWeights.Medium,
+            FontWeight = AppFonts.Heavier(FontWeights.Medium),
             Opacity = 0.45,
             VerticalAlignment = VerticalAlignment.Center,
 
@@ -428,7 +428,7 @@ public sealed partial class EditorWindow : Window
         // percentage changes under every scroll and a proportional 8 is a different width
         // from a proportional 1.
         _zoomButton.FontSize = BarFontSize;
-        _zoomButton.FontWeight = FontWeights.Medium;
+        _zoomButton.FontWeight = AppFonts.Heavier(FontWeights.Medium);
         _zoomButton.Opacity = 0.45;
         Typography.SetNumeralAlignment(_zoomButton, FontNumeralAlignment.Tabular);
 

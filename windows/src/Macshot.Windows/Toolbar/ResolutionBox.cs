@@ -1,4 +1,5 @@
 using Macshot.Windows.Core.Capture;
+using Macshot.Windows.Services;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -219,7 +220,7 @@ internal sealed partial class ResolutionBox : UserControl
             MinHeight = FieldHeight,
             Padding = new Thickness(4, 0, 4, 0),
             FontSize = FieldFontSize,
-            FontWeight = FontWeights.Medium,
+            FontWeight = AppFonts.Heavier(FontWeights.Medium),
             TextAlignment = TextAlignment.Center,
             VerticalAlignment = VerticalAlignment.Center,
             VerticalContentAlignment = VerticalAlignment.Center,

@@ -75,7 +75,7 @@
                 <TextBlock
                     x:Name="QrHeading"
                     FontSize="12"
-                    FontWeight="SemiBold"
+                    FontWeight="{StaticResource MacshotSemiBoldWeight}"
                     Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
 
                 <!-- macshot caps this section at 168 so a picture full of codes cannot

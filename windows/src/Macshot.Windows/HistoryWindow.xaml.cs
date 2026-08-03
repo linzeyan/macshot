@@ -205,7 +205,7 @@ public sealed partial class HistoryWindow : Window
                 CornerRadius = new CornerRadius(HistoryPanelLayout.TabHeight / 2),
                 BorderThickness = new Thickness(0),
                 FontSize = 13,
-                FontWeight = Microsoft.UI.Text.FontWeights.Medium,
+                FontWeight = AppFonts.Heavier(Microsoft.UI.Text.FontWeights.Medium),
                 Tag = name,
             };
 
@@ -267,7 +267,7 @@ public sealed partial class HistoryWindow : Window
             {
                 Text = L("Click to copy · Drag to app"),
                 FontSize = 10,
-                FontWeight = Microsoft.UI.Text.FontWeights.SemiBold,
+                FontWeight = AppFonts.Heavier(Microsoft.UI.Text.FontWeights.SemiBold),
                 Foreground = HintInk,
                 TextAlignment = TextAlignment.Center,
                 TextWrapping = TextWrapping.Wrap,
@@ -281,7 +281,7 @@ public sealed partial class HistoryWindow : Window
         {
             Text = tile.Caption,
             FontSize = 11,
-            FontWeight = Microsoft.UI.Text.FontWeights.Medium,
+            FontWeight = AppFonts.Heavier(Microsoft.UI.Text.FontWeights.Medium),
             Foreground = LabelInk,
             TextAlignment = TextAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Center,

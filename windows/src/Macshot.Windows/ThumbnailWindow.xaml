@@ -101,7 +101,7 @@
                     <TextBlock
                         Text="Copy"
                         FontSize="13"
-                        FontWeight="Medium"
+                        FontWeight="{StaticResource MacshotMediumWeight}"
                         Foreground="#1F1F1F"
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center" />
@@ -111,7 +111,7 @@
                     <TextBlock
                         Text="Save"
                         FontSize="13"
-                        FontWeight="Medium"
+                        FontWeight="{StaticResource MacshotMediumWeight}"
                         Foreground="#1F1F1F"
                         HorizontalAlignment="Center"
                         VerticalAlignment="Center" />

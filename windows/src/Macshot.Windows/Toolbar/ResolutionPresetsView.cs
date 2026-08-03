@@ -1,4 +1,5 @@
 using Macshot.Windows.Core.Capture;
+using Macshot.Windows.Services;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -173,7 +174,7 @@ internal sealed partial class ResolutionPresetsView : UserControl
         Height = HeaderHeight,
         Padding = new Thickness(RowIndent, 0, 2, 0),
         FontSize = HeaderFontSize,
-        FontWeight = FontWeights.SemiBold,
+        FontWeight = AppFonts.Heavier(FontWeights.SemiBold),
         Foreground = ToolbarPalette.IconBrush(0.5),
     };
 

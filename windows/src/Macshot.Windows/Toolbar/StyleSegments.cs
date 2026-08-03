@@ -1,3 +1,4 @@
+using Macshot.Windows.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 
@@ -93,7 +94,7 @@ internal sealed class StyleSegments : UserControl
             {
                 Text = segment.Label ?? string.Empty,
                 FontSize = 10,
-                FontWeight = Microsoft.UI.Text.FontWeights.Medium,
+                FontWeight = AppFonts.Heavier(Microsoft.UI.Text.FontWeights.Medium),
                 Foreground = ToolbarPalette.IconBrush(),
                 HorizontalAlignment = HorizontalAlignment.Center,
                 VerticalAlignment = VerticalAlignment.Center,

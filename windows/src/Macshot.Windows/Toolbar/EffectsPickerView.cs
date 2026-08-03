@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices.WindowsRuntime;
 using Macshot.Windows.Core.Imaging;
+using Macshot.Windows.Services;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -145,7 +146,7 @@ internal sealed class EffectsPickerView : StackPanel
             Height = ResetHeight,
             Padding = new Thickness(0),
             FontSize = RowFontSize,
-            FontWeight = FontWeights.Medium,
+            FontWeight = AppFonts.Heavier(FontWeights.Medium),
             HorizontalAlignment = HorizontalAlignment.Right,
             Margin = new Thickness(0, 8, 0, 0),
         };
@@ -228,7 +229,7 @@ internal sealed class EffectsPickerView : StackPanel
     {
         Text = text,
         FontSize = HeadingFontSize,
-        FontWeight = FontWeights.SemiBold,
+        FontWeight = AppFonts.Heavier(FontWeights.SemiBold),
         Foreground = ToolbarPalette.IconBrush(0.5),
         Margin = margin,
     };
@@ -259,7 +260,7 @@ internal sealed class EffectsPickerView : StackPanel
         {
             Text = label,
             FontSize = RowFontSize,
-            FontWeight = FontWeights.Medium,
+            FontWeight = AppFonts.Heavier(FontWeights.Medium),
             Foreground = ToolbarPalette.IconBrush(1),
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -328,7 +329,7 @@ internal sealed class EffectsPickerView : StackPanel
     {
         Text = name,
         FontSize = SwatchFontSize,
-        FontWeight = FontWeights.SemiBold,
+        FontWeight = AppFonts.Heavier(FontWeights.SemiBold),
         HorizontalAlignment = HorizontalAlignment.Center,
         VerticalAlignment = VerticalAlignment.Bottom,
         Foreground = new SolidColorBrush(shadow ? Microsoft.UI.Colors.Black : Microsoft.UI.Colors.White),

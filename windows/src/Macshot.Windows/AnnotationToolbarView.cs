@@ -251,7 +251,7 @@ public sealed partial class AnnotationToolbarView : UserControl
     {
         Text = L("Hold 1 auto-vertical  ·  Hold 2 auto-horizontal"),
         FontSize = OptionLabelSize,
-        FontWeight = FontWeights.Medium,
+        FontWeight = AppFonts.Heavier(FontWeights.Medium),
         Foreground = ToolbarPalette.IconBrush(0.3),
         VerticalAlignment = VerticalAlignment.Center,
     };
@@ -332,7 +332,7 @@ public sealed partial class AnnotationToolbarView : UserControl
     {
         Width = 26,
         FontSize = OptionValueSize,
-        FontWeight = FontWeights.Medium,
+        FontWeight = AppFonts.Heavier(FontWeights.Medium),
         TextAlignment = TextAlignment.Center,
         VerticalAlignment = VerticalAlignment.Center,
     };
@@ -1806,7 +1806,7 @@ public sealed partial class AnnotationToolbarView : UserControl
     {
         Text = text,
         FontSize = OptionLabelSize,
-        FontWeight = FontWeights.Medium,
+        FontWeight = AppFonts.Heavier(FontWeights.Medium),
         VerticalAlignment = VerticalAlignment.Center,
     };
 
@@ -1891,7 +1891,7 @@ public sealed partial class AnnotationToolbarView : UserControl
             Width = width,
             Tag = unit,
             FontSize = OptionValueSize,
-            FontWeight = FontWeights.Medium,
+            FontWeight = AppFonts.Heavier(FontWeights.Medium),
             TextAlignment = TextAlignment.Right,
             VerticalAlignment = VerticalAlignment.Center,
         };
@@ -1920,7 +1920,7 @@ public sealed partial class AnnotationToolbarView : UserControl
             MinWidth = 0,
             Padding = new Thickness(0),
             FontSize = 12,
-            FontWeight = FontWeights.SemiBold,
+            FontWeight = AppFonts.Heavier(FontWeights.SemiBold),
             VerticalAlignment = VerticalAlignment.Center,
         };
 

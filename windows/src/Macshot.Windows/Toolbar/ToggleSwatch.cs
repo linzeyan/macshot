@@ -1,3 +1,4 @@
+using Macshot.Windows.Services;
 using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -42,7 +43,7 @@ internal sealed class ToggleSwatch : StackPanel
         {
             Content = name,
             FontSize = 10,
-            FontWeight = FontWeights.Medium,
+            FontWeight = AppFonts.Heavier(FontWeights.Medium),
             Padding = new Thickness(6, 0, 6, 0),
             MinWidth = 0,
             Height = 22,
