@@ -115,7 +115,10 @@ public static class ScreenshotHistory
 
             var stem = DateTimeOffset.Now.ToString(NameFormat, CultureInfo.InvariantCulture);
             var path = Path.Combine(Directory, stem + Extension);
-            var bytes = await ImageDelivery.EncodeAsync(frame, CaptureImageFormat.Png, CaptureSettings.MaxQuality);
+            var bytes = (await ImageDelivery.EncodeAsync(
+                frame,
+                CaptureImageFormat.Png,
+                CaptureSettings.MaxQuality)).Bytes;
             await File.WriteAllBytesAsync(path, bytes);
 
             // Only when there is something to separate. A capture nobody drew on is
@@ -123,10 +126,10 @@ public static class ScreenshotHistory
             // the history costs for the commonest capture there is.
             if (editable is { Annotations.Count: > 0 })
             {
-                var raw = await ImageDelivery.EncodeAsync(
+                var raw = (await ImageDelivery.EncodeAsync(
                     editable.Raw,
                     CaptureImageFormat.Png,
-                    CaptureSettings.MaxQuality);
+                    CaptureSettings.MaxQuality)).Bytes;
 
                 await File.WriteAllBytesAsync(Path.Combine(Directory, stem + RawSuffix), raw);
                 await File.WriteAllTextAsync(
@@ -191,7 +194,10 @@ public static class ScreenshotHistory
                 Path.GetDirectoryName(path) ?? Directory,
                 Path.GetFileNameWithoutExtension(path));
 
-            var bytes = await ImageDelivery.EncodeAsync(frame, CaptureImageFormat.Png, CaptureSettings.MaxQuality);
+            var bytes = (await ImageDelivery.EncodeAsync(
+                frame,
+                CaptureImageFormat.Png,
+                CaptureSettings.MaxQuality)).Bytes;
             await File.WriteAllBytesAsync(path, bytes);
 
             // The companions follow the marks. An edit that took every mark off has to
@@ -199,10 +205,10 @@ public static class ScreenshotHistory
             // arrows the user just deleted.
             if (editable is { Annotations.Count: > 0 })
             {
-                var raw = await ImageDelivery.EncodeAsync(
+                var raw = (await ImageDelivery.EncodeAsync(
                     editable.Raw,
                     CaptureImageFormat.Png,
-                    CaptureSettings.MaxQuality);
+                    CaptureSettings.MaxQuality)).Bytes;
 
                 await File.WriteAllBytesAsync(stem + RawSuffix, raw);
                 await File.WriteAllTextAsync(stem + NotesSuffix, AnnotationFile.Write(editable.Annotations));

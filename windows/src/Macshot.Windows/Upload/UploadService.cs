@@ -118,7 +118,7 @@ internal sealed class UploadService
             .ConfigureAwait(true);
 
         var name = FilenameTemplate.Resolve(settings.FilenameTemplate, DateTimeOffset.Now) + ".png";
-        await SendAsync(png, name, "image/png").ConfigureAwait(true);
+        await SendAsync(png.Bytes, name, "image/png").ConfigureAwait(true);
     }
 
     /// <summary>Uploads a file that is already written — which is every recording.</summary>

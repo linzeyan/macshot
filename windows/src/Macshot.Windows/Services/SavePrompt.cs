@@ -103,7 +103,7 @@ internal static class SavePrompt
 
         // The preference's format first, so the top entry is the one the session is
         // already set to.
-        foreach (var format in Formats(settings.Format))
+        foreach (var format in Formats(ImageEncoders.Resolve(settings.Format)))
         {
             picker.FileTypeChoices.Add(Describe(format), [format.FileExtension()]);
         }
@@ -113,25 +113,39 @@ internal static class SavePrompt
             return null;
         }
 
-        var chosen = FormatOf(file.FileType) ?? settings.Format;
+        var chosen = FormatOf(file.FileType) ?? ImageEncoders.Resolve(settings.Format);
 
         // Through ForSaving like the folder path, or the resolution setting would hold
         // for the captures saved without being asked about and not for the ones the user
         // named by hand.
-        await FileIO.WriteBytesAsync(
-            file,
-            await ImageDelivery.EncodeAsync(
-                ImageDelivery.ForSaving(frame, settings),
-                chosen,
-                settings.Quality));
+        var encoded = await ImageDelivery.EncodeAsync(
+            ImageDelivery.ForSaving(frame, settings),
+            chosen,
+            settings.Quality);
+        await FileIO.WriteBytesAsync(file, encoded.Bytes);
+
+        // The picker has already created the file under the extension it was offered, so
+        // an encoder that fell back leaves a JPEG called .heic — a file every viewer
+        // opens by its name and then fails on. Renaming is the only way to keep the name
+        // and the bytes telling the same story.
+        if (encoded.Format != chosen)
+        {
+            await file.RenameAsync(
+                Path.GetFileNameWithoutExtension(file.Name) + encoded.Format.FileExtension(),
+                NameCollisionOption.GenerateUniqueName);
+        }
+
         return file.Path;
     }
 
+    /// <summary>
+    /// Only what this machine can write, preference first — a dialog offering a format
+    /// the encoder does not have would be a choice that renamed itself on the way out.
+    /// </summary>
     private static IEnumerable<CaptureImageFormat> Formats(CaptureImageFormat first) =>
-        Enum.GetValues<CaptureImageFormat>().OrderByDescending(format => format == first);
+        ImageEncoders.Available.OrderByDescending(format => format == first);
 
-    private static string Describe(CaptureImageFormat format) =>
-        $"{format.ToString().ToUpperInvariant()} image";
+    private static string Describe(CaptureImageFormat format) => $"{format.DisplayName()} image";
 
     private static CaptureImageFormat? FormatOf(string extension)
     {

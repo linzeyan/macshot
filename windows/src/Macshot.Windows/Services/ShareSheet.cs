@@ -113,7 +113,7 @@ internal static class ShareSheet
         var path = Path.Combine(directory, name);
         await File.WriteAllBytesAsync(
             path,
-            await ImageDelivery.EncodeAsync(frame, CaptureImageFormat.Png, CaptureSettings.MaxQuality));
+            (await ImageDelivery.EncodeAsync(frame, CaptureImageFormat.Png, CaptureSettings.MaxQuality)).Bytes);
 
         return await StorageFile.GetFileFromPathAsync(path);
     }

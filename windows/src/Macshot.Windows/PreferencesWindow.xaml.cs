@@ -103,6 +103,16 @@ public sealed partial class PreferencesWindow : Window
     /// </remarks>
     private IReadOnlyList<CaptureMenuItem> _menuOrder = CaptureMenuItems.DefaultOrder;
 
+    /// <summary>
+    /// The save formats the list is currently offering, in its own order.
+    /// </summary>
+    /// <remarks>
+    /// Held rather than derived from the selected index, because the list is only as long
+    /// as this machine's encoders allow: HEIC is absent where its codec is, and the index
+    /// would then name the wrong format for every entry after the missing one.
+    /// </remarks>
+    private List<CaptureImageFormat> _formatChoices = [];
+
     /// <summary>One tick box per hideable toolbar button, by identifier.</summary>
     private readonly Dictionary<string, CheckBox> _actionToggles = new(StringComparer.Ordinal);
 
@@ -978,8 +988,11 @@ public sealed partial class PreferencesWindow : Window
     private void Fill(CaptureSettings settings)
     {
         FillUploads(settings);
-        FormatBox.ItemsSource = Enum.GetValues<CaptureImageFormat>().Select(format => format.ToString()).ToList();
-        FormatBox.SelectedIndex = (int)settings.Format;
+        // Only what this machine can write. A greyed-out HEIC would read as temporarily
+        // unavailable; absent is what it actually is.
+        _formatChoices = [.. ImageEncoders.Available];
+        FormatBox.ItemsSource = _formatChoices.Select(format => format.DisplayName()).ToList();
+        FormatBox.SelectedIndex = Math.Max(_formatChoices.IndexOf(ImageEncoders.Resolve(settings.Format)), 0);
         QualitySlider.Value = settings.Quality;
         RecordingFormatBox.ItemsSource = Enum.GetValues<RecordingFormat>().Select(format => format.ToString()).ToList();
         RecordingFormatBox.SelectedIndex = (int)settings.RecordingFormat;
@@ -1567,7 +1580,9 @@ public sealed partial class PreferencesWindow : Window
     }
 
     private CaptureImageFormat SelectedFormat() =>
-        FormatBox.SelectedIndex >= 0 ? (CaptureImageFormat)FormatBox.SelectedIndex : CaptureImageFormat.Png;
+        FormatBox.SelectedIndex >= 0 && FormatBox.SelectedIndex < _formatChoices.Count
+            ? _formatChoices[FormatBox.SelectedIndex]
+            : CaptureImageFormat.Png;
 
     private void Format_SelectionChanged(object sender, SelectionChangedEventArgs e)
     {

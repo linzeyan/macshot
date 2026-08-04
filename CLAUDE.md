@@ -311,7 +311,11 @@ start the macOS pipeline on `main`, and vice versa.
 
 ## Known gaps
 
-- The video editor's effects band, HEIC encoding, and an installer are not done.
+- The video editor's effects band and an installer are not done.
+- Save formats stop at PNG, JPEG and HEIC. macOS also offers WebP and AVIF; WinRT exposes
+  no encoder for either — WIC's WebP support is a decoder — so both would mean bundling a
+  third-party codec. HEIC is offered only where its codec is registered, and the encode
+  falls back to JPEG (renaming the file) where it is registered but broken.
 - The beautify options row is short one of macOS's controls: the Blur slider (`:1311`)
   applies only to a custom image background, which the port cannot load.
 - `docs/` is a symlink to a private directory outside the repository — the parity matrices

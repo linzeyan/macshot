@@ -96,7 +96,7 @@ Self-contained: no .NET runtime to install.
 - **Video editor** — trim timeline, mute/strip audio, play/pause, save (with Save As), upload, reveal in Finder
 
 ### Output & Upload
-- **Formats** — PNG, JPEG, HEIC, WebP, AVIF with quality slider
+- **Formats** — PNG, JPEG, and HEIC where Windows has the codec for it, with quality slider
 - **Google Drive** — sign in once, uploads to a private "macshot" folder
 - **imgbb** — anonymous image hosting with shareable links
 - **S3-compatible** — upload to Cloudflare R2, AWS S3, MinIO, DigitalOcean Spaces, Backblaze B2, etc.

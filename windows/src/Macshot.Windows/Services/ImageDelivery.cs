@@ -8,6 +8,16 @@ using Windows.Storage.Streams;
 
 namespace Macshot.Windows.Services;
 
+/// <summary>Encoded bytes together with the format they are actually in.</summary>
+/// <param name="Format">
+/// Not always the format that was asked for: one whose codec turns out to be missing is
+/// written as its <see cref="CaptureImageFormatExtensions.Fallback"/> instead. Whoever
+/// names the file must name it from this and never from what they requested, or the
+/// capture lands with an extension that lies about its contents — which is worse than
+/// the failure it came from, because nothing downstream can tell.
+/// </param>
+public readonly record struct EncodedCapture(byte[] Bytes, CaptureImageFormat Format);
+
 /// <summary>
 /// Everything that happens to a capture once it is finished: encoding it, writing
 /// it out, and putting it on the clipboard.
@@ -32,10 +42,46 @@ public static class ImageDelivery
             "Macshot");
     }
 
-    public static async Task<byte[]> EncodeAsync(CapturedFrame frame, CaptureImageFormat format, int quality)
+    /// <summary>
+    /// Encodes the capture, falling back to another format rather than failing when the
+    /// asked-for encoder is not on this machine.
+    /// </summary>
+    /// <remarks>
+    /// HEIC's codec is an optional component, and a machine where it is registered but
+    /// not installed only says so here — at <c>CreateAsync</c>, or as late as the flush.
+    /// A capture the user has already taken is worth more than the container it was
+    /// going to be in, so the substitute is written instead. The answer carries the
+    /// format that was actually used because the caller has to name the file from it.
+    /// </remarks>
+    public static async Task<EncodedCapture> EncodeAsync(
+        CapturedFrame frame,
+        CaptureImageFormat format,
+        int quality)
     {
         ArgumentNullException.ThrowIfNull(frame);
 
+        try
+        {
+            return new EncodedCapture(await EncodeToBytesAsync(frame, format, quality), format);
+        }
+        catch (Exception exception) when (format.Fallback() != format)
+        {
+            // Loud in the log, because a user who set HEIC and keeps getting JPEGs has
+            // nothing else to go on. Into a fresh stream: the failure may have come at
+            // the flush, and the partial one would be a truncated file.
+            var substitute = format.Fallback();
+            DiagnosticLog.Write(
+                $"The {format.DisplayName()} encoder failed ({exception.Message}); "
+                + $"writing {substitute.DisplayName()} instead.");
+            return new EncodedCapture(await EncodeToBytesAsync(frame, substitute, quality), substitute);
+        }
+    }
+
+    private static async Task<byte[]> EncodeToBytesAsync(
+        CapturedFrame frame,
+        CaptureImageFormat format,
+        int quality)
+    {
         using var stream = new InMemoryRandomAccessStream();
         await EncodeIntoAsync(frame, format, quality, stream);
         return await ReadAllAsync(stream);
@@ -57,18 +103,21 @@ public static class ImageDelivery
         var directory = ResolveDirectory(settings);
         Directory.CreateDirectory(directory);
 
+        // Encoded before it is named, because the name carries the extension and the
+        // encoder is what decides which format there is actually going to be.
+        var encoded = await EncodeAsync(ForSaving(frame, settings), settings.Format, settings.Quality);
+
         // Two captures inside the same second resolve to the same name, so the
         // collision check runs against the directory that is about to be written.
         var name = FilenameTemplate.ResolveUnique(
             settings.FilenameTemplate,
             DateTimeOffset.Now,
-            settings.Format.FileExtension(),
+            encoded.Format.FileExtension(),
             candidate => File.Exists(Path.Combine(directory, candidate)),
             new FilenameContext(windowTitle));
 
-        var bytes = await EncodeAsync(ForSaving(frame, settings), settings.Format, settings.Quality);
         var path = Path.Combine(directory, name);
-        await File.WriteAllBytesAsync(path, bytes);
+        await File.WriteAllBytesAsync(path, encoded.Bytes);
         return path;
     }
 
@@ -186,9 +235,10 @@ public static class ImageDelivery
         int quality,
         IRandomAccessStream stream)
     {
+        var encoderId = ImageEncoders.EncoderIdOf(format);
         var encoder = format.IsLossy()
-            ? await BitmapEncoder.CreateAsync(EncoderIdOf(format), stream, QualityOptions(quality))
-            : await BitmapEncoder.CreateAsync(EncoderIdOf(format), stream);
+            ? await BitmapEncoder.CreateAsync(encoderId, stream, QualityOptions(quality))
+            : await BitmapEncoder.CreateAsync(encoderId, stream);
 
         encoder.SetPixelData(
             BitmapPixelFormat.Bgra8,
@@ -204,13 +254,6 @@ public static class ImageDelivery
             frame.BgraPixels);
         await encoder.FlushAsync();
     }
-
-    private static Guid EncoderIdOf(CaptureImageFormat format) => format switch
-    {
-        CaptureImageFormat.Png => BitmapEncoder.PngEncoderId,
-        CaptureImageFormat.Jpeg => BitmapEncoder.JpegEncoderId,
-        _ => throw new ArgumentOutOfRangeException(nameof(format), format, "Unknown capture image format."),
-    };
 
     private static BitmapPropertySet QualityOptions(int quality)
     {
