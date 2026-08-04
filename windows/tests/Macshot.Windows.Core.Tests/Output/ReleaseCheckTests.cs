@@ -69,6 +69,37 @@ public sealed class ReleaseCheckTests
         Assert.IsFalse(ReleaseCheck.IsWindowsAsset("release-notes.txt", offline: false));
     }
 
+    /// <summary>
+    /// Every name build-release.yml attaches, read back by the method that has to
+    /// recognise it.
+    /// </summary>
+    /// <remarks>
+    /// The naming scheme and this method are one contract kept in two files that nothing
+    /// compiles together — the workflow writes the names and the app reads them a release
+    /// later, so a rename there is only found out by the users it stops offering updates
+    /// to. Since the installer was added there are eight of these rather than four, and
+    /// the MSIX is where a slip is most likely: it is the one whose name a packaging tool
+    /// would otherwise be left to choose.
+    /// </remarks>
+    [TestMethod]
+    public void EveryNameTheReleaseWorkflowAttachesIsOfferedToExactlyOneVariant()
+    {
+        foreach (var architecture in new[] { "x64", "arm64" })
+        {
+            foreach (var extension in new[] { "zip", "msix" })
+            {
+                var ordinary = $"macshot-1.0.0-win-{architecture}.{extension}";
+                var offline = $"macshot-Offline-1.0.0-win-{architecture}.{extension}";
+
+                Assert.IsTrue(ReleaseCheck.IsWindowsAsset(ordinary, offline: false), ordinary);
+                Assert.IsFalse(ReleaseCheck.IsWindowsAsset(ordinary, offline: true), ordinary);
+
+                Assert.IsTrue(ReleaseCheck.IsWindowsAsset(offline, offline: true), offline);
+                Assert.IsFalse(ReleaseCheck.IsWindowsAsset(offline, offline: false), offline);
+            }
+        }
+    }
+
     [TestMethod]
     public void ANewerReleaseWithAWindowsBuildIsOffered()
     {

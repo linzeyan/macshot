@@ -4,7 +4,14 @@
     <TargetFramework>net10.0-windows10.0.26100.0</TargetFramework>
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
     <UseWinUI>true</UseWinUI>
-    <WindowsPackageType>None</WindowsPackageType>
+    <!-- Unpackaged unless the command line asks otherwise, which is the only thing that
+         differs between the zip and the MSIX. It is not cosmetic: None wires the Windows
+         App SDK bootstrapper into startup, and the bootstrapper refuses to run inside a
+         package — so a package built from the unpackaged publish would install and then
+         fail at launch. Conditional rather than fixed for the same reason as
+         RuntimeIdentifier below: -p:WindowsPackageType=MSIX has to be able to win.
+         See windows/tools/pack-msix.ps1. -->
+    <WindowsPackageType Condition="'$(WindowsPackageType)' == ''">None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
 
     <!-- Not about MSIX, despite the name, and not optional. It is what brings in the

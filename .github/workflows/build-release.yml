@@ -1,7 +1,8 @@
 name: Build Release
 
 # What a tag produces on this branch: the Windows app, both architectures and both
-# variants, zipped and attached to a GitHub Release.
+# variants, zipped and attached to a GitHub Release, plus a signed MSIX installer for each
+# when a signing certificate is configured.
 #
 # This replaced the Mac app's release pipeline, which is still on main and is where Mac
 # releases are cut from. The two cannot share a tag trigger — a tag pushed here would
@@ -106,10 +107,102 @@ jobs:
           Compress-Archive -Path publish/* -DestinationPath $name -CompressionLevel Optimal
           "name=$name" >> $env:GITHUB_OUTPUT
 
+      # Uploaded before the installer is attempted, and separately from it. The zip is the
+      # product and the MSIX is an addition, so a missing SDK tool or a timestamp server
+      # having a bad day must not be able to cost a release the binaries that were already
+      # built and sitting on disk two steps earlier.
       - uses: actions/upload-artifact@v4
         with:
-          name: macshot-${{ matrix.variant }}-${{ matrix.arch }}
+          name: macshot-zip-${{ matrix.variant }}-${{ matrix.arch }}
           path: ${{ steps.package.outputs.name }}
+          if-no-files-found: error
+
+      # A second publish rather than a second package of the first. WindowsPackageType is
+      # the whole difference: the unpackaged value wires the Windows App SDK bootstrapper
+      # into startup, and the bootstrapper refuses to run inside a package — a zip
+      # repackaged as an MSIX would install and then fail to open a window. The zip above
+      # is finished and untouched by this.
+      #
+      # continue-on-error here and on the step below, for the reason the zip is uploaded
+      # first: the step still shows as failed, which is the loud part, but it cannot skip
+      # the release job and take the zips with it.
+      - name: Publish the packaged build
+        id: packaged
+        continue-on-error: true
+        shell: pwsh
+        run: |
+          $variant = if ("${{ matrix.variant }}" -eq "offline") { "Offline" } else { "" }
+          dotnet publish windows/src/Macshot.Windows/Macshot.Windows.csproj `
+            --configuration Release `
+            --runtime win-${{ matrix.arch }} `
+            --self-contained true `
+            -p:WindowsPackageType=MSIX `
+            -p:Variant=$variant `
+            -p:Version=${{ steps.version.outputs.version }} `
+            -p:AssemblyVersion=${{ steps.version.outputs.assembly }} `
+            -p:FileVersion=${{ steps.version.outputs.assembly }} `
+            -p:InformationalVersion=${{ steps.version.outputs.version }} `
+            --output publish-msix
+          if ($LASTEXITCODE -ne 0) { throw "packaged publish failed" }
+
+      # An MSIX must be signed to be installable at all, so the certificate decides where
+      # this lands rather than whether it runs: a signed package goes on the release, an
+      # unsigned one stays a workflow artifact. Packing on every release either way is
+      # deliberate — a packaging step that only ran once a certificate existed would be a
+      # step nobody had ever seen work.
+      #
+      # The secrets are WINDOWS_SIGNING_CERT_BASE64 (a base64 .pfx) and
+      # WINDOWS_SIGNING_CERT_PASSWORD. Neither is set today.
+      - name: Pack the MSIX
+        id: msix
+        if: steps.packaged.outcome == 'success'
+        continue-on-error: true
+        shell: pwsh
+        env:
+          SIGNING_CERT: ${{ secrets.WINDOWS_SIGNING_CERT_BASE64 }}
+          SIGNING_PASSWORD: ${{ secrets.WINDOWS_SIGNING_CERT_PASSWORD }}
+        run: |
+          # The same name as the zip beside it, because ReleaseCheck.IsWindowsAsset reads
+          # both the same way: "win" marks it as this product's build and "offline" as the
+          # variant's. See the Package step above.
+          $offline = if ("${{ matrix.variant }}" -eq "offline") { "-Offline" } else { "" }
+          $name = "macshot$offline-${{ steps.version.outputs.version }}-win-${{ matrix.arch }}.msix"
+          # At the root of the workspace rather than in a folder of its own, because
+          # upload-artifact roots an artifact at the common ancestor of what it matched:
+          # a package one directory down would arrive as artifacts/msix-signed/*.msix and
+          # the release job's glob would not see it.
+          & ./windows/tools/pack-msix.ps1 `
+            -PublishDirectory publish-msix `
+            -PackageVersion ${{ steps.version.outputs.assembly }} `
+            -Architecture ${{ matrix.arch }} `
+            -Variant ${{ matrix.variant }} `
+            -FileName $name `
+            -SignedDirectory . `
+            -CertificateBase64 $env:SIGNING_CERT `
+            -CertificatePassword $env:SIGNING_PASSWORD
+          if (-not $env:SIGNING_CERT) {
+            "::warning::$name was built but NOT signed: WINDOWS_SIGNING_CERT_BASE64 is not set. Windows cannot install an unsigned MSIX, so it is not attached to the release."
+            "signed=false" >> $env:GITHUB_OUTPUT
+          }
+          else {
+            "signed=true" >> $env:GITHUB_OUTPUT
+          }
+
+      - uses: actions/upload-artifact@v4
+        if: steps.msix.outputs.signed == 'true'
+        with:
+          name: macshot-msix-${{ matrix.variant }}-${{ matrix.arch }}
+          path: "*.msix"
+          if-no-files-found: error
+
+      # Under a name the release job does not collect, which is what keeps an
+      # uninstallable file off the release page while still leaving it somewhere it can be
+      # downloaded and signed by hand.
+      - uses: actions/upload-artifact@v4
+        if: steps.msix.outputs.signed == 'false'
+        with:
+          name: unsigned-msix-${{ matrix.variant }}-${{ matrix.arch }}
+          path: msix-unsigned/*.msix
           if-no-files-found: error
 
   release:
@@ -120,8 +213,12 @@ jobs:
         with:
           ref: ${{ github.event.inputs.tag || github.ref }}
 
+      # By pattern, not everything: the unsigned MSIX artifacts are deliberately named
+      # outside it so that a run with no signing certificate cannot attach a file Windows
+      # will refuse to install.
       - uses: actions/download-artifact@v4
         with:
+          pattern: macshot-*
           path: artifacts
           merge-multiple: true
 
@@ -147,6 +244,27 @@ jobs:
 
           echo "tag=$tag" >> "$GITHUB_OUTPUT"
 
+      # The list is built here rather than given as globs, because a glob that matches
+      # nothing fails the upload and the MSIX legitimately may not be there. The zips are
+      # still mandatory — the bare `ls` is what fails the release when a matrix leg
+      # produced nothing — and the installer is added only when one was signed.
+      - name: Decide what goes on the release
+        id: files
+        shell: bash
+        run: |
+          ls artifacts/*.zip
+          {
+            echo 'list<<FILES_EOF'
+            ls artifacts/*.zip
+            ls artifacts/*.msix 2>/dev/null || true
+            echo FILES_EOF
+          } >> "$GITHUB_OUTPUT"
+
+          if ! ls artifacts/*.msix >/dev/null 2>&1; then
+            echo "::warning::This release carries no installer. WINDOWS_SIGNING_CERT_BASE64 is not set, so the MSIX was built unsigned and left as a workflow artifact — an unsigned MSIX cannot be installed."
+            echo 'No MSIX installer: this release was built without a signing certificate. Download a zip and run the executable in it.' >> "$GITHUB_STEP_SUMMARY"
+          fi
+
       - name: Publish the release
         uses: softprops/action-gh-release@v2
         with:
@@ -154,5 +272,5 @@ jobs:
           name: ${{ steps.notes.outputs.tag }}
           body: ${{ steps.notes.outputs.body }}
           prerelease: ${{ contains(steps.notes.outputs.tag, '-beta.') }}
-          files: artifacts/*.zip
+          files: ${{ steps.files.outputs.list }}
           fail_on_unmatched_files: true

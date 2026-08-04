@@ -3,10 +3,10 @@
     Builds, tests, and runs the Windows port of macshot.
 
 .DESCRIPTION
-    macshot for Windows is an unpackaged WinUI 3 app, so there is nothing to
-    install: publishing produces a folder with the executable in it, and running
-    that puts the icon in the notification area. There is no MSI or MSIX yet; that
-    belongs to the distribution milestone.
+    macshot for Windows publishes as an unpackaged WinUI 3 app: a folder with the
+    executable in it, nothing to install, and running it puts the icon in the
+    notification area. That is what the release zips are. -Msix additionally packs
+    the same app as an installer; see -Msix for what it takes to install one.
 
     Visual Studio is not required. The .NET SDK restores the Windows App SDK and
     the Windows SDK projection from NuGet.
@@ -28,6 +28,19 @@
     Publishes against an installed .NET 10 Desktop Runtime instead of bundling one.
     Much smaller output, but the machine running it needs that runtime.
 
+.PARAMETER Msix
+    Packs an MSIX installer under windows/dist alongside the published folder. It is
+    a separate publish, because a packaged build differs from an unpackaged one in
+    more than how it is zipped — see windows/tools/pack-msix.ps1.
+
+    Without -CertificatePath the package is unsigned and Windows will refuse to
+    install it. The script's help shows the one-line New-SelfSignedCertificate that
+    makes a usable test certificate.
+
+.PARAMETER CertificatePath
+    A .pfx to sign the MSIX with. Its subject must be exactly what the package
+    declares as its publisher.
+
 .EXAMPLE
     .\build.ps1 -Test
     Builds Release and runs the unit tests. This is the CI equivalent.
@@ -47,6 +60,9 @@ param(
     [switch]$Publish,
     [switch]$Run,
     [switch]$FrameworkDependent,
+    [switch]$Msix,
+    [string]$CertificatePath,
+    [string]$CertificatePassword,
     [string]$OutputPath
 )
 
@@ -127,4 +143,32 @@ if ($Run -or $Publish) {
         Write-Host '  Ctrl+Shift+F  capture every screen'
         Write-Host '  right-click the icon for Preferences and Quit'
     }
+}
+
+if ($Msix) {
+    # Published separately and self-contained, whatever -FrameworkDependent said. The
+    # packaged app cannot use the unpackaged folder above — WindowsPackageType decides
+    # whether the Windows App SDK bootstrapper runs at startup, and it must not inside a
+    # package — and a package that assumed a runtime on the machine would defeat the point
+    # of shipping an installer.
+    $packagedOutput = Join-Path $root "dist/$Configuration-msix"
+    Invoke-Step "Publishing the packaged build to $packagedOutput" {
+        dotnet publish $app `
+            --configuration $Configuration `
+            --self-contained true `
+            -p:WindowsPackageType=MSIX `
+            --output $packagedOutput
+    }
+
+    # An MSIX version is four numbers with no room for a pre-release word, and this one
+    # matches the 0.0.0 a build off a working tree already calls itself — below every
+    # published version, so a local install is never mistaken for a release. CI passes the
+    # tag's version instead.
+    & (Join-Path $root 'tools/pack-msix.ps1') `
+        -PublishDirectory $packagedOutput `
+        -PackageVersion '0.0.0.0' `
+        -SignedDirectory (Join-Path $root 'dist') `
+        -UnsignedDirectory (Join-Path $root 'dist') `
+        -CertificatePath $CertificatePath `
+        -CertificatePassword $CertificatePassword
 }

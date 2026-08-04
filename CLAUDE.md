@@ -289,7 +289,8 @@ and the type-info generator run only there. Each of these cost a CI round trip.
 
 `.github/workflows/build-release.yml` triggers on `v*.*.*` and `v*.*.*-beta.*`, or on
 `workflow_dispatch` with a `tag` input. It builds a 2×2 matrix — `x64`/`arm64` ×
-`normal`/`offline` — self-contained, and attaches four zips to a GitHub Release.
+`normal`/`offline` — self-contained, and attaches four zips to a GitHub Release, plus four
+MSIX installers when there is a certificate to sign them with.
 
 1. Add a `CHANGELOG.md` entry under `## [<version>]`. CI extracts that section as the
    release notes; a version with no entry gets the tag and an empty body.
@@ -302,7 +303,51 @@ forever. A `-beta.` in the tag marks the release as a pre-release automatically.
 **Asset names are load-bearing.** `ReleaseCheck.IsWindowsAsset` requires `win` in the name
 and matches `offline` to the variant, so an offline user is only ever offered an offline
 build. Changing the naming scheme without changing that method breaks the update check for
-everyone already running the app.
+everyone already running the app. `EveryNameTheReleaseWorkflowAttachesIsOfferedToExactlyOneVariant`
+pins the eight names the workflow produces; a rename there has to be made here too.
+
+### The MSIX, and signing it
+
+Each matrix leg publishes twice. The zip is the unpackaged publish, unchanged. The MSIX is
+a second publish with `-p:WindowsPackageType=MSIX`, packed by `windows/tools/pack-msix.ps1`
+from `windows/packaging/msix/`. The two cannot share a publish: the unpackaged setting
+wires the Windows App SDK bootstrapper into startup and the bootstrapper refuses to run
+inside a package.
+
+Signing reads two repository secrets:
+
+| Secret | What it holds |
+| --- | --- |
+| `WINDOWS_SIGNING_CERT_BASE64` | The code-signing certificate, a `.pfx` in base64. |
+| `WINDOWS_SIGNING_CERT_PASSWORD` | Its password. |
+
+**Neither is set today, and there is no certificate.** With them absent the MSIX is still
+packed — a packaging step that only ran once a certificate existed would be one nobody had
+seen work — but it is **not attached to the release**. Windows refuses to install an
+unsigned MSIX, so attaching one would put a file on the release page that cannot be used.
+It goes to a workflow artifact named `unsigned-msix-*`, which the release job's
+`pattern: macshot-*` deliberately does not collect, and the run carries a `::warning::` and
+a line in the job summary saying the release has no installer. Releases stay exactly as
+they are today: four zips.
+
+The certificate's **subject must be the package's `Publisher` verbatim** or the MSIX will
+not install, so `pack-msix.ps1` reads the subject out of the `.pfx` and writes it into the
+manifest before packing. Nothing needs updating when the certificate is bought — only the
+two secrets.
+
+To install one locally, `.\build.ps1 -Msix -CertificatePath test.pfx`; `pack-msix.ps1`'s
+help has the `New-SelfSignedCertificate` line that makes a usable test certificate.
+
+**A packaged macshot is not identical to an unpackaged one.** MSIX gives it a package
+identity, which is what Windows AI Foundry requires — so `BackgroundRemover` starts working
+on a Copilot+ PC, its check having always asked about the capability rather than the
+packaging. It also puts the process in an MSIX container, and two things macshot does by
+writing to `HKCU` are what a packaged app is supposed to declare in its manifest instead:
+**Launch at login** (`StartupRegistration`, the `Run` key → `windows.startupTask`) and the
+**`macshot:` URL scheme** (`UrlSchemeHost` → `windows.protocol`). Expect both to be dead in
+the MSIX build. Where settings and history land under the container has not been checked.
+Until all of that is settled the MSIX is an addition and the zip is still how macshot is
+meant to be run.
 
 A tag push runs the workflow **as it exists at the tagged commit**, so tagging here cannot
 start the macOS pipeline on `main`, and vice versa.
@@ -311,7 +356,10 @@ start the macOS pipeline on `main`, and vice versa.
 
 ## Known gaps
 
-- The video editor's effects band and an installer are not done.
+- The video editor's effects band is not done.
+- The MSIX is built but never signed: there is no certificate, so no release has carried an
+  installer yet. `windows.startupTask` and `windows.protocol` are the two manifest entries
+  it still needs before it is the recommended way to install macshot — see Releasing.
 - Save formats stop at PNG, JPEG and HEIC. macOS also offers WebP and AVIF; WinRT exposes
   no encoder for either — WIC's WebP support is a decoder — so both would mean bundling a
   third-party codec. HEIC is offered only where its codec is registered, and the encode
