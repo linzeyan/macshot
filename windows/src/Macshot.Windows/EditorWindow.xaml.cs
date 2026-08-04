@@ -7,6 +7,7 @@ using Macshot.Windows.Services;
 using Macshot.Windows.Toolbar;
 using Microsoft.UI.Input;
 using Microsoft.UI.Text;
+using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
@@ -105,6 +106,27 @@ public sealed partial class EditorWindow : Window
 
     private Button _zoomButton = null!;
 
+    /// <summary>
+    /// Writes the marks back over the capture they belong to. Built with the rest of the
+    /// bar and shown only once there is something to commit.
+    /// </summary>
+    private Button _doneButton = null!;
+
+    /// <summary>
+    /// What this capture looked like when it was last written down: at open, and again
+    /// after every delivery and every commit.
+    /// </summary>
+    /// <remarks>
+    /// macshot's clean baseline (<c>DetachedEditorWindowController.swift:241-247</c>).
+    /// Taken in <see cref="ShowAsync"/> rather than in the constructor, because a capture
+    /// reopened with its marks has to be clean with those marks on it — baselined before
+    /// they were applied, every reopened capture would offer Done for edits it arrived
+    /// with. Given a value here as well, because the default of a struct leaves its
+    /// <see cref="ImageEffectsOptions"/> null — harmless to compare against, but not
+    /// something to leave lying about in a field.
+    /// </remarks>
+    private EditorState _saved = new(0, 0, ImageEffectsOptions.Default);
+
     private bool _cropping;
     private Point? _cropStart;
     private bool _zoomFitted;
@@ -163,9 +185,10 @@ public sealed partial class EditorWindow : Window
     public event EventHandler? AddCaptureRequested;
 
     /// <summary>
-    /// Raised with the finished image when Done is pressed. The owner decides what
-    /// delivery means, exactly as it does for a capture, so this window needs no opinion
-    /// about clipboards or folders.
+    /// Raised with the finished image when the user is done with it — Enter to deliver it
+    /// again, Done to write the marks back over the capture they belong to. The owner
+    /// decides what each means, exactly as it does for a capture, so this window needs no
+    /// opinion about clipboards or folders.
     /// </summary>
     /// <remarks>
     /// A completion rather than the image alone, so that what the editor hands over
@@ -191,8 +214,17 @@ public sealed partial class EditorWindow : Window
             AnnotationCanvas.Render();
         }
 
+        // After the marks it opens with, so a reopened capture is clean with them on.
+        Rebaseline();
+        _editor.Document.Changed += (_, _) => RefreshDone();
+
         var appWindow = this.GetAppWindow();
         appWindow.MoveAndResize(PlaceOverImage());
+
+        // The question macshot asks in windowShouldClose, in the shape Windows asks it.
+        // Without it the X is a way to lose every mark on a capture without being told,
+        // which is the one thing an editor must not be.
+        appWindow.Closing += (_, args) => OfferToKeepEdits(args);
         HintText.Text = StandingHint;
         Activate();
         EditorRoot.Focus(FocusState.Programmatic);
@@ -237,6 +269,11 @@ public sealed partial class EditorWindow : Window
         {
             _effects = options;
             Present();
+
+            // By hand, because an adjustment is the one edit that leaves no undo step and
+            // no image operation behind — it is a layer the delivered pixels are taken
+            // through, so nothing the document raises says it happened.
+            RefreshDone();
         };
         AnnotationToolbar.CommandInvoked += (_, command) => RunToolbarCommand(command);
 
@@ -421,6 +458,11 @@ public sealed partial class EditorWindow : Window
         var add = new Button { Content = "Add capture" };
         add.Click += (_, _) => AddCaptureRequested?.Invoke(this, EventArgs.Empty);
 
+        // Localized here rather than by the page-wide pass, which ran in the constructor
+        // before this bar existed. macshot's own key, so it is already translated.
+        _doneButton = new Button { Content = L("Done"), Visibility = Visibility.Collapsed };
+        _doneButton.Click += (_, _) => _ = CommitAsync();
+
         _zoomButton = new Button { Content = "100% ▾" };
         _zoomButton.Flyout = ZoomMenu();
 
@@ -440,6 +482,16 @@ public sealed partial class EditorWindow : Window
         Seat(flip, BarGap);
         Seat(frame, BarGap);
         Seat(add, BarGroupGap);
+
+        // Before the zoom reading and 12 clear of it, where macshot puts it
+        // (EditorTopBarView.swift:209-212). Louder than its neighbours on purpose: 12
+        // semibold in the accent against their faded 11, because it is the one control on
+        // this bar that finishes something.
+        Seat(_doneButton, 0, ZoomHost);
+        _doneButton.Margin = new Thickness(0, 0, BarGroupGap, 0);
+        _doneButton.FontSize = 12;
+        _doneButton.FontWeight = FontWeights.SemiBold;
+        _doneButton.Foreground = ToolbarPalette.AccentBrush;
 
         Seat(_zoomButton, 0, ZoomHost);
 
@@ -568,10 +620,11 @@ public sealed partial class EditorWindow : Window
     /// the window opens whole rather than showing its top-left corner.
     /// </summary>
     /// <remarks>
-    /// Only ever out, never in: a small capture blown up to fill the window would be
-    /// shown softer than it is, and the marks would be drawn at a size that means
-    /// nothing. Only once, or resizing the window would keep overruling the zoom the
-    /// user chose.
+    /// The rule is <see cref="CaptureFit.OpeningZoom"/>'s: the width is fitted and the
+    /// height is scrolled, so a scroll capture ten screens tall opens at a size its text
+    /// can be read at instead of at a tenth. Only once, or resizing the window would keep
+    /// overruling the zoom the user chose. "Fit canvas" in the zoom menu is still the whole
+    /// image on both axes, for whoever wants it.
     /// </remarks>
     private void Scroller_SizeChanged(object sender, SizeChangedEventArgs e)
     {
@@ -581,10 +634,15 @@ public sealed partial class EditorWindow : Window
         }
 
         _zoomFitted = true;
-        var fit = Math.Min(Scroller.ViewportWidth / _frame.Width, Scroller.ViewportHeight / _frame.Height);
-        if (fit < 1)
+        var opening = CaptureFit.OpeningZoom(
+            _frame.Width,
+            Scroller.ViewportWidth,
+            Scroller.MinZoomFactor,
+            Scroller.MaxZoomFactor);
+
+        if (opening < 1)
         {
-            Scroller.ChangeView(null, null, (float)Math.Max(fit, Scroller.MinZoomFactor));
+            Scroller.ChangeView(null, null, (float)opening);
         }
     }
 
@@ -1401,18 +1459,58 @@ public sealed partial class EditorWindow : Window
     }
 #endif
 
+    /// <summary>
+    /// Enter: delivers the capture as it now stands, wherever the preferences send one,
+    /// and leaves the window open.
+    /// </summary>
+    /// <remarks>
+    /// Open, because macshot's Enter here is its quick capture and does not close either
+    /// (<c>DetachedEditorWindowController.swift:477-495</c>) — and because copy, save and
+    /// pin on this same strip already act and stay. An editor is somewhere the user works,
+    /// and the one action that closed the window was the one that also wrote a file. Done
+    /// is what finishes.
+    /// </remarks>
     private async Task FinishAsync()
     {
         try
         {
             await AnnotationCanvas.FlushAsync();
-            if (AnnotationCanvas.ToFrame() is { } finished)
+            if (AnnotationCanvas.ToFrame() is not { } finished)
             {
-                Finished?.Invoke(
-                    this,
-                    new CaptureCompletion(finished, CaptureOutcome.Deliver, AnnotationCanvas.ToEditable()));
+                return;
             }
 
+            Finished?.Invoke(
+                this,
+                new CaptureCompletion(finished, CaptureOutcome.Deliver, AnnotationCanvas.ToEditable()));
+
+            // What was just delivered is what is written down, so the window is clean and
+            // Done goes away. Without this the close would still ask about marks that are
+            // already in the file the user asked for.
+            Rebaseline();
+        }
+        catch (Exception exception)
+        {
+            HintText.Text = exception.Message;
+        }
+    }
+
+    /// <summary>
+    /// Done: writes the marks back over the capture they belong to, and closes.
+    /// </summary>
+    /// <remarks>
+    /// macshot's <c>commitToHistory</c> (<c>:346-361</c>). Not a second delivery — no
+    /// clipboard and no file — because the capture was delivered when it was taken and this
+    /// is the drawing being finished. That distinction is the whole reason the button
+    /// exists: with Enter as the only way out, annotating a capture auto-save had already
+    /// written would put a second file beside the first for one keypress.
+    /// </remarks>
+    private async Task CommitAsync()
+    {
+        try
+        {
+            await AnnotationCanvas.FlushAsync();
+            CommitEdits();
             Close();
         }
         catch (Exception exception)
@@ -1420,6 +1518,87 @@ public sealed partial class EditorWindow : Window
             HintText.Text = exception.Message;
         }
     }
+
+    /// <summary>
+    /// Hands the marks over and marks the window clean, without touching the window
+    /// itself.
+    /// </summary>
+    /// <remarks>
+    /// Synchronous, so the close prompt can use it: a closing handler cannot await, and
+    /// cancelling the close to await a commit would mean closing the window a second time
+    /// from inside its own close notification. Nothing in flight is flushed here for the
+    /// same reason — a label still being typed when the X is pressed is not committed,
+    /// which is the same answer macshot gives, since it composites what is on the canvas.
+    /// </remarks>
+    private void CommitEdits()
+    {
+        if (AnnotationCanvas.ToFrame() is not { } finished)
+        {
+            return;
+        }
+
+        Finished?.Invoke(
+            this,
+            new CaptureCompletion(finished, CaptureOutcome.Commit, AnnotationCanvas.ToEditable()));
+
+        Rebaseline();
+    }
+
+    /// <summary>
+    /// Stops a close that would throw away marks, until the user has said what to do with
+    /// them.
+    /// </summary>
+    /// <remarks>
+    /// Neither answer that lets the window go cancels the close: the window is already
+    /// closing and both branches simply leave it clean on the way out, so nothing here
+    /// re-enters. Only Cancel touches <paramref name="args"/>.
+    /// </remarks>
+    private void OfferToKeepEdits(AppWindowClosingEventArgs args)
+    {
+        if (!Edits.DiffersFrom(_saved))
+        {
+            return;
+        }
+
+        switch (UnsavedEditsPrompt.Ask(WinRT.Interop.WindowNative.GetWindowHandle(this)))
+        {
+            case UnsavedEdits.Keep:
+                CommitEdits();
+                return;
+
+            case UnsavedEdits.Discard:
+                // Marked clean rather than committed, so nothing is written and this
+                // handler cannot ask a second time about the same marks.
+                Rebaseline();
+                return;
+
+            default:
+                args.Cancel = true;
+                return;
+        }
+    }
+
+    /// <summary>Everything about this capture the user can have changed.</summary>
+    private EditorState Edits => new(_editor.Document.UndoDepth, _imageUndo.Count, _effects);
+
+    /// <summary>Records the capture as written down, and takes Done off the bar.</summary>
+    private void Rebaseline()
+    {
+        _saved = Edits;
+        RefreshDone();
+    }
+
+    /// <summary>
+    /// Offers Done only when there is something to commit.
+    /// </summary>
+    /// <remarks>
+    /// macshot's rule and its reason (<c>:256-257</c>): the overlay has no Done until you
+    /// draw, and an editor that always showed one would be offering to finish a capture
+    /// nobody had started on.
+    /// </remarks>
+    private void RefreshDone() => _doneButton.Visibility = Edits.DiffersFrom(_saved)
+        ? Visibility.Visible
+        : Visibility.Collapsed;
 
     private void SetColorSampling(bool armed)
     {

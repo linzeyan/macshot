@@ -29,6 +29,23 @@ public sealed class AnnotationDocument
 
     public bool CanUndo => _undo.Count > 0;
 
+    /// <summary>
+    /// How many steps are on the undo stack, which is how many edits deep this document
+    /// is.
+    /// </summary>
+    /// <remarks>
+    /// For telling an edited capture from an untouched one — see <see cref="EditorState"/>.
+    /// Every edit pushes a step and every undo pops one, so a depth back at the number it
+    /// was at is a document back at the state it was in, and drawing then undoing leaves
+    /// nothing behind to prompt about. macshot compares <c>undoStack.count</c> the same way
+    /// (<c>DetachedEditorWindowController.swift:250-254</c>).
+    ///
+    /// It saturates at <see cref="MaxHistoryDepth"/>, so an edit made past the hundredth
+    /// on one capture, after a save that was also past the hundredth, does not register.
+    /// That bound is this port's; the alternative is an unbounded stack of array snapshots.
+    /// </remarks>
+    public int UndoDepth => _undo.Count;
+
     public bool CanRedo => _redo.Count > 0;
 
     public void Add(Annotation annotation)

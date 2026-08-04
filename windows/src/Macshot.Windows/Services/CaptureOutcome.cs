@@ -32,6 +32,20 @@ public enum CaptureOutcome
     Pin,
 
     /// <summary>
+    /// The marks, written back over the capture they belong to. Nothing is copied and no
+    /// file is written: this capture was already delivered when it was taken, and what the
+    /// editor's Done button finishes is the drawing, not the delivery.
+    /// </summary>
+    /// <remarks>
+    /// The distinction macshot draws between its Done button and its Enter key
+    /// (<c>DetachedEditorWindowController.swift:346</c> against <c>:477</c>). Without a
+    /// button that only amends, the one way out of the editor is the key that delivers
+    /// again — so annotating a capture that auto-save had already written puts a second
+    /// file beside the first, and the user pressed one key to get it.
+    /// </remarks>
+    Commit,
+
+    /// <summary>
     /// The destination the preferences name, with the link it comes back with put on the
     /// clipboard. Its own outcome rather than a variant of Copy, because what is copied
     /// is a URL and not the picture — pasting it into an image editor gives text.

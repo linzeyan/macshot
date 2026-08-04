@@ -17,6 +17,26 @@
     </windowsSettings>
   </application>
 
+  <!--
+    TaskDialogIndirect is exported by comctl32 version 6 only; the copy in System32 is
+    5.82 and does not have it, so without this dependency the loader binds to the old
+    one and the export is missing at the first call. UnsavedEditsPrompt is what needs
+    it — the editor's "Save changes?" is the one question in the app whose buttons must
+    say what they do rather than Yes/No. WinUI draws none of its own controls with
+    comctl32, so nothing else in the process changes appearance because of this.
+  -->
+  <dependency>
+    <dependentAssembly>
+      <assemblyIdentity
+          type="win32"
+          name="Microsoft.Windows.Common-Controls"
+          version="6.0.0.0"
+          processorArchitecture="*"
+          publicKeyToken="6595b64144ccf1df"
+          language="*" />
+    </dependentAssembly>
+  </dependency>
+
   <compatibility xmlns="urn:schemas-microsoft-com:compatibility.v1">
     <application>
       <!-- Windows 10 and later. -->
