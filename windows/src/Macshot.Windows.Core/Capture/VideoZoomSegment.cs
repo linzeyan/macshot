@@ -71,15 +71,22 @@ public readonly record struct VideoZoomSegment(
     /// whichever end it would otherwise hang over rather than shortened, so a zoom
     /// placed near the start is still the length every other zoom is.
     /// </remarks>
-    public static VideoZoomSegment Placed(double at, double totalSeconds, double seconds = DefaultDuration)
+    public static VideoZoomSegment Placed(double at, double totalSeconds, double seconds = DefaultDuration) =>
+        Placed(at, new VideoTimeRange(0, totalSeconds), seconds);
+
+    /// <summary>
+    /// The same, confined to <paramref name="gap"/> — the stretch of band no other zoom
+    /// occupies. Two zooms running at once would magnify by whichever the renderer
+    /// happened to test first, so the band refuses to place one over another.
+    /// </summary>
+    public static VideoZoomSegment Placed(double at, VideoTimeRange gap, double seconds = DefaultDuration)
     {
-        var length = Math.Clamp(seconds, MinDuration, Math.Max(MinDuration, totalSeconds));
-        var start = Math.Clamp(at - (length / 2), 0, Math.Max(0, totalSeconds - length));
-        var fade = AutoFade(length);
+        var span = VideoSegmentSpan.Placed(at, gap, seconds, MinDuration);
+        var fade = AutoFade(span.Duration);
 
         return new VideoZoomSegment(
-            start,
-            start + length,
+            span.Start,
+            span.End,
             DefaultLevel,
             new CapturePoint(0.5, 0.5),
             fade,
@@ -117,10 +124,10 @@ public readonly record struct VideoZoomSegment(
 
     /// <summary>Moves the head of the segment, keeping it a segment.</summary>
     public VideoZoomSegment WithStart(double start, double totalSeconds) =>
-        this with { Start = Math.Clamp(start, 0, Math.Max(0, Math.Min(End, totalSeconds) - MinDuration)) };
+        this with { Start = VideoSegmentSpan.NewStart(start, End, MinDuration, totalSeconds) };
 
     public VideoZoomSegment WithEnd(double end, double totalSeconds) =>
-        this with { End = Math.Clamp(end, Math.Min(Start + MinDuration, totalSeconds), Math.Max(0, totalSeconds)) };
+        this with { End = VideoSegmentSpan.NewEnd(end, Start, MinDuration, totalSeconds) };
 
     /// <summary>
     /// Slides the whole segment so it starts at <paramref name="start"/>, keeping its
@@ -128,10 +135,12 @@ public readonly record struct VideoZoomSegment(
     /// </summary>
     public VideoZoomSegment MovedTo(double start, double totalSeconds)
     {
-        var length = Duration;
-        var placed = Math.Clamp(start, 0, Math.Max(0, totalSeconds - length));
-        return this with { Start = placed, End = placed + length };
+        var span = VideoSegmentSpan.Moved(start, Duration, totalSeconds);
+        return this with { Start = span.Start, End = span.End };
     }
+
+    /// <summary>Where the segment sits, for the band's row packing and overlap checks.</summary>
+    public VideoTimeRange Span => new(Start, End);
 
     /// <summary>
     /// Sets the level, and re-scales the ramps to suit the length.
@@ -174,7 +183,7 @@ public readonly record struct VideoZoomSegment(
                 ? toEnd / fadeOut
                 : 1;
 
-        return 1 + ((Level - 1) * Smoothstep(progress));
+        return 1 + ((Level - 1) * VideoFade.Smoothstep(progress));
     }
 
     /// <summary>
@@ -228,16 +237,6 @@ public readonly record struct VideoZoomSegment(
 
     /// <summary>Whether <paramref name="seconds"/> is inside the segment.</summary>
     public bool Covers(double seconds) => seconds >= Start && seconds <= End && Duration > 0;
-
-    /// <summary>
-    /// Cubic ease over [0, 1]. macshot's <c>easeInOut</c>: zero slope at both ends, which
-    /// is what makes the zoom start and stop without a visible kick.
-    /// </summary>
-    private static double Smoothstep(double progress)
-    {
-        var clamped = Math.Clamp(progress, 0, 1);
-        return clamped * clamped * (3 - (2 * clamped));
-    }
 
     /// <remarks>
     /// A thousandth short of half, so a segment always has at least one frame at the

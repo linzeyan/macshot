@@ -1,14 +1,16 @@
 using System.ComponentModel;
 using System.Diagnostics;
-using System.Globalization;
 using System.Runtime.InteropServices;
 using Macshot.Windows.Core.Capture;
+using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Output;
+using Macshot.Windows.Rendering;
 using Macshot.Windows.Services;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
 using static Macshot.Windows.Services.Localization;
 
@@ -25,33 +27,43 @@ using Windows.Media.Playback;
 using Windows.Media.Transcoding;
 using Windows.Storage;
 using Windows.Storage.Pickers;
+using Windows.UI;
 using WinRT.Interop;
 
 namespace Macshot.Windows;
 
 /// <summary>
-/// The window a finished recording opens in: play it, keep part of it, and write that
-/// part somewhere.
+/// The window a finished recording opens in: play it, keep part of it, put effects over
+/// it, and write the result somewhere.
 /// </summary>
 /// <remarks>
 /// <para>
-/// macshot's <c>VideoEditorWindowController</c> as far as its own description of it goes
-/// — trimming, exporting and uploading. Its bottom bar is reproduced control for control:
-/// play and mute, the MP4/GIF toggle, what the source is, the dimensions, the quality,
-/// the GIF frame rate, the estimate, and then Save, Save As, Upload, the folder and Copy.
+/// macshot's <c>VideoEditorWindowController</c>. Its bottom bar is reproduced control for
+/// control: play and mute, the MP4/GIF toggle, what the source is, the dimensions, the
+/// quality, the GIF frame rate, the estimate, and then Save, Save As, Upload, the folder
+/// and Copy.
 /// </para>
 /// <para>
-/// macshot's effects band is here for one of its six effects. A zoom can be placed on
-/// the band, dragged, resized and given a level, and the export applies it —
-/// <see cref="ZoomVideoCompositor"/>, whose head explains at length why Windows needs a
-/// hand-built frame pipeline where macOS has an <c>AVVideoComposition</c>. Censor, cut,
-/// freeze, speed and text are still absent; the point of building one effect all the way
-/// through was to find out what the other five would cost, and the answer is in that
-/// file. The parity notes record the remaining gap.
+/// The effects band carries macshot's six: zoom, censor, cut, speed, freeze and text. What
+/// each one <em>is</em> lives in Core — <see cref="VideoEffects"/> and the segment types
+/// around it — and what an export made from them looks like is decided by
+/// <see cref="VideoTimeline"/>. This file is the band: where the pills are drawn, what
+/// dragging one does, and which of the three export paths the result needs.
 /// </para>
 /// <para>
-/// Trimming goes through <see cref="MediaComposition"/>, which is the platform's own
-/// editor: a clip with time taken off each end, rendered to a file.
+/// <strong>Where the band differs from macshot's.</strong> macOS drives it entirely from
+/// context menus — right-click the band to add, right-click a pill for everything it can
+/// be set to. This port puts the same choices on a row beside the band instead: a picker
+/// for what to add, an Add and a Delete, and one box that shows whatever the selected pill
+/// has to set. The set of choices is the same; where they live is not. A caption's text
+/// and its weight get a second row, which is up only while a caption is selected.
+/// </para>
+/// <para>
+/// Trimming with nothing on the band goes through <see cref="MediaComposition"/>, which is
+/// the platform's own editor, and so does a recording with only cuts on it — one clip per
+/// surviving stretch. Anything else goes through <see cref="VideoEffectsCompositor"/>,
+/// whose head explains at length why Windows needs a hand-built frame pipeline where macOS
+/// has an <c>AVVideoComposition</c>.
 /// </para>
 /// <para>
 /// A GIF is playback and delivery only, exactly as it is in macshot, whose AVFoundation
@@ -86,8 +98,73 @@ public sealed partial class VideoEditorWindow : Window
     /// </remarks>
     private const double PillEdgeGrab = 6;
 
+    /// <summary>macshot's band metrics: a 22-tall row with 2 between rows.</summary>
+    private const double RowHeight = 22;
+
+    private const double RowGap = 2;
+
+    private const double RowStride = RowHeight + RowGap;
+
+    /// <summary>Clear above and below the stack, so a row's pill is not clipped.</summary>
+    private const double BandInset = 2;
+
+    /// <summary>
+    /// How many rows the band grows to before it stops.
+    /// </summary>
+    /// <remarks>
+    /// macshot's four, but scrolled rather than capped: past four rows its band scrolls
+    /// inside a scroll view. This port stops instead, because a scroll view here would
+    /// take a working band and make it depend on a nested-scrolling behaviour nothing in
+    /// this session could photograph. Effects past the fourth row are still exported —
+    /// what is lost is the pill, not the effect.
+    /// </remarks>
+    private const int MaxBandRows = 4;
+
+    /// <summary>
+    /// How wide a freeze's pill is drawn.
+    /// </summary>
+    /// <remarks>
+    /// macshot's 62. A freeze is a single instant and has no width to map, so the pill is
+    /// given one — a rectangle of no width could not be clicked on.
+    /// </remarks>
+    private const double FreezePillWidth = 62;
+
     /// <summary>The levels the box beside the band offers. macshot's range.</summary>
     private static readonly double[] ZoomLevels = [1.2, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0];
+
+    /// <summary>The censor styles, in macshot's menu order.</summary>
+    private static readonly VideoCensorStyle[] CensorStyles =
+        [VideoCensorStyle.Solid, VideoCensorStyle.Pixelate, VideoCensorStyle.Blur];
+
+    /// <summary>Which effect the picker offers, in macshot's menu order.</summary>
+    private static readonly VideoEffectKind[] EffectKinds =
+    [
+        VideoEffectKind.Zoom,
+        VideoEffectKind.Censor,
+        VideoEffectKind.Cut,
+        VideoEffectKind.Speed,
+        VideoEffectKind.Freeze,
+        VideoEffectKind.Text,
+    ];
+
+    private static readonly VideoTextAlignment[] CaptionAlignments =
+        [VideoTextAlignment.Left, VideoTextAlignment.Centre, VideoTextAlignment.Right];
+
+    /// <summary>macshot's pill colours, one per kind.</summary>
+    /// <remarks>
+    /// Taken from <c>EffectsBandView.draw</c> rather than chosen here: the colour is how a
+    /// user tells a censor from a caption at a glance on a band four rows deep, and two
+    /// products that disagreed about which is which would be worse than either.
+    /// </remarks>
+    private static Color PillColor(VideoEffectKind kind) => kind switch
+    {
+        VideoEffectKind.Zoom => Color.FromArgb(0xCC, 0x40, 0x8C, 0xFF),
+        VideoEffectKind.Censor => Color.FromArgb(0xCC, 0xF2, 0x59, 0x59),
+        VideoEffectKind.Cut => Color.FromArgb(0xCC, 0x2A, 0x2A, 0x2A),
+        VideoEffectKind.Speed => Color.FromArgb(0xCC, 0x33, 0xA6, 0x99),
+        VideoEffectKind.Freeze => Color.FromArgb(0xCC, 0x8C, 0x59, 0xD9),
+        _ => Color.FromArgb(0xCC, 0xFF, 0xC7, 0x4D),
+    };
 
     /// <summary>How often the playhead is moved along while something is playing.</summary>
     private static readonly TimeSpan TickInterval = TimeSpan.FromMilliseconds(60);
@@ -97,6 +174,12 @@ public sealed partial class VideoEditorWindow : Window
     private readonly SettingsStore _settings;
     private readonly string _path;
     private readonly DispatcherQueueTimer _ticker;
+
+    /// <summary>Everything on the band. See <see cref="VideoEffects"/>.</summary>
+    private readonly VideoEffects _effects = new();
+
+    /// <summary>Where each pill was drawn, so a press can be matched to one.</summary>
+    private readonly List<BandPill> _pills = [];
 
     private MediaPlayer? _player;
     private BitmapImage? _gif;
@@ -108,24 +191,50 @@ public sealed partial class VideoEditorWindow : Window
     private int _sourceFrameRate;
     private long _sourceBytes;
 
+    /// <summary>Whether the recording has a track the export has to carry.</summary>
+    private bool _sourceHasAudio;
+
     /// <summary>The percentages behind the dimensions menu's entries.</summary>
     private IReadOnlyList<int> _scales = [100];
 
     private VideoTrim _trim;
     private Handle _dragging;
 
-    /// <summary>The zoom on the band, or nothing when there is none.</summary>
+    /// <summary>Which pill is selected, or nothing.</summary>
     /// <remarks>
-    /// One, not a list. macshot's band stacks as many as fit and gives each a UUID to tell
-    /// them apart; this is the first effect of the six to be built here, and one of them is
-    /// what says whether the pipeline underneath works.
+    /// A kind and a position rather than macshot's UUID. The segments are values in lists,
+    /// so there is no identity to carry; deleting one shifts what is behind it, which is
+    /// why <see cref="Select"/> is the only thing that ever sets this.
     /// </remarks>
-    private VideoZoomSegment? _zoom;
+    private (VideoEffectKind Kind, int Index)? _selected;
 
-    private PillGrab _zoomDragging;
+    private PillGrab _pillDragging;
 
     /// <summary>Where in the pill the press landed, so a move does not jump.</summary>
-    private double _zoomGrabOffset;
+    private double _pillGrabOffset;
+
+    private RectGrab _rectDragging;
+
+    /// <summary>Where in the rectangle the press landed, in the overlay's own units.</summary>
+    private global::Windows.Foundation.Point _rectGrabOffset;
+
+    /// <summary>How many rows deep the band was last drawn.</summary>
+    private int _bandRows = 1;
+
+    /// <summary>
+    /// Whether the band's pills have to be built again.
+    /// </summary>
+    /// <remarks>
+    /// The playhead is moved sixteen times a second while something is playing, and the
+    /// band is redrawn from the same place. Rebuilding a dozen shapes and text blocks at
+    /// that rate is work the band never needs: what a pill looks like changes when the
+    /// effects change, when the selection moves, or when the window is resized, and
+    /// nothing else on this timer touches any of the three.
+    /// </remarks>
+    private bool _bandDirty = true;
+
+    /// <summary>The timeline width the pills were last measured against.</summary>
+    private double _bandWidth;
 
     /// <summary>Where the last export went, which is what the folder button opens.</summary>
     private string? _exported;
@@ -141,7 +250,7 @@ public sealed partial class VideoEditorWindow : Window
         Playhead,
     }
 
-    /// <summary>Which part of the zoom pill a press took hold of.</summary>
+    /// <summary>Which part of a pill a press took hold of.</summary>
     private enum PillGrab
     {
         None,
@@ -149,6 +258,22 @@ public sealed partial class VideoEditorWindow : Window
         End,
         Body,
     }
+
+    /// <summary>Which part of the rectangle on the picture a press took hold of.</summary>
+    private enum RectGrab
+    {
+        None,
+        Body,
+        Corner,
+    }
+
+    /// <summary>Where a pill ended up, for hit-testing a press against it.</summary>
+    private readonly record struct BandPill(
+        VideoEffectKind Kind,
+        int Index,
+        double Left,
+        double Right,
+        int Row);
 
     public VideoEditorWindow(string path, SettingsStore settings)
     {
@@ -199,6 +324,18 @@ public sealed partial class VideoEditorWindow : Window
         : VideoExportPlan.DefaultGifFrameRate;
 
     private int FrameRate => _sourceFrameRate > 0 ? _sourceFrameRate : RecordingPlan.DefaultFrameRate;
+
+    /// <summary>Which effect the Add button would place.</summary>
+    private VideoEffectKind AddingKind =>
+        EffectKindBox.SelectedIndex >= 0 && EffectKindBox.SelectedIndex < EffectKinds.Length
+            ? EffectKinds[EffectKindBox.SelectedIndex]
+            : VideoEffectKind.Zoom;
+
+    /// <summary>Which kind the options box is currently showing choices for.</summary>
+    private VideoEffectKind OptionKind => _selected?.Kind ?? AddingKind;
+
+    /// <summary>How long the exported file will run, with everything on the band applied.</summary>
+    private double OutputSeconds => _effects.OutputSeconds(_trim);
 
     /// <summary>Opens <paramref name="path"/> in an editor, or brings its window forward.</summary>
     /// <param name="prepare">
@@ -276,7 +413,10 @@ public sealed partial class VideoEditorWindow : Window
         _sourceWidth = (int)properties.Width;
         _sourceHeight = (int)properties.Height;
         _duration = properties.Duration.TotalSeconds;
-        _sourceFrameRate = await FrameRateOfAsync(file);
+
+        var probe = await ProbeAsync(file);
+        _sourceFrameRate = probe.FrameRate;
+        _sourceHasAudio = probe.HasAudio;
 
         _player = new MediaPlayer
         {
@@ -288,28 +428,37 @@ public sealed partial class VideoEditorWindow : Window
     }
 
     /// <summary>
-    /// How many frames a second the source runs at, for the bitrate an export asks for.
+    /// How many frames a second the source runs at, and whether it has any sound.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Read from the file rather than taken from the recording preference, because the
     /// file need not have been made by this copy of macshot — or by macshot at all — and
     /// a 60 fps recording encoded as though it were 30 comes out at half the bitrate it
     /// needs.
+    /// </para>
+    /// <para>
+    /// The audio answer is read here rather than assumed for the same reason and one more:
+    /// an effects export re-encodes a second time purely to carry the sound, and a silent
+    /// recording that claimed to have some would pay for that pass to add nothing.
+    /// </para>
     /// </remarks>
-    private static async Task<int> FrameRateOfAsync(StorageFile file)
+    private static async Task<(int FrameRate, bool HasAudio)> ProbeAsync(StorageFile file)
     {
         try
         {
             var profile = await MediaEncodingProfile.CreateFromFileAsync(file);
             var rate = profile.Video?.FrameRate;
 
-            return rate is { Denominator: > 0 }
-                ? (int)Math.Round(rate.Numerator / (double)rate.Denominator)
-                : RecordingPlan.DefaultFrameRate;
+            return (
+                rate is { Denominator: > 0 }
+                    ? (int)Math.Round(rate.Numerator / (double)rate.Denominator)
+                    : RecordingPlan.DefaultFrameRate,
+                profile.Audio is not null);
         }
         catch (Exception error) when (error is ArgumentException or NotSupportedException or COMException)
         {
-            return RecordingPlan.DefaultFrameRate;
+            return (RecordingPlan.DefaultFrameRate, false);
         }
     }
 
@@ -395,10 +544,13 @@ public sealed partial class VideoEditorWindow : Window
                 0,
                 GifFrameRateBox.Items.Count - 1);
 
-            // macshot's own label for a zoom level, and the reason the box is filled even
-            // with no zoom placed: the row would otherwise resize the moment one was.
-            ZoomLevelBox.ItemsSource = ZoomLevels.Select(FormatZoom).ToList();
-            ZoomLevelBox.SelectedIndex = Array.IndexOf(ZoomLevels, VideoZoomSegment.DefaultLevel);
+            // Named through L because these are built after the page-wide pass has run,
+            // which only reaches strings that were in the XAML.
+            EffectKindBox.ItemsSource = EffectKinds.Select(kind => L(VideoEffectLabels.AddKey(kind))).ToList();
+            EffectKindBox.SelectedIndex = 0;
+
+            CaptionAlignBox.ItemsSource = new List<string> { L("Left"), L("Center"), L("Right") };
+            CaptionAlignBox.SelectedIndex = 1;
 
             SourceInfoText.Text = _sourceWidth > 0
                 ? $"{Bytes(_sourceBytes)}  ·  {_sourceWidth} × {_sourceHeight}"
@@ -409,6 +561,7 @@ public sealed partial class VideoEditorWindow : Window
             _filling = false;
         }
 
+        FillOptions();
         ShowExportChoices();
     }
 
@@ -435,17 +588,31 @@ public sealed partial class VideoEditorWindow : Window
         // a frame-by-frame encoder of its own that knows nothing about the band. A disabled
         // band would read as one that is temporarily unavailable.
         EffectsPanel.Visibility = editable && !gif ? Visibility.Visible : Visibility.Collapsed;
-        ZoomLevelBox.IsEnabled = _zoom is not null;
-        ZoomButton.Content = _zoom is null ? L("Add Zoom") : L("Delete Zoom");
+
+        AddButton.Content = L(VideoEffectLabels.AddKey(AddingKind));
+        DeleteButton.Content = L(VideoEffectLabels.DeleteKey(_selected?.Kind ?? AddingKind));
+        DeleteButton.IsEnabled = _selected is not null;
+
+        // A cut has nothing to set: its whole statement is where it starts and where it
+        // ends, both of which are the pill. An empty box beside it would look broken.
+        OptionBox.Visibility = OptionKind is VideoEffectKind.Cut
+            ? Visibility.Collapsed
+            : Visibility.Visible;
+
+        CaptionPanel.Visibility = _selected?.Kind is VideoEffectKind.Text
+            ? Visibility.Visible
+            : Visibility.Collapsed;
+
+        ShowRectOverlay();
 
         var estimated = editable
             && _sourceWidth > 0
-            && VideoExportPlan.ShowsEstimate(_trim.Duration, _duration, ExportPercent, ExportQuality, gif);
+            && VideoExportPlan.ShowsEstimate(OutputSeconds, _duration, ExportPercent, ExportQuality, gif);
 
         EstimateText.Text = estimated
             ? "~" + Bytes(VideoExportPlan.EstimatedBytes(
                 _sourceBytes,
-                _trim.Duration,
+                OutputSeconds,
                 _duration,
                 ExportPercent,
                 ExportQuality,
@@ -684,14 +851,18 @@ public sealed partial class VideoEditorWindow : Window
         ElapsedText.Text = VideoTrim.Format(at);
         DurationText.Text = VideoTrim.Format(_duration);
         SelectionText.Text = L("%@ selected")
-            .Replace("%@", VideoTrim.Format(_trim.Duration), StringComparison.Ordinal);
+            .Replace("%@", VideoTrim.Format(OutputSeconds), StringComparison.Ordinal);
 
         DrawEffectsBand();
+        DrawRectOverlay();
     }
 
     // Effects band
 
-    /// <summary>Puts the zoom pill under the stretch of timeline it covers.</summary>
+    /// <summary>
+    /// Draws a pill for every segment on the band, stacked into rows where two of them
+    /// run at the same moment.
+    /// </summary>
     /// <remarks>
     /// Measured against the timeline rather than against the band, though the two are the
     /// same width. What a band is for is that a pill sits under the moment it applies to,
@@ -699,156 +870,830 @@ public sealed partial class VideoEditorWindow : Window
     /// </remarks>
     private void DrawEffectsBand()
     {
-        if (_zoom is not { } zoom)
+        if (!_bandDirty && Math.Abs(_bandWidth - Timeline.ActualWidth) < 0.5)
         {
-            ZoomPill.Visibility = Visibility.Collapsed;
-            ZoomPillLabel.Visibility = Visibility.Collapsed;
             return;
         }
 
-        var left = XFor(zoom.Start);
-        var width = Math.Max(2, XFor(zoom.End) - left);
+        _bandDirty = false;
+        _bandWidth = Timeline.ActualWidth;
 
-        ZoomPill.Visibility = Visibility.Visible;
-        ZoomPill.Width = width;
-        Canvas.SetLeft(ZoomPill, left);
+        _pills.Clear();
+        EffectsBand.Children.Clear();
+        EffectsBand.Children.Add(BandHintText);
 
-        // Inside the pill where it fits, and out of the way rather than clipped where it
-        // does not: a short zoom on a long recording is a few pixels wide, and a label
-        // painted over it would be unreadable in either place.
-        ZoomPillLabel.Text = FormatZoom(zoom.Level);
-        ZoomPillLabel.Visibility = Visibility.Visible;
-        Canvas.SetLeft(ZoomPillLabel, width >= 44 ? left + 6 : left + width + 6);
+        BandHintText.Visibility = _effects.IsEmpty ? Visibility.Visible : Visibility.Collapsed;
+        Canvas.SetLeft(BandHintText, 8);
+
+        if (_duration <= 0 || Timeline.ActualWidth <= 0)
+        {
+            return;
+        }
+
+        var placed = Placements();
+        var rows = VideoBandRows.Assign(placed.Select(pill => pill.Span).ToList());
+        var rowCount = Math.Min(MaxBandRows, VideoBandRows.RowCount(rows));
+
+        _bandRows = rowCount;
+        EffectsBand.Height = (rowCount * RowStride) - RowGap + (BandInset * 2);
+
+        for (var index = 0; index < placed.Count; index++)
+        {
+            var row = rows[index];
+            if (row >= rowCount)
+            {
+                // Past the last row the band grows to. The effect still exports; what is
+                // missing is somewhere to draw its pill.
+                continue;
+            }
+
+            var pill = placed[index];
+            var left = pill.Kind is VideoEffectKind.Freeze
+                ? Math.Clamp(
+                    XFor(pill.Span.Start) - (FreezePillWidth / 2),
+                    0,
+                    Math.Max(0, Timeline.ActualWidth - FreezePillWidth))
+                : XFor(pill.Span.Start);
+
+            var width = pill.Kind is VideoEffectKind.Freeze
+                ? FreezePillWidth
+                : Math.Max(2, XFor(pill.Span.End) - left);
+
+            // Row 0 is the bottom one, as it is on macOS, so a band that grows does so
+            // upwards and the pill already placed does not move under the pointer.
+            var top = BandInset + ((rowCount - 1 - row) * RowStride);
+
+            AddPill(pill, left, width, top);
+            _pills.Add(new BandPill(pill.Kind, pill.Index, left, left + width, row));
+        }
     }
 
-    private void Zoom_Click(object sender, RoutedEventArgs e)
+    /// <summary>Every segment on the band, in the order macshot draws them.</summary>
+    /// <remarks>
+    /// Cuts last so they sit over the others in their row, which is macshot's order and
+    /// its reason: a cut removes what the pills beside it would have applied to, and
+    /// seeing it on top says so.
+    /// </remarks>
+    private List<Placement> Placements()
     {
-        if (_zoom is not null)
+        var placed = new List<Placement>(_effects.Count);
+
+        for (var index = 0; index < _effects.Zooms.Count; index++)
         {
-            _zoom = null;
+            placed.Add(new Placement(
+                VideoEffectKind.Zoom,
+                index,
+                _effects.Zooms[index].Span,
+                VideoEffectLabels.Zoom(_effects.Zooms[index].Level)));
         }
-        else if (_duration >= VideoZoomSegment.MinDuration)
+
+        for (var index = 0; index < _effects.Censors.Count; index++)
         {
-            // At the playhead, which is where the user is looking. macshot places it at
-            // the point the band was right-clicked; this port has no band menu, so the
-            // playhead is the equivalent statement of where.
-            var at = _player?.PlaybackSession.Position.TotalSeconds ?? _trim.Start;
-            _zoom = VideoZoomSegment.Placed(at, _duration).WithLevel(SelectedZoomLevel);
+            placed.Add(new Placement(
+                VideoEffectKind.Censor,
+                index,
+                _effects.Censors[index].Span,
+                L(VideoEffectLabels.StyleKey(_effects.Censors[index].Style))));
         }
-        else
+
+        for (var index = 0; index < _effects.Texts.Count; index++)
+        {
+            placed.Add(new Placement(
+                VideoEffectKind.Text,
+                index,
+                _effects.Texts[index].Span,
+                Shortened(_effects.Texts[index].Text)));
+        }
+
+        for (var index = 0; index < _effects.Speeds.Count; index++)
+        {
+            placed.Add(new Placement(
+                VideoEffectKind.Speed,
+                index,
+                _effects.Speeds[index].Span,
+                VideoEffectLabels.Speed(_effects.Speeds[index].Factor)));
+        }
+
+        for (var index = 0; index < _effects.Freezes.Count; index++)
+        {
+            var freeze = _effects.Freezes[index];
+            placed.Add(new Placement(
+                VideoEffectKind.Freeze,
+                index,
+                new VideoTimeRange(freeze.At, freeze.At),
+                VideoEffectLabels.Freeze(freeze.Hold)));
+        }
+
+        for (var index = 0; index < _effects.Cuts.Count; index++)
+        {
+            placed.Add(new Placement(
+                VideoEffectKind.Cut,
+                index,
+                _effects.Cuts[index].Span,
+                VideoEffectLabels.Cut(_effects.Cuts[index].Duration)));
+        }
+
+        return placed;
+    }
+
+    /// <summary>What a caption's pill says. macshot's eighteen characters and an ellipsis.</summary>
+    private static string Shortened(string text)
+    {
+        var line = text.Replace('\n', ' ').Replace('\r', ' ');
+
+        return line.Length > 18 ? string.Concat(line.AsSpan(0, 18), "…") : line;
+    }
+
+    private void AddPill(Placement pill, double left, double width, double top)
+    {
+        var selected = _selected is { } chosen && chosen.Kind == pill.Kind && chosen.Index == pill.Index;
+
+        // Qualified rather than imported: Microsoft.UI.Xaml.Shapes also declares Path,
+        // which would make every System.IO.Path call in this file ambiguous.
+        var body = new Microsoft.UI.Xaml.Shapes.Rectangle
+        {
+            Width = width,
+            Height = RowHeight,
+            RadiusX = 5,
+            RadiusY = 5,
+            Fill = new SolidColorBrush(PillColor(pill.Kind)),
+
+            // A ring rather than a lift or a glow, because the band is flat and a pill
+            // that grew when selected would move its neighbours.
+            Stroke = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
+            StrokeThickness = selected ? 2 : 0,
+        };
+
+        Canvas.SetLeft(body, left);
+        Canvas.SetTop(body, top);
+        EffectsBand.Children.Add(body);
+
+        var label = new TextBlock
+        {
+            Text = pill.Label,
+            FontSize = 11,
+            Foreground = new SolidColorBrush(Color.FromArgb(0xFF, 0xFF, 0xFF, 0xFF)),
+
+            // The pill underneath is what a press is matched against, and a label that
+            // took the press would make the middle of a wide pill undraggable.
+            IsHitTestVisible = false,
+        };
+
+        // Inside the pill where it fits, and out of the way rather than clipped where it
+        // does not: a short effect on a long recording is a few pixels wide, and a label
+        // painted over it would be unreadable in either place.
+        Canvas.SetLeft(label, width >= 44 ? left + 6 : left + width + 6);
+        Canvas.SetTop(label, top + 3);
+        EffectsBand.Children.Add(label);
+    }
+
+    /// <summary>One pill's worth of what the band has to draw.</summary>
+    private readonly record struct Placement(
+        VideoEffectKind Kind,
+        int Index,
+        VideoTimeRange Span,
+        string Label);
+
+    private void EffectKind_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_filling)
+        {
+            return;
+        }
+
+        // Picking a different kind to add is also how a selection is let go: the options
+        // box can only show one kind's choices, and leaving a pill selected while the box
+        // described a different kind would make the next change land somewhere unexpected.
+        Select(null);
+    }
+
+    private void Add_Click(object sender, RoutedEventArgs e)
+    {
+        if (_duration <= 0)
+        {
+            return;
+        }
+
+        // At the playhead, which is where the user is looking. macshot places an effect
+        // where the band was right-clicked; this port has no band menu, so the playhead is
+        // the equivalent statement of where.
+        var at = _player?.PlaybackSession.Position.TotalSeconds ?? _trim.Start;
+        var kind = AddingKind;
+
+        if (_effects.GapFor(kind, at, _duration) is not { } gap)
         {
             StatusText.Text = L("Not enough room here");
             return;
         }
 
-        // What was exported no longer matches the band, so the folder and Copy buttons go
-        // back to pointing at the source.
-        _exported = null;
-        ShowExportChoices();
-        DrawTimeline();
+        switch (kind)
+        {
+            case VideoEffectKind.Zoom:
+                if (gap.Duration < VideoZoomSegment.MinDuration)
+                {
+                    StatusText.Text = L("Not enough room here");
+                    return;
+                }
+
+                _effects.Zooms.Add(VideoZoomSegment.Placed(at, gap).WithLevel(SelectedZoomLevel));
+                Select((kind, _effects.Zooms.Count - 1));
+                break;
+
+            case VideoEffectKind.Censor:
+                _effects.Censors.Add(VideoCensorSegment.Placed(at, _duration, SelectedCensorStyle));
+                Select((kind, _effects.Censors.Count - 1));
+                break;
+
+            case VideoEffectKind.Cut:
+                _effects.Cuts.Add(VideoCutSegment.Placed(at, _duration));
+                Select((kind, _effects.Cuts.Count - 1));
+                break;
+
+            case VideoEffectKind.Speed:
+                if (gap.Duration < VideoSpeedSegment.MinSourceDuration(SelectedSpeedFactor))
+                {
+                    StatusText.Text = L("Not enough room here");
+                    return;
+                }
+
+                _effects.Speeds.Add(VideoSpeedSegment.Placed(at, gap, SelectedSpeedFactor));
+                Select((kind, _effects.Speeds.Count - 1));
+                break;
+
+            case VideoEffectKind.Freeze:
+                _effects.Freezes.Add(VideoFreezeSegment.Placed(at, _duration, SelectedFreezeHold));
+                Select((kind, _effects.Freezes.Count - 1));
+                break;
+
+            default:
+                _effects.Texts.Add(VideoTextSegment.Placed(at, _duration));
+                Select((kind, _effects.Texts.Count - 1));
+                break;
+        }
+
+        Touched();
     }
 
-    private void ZoomLevel_Changed(object sender, SelectionChangedEventArgs e)
+    private void Delete_Click(object sender, RoutedEventArgs e)
     {
-        if (_filling || _zoom is not { } zoom)
+        if (_selected is not { } chosen)
         {
             return;
         }
 
-        _zoom = zoom.WithLevel(SelectedZoomLevel);
-        _exported = null;
+        _effects.Remove(chosen.Kind, chosen.Index);
+        Select(null);
+        Touched();
+    }
+
+    /// <summary>
+    /// Selects a pill, and points the options row at whatever that pill can be set to.
+    /// </summary>
+    private void Select((VideoEffectKind Kind, int Index)? pill)
+    {
+        _selected = pill;
+        _bandDirty = true;
+        FillOptions();
+        FillCaption();
         ShowExportChoices();
         DrawTimeline();
+    }
+
+    /// <summary>
+    /// Fills the box beside the band with the choices for the kind it is describing.
+    /// </summary>
+    /// <remarks>
+    /// The selected pill's kind when there is one, and otherwise the kind Add would place —
+    /// so that the box doubles as the setting a new effect is created with, which is what
+    /// the zoom level box already did before there was more than one kind of effect.
+    /// </remarks>
+    private void FillOptions()
+    {
+        // Read into a local once. The nullable analyser will not carry "this has a value"
+        // from a test into a .Value on a field, so every use below would otherwise have to
+        // repeat the test — see the CS8629 row in CLAUDE.md.
+        var chosen = _selected;
+
+        _filling = true;
+        try
+        {
+            switch (OptionKind)
+            {
+                case VideoEffectKind.Zoom:
+                    OptionBox.ItemsSource = ZoomLevels.Select(VideoEffectLabels.Zoom).ToList();
+                    OptionBox.SelectedIndex = Nearest(
+                        ZoomLevels,
+                        chosen is { Kind: VideoEffectKind.Zoom, Index: var zoom }
+                            ? _effects.Zooms[zoom].Level
+                            : VideoZoomSegment.DefaultLevel);
+                    break;
+
+                case VideoEffectKind.Censor:
+                    OptionBox.ItemsSource = CensorStyles
+                        .Select(style => L(VideoEffectLabels.StyleKey(style)))
+                        .ToList();
+                    OptionBox.SelectedIndex = Array.IndexOf(
+                        CensorStyles,
+                        chosen is { Kind: VideoEffectKind.Censor, Index: var censor }
+                            ? _effects.Censors[censor].Style
+                            : VideoCensorStyle.Blur);
+                    break;
+
+                case VideoEffectKind.Speed:
+                    OptionBox.ItemsSource = VideoSpeedSegment.PresetFactors
+                        .Select(VideoEffectLabels.Speed)
+                        .ToList();
+                    OptionBox.SelectedIndex = Nearest(
+                        VideoSpeedSegment.PresetFactors,
+                        chosen is { Kind: VideoEffectKind.Speed, Index: var speed }
+                            ? _effects.Speeds[speed].Factor
+                            : VideoSpeedSegment.DefaultFactor);
+                    break;
+
+                case VideoEffectKind.Freeze:
+                    OptionBox.ItemsSource = VideoFreezeSegment.PresetHolds
+                        .Select(VideoEffectLabels.Freeze)
+                        .ToList();
+                    OptionBox.SelectedIndex = Nearest(
+                        VideoFreezeSegment.PresetHolds,
+                        chosen is { Kind: VideoEffectKind.Freeze, Index: var freeze }
+                            ? _effects.Freezes[freeze].Hold
+                            : VideoFreezeSegment.DefaultHold);
+                    break;
+
+                case VideoEffectKind.Text:
+                    OptionBox.ItemsSource = VideoTextSegment.PresetFontSizes
+                        .Select(preset => L(preset.Name))
+                        .ToList();
+                    OptionBox.SelectedIndex = Nearest(
+                        VideoTextSegment.PresetFontSizes.Select(preset => preset.Size).ToList(),
+                        chosen is { Kind: VideoEffectKind.Text, Index: var text }
+                            ? _effects.Texts[text].FontSize
+                            : VideoTextSegment.DefaultFontSize);
+                    break;
+
+                default:
+                    // A cut has nothing to set. The box is emptied as well as hidden, so a
+                    // stale list cannot be read back by the next selection.
+                    OptionBox.ItemsSource = new List<string>();
+                    break;
+            }
+        }
+        finally
+        {
+            _filling = false;
+        }
+    }
+
+    /// <summary>
+    /// Which entry of <paramref name="choices"/> is nearest <paramref name="value"/>.
+    /// </summary>
+    /// <remarks>
+    /// Nearest rather than exact, because a value can arrive from somewhere the list does
+    /// not contain — a segment widened to fit a factor, say. An exact match that failed
+    /// would leave the box blank, which reads as a control that has lost its setting.
+    /// </remarks>
+    private static int Nearest(IReadOnlyList<double> choices, double value)
+    {
+        var best = 0;
+        for (var index = 1; index < choices.Count; index++)
+        {
+            if (Math.Abs(choices[index] - value) < Math.Abs(choices[best] - value))
+            {
+                best = index;
+            }
+        }
+
+        return best;
+    }
+
+    private double SelectedZoomLevel => OptionKind is VideoEffectKind.Zoom
+        && OptionBox.SelectedIndex >= 0
+        && OptionBox.SelectedIndex < ZoomLevels.Length
+            ? ZoomLevels[OptionBox.SelectedIndex]
+            : VideoZoomSegment.DefaultLevel;
+
+    private VideoCensorStyle SelectedCensorStyle => OptionKind is VideoEffectKind.Censor
+        && OptionBox.SelectedIndex >= 0
+        && OptionBox.SelectedIndex < CensorStyles.Length
+            ? CensorStyles[OptionBox.SelectedIndex]
+            : VideoCensorStyle.Blur;
+
+    private double SelectedSpeedFactor => OptionKind is VideoEffectKind.Speed
+        && OptionBox.SelectedIndex >= 0
+        && OptionBox.SelectedIndex < VideoSpeedSegment.PresetFactors.Count
+            ? VideoSpeedSegment.PresetFactors[OptionBox.SelectedIndex]
+            : VideoSpeedSegment.DefaultFactor;
+
+    private double SelectedFreezeHold => OptionKind is VideoEffectKind.Freeze
+        && OptionBox.SelectedIndex >= 0
+        && OptionBox.SelectedIndex < VideoFreezeSegment.PresetHolds.Count
+            ? VideoFreezeSegment.PresetHolds[OptionBox.SelectedIndex]
+            : VideoFreezeSegment.DefaultHold;
+
+    private double SelectedFontSize => OptionKind is VideoEffectKind.Text
+        && OptionBox.SelectedIndex >= 0
+        && OptionBox.SelectedIndex < VideoTextSegment.PresetFontSizes.Count
+            ? VideoTextSegment.PresetFontSizes[OptionBox.SelectedIndex].Size
+            : VideoTextSegment.DefaultFontSize;
+
+    private void Option_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_filling || _selected is not { } chosen)
+        {
+            return;
+        }
+
+        switch (chosen.Kind)
+        {
+            case VideoEffectKind.Zoom:
+                _effects.Zooms[chosen.Index] = _effects.Zooms[chosen.Index].WithLevel(SelectedZoomLevel);
+                break;
+
+            case VideoEffectKind.Censor:
+                _effects.Censors[chosen.Index] = _effects.Censors[chosen.Index].WithStyle(SelectedCensorStyle);
+                break;
+
+            case VideoEffectKind.Speed:
+                _effects.Speeds[chosen.Index] =
+                    _effects.Speeds[chosen.Index].WithFactor(SelectedSpeedFactor, _duration);
+                break;
+
+            case VideoEffectKind.Freeze:
+                _effects.Freezes[chosen.Index] = _effects.Freezes[chosen.Index].WithHold(SelectedFreezeHold);
+                break;
+
+            case VideoEffectKind.Text:
+                _effects.Texts[chosen.Index] = _effects.Texts[chosen.Index] with { FontSize = SelectedFontSize };
+                break;
+
+            default:
+                return;
+        }
+
+        Touched();
+    }
+
+    /// <summary>Puts the selected caption's own text and weight into the row below.</summary>
+    private void FillCaption()
+    {
+        if (_selected is not { Kind: VideoEffectKind.Text, Index: var index })
+        {
+            return;
+        }
+
+        _filling = true;
+        try
+        {
+            var caption = _effects.Texts[index];
+            CaptionBox.Text = caption.Text;
+            CaptionBoldBox.IsChecked = caption.Bold;
+            CaptionItalicBox.IsChecked = caption.Italic;
+            CaptionAlignBox.SelectedIndex = Array.IndexOf(CaptionAlignments, caption.Alignment);
+        }
+        finally
+        {
+            _filling = false;
+        }
+    }
+
+    private void Caption_Changed(object sender, TextChangedEventArgs e)
+    {
+        if (_filling || _selected is not { Kind: VideoEffectKind.Text, Index: var index })
+        {
+            return;
+        }
+
+        // Not through WithText, which refuses an empty caption: this fires on every
+        // keystroke, and rejecting the moment the field is cleared would put the old text
+        // back under the cursor. The refusal happens when the caption is rasterized.
+        _effects.Texts[index] = _effects.Texts[index] with
+        {
+            Text = CaptionBox.Text,
+        };
+
+        Touched();
+    }
+
+    private void CaptionStyle_Changed(object sender, RoutedEventArgs e)
+    {
+        if (_filling || _selected is not { Kind: VideoEffectKind.Text, Index: var index })
+        {
+            return;
+        }
+
+        var alignment = CaptionAlignBox.SelectedIndex >= 0
+            && CaptionAlignBox.SelectedIndex < CaptionAlignments.Length
+                ? CaptionAlignments[CaptionAlignBox.SelectedIndex]
+                : VideoTextAlignment.Centre;
+
+        _effects.Texts[index] = _effects.Texts[index] with
+        {
+            Bold = CaptionBoldBox.IsChecked is true,
+            Italic = CaptionItalicBox.IsChecked is true,
+            Alignment = alignment,
+        };
+
+        Touched();
     }
 
     private void EffectsBand_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        if (_zoom is not { } zoom)
+        var point = e.GetCurrentPoint(EffectsBand).Position;
+        var hit = PillAt(point);
+
+        if (hit is not { } pill)
         {
+            // A press on bare band lets the selection go, which is the only way to get the
+            // options row back to describing what Add would place.
+            Select(null);
             return;
         }
 
-        var x = e.GetCurrentPoint(EffectsBand).Position.X;
-        var left = XFor(zoom.Start);
-        var right = XFor(zoom.End);
+        Select((pill.Kind, pill.Index));
 
-        // Outside the pill entirely: a press on bare band does nothing, rather than
-        // moving the zoom the user was not pointing at.
-        if (x < left - PillEdgeGrab || x > right + PillEdgeGrab)
-        {
-            return;
-        }
+        _pillDragging = pill.Kind is VideoEffectKind.Freeze
+            // A freeze is an instant: there is nothing to resize, only somewhere to put it.
+            ? PillGrab.Body
+            : point.X <= pill.Left + PillEdgeGrab
+                ? PillGrab.Start
+                : point.X >= pill.Right - PillEdgeGrab
+                    ? PillGrab.End
+                    : PillGrab.Body;
 
-        _zoomDragging = x <= left + PillEdgeGrab
-            ? PillGrab.Start
-            : x >= right - PillEdgeGrab
-                ? PillGrab.End
-                : PillGrab.Body;
-
-        _zoomGrabOffset = SecondsFor(x) - zoom.Start;
+        _pillGrabOffset = SecondsFor(point.X) - _effects.SpanOf(pill.Kind, pill.Index).Start;
         EffectsBand.CapturePointer(e.Pointer);
+    }
+
+    /// <summary>Which pill a press landed on, or nothing.</summary>
+    /// <remarks>
+    /// Searched from the end, so the pill drawn last — a cut, which is drawn over its
+    /// row-mates deliberately — is the one a press on the overlap takes hold of.
+    /// </remarks>
+    private BandPill? PillAt(global::Windows.Foundation.Point point)
+    {
+        for (var index = _pills.Count - 1; index >= 0; index--)
+        {
+            var pill = _pills[index];
+            var top = BandInset + ((_bandRows - 1 - pill.Row) * RowStride);
+
+            if (point.Y >= top
+                && point.Y <= top + RowHeight
+                && point.X >= pill.Left - PillEdgeGrab
+                && point.X <= pill.Right + PillEdgeGrab)
+            {
+                return pill;
+            }
+        }
+
+        return null;
     }
 
     private void EffectsBand_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
-        if (_zoomDragging is PillGrab.None || _zoom is not { } zoom)
+        if (_pillDragging is PillGrab.None || _selected is not { } chosen)
         {
             return;
         }
 
         var seconds = SecondsFor(e.GetCurrentPoint(EffectsBand).Position.X);
+        var moved = seconds - _pillGrabOffset;
 
-        _zoom = _zoomDragging switch
+        switch (chosen.Kind)
         {
-            PillGrab.Start => zoom.WithStart(seconds, _duration),
-            PillGrab.End => zoom.WithEnd(seconds, _duration),
-            _ => zoom.MovedTo(seconds - _zoomGrabOffset, _duration),
-        };
+            case VideoEffectKind.Zoom:
+                _effects.Zooms[chosen.Index] = _pillDragging switch
+                {
+                    PillGrab.Start => _effects.Zooms[chosen.Index].WithStart(seconds, _duration),
+                    PillGrab.End => _effects.Zooms[chosen.Index].WithEnd(seconds, _duration),
+                    _ => _effects.Zooms[chosen.Index].MovedTo(moved, _duration),
+                };
+                break;
+
+            case VideoEffectKind.Censor:
+                _effects.Censors[chosen.Index] = _pillDragging switch
+                {
+                    PillGrab.Start => _effects.Censors[chosen.Index].WithStart(seconds, _duration),
+                    PillGrab.End => _effects.Censors[chosen.Index].WithEnd(seconds, _duration),
+                    _ => _effects.Censors[chosen.Index].MovedTo(moved, _duration),
+                };
+                break;
+
+            case VideoEffectKind.Cut:
+                _effects.Cuts[chosen.Index] = _pillDragging switch
+                {
+                    PillGrab.Start => _effects.Cuts[chosen.Index].WithStart(seconds, _duration),
+                    PillGrab.End => _effects.Cuts[chosen.Index].WithEnd(seconds, _duration),
+                    _ => _effects.Cuts[chosen.Index].MovedTo(moved, _duration),
+                };
+                break;
+
+            case VideoEffectKind.Speed:
+                _effects.Speeds[chosen.Index] = _pillDragging switch
+                {
+                    PillGrab.Start => _effects.Speeds[chosen.Index].WithStart(seconds, _duration),
+                    PillGrab.End => _effects.Speeds[chosen.Index].WithEnd(seconds, _duration),
+                    _ => _effects.Speeds[chosen.Index].MovedTo(moved, _duration),
+                };
+                break;
+
+            case VideoEffectKind.Freeze:
+                // From where the press landed, like every other kind: the pill is 62 wide
+                // around an instant that has no width, so taking hold of its edge and
+                // having the instant jump under the pointer would be the visible result.
+                _effects.Freezes[chosen.Index] = _effects.Freezes[chosen.Index].MovedTo(moved, _duration);
+                break;
+
+            default:
+                _effects.Texts[chosen.Index] = _pillDragging switch
+                {
+                    PillGrab.Start => _effects.Texts[chosen.Index].WithStart(seconds, _duration),
+                    PillGrab.End => _effects.Texts[chosen.Index].WithEnd(seconds, _duration),
+                    _ => _effects.Texts[chosen.Index].MovedTo(moved, _duration),
+                };
+                break;
+        }
 
         _exported = null;
+        _bandDirty = true;
         DrawTimeline();
     }
 
     private void EffectsBand_PointerReleased(object sender, PointerRoutedEventArgs e)
     {
         EffectsBand.ReleasePointerCapture(e.Pointer);
-        EndZoomDrag();
+        EndPillDrag();
     }
 
     /// <summary>
     /// Ends the drag when the pointer is taken away rather than let go, for the same
     /// reason <see cref="Timeline_PointerCaptureLost"/> does.
     /// </summary>
-    private void EffectsBand_PointerCaptureLost(object sender, PointerRoutedEventArgs e) => EndZoomDrag();
+    private void EffectsBand_PointerCaptureLost(object sender, PointerRoutedEventArgs e) => EndPillDrag();
 
-    private void EndZoomDrag()
+    private void EndPillDrag()
     {
-        if (_zoomDragging is PillGrab.None)
+        if (_pillDragging is PillGrab.None)
         {
             return;
         }
 
-        _zoomDragging = PillGrab.None;
+        _pillDragging = PillGrab.None;
+        Touched();
+    }
 
-        // The ramps are scaled to the segment's length, which the drag may just have
-        // changed. Re-applying the level is what rescales them.
-        if (_zoom is { } zoom)
+    // The rectangle on the picture
+
+    private void ShowRectOverlay() =>
+        RectOverlay.Visibility =
+            (_selected?.Kind is VideoEffectKind.Censor or VideoEffectKind.Text) && !SourceIsGif
+                ? Visibility.Visible
+                : Visibility.Collapsed;
+
+    private void RectOverlay_SizeChanged(object sender, SizeChangedEventArgs e) => DrawRectOverlay();
+
+    /// <summary>Where the selected censor or caption's rectangle is, or nothing.</summary>
+    private CaptureRegion? SelectedRect => _selected switch
+    {
+        { Kind: VideoEffectKind.Censor, Index: var index } => _effects.Censors[index].Rect,
+        { Kind: VideoEffectKind.Text, Index: var index } => _effects.Texts[index].Rect,
+        _ => null,
+    };
+
+    /// <summary>Where the picture actually is inside the overlay, bars excluded.</summary>
+    private CaptureRegion Letterbox => VideoOverlayGeometry.Letterbox(
+        RectOverlay.ActualWidth,
+        RectOverlay.ActualHeight,
+        _sourceWidth,
+        _sourceHeight);
+
+    private void DrawRectOverlay()
+    {
+        if (RectOverlay.Visibility is not Visibility.Visible || SelectedRect is not { } normalized)
         {
-            _zoom = zoom.WithLevel(zoom.Level);
+            return;
         }
 
+        var box = Letterbox;
+        if (box.Width <= 0)
+        {
+            return;
+        }
+
+        var drawn = VideoOverlayGeometry.Denormalize(normalized, box);
+
+        RectFrame.Width = Math.Max(1, drawn.Width);
+        RectFrame.Height = Math.Max(1, drawn.Height);
+        Canvas.SetLeft(RectFrame, drawn.X);
+        Canvas.SetTop(RectFrame, drawn.Y);
+
+        Canvas.SetLeft(RectHandle, drawn.Right - RectHandle.Width);
+        Canvas.SetTop(RectHandle, drawn.Bottom - RectHandle.Height);
+    }
+
+    private void RectOverlay_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (SelectedRect is not { } normalized)
+        {
+            return;
+        }
+
+        var box = Letterbox;
+        var drawn = VideoOverlayGeometry.Denormalize(normalized, box);
+        var point = e.GetCurrentPoint(RectOverlay).Position;
+
+        // The corner first, because it overlaps the body and resizing is what a press
+        // there is asking for.
+        if (Math.Abs(point.X - drawn.Right) <= HandleGrab && Math.Abs(point.Y - drawn.Bottom) <= HandleGrab)
+        {
+            _rectDragging = RectGrab.Corner;
+        }
+        else if (drawn.Contains(point.X, point.Y))
+        {
+            _rectDragging = RectGrab.Body;
+            _rectGrabOffset = new global::Windows.Foundation.Point(point.X - drawn.X, point.Y - drawn.Y);
+        }
+        else
+        {
+            return;
+        }
+
+        RectOverlay.CapturePointer(e.Pointer);
+    }
+
+    private void RectOverlay_PointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (_rectDragging is RectGrab.None || SelectedRect is not { } normalized)
+        {
+            return;
+        }
+
+        var box = Letterbox;
+        if (box.Width <= 0 || box.Height <= 0)
+        {
+            return;
+        }
+
+        var drawn = VideoOverlayGeometry.Denormalize(normalized, box);
+        var point = e.GetCurrentPoint(RectOverlay).Position;
+
+        var moved = _rectDragging is RectGrab.Corner
+            ? new CaptureRegion(
+                drawn.X,
+                drawn.Y,
+                Math.Max(1, point.X - drawn.X),
+                Math.Max(1, point.Y - drawn.Y))
+            : new CaptureRegion(
+                point.X - _rectGrabOffset.X,
+                point.Y - _rectGrabOffset.Y,
+                drawn.Width,
+                drawn.Height);
+
+        var back = VideoOverlayGeometry.Normalize(moved, box);
+
+        if (_selected is { Kind: VideoEffectKind.Censor, Index: var censor })
+        {
+            _effects.Censors[censor] = _effects.Censors[censor].WithRect(back);
+        }
+        else if (_selected is { Kind: VideoEffectKind.Text, Index: var text })
+        {
+            _effects.Texts[text] = _effects.Texts[text].WithRect(back);
+        }
+
+        _exported = null;
+        DrawRectOverlay();
+    }
+
+    private void RectOverlay_PointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        RectOverlay.ReleasePointerCapture(e.Pointer);
+        EndRectDrag();
+    }
+
+    private void RectOverlay_PointerCaptureLost(object sender, PointerRoutedEventArgs e) => EndRectDrag();
+
+    private void EndRectDrag()
+    {
+        if (_rectDragging is RectGrab.None)
+        {
+            return;
+        }
+
+        _rectDragging = RectGrab.None;
+        Touched();
+    }
+
+    /// <summary>
+    /// What every change to the band does: the file already written no longer matches it,
+    /// and the bar has to be redrawn around the new length.
+    /// </summary>
+    private void Touched()
+    {
+        _exported = null;
+        _bandDirty = true;
         ShowExportChoices();
         DrawTimeline();
     }
-
-    private double SelectedZoomLevel => ZoomLevelBox.SelectedIndex >= 0
-        && ZoomLevelBox.SelectedIndex < ZoomLevels.Length
-            ? ZoomLevels[ZoomLevelBox.SelectedIndex]
-            : VideoZoomSegment.DefaultLevel;
-
-    /// <summary>macshot's <c>formatZoom</c>: one decimal, and an x.</summary>
-    private static string FormatZoom(double level) =>
-        level.ToString("0.0", CultureInfo.InvariantCulture) + "x";
 
     // Output
 
@@ -951,7 +1796,7 @@ public sealed partial class VideoEditorWindow : Window
         && (!_trim.IsWhole(_duration)
             || ExportPercent < 100
             || ExportsGif
-            || _zoom is { IsFlat: false }
+            || _effects.ChangesAnything
             || ExportQuality != VideoQuality.High);
 
     /// <summary>
@@ -984,9 +1829,13 @@ public sealed partial class VideoEditorWindow : Window
             {
                 note = await WriteGifAsync(source, file);
             }
-            else if (_zoom is { IsFlat: false } zoom)
+            else if (_effects.NeedsFramePipeline)
             {
-                note = await WriteZoomedMp4Async(source, file, zoom);
+                note = await WriteEffectsMp4Async(source, file);
+            }
+            else if (_effects.HasCuts)
+            {
+                await WriteCutMp4Async(source, file);
             }
             else
             {
@@ -1036,31 +1885,43 @@ public sealed partial class VideoEditorWindow : Window
             GifFrameRate,
             progress);
 
-        // Said rather than left to be noticed: a truncated GIF ends before the piece that
-        // was asked for does, and a file that quietly stops early is worse than one that
-        // says why it did. Not through L, since macshot has no string for a limit it does
-        // not have.
-        return result.Truncated
-            ? $"stopped after {result.Frames} frames, which is as long as a GIF goes here"
-            : null;
+        // Said rather than left to be noticed. Not through L, since macshot has no string
+        // for either of these limits, neither of which it has.
+        var notes = new List<string>(2);
+
+        // A truncated GIF ends before the piece that was asked for does, and a file that
+        // quietly stops early is worse than one that says why it did.
+        if (result.Truncated)
+        {
+            notes.Add($"stopped after {result.Frames} frames, which is as long as a GIF goes here");
+        }
+
+        // The band is taken off the window while GIF is chosen, but what is on it survives
+        // the format being switched back and forth. A GIF is written straight out of the
+        // composition by GifExporter, which knows nothing about effects, so an export that
+        // said nothing here would look like one that had applied them.
+        if (_effects.ChangesAnything)
+        {
+            notes.Add("the effects band is not applied to a GIF");
+        }
+
+        return notes.Count == 0 ? null : string.Join("  ·  ", notes);
     }
 
     /// <summary>
-    /// Writes the MP4 with the band's zoom applied, and returns what the caller has to say
-    /// about it beyond where it went.
+    /// Writes the MP4 with the band applied, and returns what the caller has to say about
+    /// it beyond where it went.
     /// </summary>
     /// <remarks>
-    /// A separate path from <see cref="WriteMp4Async"/> rather than the same one with an
-    /// effect switched on, because the two do genuinely different work:
-    /// <see cref="MediaComposition"/> hands the file to the platform and lets it re-encode,
-    /// while <see cref="ZoomVideoCompositor"/> decodes every frame, magnifies it here and
-    /// encodes it again. The second is several times slower, so a recording with no zoom on
-    /// it must not be made to pay for one.
+    /// A separate path from <see cref="WriteMp4Async"/> and from
+    /// <see cref="WriteCutMp4Async"/> rather than one path with effects switched on,
+    /// because the three do genuinely different work: <see cref="MediaComposition"/> hands
+    /// the file to the platform and lets it re-encode, while
+    /// <see cref="VideoEffectsCompositor"/> decodes every frame, draws on it here, and
+    /// encodes it again. The last is several times slower, so a recording that does not
+    /// need it must not be made to pay for it.
     /// </remarks>
-    private async Task<string?> WriteZoomedMp4Async(
-        StorageFile source,
-        StorageFile destination,
-        VideoZoomSegment zoom)
+    private async Task<string?> WriteEffectsMp4Async(StorageFile source, StorageFile destination)
     {
         var (width, height) = SizeForExport();
         if (width <= 0 || height <= 0)
@@ -1068,30 +1929,116 @@ public sealed partial class VideoEditorWindow : Window
             throw new InvalidOperationException("This recording does not say what size its frames are.");
         }
 
-        // Reported as it goes, as the GIF export is: a zoom export seeks to every frame,
-        // and a bar that does not move on a minute of recording reads as one that has
-        // stopped.
+        // Reported as it goes, as the GIF export is: an effects export seeks to every
+        // frame, and a bar that does not move on a minute of recording reads as one that
+        // has stopped.
         var progress = new Progress<double>(done =>
             StatusText.Text = L("Exporting...") + $" {done:P0}");
 
-        await ZoomVideoCompositor.WriteAsync(
+        var carried = await VideoEffectsCompositor.WriteAsync(
             source,
             destination,
             _trim,
-            zoom,
+            _effects,
+            await CaptionsAsync(width, height),
+            _duration,
             _sourceWidth,
             _sourceHeight,
             width,
             height,
             FrameRate,
             VideoExportPlan.Bitrate(width, height, FrameRate, ExportQuality),
+            _sourceHasAudio,
             progress);
 
-        // Said rather than left to be discovered on playback. The compositor builds the
-        // file out of frames it decoded itself, and carrying the recording's audio through
-        // that would mean demuxing and re-muxing a track nothing else here touches. Not
-        // through L, since macshot has no string for a limit it does not have.
-        return "the zoom export carries no audio";
+        // Only when the recording had sound and it did not survive, which now means the
+        // machine would not decode the track rather than that macshot cannot re-time one.
+        // Not through L, since macshot has no string for a failure it does not have.
+        return _sourceHasAudio && !carried
+            ? "this machine would not decode the recording's audio, so the export has none"
+            : null;
+    }
+
+    /// <summary>
+    /// Rasterizes every caption on the band at the size the export will draw it.
+    /// </summary>
+    /// <remarks>
+    /// Once, before the frames start, because font shaping at video frame rate would cost
+    /// more than the encode. The rectangle is measured with no zoom applied — a caption
+    /// under a zoom is scaled from this raster rather than re-set at the magnified size,
+    /// which is what macshot does too and what keeps the caption's own proportions steady
+    /// while the picture behind it moves.
+    /// </remarks>
+    private async Task<IReadOnlyList<VideoCaption>> CaptionsAsync(int width, int height)
+    {
+        var whole = new CaptureRegion(0, 0, _sourceWidth, _sourceHeight);
+        var scale = EffectsBand.XamlRoot?.RasterizationScale ?? 1;
+        var captions = new List<VideoCaption>(_effects.Texts.Count);
+
+        foreach (var text in _effects.Texts)
+        {
+            if (text.Duration <= 0)
+            {
+                continue;
+            }
+
+            var rect = VideoOverlayGeometry.OutputRect(
+                text.Rect,
+                whole,
+                _sourceWidth,
+                _sourceHeight,
+                width,
+                height);
+
+            // Through WithText here rather than as it was typed: an emptied field must not
+            // rasterize to a bare pill sitting on the picture with nothing in it.
+            var raster = await VideoCaptionGlyphs.RenderAsync(
+                EffectsBand,
+                text.WithText(text.Text),
+                (int)Math.Round(rect.Width),
+                (int)Math.Round(rect.Height),
+                height,
+                scale);
+
+            if (raster is not null)
+            {
+                captions.Add(new VideoCaption(text, raster));
+            }
+        }
+
+        return captions;
+    }
+
+    /// <summary>
+    /// Writes the MP4 with the cuts taken out of it, through the platform's own editor.
+    /// </summary>
+    /// <remarks>
+    /// One clip per surviving stretch, which is what a cut is to Windows. Worth its own
+    /// path rather than folding into the frame pipeline for two reasons: the platform
+    /// encodes it in one pass rather than one seek per frame, and it carries the
+    /// recording's audio across the cuts itself, in step, with nothing here to get wrong.
+    /// </remarks>
+    private async Task WriteCutMp4Async(StorageFile source, StorageFile destination)
+    {
+        var composition = new MediaComposition();
+
+        foreach (var kept in VideoCuts.KeptRanges(_trim.Start, _trim.End, _effects.Cuts))
+        {
+            // A clip of its own per stretch. The same file opened repeatedly, which is
+            // what MediaComposition expects: a clip is a view of a file, not the file.
+            var clip = await MediaClip.CreateFromFileAsync(source);
+            clip.TrimTimeFromStart = TimeSpan.FromSeconds(kept.Start);
+            clip.TrimTimeFromEnd = TimeSpan.FromSeconds(Math.Max(0, _duration - kept.End));
+            composition.Clips.Add(clip);
+        }
+
+        if (composition.Clips.Count == 0)
+        {
+            throw new InvalidOperationException(
+                "The cuts and the trim between them leave nothing of this recording to export.");
+        }
+
+        await RenderAsync(composition, destination);
     }
 
     private async Task WriteMp4Async(StorageFile source, StorageFile destination)
@@ -1103,6 +2050,11 @@ public sealed partial class VideoEditorWindow : Window
         var composition = new MediaComposition();
         composition.Clips.Add(clip);
 
+        await RenderAsync(composition, destination);
+    }
+
+    private async Task RenderAsync(MediaComposition composition, StorageFile destination)
+    {
         var profile = MediaEncodingProfile.CreateMp4(VideoEncodingQuality.Auto);
         var (width, height) = SizeForExport();
 
