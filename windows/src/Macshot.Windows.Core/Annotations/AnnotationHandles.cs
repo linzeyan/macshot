@@ -11,11 +11,8 @@ public enum AnnotationHandleKind
     /// <summary>Moves the end a linear mark was drawn to.</summary>
     End,
 
-    /// <summary>Pulls the first third of a line or arrow off the straight path.</summary>
+    /// <summary>Moves the control point that bows a line or arrow.</summary>
     Bend,
-
-    /// <summary>Pulls the last third off it, which is what makes an S-curve reachable.</summary>
-    BendEnd,
 
     TopLeft,
     TopRight,
@@ -79,13 +76,6 @@ public static class AnnotationHandles
     /// shorten with it.
     /// </remarks>
     public const double RotateReach = 24;
-
-    /// <summary>
-    /// How far a line may be bowed, as the fraction of its length its middle is pulled
-    /// off the straight path. Past this the curve doubles back on itself and the handle
-    /// stops following the pointer, which reads as the drag having broken.
-    /// </summary>
-    public const double MaximumBend = 1;
 
     /// <summary>
     /// The handles <paramref name="annotation"/> offers, or nothing for a mark that only
@@ -189,14 +179,7 @@ public static class AnnotationHandles
             {
                 End = Constrain(annotation.Start, upright, modifiers),
             },
-            AnnotationHandleKind.Bend => annotation with
-            {
-                Bend = BendTo(annotation, upright, FirstStation),
-            },
-            AnnotationHandleKind.BendEnd => annotation with
-            {
-                BendEnd = BendTo(annotation, upright, SecondStation),
-            },
+            AnnotationHandleKind.Bend => BentTo(annotation, upright),
             AnnotationHandleKind.TopLeft
                 or AnnotationHandleKind.TopRight
                 or AnnotationHandleKind.BottomLeft
@@ -264,7 +247,7 @@ public static class AnnotationHandles
             || left.End != right.End
             || left.Rotation != right.Rotation
             || left.Bend != right.Bend
-            || left.BendEnd != right.BendEnd;
+            || left.BendAlong != right.BendAlong;
     }
 
     /// <summary>
@@ -292,10 +275,7 @@ public static class AnnotationHandles
         {
             handles.Add(new AnnotationHandle(
                 AnnotationHandleKind.Bend,
-                Turn(BendGrip(annotation, FirstStation, annotation.Bend), centre, annotation.Rotation)));
-            handles.Add(new AnnotationHandle(
-                AnnotationHandleKind.BendEnd,
-                Turn(BendGrip(annotation, SecondStation, annotation.BendEnd), centre, annotation.Rotation)));
+                Turn(BendGrip(annotation), centre, annotation.Rotation)));
         }
 
         return handles;
@@ -328,58 +308,74 @@ public static class AnnotationHandles
     }
 
     /// <summary>
-    /// How far along the straight path each of the two bend handles sits.
+    /// Where the bend handle sits: on the control point itself, which for an unbent line
+    /// is the middle of it.
     /// </summary>
     /// <remarks>
-    /// Thirds rather than the midpoint one handle used, because two handles at the same
-    /// place cannot be told apart, and because a cubic's two controls are naturally
-    /// stationed there — which is what makes each handle land exactly on the curve it
-    /// bends. See <c>AnnotationRasterizer.BendControlPoints</c>.
+    /// Beside the curve rather than on it, which is macshot's own arrangement
+    /// (<c>OverlayView.swift:4370-4378</c> puts the grip at <c>controlPoint</c>, falling
+    /// back to the midpoint of the two ends). This port used to sit it on the curve, on
+    /// the reasoning that a handle should be a point of the line it bends — but that only
+    /// works while the drag is confined to one axis, and macshot's is not. A grip that is
+    /// the control point follows the pointer exactly wherever it goes, which is worth more
+    /// than being on the line, and it is what the dashed arms drawn out to it explain.
     /// </remarks>
-    private const double FirstStation = 1d / 3;
-
-    private const double SecondStation = 2d / 3;
-
-    /// <summary>
-    /// Where a bend handle sits: on the curve itself, at its station along the straight
-    /// path, so the handle is a point of the line it bends rather than a control point
-    /// floating beside it.
-    /// </summary>
-    private static CapturePoint BendGrip(Annotation annotation, double station, double bend)
+    private static CapturePoint BendGrip(Annotation annotation)
     {
-        var (at, acrossX, acrossY) = Across(annotation, station);
-        return new CapturePoint(at.X + (acrossX * bend), at.Y + (acrossY * bend));
+        var (mid, alongX, alongY, acrossX, acrossY) = Frame(annotation);
+        var along = annotation.BendAlong;
+
+        return new CapturePoint(
+            mid.X + (alongX * along) + (acrossX * annotation.Bend),
+            mid.Y + (alongY * along) + (acrossY * annotation.Bend));
     }
 
-    private static double BendTo(Annotation annotation, CapturePoint point, double station)
+    /// <summary>
+    /// The mark as dragging its control point to <paramref name="point"/> leaves it.
+    /// </summary>
+    /// <remarks>
+    /// Both components are taken, not just the sideways one: macshot stores the pointer
+    /// where it is (<c>OverlayView.swift:6011</c>), so sliding the grip towards an end
+    /// moves the bulge towards that end instead of doing nothing. And nothing is clamped,
+    /// because the reason this port clamped — that past a certain bow the handle stopped
+    /// following the pointer and the drag read as broken — cannot arise once the handle is
+    /// the very point being set.
+    /// </remarks>
+    private static Annotation BentTo(Annotation annotation, CapturePoint point)
     {
-        var (at, acrossX, acrossY) = Across(annotation, station);
-        var lengthSquared = (acrossX * acrossX) + (acrossY * acrossY);
+        var (mid, alongX, alongY, acrossX, acrossY) = Frame(annotation);
+        var lengthSquared = (alongX * alongX) + (alongY * alongY);
         if (lengthSquared == 0)
         {
-            return station == FirstStation ? annotation.Bend : annotation.BendEnd;
+            return annotation;
         }
 
-        // The component of the drag along the perpendicular, as a fraction of the line's
-        // length: sideways pulls bow the line, along-the-line movement does nothing.
-        var bend = (((point.X - at.X) * acrossX) + ((point.Y - at.Y) * acrossY)) / lengthSquared;
-        return Math.Clamp(bend, -MaximumBend, MaximumBend);
+        var offsetX = point.X - mid.X;
+        var offsetY = point.Y - mid.Y;
+
+        return annotation with
+        {
+            Bend = ((offsetX * acrossX) + (offsetY * acrossY)) / lengthSquared,
+            BendAlong = ((offsetX * alongX) + (offsetY * alongY)) / lengthSquared,
+        };
     }
 
     /// <summary>
-    /// A point a given fraction along a linear mark, and the perpendicular a bend runs
-    /// along there. The perpendicular is as long as the mark, so a bend fraction times it
-    /// is that fraction of the mark's length sideways.
+    /// The middle of a linear mark and the two directions a bend is measured in: along it
+    /// and across it. Both vectors are exactly as long as the mark, so a bend fraction
+    /// times either is that fraction of its length — which is what lets a bow survive the
+    /// mark being dragged longer.
     /// </summary>
-    private static (CapturePoint At, double AcrossX, double AcrossY) Across(Annotation annotation, double station)
+    private static (CapturePoint Mid, double AlongX, double AlongY, double AcrossX, double AcrossY) Frame(
+        Annotation annotation)
     {
         var deltaX = annotation.End.X - annotation.Start.X;
         var deltaY = annotation.End.Y - annotation.Start.Y;
-        var at = new CapturePoint(
-            annotation.Start.X + (deltaX * station),
-            annotation.Start.Y + (deltaY * station));
+        var mid = new CapturePoint(
+            (annotation.Start.X + annotation.End.X) / 2,
+            (annotation.Start.Y + annotation.End.Y) / 2);
 
-        return (at, -deltaY, deltaX);
+        return (mid, deltaX, deltaY, -deltaY, deltaX);
     }
 
     private static Annotation ResizeCorner(

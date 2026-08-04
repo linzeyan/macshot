@@ -696,83 +696,63 @@ public static class AnnotationRasterizer
     /// side when the annotation carries a bend.
     /// </summary>
     /// <remarks>
-    /// A cubic, as macOS draws it (<c>Annotation.swift:891</c>). Two controls rather than
-    /// one is what lets the two halves bow by different amounts and in different
-    /// directions, which is the whole difference between a bow and a path steered round
-    /// something in the way.
+    /// A cubic with one control point given twice, which is exactly how macOS bows a line
+    /// — <c>curve(to:controlPoint1:cp,controlPoint2:cp)</c>, <c>Annotation.swift:891</c>.
+    /// Not the quadratic this drew before: the two reach different distances towards the
+    /// same control, so a quadratic bowed by three quarters of what macshot's does.
     /// </remarks>
     private static CapturePoint[] BuildShaftPath(Annotation annotation)
     {
-        if (annotation.Bend == 0 && annotation.BendEnd == 0)
+        if (annotation.Bend == 0 && annotation.BendAlong == 0)
         {
             return [annotation.Start, annotation.End];
         }
 
-        var (first, second) = BendControlPoints(annotation);
+        var control = BendControlPoint(annotation);
         var path = new CapturePoint[BendSegments + 1];
         for (var step = 0; step <= BendSegments; step++)
         {
-            path[step] = CubicAt(annotation.Start, first, second, annotation.End, (double)step / BendSegments);
+            path[step] = CubicAt(annotation.Start, control, annotation.End, (double)step / BendSegments);
         }
 
         return path;
     }
 
     /// <summary>
-    /// The two control points a bend describes, sat a third and two thirds of the way
-    /// along the straight path and pushed out at right angles to it.
+    /// The single control point a bend describes: off the middle of the straight path, by
+    /// the two bend fractions of that path's length — sideways, and along.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// <see cref="Annotation.Bend"/> and <see cref="Annotation.BendEnd"/> say where the
-    /// <em>curve</em> passes, not where its controls sit, so that each handle is a point
-    /// of the line it bends rather than something floating beside it. Solving back for
-    /// the controls is what makes that true.
-    /// </para>
-    /// <para>
-    /// A cubic whose controls sit at exactly those two stations is offset sideways by
-    /// <c>(4c₁ + 2c₂)/9</c> at a third along and <c>(2c₁ + 4c₂)/9</c> at two thirds.
-    /// Setting those equal to the two bends and inverting the pair gives the two
-    /// coefficients below — and, because the along-the-path halves work out to exactly a
-    /// third and two thirds, the curve passes through each handle rather than merely
-    /// near it.
-    /// </para>
+    /// Both of the path's own vectors are exactly as long as the path is: the delta
+    /// itself, and <c>(-deltaY, deltaX)</c> at right angles to it. So a bend fraction
+    /// times either one is that fraction of the length in that direction, which is what
+    /// makes a bow keep its shape when the mark is dragged longer.
     /// </remarks>
-    private static (CapturePoint First, CapturePoint Second) BendControlPoints(Annotation annotation)
+    private static CapturePoint BendControlPoint(Annotation annotation)
     {
         var deltaX = annotation.End.X - annotation.Start.X;
         var deltaY = annotation.End.Y - annotation.Start.Y;
+        var along = 0.5 + annotation.BendAlong;
 
-        // (-deltaY, deltaX) is at right angles to the path and exactly as long as it, so
-        // multiplying by a bend fraction gives that fraction of the length sideways.
-        var firstReach = (3 * annotation.Bend) - (1.5 * annotation.BendEnd);
-        var secondReach = (3 * annotation.BendEnd) - (1.5 * annotation.Bend);
-
-        return (
-            new CapturePoint(
-                annotation.Start.X + (deltaX / 3) - (deltaY * firstReach),
-                annotation.Start.Y + (deltaY / 3) + (deltaX * firstReach)),
-            new CapturePoint(
-                annotation.Start.X + (deltaX * 2 / 3) - (deltaY * secondReach),
-                annotation.Start.Y + (deltaY * 2 / 3) + (deltaX * secondReach)));
+        return new CapturePoint(
+            annotation.Start.X + (deltaX * along) - (deltaY * annotation.Bend),
+            annotation.Start.Y + (deltaY * along) + (deltaX * annotation.Bend));
     }
 
-    private static CapturePoint CubicAt(
-        CapturePoint start,
-        CapturePoint first,
-        CapturePoint second,
-        CapturePoint end,
-        double t)
+    /// <summary>
+    /// A cubic whose two controls are the same point, which collapses the usual four
+    /// weights to three.
+    /// </summary>
+    private static CapturePoint CubicAt(CapturePoint start, CapturePoint control, CapturePoint end, double t)
     {
         var inverse = 1 - t;
         var a = inverse * inverse * inverse;
-        var b = 3 * inverse * inverse * t;
-        var c = 3 * inverse * t * t;
-        var d = t * t * t;
+        var b = 3 * inverse * t;
+        var c = t * t * t;
 
         return new CapturePoint(
-            (a * start.X) + (b * first.X) + (c * second.X) + (d * end.X),
-            (a * start.Y) + (b * first.Y) + (c * second.Y) + (d * end.Y));
+            (a * start.X) + (b * control.X) + (c * end.X),
+            (a * start.Y) + (b * control.Y) + (c * end.Y));
     }
 
     private static CapturePoint QuadraticAt(CapturePoint start, CapturePoint control, CapturePoint end, double t)

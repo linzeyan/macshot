@@ -54,7 +54,7 @@ public sealed class AnnotationFileTests
         {
             Rotation = 0.75,
             Bend = -0.25,
-            BendEnd = 0.4,
+            BendAlong = 0.4,
             GroupId = group,
             Text = "note",
             NumberValue = 4,
@@ -90,7 +90,7 @@ public sealed class AnnotationFileTests
         Assert.AreEqual(original.Style.DimOpacity, restored[0].Style.DimOpacity);
         Assert.AreEqual(original.Rotation, restored[0].Rotation);
         Assert.AreEqual(original.Bend, restored[0].Bend);
-        Assert.AreEqual(original.BendEnd, restored[0].BendEnd);
+        Assert.AreEqual(original.BendAlong, restored[0].BendAlong);
         Assert.AreEqual(group, restored[0].GroupId);
         Assert.AreEqual("note", restored[0].Text);
         Assert.AreEqual(4, restored[0].NumberValue);
@@ -159,12 +159,13 @@ public sealed class AnnotationFileTests
     }
 
     [TestMethod]
-    public void Read_KeepsTheShapeOfALineBentBeforeThereWereTwoBends()
+    public void Read_KeepsTheDepthOfALineBentBeforeTheBendWasAControlPoint()
     {
-        // A lone stored bend meant the offset of the curve's own middle. Read as one of a
-        // symmetric pair it would describe a curve an eighth deeper, so a capture reopened
-        // from the history would come back with a mark subtly different from the one that
-        // was saved — the exact failure this file exists to prevent.
+        // A lone stored bend was the offset of the curve's own middle, drawn as a
+        // quadratic. The same number now places a control point on a cubic, which carries
+        // the curve only three quarters of the way out to it — so read unchanged, a
+        // capture reopened from the history would come back with a shallower bow than the
+        // one that was saved. That is the exact failure this file exists to prevent.
         const string Document =
             """
             {"version":1,"annotations":[{"id":"00000000-0000-0000-0000-000000000001",
@@ -176,11 +177,8 @@ public sealed class AnnotationFileTests
         var restored = AnnotationFile.Read(Document);
 
         Assert.AreEqual(1, restored.Count);
-        Assert.AreEqual(restored[0].Bend, restored[0].BendEnd, 1e-12, "a lone bend was symmetric");
-
-        // A symmetric pair carries the middle to 1.125 times each bend, so the middle is
-        // back where the saved 0.45 of the length put it.
-        Assert.AreEqual(0.45, restored[0].Bend * 1.125, 1e-12);
+        Assert.AreEqual(0, restored[0].BendAlong, "a bend that could not slide was centred");
+        Assert.AreEqual(0.45, restored[0].Bend * 0.75, 1e-12, "and the curve is as deep as it was");
     }
 
     [TestMethod]

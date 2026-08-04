@@ -39,9 +39,7 @@ internal static class CursorHints
         // No system cursor turns or bends anything, so both of those handles borrow the
         // hand: what they have in common is that the shape follows the grip rather than a
         // corner following an axis.
-        AnnotationHandleKind.Rotate
-            or AnnotationHandleKind.Bend
-            or AnnotationHandleKind.BendEnd => InputSystemCursorShape.Hand,
+        AnnotationHandleKind.Rotate or AnnotationHandleKind.Bend => InputSystemCursorShape.Hand,
 
         // An end of a line goes anywhere, so no single axis describes it.
         _ => InputSystemCursorShape.SizeAll,

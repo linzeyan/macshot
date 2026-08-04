@@ -134,33 +134,35 @@ public sealed class RasterizerToolsTests
     }
 
     [TestMethod]
-    public void Bend_PullsTheLineThroughTheOffsetEachHandleWasDraggedTo()
+    public void Bend_CarriesTheCurveThreeQuartersOfTheWayToItsControlPoint()
     {
         var straight = Render(Blank(), Shape(AnnotationTool.Line, 10, 32, 54, 32));
-        var bent = Render(
-            Blank(),
-            Shape(AnnotationTool.Line, 10, 32, 54, 32) with { Bend = 0.2, BendEnd = 0.2 });
+        var bent = Render(Blank(), Shape(AnnotationTool.Line, 10, 32, 54, 32) with { Bend = 0.2 });
 
-        // The line is 44 long, so a fifth of it is 8.8 pixels. The two grips sit a third
-        // and two thirds along — x = 24.7 and x = 39.3 — and the curve has to pass
-        // through each of them, or a handle would not be a point of the line it bends.
+        // The line is 44 long and the control point a fifth of that off it, so it sits 8.8
+        // pixels below. A cubic with that point given twice — macshot's curve — reaches
+        // three quarters of the way, which is 6.6. A quadratic would reach only half, and
+        // that difference is the whole reason this stopped being one.
         Assert.IsTrue(IsInked(straight, 32, 32));
-        Assert.IsFalse(IsInked(straight, 25, 40), "A straight line has nothing this far off the path.");
-        Assert.IsTrue(IsInked(bent, 25, 40), "The near grip should carry the line down to it.");
-        Assert.IsTrue(IsInked(bent, 39, 40), "And the far one likewise.");
+        Assert.IsFalse(IsInked(straight, 32, 38), "A straight line has nothing this far off the path.");
+        Assert.IsTrue(IsInked(bent, 32, 38), "The curve should reach past where a quadratic would stop.");
+        Assert.IsFalse(IsInked(bent, 32, 41), "But not as far as the control point itself.");
     }
 
     [TestMethod]
-    public void Bend_BowsEachHalfSeparatelySoALineCanChangeDirection()
+    public void BendAlong_MovesTheBulgeTowardsTheEndItWasSlidTo()
     {
-        // What the second control point buys: one bend can only ever bulge to one side,
-        // and an arrow that has to get round something in its way needs both.
-        var essed = Render(
-            Blank(),
-            Shape(AnnotationTool.Line, 10, 32, 54, 32) with { Bend = 0.2, BendEnd = -0.2 });
+        // The second half of a control point macshot drags freely. Confined to the
+        // perpendicular the bow could only ever be symmetric about the line's middle.
+        var line = Shape(AnnotationTool.Line, 10, 32, 54, 32) with { Bend = 0.2 };
 
-        Assert.IsTrue(IsInked(essed, 25, 40), "the near half bows down");
-        Assert.IsTrue(IsInked(essed, 39, 23), "and the far half bows up");
+        var centred = Render(Blank(), line);
+        var late = Render(Blank(), line with { BendAlong = 0.25 });
+
+        // Eleven pixels past the middle, so the deepest part of the bow moves with it.
+        Assert.IsTrue(IsInked(centred, 32, 38));
+        Assert.IsFalse(IsInked(centred, 43, 38), "a centred bow is already climbing back by here");
+        Assert.IsTrue(IsInked(late, 43, 38), "and a slid one is still at its deepest");
     }
 
     [TestMethod]
@@ -168,7 +170,7 @@ public sealed class RasterizerToolsTests
     {
         var bent = Render(
             Blank(),
-            Shape(AnnotationTool.Line, 10, 32, 54, 32) with { Bend = 0.2, BendEnd = -0.1 });
+            Shape(AnnotationTool.Line, 10, 32, 54, 32) with { Bend = 0.2, BendAlong = -0.1 });
 
         Assert.IsTrue(IsInked(bent, 10, 32));
         Assert.IsTrue(IsInked(bent, 54, 32));
@@ -180,7 +182,7 @@ public sealed class RasterizerToolsTests
         var straight = Render(Blank(), Shape(AnnotationTool.Line, 10, 20, 54, 44));
         var explicitlyStraight = Render(
             Blank(),
-            Shape(AnnotationTool.Line, 10, 20, 54, 44) with { Bend = 0, BendEnd = 0 });
+            Shape(AnnotationTool.Line, 10, 20, 54, 44) with { Bend = 0, BendAlong = 0 });
 
         CollectionAssert.AreEqual(straight, explicitlyStraight);
     }

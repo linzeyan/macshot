@@ -341,7 +341,7 @@ public sealed partial class AnnotationCanvasView : UserControl
 
         foreach (var handle in _editor.Handles)
         {
-            AddHandle(handle, outline);
+            AddHandle(handle, outline, shown);
         }
     }
 
@@ -371,6 +371,22 @@ public sealed partial class AnnotationCanvasView : UserControl
         }
     }
 
+    /// <summary>One leg of the dashed arms drawn from a line's ends to its control point.</summary>
+    private void AddArm(Point from, Point to)
+    {
+        SelectionLayer.Children.Add(new Line
+        {
+            X1 = from.X,
+            Y1 = from.Y,
+            X2 = to.X,
+            Y2 = to.Y,
+            Stroke = _chromeStroke,
+            StrokeThickness = 1,
+            StrokeDashArray = new DoubleCollection { 4, 3 },
+            IsHitTestVisible = false,
+        });
+    }
+
     private void AddGuide(CapturePoint from, CapturePoint to)
     {
         var start = _placement.ToLayout(from);
@@ -393,9 +409,19 @@ public sealed partial class AnnotationCanvasView : UserControl
         });
     }
 
-    private void AddHandle(AnnotationHandle handle, IReadOnlyList<Point> outline)
+    private void AddHandle(AnnotationHandle handle, IReadOnlyList<Point> outline, Annotation shown)
     {
         var at = _placement.ToLayout(handle.Position);
+
+        if (handle.Kind == AnnotationHandleKind.Bend)
+        {
+            // The arms macshot draws out to the control point
+            // (OverlayView.swift:4324-4332). The grip sits beside the curve rather than on
+            // it, so without them it is a dot floating near an arrow with nothing saying
+            // it belongs to it — and the further it is dragged the less obviously it does.
+            AddArm(_placement.ToLayout(shown.Start), at);
+            AddArm(at, _placement.ToLayout(shown.End));
+        }
 
         if (handle.Kind == AnnotationHandleKind.Rotate)
         {
@@ -414,10 +440,7 @@ public sealed partial class AnnotationCanvasView : UserControl
             });
         }
 
-        var round = handle.Kind
-            is AnnotationHandleKind.Rotate
-            or AnnotationHandleKind.Bend
-            or AnnotationHandleKind.BendEnd;
+        var round = handle.Kind is AnnotationHandleKind.Rotate or AnnotationHandleKind.Bend;
         var shape = new Rectangle
         {
             Width = HandleSize,
