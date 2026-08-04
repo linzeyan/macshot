@@ -441,15 +441,38 @@ public sealed record Annotation(
     public double Rotation { get; init; }
 
     /// <summary>
-    /// How far the middle of a line or arrow is pulled off the straight path between
-    /// its ends, as a fraction of that path's length. Zero is straight.
+    /// How far the bend's control point sits to the side of the straight path between the
+    /// ends, as a fraction of that path's length. Zero is straight.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// One control point, as macOS has: it bows a line with
+    /// <c>curve(to:controlPoint1:controlPoint2:)</c> passing the same point twice
+    /// (<c>Annotation.swift:891</c>). Together with <see cref="BendAlong"/> this is that
+    /// point, so the curve drawn here is the curve macshot draws.
+    /// </para>
+    /// <para>
     /// A fraction rather than a distance, so a bent arrow keeps its shape when it is
     /// dragged longer — which is what the user drew, rather than what a control point
-    /// pinned at an absolute offset would give them.
+    /// pinned at an absolute offset would give them. This is the one place the port does
+    /// not copy macOS, which stores the point in screen coordinates and so lets a bow
+    /// flatten out as the line it belongs to is stretched.
+    /// </para>
     /// </remarks>
     public double Bend { get; init; }
+
+    /// <summary>
+    /// Where that control point sits along the straight path, as a fraction of its length
+    /// away from the middle. Zero is level with the middle; positive is towards the end.
+    /// </summary>
+    /// <remarks>
+    /// The second half of a control point that macshot drags freely
+    /// (<c>OverlayView.swift:6011</c>, which stores the pointer where it is). Without it a
+    /// bow could only ever be symmetric, and the asymmetric bulge — the one that clears an
+    /// obstacle near one end of an arrow rather than in the middle of it — was
+    /// unreachable however far the handle was dragged.
+    /// </remarks>
+    public double BendAlong { get; init; }
 
     public static Annotation Create(
         AnnotationTool tool,

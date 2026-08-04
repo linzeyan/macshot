@@ -54,6 +54,7 @@ public sealed class AnnotationFileTests
         {
             Rotation = 0.75,
             Bend = -0.25,
+            BendAlong = 0.4,
             GroupId = group,
             Text = "note",
             NumberValue = 4,
@@ -89,6 +90,7 @@ public sealed class AnnotationFileTests
         Assert.AreEqual(original.Style.DimOpacity, restored[0].Style.DimOpacity);
         Assert.AreEqual(original.Rotation, restored[0].Rotation);
         Assert.AreEqual(original.Bend, restored[0].Bend);
+        Assert.AreEqual(original.BendAlong, restored[0].BendAlong);
         Assert.AreEqual(group, restored[0].GroupId);
         Assert.AreEqual("note", restored[0].Text);
         Assert.AreEqual(4, restored[0].NumberValue);
@@ -154,6 +156,29 @@ public sealed class AnnotationFileTests
             [Annotation.CreateSprite(AnnotationTool.Stamp, new CapturePoint(0, 0), blank)]);
 
         Assert.IsTrue(written.Length < 64 * 64 * 4 / 4, $"the document is {written.Length} bytes");
+    }
+
+    [TestMethod]
+    public void Read_KeepsTheDepthOfALineBentBeforeTheBendWasAControlPoint()
+    {
+        // A lone stored bend was the offset of the curve's own middle, drawn as a
+        // quadratic. The same number now places a control point on a cubic, which carries
+        // the curve only three quarters of the way out to it — so read unchanged, a
+        // capture reopened from the history would come back with a shallower bow than the
+        // one that was saved. That is the exact failure this file exists to prevent.
+        const string Document =
+            """
+            {"version":1,"annotations":[{"id":"00000000-0000-0000-0000-000000000001",
+            "tool":"Line","startX":0,"startY":0,"endX":90,"endY":0,
+            "color":"#FF000000","strokeWidth":3,"lineStyle":"Solid","opacity":1,
+            "arrowStyle":"Filled","cornerRadius":0,"bend":0.45}]}
+            """;
+
+        var restored = AnnotationFile.Read(Document);
+
+        Assert.AreEqual(1, restored.Count);
+        Assert.AreEqual(0, restored[0].BendAlong, "a bend that could not slide was centred");
+        Assert.AreEqual(0.45, restored[0].Bend * 0.75, 1e-12, "and the curve is as deep as it was");
     }
 
     [TestMethod]

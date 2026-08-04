@@ -365,11 +365,72 @@ public static class AnnotationRasterizer
     private const double CensorBlock = 16;
 
     /// <summary>
-    /// Blurs, solids, pixelates or fills in the region, by the mode the mark carries.
+    /// Blurs, solids, pixelates or fills in the region, by the mode the mark carries,
+    /// turned with the mark when it has been turned.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The redaction tool is the one area shape whose mark is not a path, so it was the
+    /// one the rotation handle moved without moving what was drawn: the grips and the
+    /// outline swung round and the black box stayed square to the screen. A redaction
+    /// laid over something at an angle — a signature, a name in a screenshot of a
+    /// rotated card — could only be covered by a box big enough to cover its
+    /// surroundings too.
+    /// </para>
+    /// <para>
+    /// Everything but the solid fill rewrites the pixels it covers by walking the
+    /// frame's own rows and columns, and none of them can be walked along a turned
+    /// axis. So each runs over the upright rectangle the turned shape sits in and
+    /// <see cref="CoverageMask.KeepInside"/> takes back the corners that were never
+    /// inside it. A blur then samples a little of what is beside the shape, which the
+    /// upright path is careful not to do — but what it pulls in is the unredacted
+    /// surroundings the reader can already see, never the covered pixels, so it costs
+    /// nothing the redaction was for.
+    /// </para>
+    /// </remarks>
     private static void Censor(byte[] pixels, int width, int height, Annotation annotation)
     {
-        var region = annotation.BoundingRect;
+        if (annotation.Rotation == 0)
+        {
+            CensorUpright(pixels, width, height, annotation, annotation.BoundingRect);
+            return;
+        }
+
+        var quad = Oriented(annotation, [BuildRectanglePath(annotation.BoundingRect)])[0];
+        if (!TryGetPathBounds([quad], out var swept))
+        {
+            return;
+        }
+
+        var mask = CoverageMask.ForBounds(swept, 0, width, height);
+        if (mask is null)
+        {
+            return;
+        }
+
+        mask.AddPolygon(quad);
+
+        // The solid mode paints rather than rewrites, so it goes straight through the
+        // mask: laying it over the whole rectangle first and taking the corners back
+        // after would blend the colour twice at every fractional edge pixel.
+        if (annotation.Style.CensorMode == CensorMode.Solid)
+        {
+            mask.Composite(pixels, width, annotation.Style.Color, annotation.Style.Opacity);
+            return;
+        }
+
+        var before = mask.Snapshot(pixels, width);
+        CensorUpright(pixels, width, height, annotation, mask.Bounds);
+        mask.KeepInside(pixels, width, before);
+    }
+
+    private static void CensorUpright(
+        byte[] pixels,
+        int width,
+        int height,
+        Annotation annotation,
+        CaptureRegion region)
+    {
         switch (annotation.Style.CensorMode)
         {
         case CensorMode.Blur:
@@ -635,12 +696,14 @@ public static class AnnotationRasterizer
     /// side when the annotation carries a bend.
     /// </summary>
     /// <remarks>
-    /// A quadratic curve rather than the cubic macOS uses. One control point is all a
-    /// single drag can describe, and a second would have nothing to set it from.
+    /// A cubic with one control point given twice, which is exactly how macOS bows a line
+    /// — <c>curve(to:controlPoint1:cp,controlPoint2:cp)</c>, <c>Annotation.swift:891</c>.
+    /// Not the quadratic this drew before: the two reach different distances towards the
+    /// same control, so a quadratic bowed by three quarters of what macshot's does.
     /// </remarks>
     private static CapturePoint[] BuildShaftPath(Annotation annotation)
     {
-        if (annotation.Bend == 0)
+        if (annotation.Bend == 0 && annotation.BendAlong == 0)
         {
             return [annotation.Start, annotation.End];
         }
@@ -649,31 +712,47 @@ public static class AnnotationRasterizer
         var path = new CapturePoint[BendSegments + 1];
         for (var step = 0; step <= BendSegments; step++)
         {
-            path[step] = QuadraticAt(annotation.Start, control, annotation.End, (double)step / BendSegments);
+            path[step] = CubicAt(annotation.Start, control, annotation.End, (double)step / BendSegments);
         }
 
         return path;
     }
 
     /// <summary>
-    /// Where a bent line's control point sits: off the midpoint, at right angles to
-    /// the straight path, by the bend fraction of that path's length.
+    /// The single control point a bend describes: off the middle of the straight path, by
+    /// the two bend fractions of that path's length — sideways, and along.
     /// </summary>
     /// <remarks>
-    /// Doubled because a quadratic curve only reaches halfway to its control point, so
-    /// without it the curve would bow by half what the handle was dragged to and the
-    /// handle would not sit on the line it is bending.
+    /// Both of the path's own vectors are exactly as long as the path is: the delta
+    /// itself, and <c>(-deltaY, deltaX)</c> at right angles to it. So a bend fraction
+    /// times either one is that fraction of the length in that direction, which is what
+    /// makes a bow keep its shape when the mark is dragged longer.
     /// </remarks>
     private static CapturePoint BendControlPoint(Annotation annotation)
     {
         var deltaX = annotation.End.X - annotation.Start.X;
         var deltaY = annotation.End.Y - annotation.Start.Y;
-        var midX = (annotation.Start.X + annotation.End.X) / 2;
-        var midY = (annotation.Start.Y + annotation.End.Y) / 2;
+        var along = 0.5 + annotation.BendAlong;
 
         return new CapturePoint(
-            midX - (deltaY * annotation.Bend * 2),
-            midY + (deltaX * annotation.Bend * 2));
+            annotation.Start.X + (deltaX * along) - (deltaY * annotation.Bend),
+            annotation.Start.Y + (deltaY * along) + (deltaX * annotation.Bend));
+    }
+
+    /// <summary>
+    /// A cubic whose two controls are the same point, which collapses the usual four
+    /// weights to three.
+    /// </summary>
+    private static CapturePoint CubicAt(CapturePoint start, CapturePoint control, CapturePoint end, double t)
+    {
+        var inverse = 1 - t;
+        var a = inverse * inverse * inverse;
+        var b = 3 * inverse * t;
+        var c = t * t * t;
+
+        return new CapturePoint(
+            (a * start.X) + (b * control.X) + (c * end.X),
+            (a * start.Y) + (b * control.Y) + (c * end.Y));
     }
 
     private static CapturePoint QuadraticAt(CapturePoint start, CapturePoint control, CapturePoint end, double t)

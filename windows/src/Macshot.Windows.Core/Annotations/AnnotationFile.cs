@@ -148,6 +148,7 @@ public static class AnnotationFile
             GroupId = annotation.GroupId,
             Rotation = annotation.Rotation,
             Bend = annotation.Bend,
+            BendAlong = annotation.BendAlong,
             Sprite = annotation.Sprite is { } sprite
                 ? new StoredSprite(sprite.Width, sprite.Height, Pack(sprite.Pixels))
                 : null,
@@ -261,6 +262,7 @@ public static class AnnotationFile
         }
 
         var points = ToPoints(stored.Points);
+        var (bend, bendAlong) = ToBend(stored);
 
         return new Annotation(
             stored.Id == Guid.Empty ? Guid.NewGuid() : stored.Id,
@@ -281,9 +283,34 @@ public static class AnnotationFile
             NumberValue = stored.NumberValue,
             GroupId = stored.GroupId,
             Rotation = double.IsFinite(stored.Rotation) ? stored.Rotation : 0,
-            Bend = double.IsFinite(stored.Bend) ? stored.Bend : 0,
+            Bend = bend,
+            BendAlong = bendAlong,
             Sprite = sprite,
         };
+    }
+
+    /// <summary>
+    /// Where a stored mark's control point sits, and what a file written before the point
+    /// could move along the line means.
+    /// </summary>
+    /// <remarks>
+    /// A lone stored <c>bend</c> was the offset of the <em>curve's</em> own middle, drawn
+    /// as a quadratic. The same number now places a <em>control point</em> on a cubic,
+    /// which carries the curve only three quarters of the way out to it — so a legacy
+    /// number is scaled by four thirds to leave the reopened bow exactly as deep as it was
+    /// saved. Cheaper than a format version, which an older build would answer by
+    /// discarding every mark in the file rather than by drawing one bow slightly wrong.
+    /// </remarks>
+    private static (double Bend, double BendAlong) ToBend(StoredAnnotation stored)
+    {
+        var bend = double.IsFinite(stored.Bend) ? stored.Bend : 0;
+
+        if (stored.BendAlong is not { } along || !double.IsFinite(along))
+        {
+            return (bend * 4 / 3, 0);
+        }
+
+        return (bend, along);
     }
 
     /// <summary>
@@ -478,6 +505,13 @@ public static class AnnotationFile
         public double Rotation { get; init; }
 
         public double Bend { get; init; }
+
+        /// <summary>
+        /// Nullable so that "written before the control point could slide along the line"
+        /// is distinguishable from "deliberately level with the middle", which a plain zero
+        /// would not be. See <see cref="ToBend"/>.
+        /// </summary>
+        public double? BendAlong { get; init; }
 
         public StoredSprite? Sprite { get; init; }
     }

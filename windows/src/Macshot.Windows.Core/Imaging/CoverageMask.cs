@@ -35,6 +35,59 @@ internal sealed class CoverageMask
 
     internal int Height { get; }
 
+    /// <summary>The frame rectangle this mask covers, already clipped to the frame.</summary>
+    internal CaptureRegion Bounds => new(Left, Top, Width, Height);
+
+    /// <summary>
+    /// A copy of the frame under this mask, to be handed back to
+    /// <see cref="KeepInside"/> once something has rewritten it.
+    /// </summary>
+    internal byte[] Snapshot(byte[] framePixels, int frameWidth)
+    {
+        var copy = new byte[checked(Width * Height * 4)];
+        for (var row = 0; row < Height; row++)
+        {
+            Buffer.BlockCopy(framePixels, (((Top + row) * frameWidth) + Left) * 4, copy, row * Width * 4, Width * 4);
+        }
+
+        return copy;
+    }
+
+    /// <summary>
+    /// Puts <paramref name="before"/> back wherever this mask does not cover, so an
+    /// operation that ran over the whole rectangle only survives inside the shape.
+    /// </summary>
+    /// <remarks>
+    /// What a rotated region effect needs. Blurring or pixelating cannot be done along a
+    /// turned axis — every one of them walks rows and columns of the frame — so the effect
+    /// runs over the upright rectangle the shape sits in and this takes back the corners
+    /// that were never inside it. The mask's fractional edge is kept, so the boundary of a
+    /// redaction is as smooth as the shape's own outline rather than a staircase.
+    /// </remarks>
+    internal void KeepInside(byte[] framePixels, int frameWidth, byte[] before)
+    {
+        ArgumentNullException.ThrowIfNull(before);
+
+        for (var y = 0; y < Height; y++)
+        {
+            for (var x = 0; x < Width; x++)
+            {
+                var coverage = _coverage[(y * Width) + x];
+                if (coverage >= 1)
+                {
+                    continue;
+                }
+
+                var from = ((y * Width) + x) * 4;
+                var to = (((Top + y) * frameWidth) + Left + x) * 4;
+                for (var channel = 0; channel < 4; channel++)
+                {
+                    framePixels[to + channel] = Blend(before[from + channel], framePixels[to + channel], coverage);
+                }
+            }
+        }
+    }
+
     /// <summary>
     /// Allocates a mask covering <paramref name="bounds"/> grown by
     /// <paramref name="inflate"/> and clipped to the frame, or null when the

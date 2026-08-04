@@ -30,6 +30,37 @@ public sealed class RasterizerToolsTests
             || pixels[offset + 2] != byte.MaxValue;
     }
 
+    /// <summary>
+    /// Alternating black and white columns. A frame the redaction tools can be seen on:
+    /// blurring or pixelating anything here lands between the two values, and a pixel
+    /// left alone is still exactly one of them. A blank frame would hide all four modes.
+    /// </summary>
+    private static byte[] Striped()
+    {
+        var pixels = new byte[Size * Size * 4];
+        for (var row = 0; row < Size; row++)
+        {
+            for (var column = 0; column < Size; column++)
+            {
+                var value = column % 2 == 0 ? byte.MinValue : byte.MaxValue;
+                var offset = ((row * Size) + column) * 4;
+                pixels[offset] = value;
+                pixels[offset + 1] = value;
+                pixels[offset + 2] = value;
+                pixels[offset + 3] = byte.MaxValue;
+            }
+        }
+
+        return pixels;
+    }
+
+    /// <summary>Whether a striped pixel has been averaged with its neighbours.</summary>
+    private static bool IsFlattened(byte[] pixels, int column, int row)
+    {
+        var offset = ((row * Size) + column) * 4;
+        return pixels[offset] is > byte.MinValue and < byte.MaxValue;
+    }
+
     private static byte[] Render(byte[] source, params Annotation[] annotations) =>
         AnnotationRasterizer.Render(Size, Size, source, annotations);
 
@@ -103,23 +134,43 @@ public sealed class RasterizerToolsTests
     }
 
     [TestMethod]
-    public void Bend_PullsTheMiddleOfALineOffTheStraightPath()
+    public void Bend_CarriesTheCurveThreeQuartersOfTheWayToItsControlPoint()
     {
         var straight = Render(Blank(), Shape(AnnotationTool.Line, 10, 32, 54, 32));
         var bent = Render(Blank(), Shape(AnnotationTool.Line, 10, 32, 54, 32) with { Bend = 0.2 });
 
-        // The line is 44 long and the bend is a fifth of that, so its middle sits
-        // 8.8 pixels below the straight path — which is what doubling the control
-        // point buys, since a quadratic curve only reaches halfway towards it.
+        // The line is 44 long and the control point a fifth of that off it, so it sits 8.8
+        // pixels below. A cubic with that point given twice — macshot's curve — reaches
+        // three quarters of the way, which is 6.6. A quadratic would reach only half, and
+        // that difference is the whole reason this stopped being one.
         Assert.IsTrue(IsInked(straight, 32, 32));
-        Assert.IsFalse(IsInked(straight, 32, 41), "A straight line has nothing this far off the path.");
-        Assert.IsTrue(IsInked(bent, 32, 41), "The bend should carry the middle of the line down to it.");
+        Assert.IsFalse(IsInked(straight, 32, 38), "A straight line has nothing this far off the path.");
+        Assert.IsTrue(IsInked(bent, 32, 38), "The curve should reach past where a quadratic would stop.");
+        Assert.IsFalse(IsInked(bent, 32, 41), "But not as far as the control point itself.");
+    }
+
+    [TestMethod]
+    public void BendAlong_MovesTheBulgeTowardsTheEndItWasSlidTo()
+    {
+        // The second half of a control point macshot drags freely. Confined to the
+        // perpendicular the bow could only ever be symmetric about the line's middle.
+        var line = Shape(AnnotationTool.Line, 10, 32, 54, 32) with { Bend = 0.2 };
+
+        var centred = Render(Blank(), line);
+        var late = Render(Blank(), line with { BendAlong = 0.25 });
+
+        // Eleven pixels past the middle, so the deepest part of the bow moves with it.
+        Assert.IsTrue(IsInked(centred, 32, 38));
+        Assert.IsFalse(IsInked(centred, 43, 38), "a centred bow is already climbing back by here");
+        Assert.IsTrue(IsInked(late, 43, 38), "and a slid one is still at its deepest");
     }
 
     [TestMethod]
     public void Bend_LeavesTheEndsWhereTheyWere()
     {
-        var bent = Render(Blank(), Shape(AnnotationTool.Line, 10, 32, 54, 32) with { Bend = 0.2 });
+        var bent = Render(
+            Blank(),
+            Shape(AnnotationTool.Line, 10, 32, 54, 32) with { Bend = 0.2, BendAlong = -0.1 });
 
         Assert.IsTrue(IsInked(bent, 10, 32));
         Assert.IsTrue(IsInked(bent, 54, 32));
@@ -129,7 +180,9 @@ public sealed class RasterizerToolsTests
     public void Bend_OfZeroIsTheStraightLineItAlwaysWas()
     {
         var straight = Render(Blank(), Shape(AnnotationTool.Line, 10, 20, 54, 44));
-        var explicitlyStraight = Render(Blank(), Shape(AnnotationTool.Line, 10, 20, 54, 44) with { Bend = 0 });
+        var explicitlyStraight = Render(
+            Blank(),
+            Shape(AnnotationTool.Line, 10, 20, 54, 44) with { Bend = 0, BendAlong = 0 });
 
         CollectionAssert.AreEqual(straight, explicitlyStraight);
     }
@@ -187,6 +240,54 @@ public sealed class RasterizerToolsTests
         var asked = covered with { Style = covered.Style with { CornerRadius = 12 } };
 
         CollectionAssert.AreEqual(Render(Blank(), covered), Render(Blank(), asked));
+    }
+
+    [TestMethod]
+    public void Rotation_TurnsARedactionRatherThanOnlyItsHandles()
+    {
+        // The redaction tool was the one area shape whose mark is not a path, so it was
+        // the one the rotation handle moved without moving what was drawn: the grips
+        // swung round and the black box stayed square to the screen. Something covered at
+        // an angle then needed a box large enough to cover its surroundings as well.
+        var box = Shape(AnnotationTool.Censor, 24, 24, 40, 40);
+        var solid = box with { Style = box.Style with { CensorMode = CensorMode.Solid } };
+
+        var upright = Render(Blank(), solid);
+        var turned = Render(Blank(), solid with { Rotation = Math.PI / 4 });
+
+        // Turned an eighth, the box becomes a diamond whose tips reach past the upright
+        // bounds — the clearest place to see the fill follow the shape.
+        Assert.IsFalse(IsInked(upright, 32, 21), "the upright box stops at its own top edge");
+        Assert.IsTrue(IsInked(turned, 32, 21), "and the turned one reaches past it");
+    }
+
+    [TestMethod]
+    public void Rotation_TakesBackTheCornersARedactionNeverCovered()
+    {
+        // Pixelating cannot be done along a turned axis, so it runs over the upright
+        // rectangle the diamond sits in. Without putting those corners back, a turned
+        // redaction would smear a square region and only look like a diamond in outline.
+        var box = Shape(AnnotationTool.Censor, 24, 24, 40, 40) with { Rotation = Math.PI / 4 };
+
+        var turned = Render(Striped(), box);
+
+        Assert.IsTrue(IsFlattened(turned, 32, 32), "the middle of the diamond is covered");
+        Assert.IsFalse(
+            IsFlattened(turned, 22, 22),
+            "and a corner of the rectangle it was worked out in is untouched");
+    }
+
+    [TestMethod]
+    public void Rotation_OfZeroLeavesARedactionExactlyWhereItWas()
+    {
+        // The upright path is the one every redaction takes, and it composites its edge
+        // differently from the turned one. A shape that changed the moment the property
+        // was written down would make every existing capture's redaction shift.
+        var box = Shape(AnnotationTool.Censor, 20, 26, 44, 38);
+
+        CollectionAssert.AreEqual(
+            Render(Striped(), box),
+            Render(Striped(), box with { Rotation = 0 }));
     }
 
     [TestMethod]

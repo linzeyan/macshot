@@ -11,7 +11,7 @@ public enum AnnotationHandleKind
     /// <summary>Moves the end a linear mark was drawn to.</summary>
     End,
 
-    /// <summary>Pulls the middle of a line or arrow off the straight path.</summary>
+    /// <summary>Moves the control point that bows a line or arrow.</summary>
     Bend,
 
     TopLeft,
@@ -76,13 +76,6 @@ public static class AnnotationHandles
     /// shorten with it.
     /// </remarks>
     public const double RotateReach = 24;
-
-    /// <summary>
-    /// How far a line may be bowed, as the fraction of its length its middle is pulled
-    /// off the straight path. Past this the curve doubles back on itself and the handle
-    /// stops following the pointer, which reads as the drag having broken.
-    /// </summary>
-    public const double MaximumBend = 1;
 
     /// <summary>
     /// The handles <paramref name="annotation"/> offers, or nothing for a mark that only
@@ -186,7 +179,7 @@ public static class AnnotationHandles
             {
                 End = Constrain(annotation.Start, upright, modifiers),
             },
-            AnnotationHandleKind.Bend => annotation with { Bend = BendTo(annotation, upright) },
+            AnnotationHandleKind.Bend => BentTo(annotation, upright),
             AnnotationHandleKind.TopLeft
                 or AnnotationHandleKind.TopRight
                 or AnnotationHandleKind.BottomLeft
@@ -253,7 +246,8 @@ public static class AnnotationHandles
         return left.Start != right.Start
             || left.End != right.End
             || left.Rotation != right.Rotation
-            || left.Bend != right.Bend;
+            || left.Bend != right.Bend
+            || left.BendAlong != right.BendAlong;
     }
 
     /// <summary>
@@ -314,34 +308,66 @@ public static class AnnotationHandles
     }
 
     /// <summary>
-    /// Where the bend handle sits: on the curve's own middle, so the handle is a point of
-    /// the line it bends rather than a control point floating beside it.
+    /// Where the bend handle sits: on the control point itself, which for an unbent line
+    /// is the middle of it.
     /// </summary>
+    /// <remarks>
+    /// Beside the curve rather than on it, which is macshot's own arrangement
+    /// (<c>OverlayView.swift:4370-4378</c> puts the grip at <c>controlPoint</c>, falling
+    /// back to the midpoint of the two ends). This port used to sit it on the curve, on
+    /// the reasoning that a handle should be a point of the line it bends — but that only
+    /// works while the drag is confined to one axis, and macshot's is not. A grip that is
+    /// the control point follows the pointer exactly wherever it goes, which is worth more
+    /// than being on the line, and it is what the dashed arms drawn out to it explain.
+    /// </remarks>
     private static CapturePoint BendGrip(Annotation annotation)
     {
-        var (mid, acrossX, acrossY) = Across(annotation);
+        var (mid, alongX, alongY, acrossX, acrossY) = Frame(annotation);
+        var along = annotation.BendAlong;
+
         return new CapturePoint(
-            mid.X + (acrossX * annotation.Bend),
-            mid.Y + (acrossY * annotation.Bend));
+            mid.X + (alongX * along) + (acrossX * annotation.Bend),
+            mid.Y + (alongY * along) + (acrossY * annotation.Bend));
     }
 
-    private static double BendTo(Annotation annotation, CapturePoint point)
+    /// <summary>
+    /// The mark as dragging its control point to <paramref name="point"/> leaves it.
+    /// </summary>
+    /// <remarks>
+    /// Both components are taken, not just the sideways one: macshot stores the pointer
+    /// where it is (<c>OverlayView.swift:6011</c>), so sliding the grip towards an end
+    /// moves the bulge towards that end instead of doing nothing. And nothing is clamped,
+    /// because the reason this port clamped — that past a certain bow the handle stopped
+    /// following the pointer and the drag read as broken — cannot arise once the handle is
+    /// the very point being set.
+    /// </remarks>
+    private static Annotation BentTo(Annotation annotation, CapturePoint point)
     {
-        var (mid, acrossX, acrossY) = Across(annotation);
-        var lengthSquared = (acrossX * acrossX) + (acrossY * acrossY);
+        var (mid, alongX, alongY, acrossX, acrossY) = Frame(annotation);
+        var lengthSquared = (alongX * alongX) + (alongY * alongY);
         if (lengthSquared == 0)
         {
-            return annotation.Bend;
+            return annotation;
         }
 
-        // The component of the drag along the perpendicular, as a fraction of the line's
-        // length: sideways pulls bow the line, along-the-line movement does nothing.
-        var bend = (((point.X - mid.X) * acrossX) + ((point.Y - mid.Y) * acrossY)) / lengthSquared;
-        return Math.Clamp(bend, -MaximumBend, MaximumBend);
+        var offsetX = point.X - mid.X;
+        var offsetY = point.Y - mid.Y;
+
+        return annotation with
+        {
+            Bend = ((offsetX * acrossX) + (offsetY * acrossY)) / lengthSquared,
+            BendAlong = ((offsetX * alongX) + (offsetY * alongY)) / lengthSquared,
+        };
     }
 
-    /// <summary>The midpoint of a linear mark, and the perpendicular a bend runs along.</summary>
-    private static (CapturePoint Mid, double AcrossX, double AcrossY) Across(Annotation annotation)
+    /// <summary>
+    /// The middle of a linear mark and the two directions a bend is measured in: along it
+    /// and across it. Both vectors are exactly as long as the mark, so a bend fraction
+    /// times either is that fraction of its length — which is what lets a bow survive the
+    /// mark being dragged longer.
+    /// </summary>
+    private static (CapturePoint Mid, double AlongX, double AlongY, double AcrossX, double AcrossY) Frame(
+        Annotation annotation)
     {
         var deltaX = annotation.End.X - annotation.Start.X;
         var deltaY = annotation.End.Y - annotation.Start.Y;
@@ -349,7 +375,7 @@ public static class AnnotationHandles
             (annotation.Start.X + annotation.End.X) / 2,
             (annotation.Start.Y + annotation.End.Y) / 2);
 
-        return (mid, -deltaY, deltaX);
+        return (mid, deltaX, deltaY, -deltaY, deltaX);
     }
 
     private static Annotation ResizeCorner(
