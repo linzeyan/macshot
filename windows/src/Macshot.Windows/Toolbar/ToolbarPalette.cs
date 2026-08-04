@@ -79,7 +79,13 @@ internal static class ToolbarPalette
     /// reading rather than decoration, and a meter tinted to match a strip somebody has
     /// turned green would say nothing at all.
     /// </remarks>
-    public static SolidColorBrush LevelBrush { get; } = new(Color.FromArgb(115, 52, 199, 89));
+    /// <remarks>
+    /// The dark-appearance value, measured out of AppKit rather than looked up: systemGreen
+    /// is 52,199,89 in aqua and 48,209,88 in darkAqua, and macshot's toolbar is always dark
+    /// whatever the system is set to. The light value is the one everybody quotes, and it is
+    /// the wrong one here.
+    /// </remarks>
+    public static SolidColorBrush LevelBrush { get; } = new(Color.FromArgb(115, 48, 209, 88));
 
     /// <summary>
     /// A flyout with no chrome of its own, for the popovers that paint their own slab.
