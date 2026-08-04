@@ -16,10 +16,21 @@ namespace Macshot.Windows.Services;
 public sealed record ScrollCaptureRequest(CaptureWindow Window, CaptureRegion? Region = null);
 
 /// <summary>
-/// A recording aimed at one display, and optionally at one part of it.
+/// A recording aimed at one display, at one part of it, or at one window.
 /// </summary>
-/// <param name="Monitor">The display whose frames are encoded.</param>
+/// <param name="Monitor">
+/// The display whose frames are encoded, and the display the panels that report the
+/// recording are placed on even when a window is what is being recorded.
+/// </param>
 /// <param name="Region">
 /// The part of the desktop to keep, in virtual space, or null for the whole display.
 /// </param>
-public sealed record RecordingRequest(CaptureMonitor Monitor, CaptureRegion? Region = null);
+/// <param name="Window">
+/// The window to follow, or null to record the display. Set when the region was chosen by
+/// clicking a window rather than by dragging a rectangle, which is the same gesture that
+/// takes a still of one — a window recording is not a second way of choosing.
+/// </param>
+public sealed record RecordingRequest(
+    CaptureMonitor Monitor,
+    CaptureRegion? Region = null,
+    CaptureWindow? Window = null);

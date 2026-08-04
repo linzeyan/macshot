@@ -1745,7 +1745,8 @@ public sealed class CaptureController : IDisposable
     }
 
     /// <summary>
-    /// Records one display, or one region of it, until something asks it to stop.
+    /// Records one display, one region of it, or one window, until something asks it to
+    /// stop.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -1757,6 +1758,13 @@ public sealed class CaptureController : IDisposable
     /// The display is looked up again by name rather than taken from the request. The
     /// request may have been made against an enumeration from before the overlays went
     /// up, and a capture item is opened from a handle Windows has to still recognize.
+    /// </para>
+    /// <para>
+    /// A window recording keeps only the panel that stops it. The region frame would stand
+    /// where the window used to be the moment it is moved, and the click ring, the
+    /// keystroke pill and the webcam bubble are macshot's own windows over the desktop —
+    /// none of them is in the recorded window's tree, so all three would be shown to the
+    /// user and be absent from the file. They are left down and the log says so.
     /// </para>
     /// </remarks>
     private async Task RecordAsync(RecordingRequest request)
@@ -1785,8 +1793,14 @@ public sealed class CaptureController : IDisposable
         }
 
         // Virtual space out of the overlay, the display's own pixels into the recorder:
-        // a capture item is one display, and it starts at its own top-left corner.
-        var region = request.Region is { } aimed ? monitor.VirtualToLocal(aimed) : (CaptureRegion?)null;
+        // a capture item is one display, and it starts at its own top-left corner. A
+        // window is its own item and needs no region at all — what it keeps is decided
+        // from the window itself, inside the recorder.
+        var followed = request.Window;
+        var region = followed is null && request.Region is { } aimed
+            ? monitor.VirtualToLocal(aimed)
+            : (CaptureRegion?)null;
+
         if (region is { IsEmpty: true })
         {
             throw new InvalidOperationException("That region is not on the display being recorded.");
@@ -1812,7 +1826,7 @@ public sealed class CaptureController : IDisposable
         // And a frame round the same rectangle, which is what still says where the
         // recording is once that panel has been dragged out of the way.
         RecordedRegionWindow? border = null;
-        if (_settings.Current.ShowRecordedRegionBorder)
+        if (followed is null && _settings.Current.ShowRecordedRegionBorder)
         {
             border = new RecordedRegionWindow();
             border.ShowAround(request.Region ?? monitor.Bounds, monitor.Scale);
@@ -1821,7 +1835,7 @@ public sealed class CaptureController : IDisposable
         // And a ring out of every click, which unlike the frame is meant to be in the
         // file: it is the only thing that tells a viewer a press happened at all.
         ClickHighlightOverlay? clicks = null;
-        if (_settings.Current.ShowClickHighlight)
+        if (followed is null && _settings.Current.ShowClickHighlight)
         {
             clicks = new ClickHighlightOverlay(monitor.Scale);
             clicks.Start();
@@ -1830,7 +1844,7 @@ public sealed class CaptureController : IDisposable
         // And what is being typed, at the foot of the same rectangle. Also meant to be in
         // the file: a recording that teaches a shortcut has to show the shortcut.
         KeystrokeOverlay? keystrokes = null;
-        if (_settings.Current.ShowKeystrokes)
+        if (followed is null && _settings.Current.ShowKeystrokes)
         {
             keystrokes = new KeystrokeOverlay(request.Region ?? monitor.Bounds, monitor.Scale)
             {
@@ -1842,7 +1856,7 @@ public sealed class CaptureController : IDisposable
         // And the camera, in a corner of the same rectangle. The one overlay here that is
         // meant to be in the file rather than kept out of it.
         WebcamWindow? webcam = null;
-        if (_settings.Current.RecordWebcam)
+        if (followed is null && _settings.Current.RecordWebcam)
         {
             var bubble = new WebcamWindow();
             var current = _settings.Current;
@@ -1889,20 +1903,26 @@ public sealed class CaptureController : IDisposable
         {
             var path = ResolveRecordingPath(format);
             DiagnosticLog.Verbose(
-                $"recording {monitor.DeviceName} ({monitor.Bounds.Width}x{monitor.Bounds.Height}) "
-                    + $"as {format} at {frameRate} fps to {path}"
+                (followed is { } target
+                    ? $"recording the window '{target.Title}' ({target.Id:X}), "
+                        + "so no region frame, click ring, keystroke pill or webcam — "
+                        + "none of them is in that window's own tree"
+                    : $"recording {monitor.DeviceName} ({monitor.Bounds.Width}x{monitor.Bounds.Height})")
+                    + $" as {format} at {frameRate} fps to {path}"
                     + (region is { } cropped
                         ? $", cropped to {cropped.Width}x{cropped.Height} at {cropped.X},{cropped.Y}"
                         : string.Empty));
 
-            var result = await _recorder.RecordDisplayAsync(
-                handle,
-                path,
-                format,
-                cancellation.Token,
-                region,
-                frameRate,
-                audio);
+            var result = followed is { } window
+                ? await _recorder.RecordWindowAsync(window, path, format, cancellation.Token, frameRate, audio)
+                : await _recorder.RecordDisplayAsync(
+                    handle,
+                    path,
+                    format,
+                    cancellation.Token,
+                    region,
+                    frameRate,
+                    audio);
 
             DiagnosticLog.Verbose($"recording finished: {result.Path}");
 

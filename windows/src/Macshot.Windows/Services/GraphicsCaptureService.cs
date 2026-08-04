@@ -138,14 +138,7 @@ public sealed class GraphicsCaptureService : IDisposable
 
         var device = _device ??= CreateDirect3DDevice();
 
-        // Windows.UI.WindowId is what the capture API takes, and its value is the
-        // HWND, so the id is built here rather than fetched: going out to
-        // Win32Interop would only produce the App SDK's WindowId, which is the type
-        // that does not fit.
-        var item = GraphicsCaptureItem.TryCreateFromWindowId(new GraphicsWindowId { Value = (ulong)windowId })
-            ?? throw new InvalidOperationException("Windows would not open a capture item for the window.");
-
-        var (width, height, pixels) = await CaptureItemAsync(device, item);
+        var (width, height, pixels) = await CaptureItemAsync(device, OpenWindow(windowId));
         var crop = WindowFrameCrop.Resolve(windowRect, visibleBounds, width, height);
 
         var frame = new CapturedFrame((int)windowRect.X, (int)windowRect.Y, width, height, pixels);
@@ -181,6 +174,22 @@ public sealed class GraphicsCaptureService : IDisposable
 
         return GraphicsCaptureItem.TryCreateFromDisplayId(displayId)
             ?? throw new InvalidOperationException("Windows would not open a capture item for the display.");
+    }
+
+    /// <summary>
+    /// Opens the capture item for one window.
+    /// </summary>
+    /// <remarks>
+    /// <c>Windows.UI.WindowId</c> is what the capture API takes, and its value is the
+    /// <c>HWND</c>, so the id is built here rather than fetched: going out to
+    /// <c>Win32Interop</c> would only produce the App SDK's <c>WindowId</c>, which is the
+    /// type that does not fit. Internal for the same reason <see cref="OpenDisplay"/> is —
+    /// a recording opens the same item and keeps it running.
+    /// </remarks>
+    internal static GraphicsCaptureItem OpenWindow(long windowId)
+    {
+        return GraphicsCaptureItem.TryCreateFromWindowId(new GraphicsWindowId { Value = (ulong)windowId })
+            ?? throw new InvalidOperationException("Windows would not open a capture item for the window.");
     }
 
     private static Task<(int Width, int Height, byte[] Pixels)> CaptureDisplayAsync(

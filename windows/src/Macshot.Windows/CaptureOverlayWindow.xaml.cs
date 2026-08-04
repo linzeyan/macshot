@@ -291,6 +291,17 @@ public sealed partial class CaptureOverlayWindow : Window
     private CaptureWindow? _hoveredWindow;
 
     /// <summary>
+    /// The window the chosen region <em>is</em>, when it was chosen by clicking one rather
+    /// than by dragging a rectangle. Null for every region that came from a drag.
+    /// </summary>
+    /// <remarks>
+    /// Only recording reads it, and only to record the window itself rather than the
+    /// rectangle it currently occupies. Kept as the window rather than as a flag because a
+    /// recording opens a capture item on it, which needs the identity and not the bounds.
+    /// </remarks>
+    private CaptureWindow? _snappedWindow;
+
+    /// <summary>
     /// Where the region was when the move button was pressed. Non-null for as long as the
     /// region is following the pointer.
     /// </summary>
@@ -1052,7 +1063,7 @@ public sealed partial class CaptureOverlayWindow : Window
                 captured = null;
             }
 
-            EnterAnnotationPhase(window.Bounds, captured, window.Title);
+            EnterAnnotationPhase(window.Bounds, captured, window.Title, window);
 
             if (captured is null)
             {
@@ -1068,10 +1079,15 @@ public sealed partial class CaptureOverlayWindow : Window
         }
     }
 
+    /// <param name="snapped">
+    /// The window the region is, when it came from clicking one. Defaulted to null so
+    /// every other way of choosing a region clears it rather than having to remember to.
+    /// </param>
     private void EnterAnnotationPhase(
         CaptureRegion region,
         CapturedFrame? capturedWindow = null,
-        string? windowTitle = null)
+        string? windowTitle = null,
+        CaptureWindow? snapped = null)
     {
         // Where the annotation phase's pixels came from, which is the difference between
         // "the window itself" and "the screenshot with whatever was over it". The two
@@ -1084,6 +1100,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         _selection = region;
         _hoveredWindow = null;
+        _snappedWindow = snapped;
         _capturedWindow = capturedWindow;
         _capturedWindowTitle = windowTitle;
         _regionIsAdjustable = capturedWindow is null;
@@ -1480,6 +1497,21 @@ public sealed partial class CaptureOverlayWindow : Window
     /// has happened the mouse is already up — so "let go to place it" would place the
     /// region before it had moved at all.
     /// </remarks>
+    /// <summary>
+    /// Says that the region has stopped being the window it was clicked out of.
+    /// </summary>
+    /// <remarks>
+    /// The two together rather than each on its own: the grips coming back and the
+    /// recording stopping following are the same fact, and a site that set one without
+    /// the other would either record a window the user has moved the region off, or leave
+    /// a region that cannot be adjusted still claiming to be a window.
+    /// </remarks>
+    private void RegionIsNoLongerAWindow()
+    {
+        _regionIsAdjustable = true;
+        _snappedWindow = null;
+    }
+
     private void BeginRegionMove()
     {
         if (_selection is not { } region || _movingFrom is not null)
@@ -1490,7 +1522,7 @@ public sealed partial class CaptureOverlayWindow : Window
         // Moving a window capture makes it an ordinary region: its pixels stop being the
         // window's own the moment it is over something else, so from here it is cropped
         // out of the screenshot like any other and its grips come back with it.
-        _regionIsAdjustable = true;
+        RegionIsNoLongerAWindow();
 
         _movingFrom = region;
         _movePending = region;
@@ -1981,7 +2013,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         // Same as moving it: a window capture typed to a different size is no longer the
         // window, so it becomes an ordinary region cropped out of the screenshot.
-        _regionIsAdjustable = true;
+        RegionIsNoLongerAWindow();
 
         ApplyRegion(SelectionSizing.Resize(
             current,
@@ -2007,7 +2039,7 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
 
-        _regionIsAdjustable = true;
+        RegionIsNoLongerAWindow();
 
         if (preset.IsExact)
         {
@@ -2638,6 +2670,12 @@ public sealed partial class CaptureOverlayWindow : Window
     public string? TranslateTarget { get; set; }
 
     /// <summary>Asks for the region to be recorded rather than captured.</summary>
+    /// <remarks>
+    /// A region that came from clicking a window asks for that window instead, following
+    /// it wherever it goes. The gesture is the one that already takes a still of a window,
+    /// rather than a mode of its own: what is being recorded is what was pointed at, and
+    /// the highlight said which that was.
+    /// </remarks>
     private void RequestRecording()
     {
         if (_selection is not { } region)
@@ -2649,7 +2687,9 @@ public sealed partial class CaptureOverlayWindow : Window
         // one is over the same corner of the same region.
         HideWebcamPreview();
 
-        RecordingRequested?.Invoke(this, new RecordingRequest(_monitor, _layout.FrameToVirtual(region)));
+        RecordingRequested?.Invoke(
+            this,
+            new RecordingRequest(_monitor, _layout.FrameToVirtual(region), _snappedWindow));
     }
 
     /// <summary>
