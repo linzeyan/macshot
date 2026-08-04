@@ -32,6 +32,8 @@
 # ──────────────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
+. "$(dirname "${BASH_SOURCE[0]}")/vm-wake.sh"
+
 VM="${MACSHOT_VM:-macshot-vm}"
 TASK=macshot-vm-shot
 
@@ -77,6 +79,11 @@ done
 
 if [ -z "$destination" ]; then
     destination="${TMPDIR:-/tmp}/macshot-vm.png"
+fi
+
+if ! vm_wake "$VM"; then
+    echo "cannot reach $VM over ssh. the setup steps are in vm-build.sh's header." >&2
+    exit 1
 fi
 
 home="$(ssh "$VM" 'echo $HOME')"

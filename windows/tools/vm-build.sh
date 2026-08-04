@@ -54,6 +54,8 @@
 # ──────────────────────────────────────────────────────────────────────────────────────
 set -euo pipefail
 
+. "$(dirname "${BASH_SOURCE[0]}")/vm-wake.sh"
+
 VM="${MACSHOT_VM:-macshot-vm}"
 ROOT="${MACSHOT_VM_ROOT:-C:/src/macshot}"
 
@@ -76,7 +78,7 @@ done
 
 cd "$(git rev-parse --show-toplevel)"
 
-if ! ssh -o BatchMode=yes -o ConnectTimeout=10 "$VM" "git --version" >/dev/null 2>&1; then
+if ! vm_wake "$VM" || ! ssh -o BatchMode=yes -o ConnectTimeout=10 "$VM" "git --version" >/dev/null 2>&1; then
     echo "cannot reach $VM over ssh, or git is not on its PATH." >&2
     echo "the setup steps are in the header of this script." >&2
     exit 1
