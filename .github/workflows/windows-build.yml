@@ -47,32 +47,94 @@ jobs:
       - run: dotnet build windows/Macshot.Windows.sln --configuration Release --warnaserror
       - run: dotnet test windows/Macshot.Windows.sln --configuration Release --no-build
 
+      # Everything above this line was green while every zip ever released was a macshot
+      # that could not take a screenshot. Nothing here had ever run publish, and publish
+      # is what was broken: the XAML compiler's output — every window's markup, packed
+      # into Macshot.Windows.pri — is produced by build and was dropped by publish, so the
+      # app started, showed its tray icon, and threw XamlParseException at the first window
+      # it was asked to open.
+      #
+      # Publishing the way the release workflow does is therefore the check. Self-contained
+      # and pinned to a runtime for the same reason it is there: an AnyCPU publish of a
+      # Windows App SDK app does not resolve.
+      - name: Publish the way a release does
+        run: >
+          dotnet publish windows/src/Macshot.Windows/Macshot.Windows.csproj
+          --configuration Release --runtime win-x64 --self-contained true
+          --output publish
+
+      # The .exe is not the assertion — build.ps1 has always checked for that and passed
+      # throughout. The compiled markup is. It is not loose .xbf files in the output
+      # directory: the XAML compiler packs all nineteen into this one resource index, so
+      # its presence is the whole question. By name, not by wildcard — Microsoft.UI.pri and
+      # four more like it come out of the Windows App SDK and are there either way.
+      #
+      # Presence only. Running it wants a desktop this runner does not have; the size is
+      # printed so a human reading the log can see it is the real thing and not a stub.
+      - name: The published app must carry its compiled XAML
+        shell: pwsh
+        run: |
+          $pri = "publish/Macshot.Windows.pri"
+          if (-not (Test-Path $pri)) {
+            throw "publish produced no Macshot.Windows.pri: the app has no markup and cannot open a window."
+          }
+          Write-Host "Macshot.Windows.pri is $((Get-Item $pri).Length) bytes."
+
+      # What puts it there is EnableMsixTooling in the csproj, which reads like a property
+      # about MSIX packaging that an app shipping a plain zip has no use for. Deleting it
+      # on that reading is the exact mistake that caused the bug, so the causal claim is
+      # asserted here rather than left in a comment: without it, publish must drop the file.
+      #
+      # If this step ever fails, the SDK has begun publishing the markup on its own and the
+      # property can go. That is worth being told about loudly, which is why it is an error
+      # and not a note nobody reads.
+      - name: Without EnableMsixTooling the markup must go missing
+        shell: pwsh
+        run: |
+          dotnet publish windows/src/Macshot.Windows/Macshot.Windows.csproj `
+            --configuration Release --runtime win-x64 --self-contained true `
+            -p:EnableMsixTooling=false --output publish-no-msix-tooling
+          if ($LASTEXITCODE -ne 0) { throw "the control publish failed" }
+          if (Test-Path "publish-no-msix-tooling/Macshot.Windows.pri") {
+            throw "publish kept the markup without EnableMsixTooling; the property in the csproj is now redundant."
+          }
+          Write-Host "EnableMsixTooling is what publishes the markup."
+
       # The offline variant is a second compilation of the same tree, so it can break on
       # its own: a field only the network code reads becomes assigned-and-never-used,
       # which is a warning, which is an error here. That is exactly how it broke the
       # first time, and building only the normal variant could not see it.
       #
-      # Not --no-restore and not sharing the output: the variant changes DefineConstants
-      # and the assembly name, so it is a genuinely different build and must not reuse
-      # the one above.
-      - name: Build the offline variant
+      # Published rather than built, and for the same reason as above — the variant is
+      # shipped as its own zip, so publish dropping something is a bug that only reaches
+      # offline users and only publish can see. Not --no-restore and not sharing an output
+      # directory: the variant changes DefineConstants and the assembly name, so it is a
+      # genuinely different build and must not reuse the one above.
+      - name: Publish the offline variant
         run: >
-          dotnet build windows/src/Macshot.Windows/Macshot.Windows.csproj
-          --configuration Release --warnaserror -p:Variant=Offline
+          dotnet publish windows/src/Macshot.Windows/Macshot.Windows.csproj
+          --configuration Release --warnaserror --runtime win-x64 --self-contained true
+          -p:Variant=Offline --output publish-offline
+
+      - name: The offline variant must carry its compiled XAML too
+        shell: pwsh
+        run: |
+          if (-not (Test-Path "publish-offline/Macshot.Windows.Offline.pri")) {
+            throw "the offline publish produced no Macshot.Windows.Offline.pri."
+          }
 
       # The point of the variant, asserted rather than trusted. A control collapsed at
       # run time would leave the endpoint in the binary, and nothing else in the build
-      # would notice.
+      # would notice. Read out of the publish output, so what is checked is what ships.
       - name: The offline build must contain no translation endpoint
         shell: pwsh
         run: |
-          $assembly = Get-ChildItem -Recurse -Filter Macshot.Windows.Offline.dll `
-            windows/src/Macshot.Windows/bin/Release | Select-Object -First 1
-          if (-not $assembly) { throw "The offline assembly was not produced." }
-          $bytes = [System.IO.File]::ReadAllBytes($assembly.FullName)
+          $assembly = "publish-offline/Macshot.Windows.Offline.dll"
+          if (-not (Test-Path $assembly)) { throw "The offline assembly was not produced." }
+          $bytes = [System.IO.File]::ReadAllBytes($assembly)
           $text = [System.Text.Encoding]::Unicode.GetString($bytes) +
                   [System.Text.Encoding]::ASCII.GetString($bytes)
           if ($text -match 'translation\.googleapis\.com') {
             throw "The offline build contains the translation endpoint."
           }
-          Write-Host "$($assembly.Name) contains no translation endpoint."
+          Write-Host "Macshot.Windows.Offline.dll contains no translation endpoint."
