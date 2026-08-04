@@ -72,8 +72,22 @@ public readonly record struct VideoTextSegment(
     /// </remarks>
     public const double DefaultFontSize = 48;
 
-    /// <summary>The sizes the box beside the band offers.</summary>
-    public static IReadOnlyList<double> PresetFontSizes { get; } = [24, 32, 48, 64, 96];
+    /// <summary>
+    /// The sizes the box beside the band offers, with macshot's names and numbers.
+    /// </summary>
+    /// <remarks>
+    /// Named rather than numeric because the number is meaningless on its own: it is
+    /// points against a 1080-tall frame, and nobody choosing a caption size is thinking
+    /// in those. The keys are the English words macshot's menu uses, so they translate
+    /// through the strings this port already vendors.
+    /// </remarks>
+    public static IReadOnlyList<(string Name, double Size)> PresetFontSizes { get; } =
+    [
+        ("Small", 32),
+        ("Medium", 48),
+        ("Large", 72),
+        ("Huge", 104),
+    ];
 
     /// <summary>
     /// The smallest a caption rectangle may be, as a fraction of the frame. Larger than

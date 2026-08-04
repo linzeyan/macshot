@@ -25,6 +25,19 @@ public static class FrameOverlay
     private const int BytesPerPixel = 4;
 
     /// <summary>
+    /// A caption turned to pixels once, ready to be composited onto every frame it
+    /// covers.
+    /// </summary>
+    /// <remarks>
+    /// Not <see cref="Annotations.AnnotationSprite"/>, though it holds the same thing in
+    /// the same premultiplied form. That one copies its buffer on the way in and hands it
+    /// back as a span, both of which are right for a mark carried around on an annotation
+    /// and wrong here: this buffer is made once, read thousands of times by the export
+    /// loop, and thrown away with it.
+    /// </remarks>
+    public sealed record VideoCaptionRaster(int Width, int Height, byte[] Pixels);
+
+    /// <summary>
     /// Composites <paramref name="sprite"/> into <paramref name="region"/> of a BGRA,
     /// top-down frame at <paramref name="opacity"/>.
     /// </summary>
