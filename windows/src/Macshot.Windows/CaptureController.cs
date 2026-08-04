@@ -1063,6 +1063,30 @@ public sealed class CaptureController : IDisposable
     }
 
     /// <summary>
+    /// Where a delivery stands in relation to the annotation phase.
+    /// </summary>
+    /// <remarks>
+    /// Three states rather than a flag, because the third one is not the absence of the
+    /// second. A delivery that came out of the editor must not open an editor whatever the
+    /// preferences say: <c>QuickCaptureOpenEditor</c> on, Enter in the editor, and the
+    /// window closes and reopens on its own for as long as the user keeps pressing it.
+    /// </remarks>
+    private enum AnnotationPass
+    {
+        /// <summary>The preference decides. Every capture taken through an overlay.</summary>
+        AsPreferred,
+
+        /// <summary>
+        /// Owed one, whatever the preference says. A scroll capture, which is taken with
+        /// no overlay up and so has never met a toolbar.
+        /// </summary>
+        Owed,
+
+        /// <summary>Just came out of one. Never offer another.</summary>
+        Over,
+    }
+
+    /// <summary>
     /// Hands a finished capture to the one place the user named on the toolbar, rather
     /// than to everything the preferences ask for.
     /// </summary>
@@ -1070,12 +1094,15 @@ public sealed class CaptureController : IDisposable
     /// History is written whichever button was pressed, the same as it is for an ordinary
     /// delivery: it is the net under every capture, not one of the destinations.
     /// </remarks>
-    private async Task DeliverAsync(CaptureCompletion completion, string? origin = null)
+    private async Task DeliverAsync(
+        CaptureCompletion completion,
+        string? origin = null,
+        AnnotationPass pass = AnnotationPass.AsPreferred)
     {
         var frame = completion.Frame;
         if (completion.Outcome is CaptureOutcome.Deliver)
         {
-            await DeliverAsync(frame, completion.Editable, completion.WindowTitle, origin);
+            await DeliverAsync(frame, completion.Editable, completion.WindowTitle, origin, pass);
             return;
         }
 
@@ -1110,7 +1137,7 @@ public sealed class CaptureController : IDisposable
                 break;
         }
 
-        _ = await ArchiveAsync(frame, settings, completion.Editable, origin);
+        var archived = await ArchiveAsync(frame, settings, completion.Editable, origin);
 
         // Only for the two that put the capture somewhere. Pinning and uploading each
         // leave a window on screen saying so, and a sound on top of that is noise.
@@ -1123,6 +1150,15 @@ public sealed class CaptureController : IDisposable
         {
             await PinAsync(frame);
         }
+
+        // Done wrote the marks back over the capture and shut the window; the panel is what
+        // is left to say the edit landed, and it carries the entry so its own Edit reopens
+        // the capture that was just committed rather than the one before the marks.
+        // macshot puts one up here too (DetachedEditorWindowController.swift:357-360).
+        if (completion.Outcome is CaptureOutcome.Commit && settings.ShowThumbnail)
+        {
+            await ShowThumbnailAsync(frame, archived);
+        }
     }
 
     /// <summary>
@@ -1131,29 +1167,27 @@ public sealed class CaptureController : IDisposable
     /// only decides where the pixels go.
     /// </summary>
     /// <remarks>
-    /// <paramref name="annotate"/> is what a scroll capture arrives with and nothing else
-    /// does. Every other capture was drawn on before it got here, on an overlay that was
-    /// already up; a scroll capture is taken with every overlay dismissed — the wheel goes
-    /// to whatever is under the pointer, so an always-on-top window covering the desktop
-    /// would swallow every notch of it — and what comes back is a page many times taller
-    /// than the display, which a window that is exactly the display has nowhere to put.
-    /// The editor is macshot's own answer to a capture bigger than the screen
+    /// <see cref="AnnotationPass.Owed"/> is what a scroll capture arrives with and nothing
+    /// else does. Every other capture was drawn on before it got here, on an overlay that
+    /// was already up; a scroll capture is taken with every overlay dismissed — the wheel
+    /// goes to whatever is under the pointer, so an always-on-top window covering the
+    /// desktop would swallow every notch of it — and what comes back is a page many times
+    /// taller than the display, which a window that is exactly the display has nowhere to
+    /// put. The editor is macshot's own answer to a capture bigger than the screen
     /// (<c>DetachedEditorWindowController</c> and the scroll view in it), and this port
     /// shares its toolbar and its drawing surface with that window, so the tools behave
     /// there exactly as they do on the overlay.
     /// </remarks>
-    /// <param name="annotate">
-    /// Whether this capture has still to be offered its annotation phase. False for
-    /// anything that came off an overlay, where the toolbar was already in front of the
-    /// user: an editor opening on top of a capture they had just finished marking up is
-    /// the preference's business and not this parameter's.
+    /// <param name="pass">
+    /// Whether this capture has still to be offered an annotation phase, and whether it
+    /// has just come out of one.
     /// </param>
     private async Task DeliverAsync(
         CapturedFrame frame,
         EditableCapture? editable = null,
         string? windowTitle = null,
         string? origin = null,
-        bool annotate = false)
+        AnnotationPass pass = AnnotationPass.AsPreferred)
     {
         var settings = _settings.Current;
 
@@ -1199,7 +1233,7 @@ public sealed class CaptureController : IDisposable
         // same capture twice, once with the marks and once without — which is exactly what
         // the thumbnail's Edit does, and there is no reading of "annotate the capture I
         // just took" under which the two should differ.
-        if (settings.QuickCaptureOpenEditor || annotate)
+        if (pass is not AnnotationPass.Over && (settings.QuickCaptureOpenEditor || pass is AnnotationPass.Owed))
         {
             await ShowEditorAsync(frame, origin: archived);
             return;
@@ -1739,7 +1773,7 @@ public sealed class CaptureController : IDisposable
         // Annotated, which is the one thing a scroll capture used to be delivered without:
         // it is taken with no overlay up, so it never passed through the phase every other
         // capture does on the way here.
-        await DeliverAsync(result.Frame, annotate: true);
+        await DeliverAsync(result.Frame, pass: AnnotationPass.Owed);
     }
 
     /// <summary>
@@ -2216,9 +2250,12 @@ public sealed class CaptureController : IDisposable
         editor.AddCaptureRequested += (_, _) => Post(() => AddCaptureAsync(editor));
 
         // Delivered exactly as a capture is, so the editor needs no opinion about
-        // clipboards, folders or history, and what Done means cannot drift between the
-        // two paths.
-        editor.Finished += (_, finished) => Post(() => DeliverAsync(finished, origin));
+        // clipboards, folders or history, and what Enter means cannot drift between the
+        // two paths. Marked as having had its annotation phase, because it is the one this
+        // is coming out of: without that, a delivery from here with the "also open in
+        // Editor" preference on opens another editor, whose Enter opens another.
+        editor.Finished += (_, finished) =>
+            Post(() => DeliverAsync(finished, origin, AnnotationPass.Over));
         editor.Closed += (_, _) =>
         {
             if (ReferenceEquals(_editor, editor))
