@@ -568,10 +568,11 @@ public sealed partial class EditorWindow : Window
     /// the window opens whole rather than showing its top-left corner.
     /// </summary>
     /// <remarks>
-    /// Only ever out, never in: a small capture blown up to fill the window would be
-    /// shown softer than it is, and the marks would be drawn at a size that means
-    /// nothing. Only once, or resizing the window would keep overruling the zoom the
-    /// user chose.
+    /// The rule is <see cref="CaptureFit.OpeningZoom"/>'s: the width is fitted and the
+    /// height is scrolled, so a scroll capture ten screens tall opens at a size its text
+    /// can be read at instead of at a tenth. Only once, or resizing the window would keep
+    /// overruling the zoom the user chose. "Fit canvas" in the zoom menu is still the whole
+    /// image on both axes, for whoever wants it.
     /// </remarks>
     private void Scroller_SizeChanged(object sender, SizeChangedEventArgs e)
     {
@@ -581,10 +582,15 @@ public sealed partial class EditorWindow : Window
         }
 
         _zoomFitted = true;
-        var fit = Math.Min(Scroller.ViewportWidth / _frame.Width, Scroller.ViewportHeight / _frame.Height);
-        if (fit < 1)
+        var opening = CaptureFit.OpeningZoom(
+            _frame.Width,
+            Scroller.ViewportWidth,
+            Scroller.MinZoomFactor,
+            Scroller.MaxZoomFactor);
+
+        if (opening < 1)
         {
-            Scroller.ChangeView(null, null, (float)Math.Max(fit, Scroller.MinZoomFactor));
+            Scroller.ChangeView(null, null, (float)opening);
         }
     }
 
