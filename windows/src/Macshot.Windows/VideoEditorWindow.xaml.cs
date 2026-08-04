@@ -1935,7 +1935,7 @@ public sealed partial class VideoEditorWindow : Window
         var progress = new Progress<double>(done =>
             StatusText.Text = L("Exporting...") + $" {done:P0}");
 
-        await VideoEffectsCompositor.WriteAsync(
+        var carried = await VideoEffectsCompositor.WriteAsync(
             source,
             destination,
             _trim,
@@ -1951,12 +1951,11 @@ public sealed partial class VideoEditorWindow : Window
             _sourceHasAudio,
             progress);
 
-        // Said before it is discovered on playback. macOS re-times an audio track along
-        // with the video it belongs to; Windows exposes nothing that does, so a sped-up
-        // stretch comes out silent. Not through L, since macshot has no string for a limit
-        // it does not have.
-        return _effects.SilencesAnything
-            ? "the sped-up part carries no audio, which is a limit of the encoder here"
+        // Only when the recording had sound and it did not survive, which now means the
+        // machine would not decode the track rather than that macshot cannot re-time one.
+        // Not through L, since macshot has no string for a failure it does not have.
+        return _sourceHasAudio && !carried
+            ? "this machine would not decode the recording's audio, so the export has none"
             : null;
     }
 

@@ -72,24 +72,32 @@ public sealed class VideoEffectsTests
     }
 
     /// <summary>
-    /// Only a speed segment costs the recording its sound, and the editor says so before
-    /// writing rather than leaving it to be found on playback. A freeze is silent by
-    /// design on both products, so it is not something to warn about.
+    /// Only a speed segment needs the recording's audio resampled. This is what picks
+    /// between the two audio routes, and picking wrong is expensive in both directions: a
+    /// cut sent down the PCM route pays a decode of the whole track for nothing, and a
+    /// speed sent down the cheap one comes out playing at the wrong rate.
     /// </summary>
     [TestMethod]
-    public void SilencesAnything_NamesTheSpeedSegmentAndNotTheFreeze()
+    public void NeedsAudioRetime_NamesTheSpeedSegmentAndNothingElse()
     {
         var sped = new VideoEffects();
         sped.Speeds.Add(new VideoSpeedSegment(2, 4, 2));
-        Assert.IsTrue(sped.SilencesAnything);
+        Assert.IsTrue(sped.NeedsAudioRetime);
 
+        // A freeze holds a frame, and the audio of one instant is nothing. Both products
+        // go silent for it, and silence needs no resampling.
         var held = new VideoEffects();
         held.Freezes.Add(new VideoFreezeSegment(2, 1));
-        Assert.IsFalse(held.SilencesAnything);
+        Assert.IsFalse(held.NeedsAudioRetime);
 
         var cut = new VideoEffects();
         cut.Cuts.Add(new VideoCutSegment(2, 4));
-        Assert.IsFalse(cut.SilencesAnything);
+        Assert.IsFalse(cut.NeedsAudioRetime);
+
+        // A speed left at 1x re-times nothing, whatever it claims to be.
+        var flat = new VideoEffects();
+        flat.Speeds.Add(new VideoSpeedSegment(2, 4, 1));
+        Assert.IsFalse(flat.NeedsAudioRetime);
     }
 
     /// <summary>

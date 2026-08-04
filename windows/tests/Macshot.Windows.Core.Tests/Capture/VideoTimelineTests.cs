@@ -248,13 +248,14 @@ public sealed class VideoTimelineTests
     }
 
     /// <summary>
-    /// A sped-up stretch carries no audio, because Windows exposes no way to re-time a
-    /// track. What must not happen is audio at 1× laid over it, which would run past the
-    /// segment and desynchronise everything after — silence is the honest answer and this
-    /// pins it, along with the timing of the run that follows.
+    /// A sped-up stretch produces no run, because this route only repositions sound and a
+    /// speed has to resample it — a recording carrying one goes through AudioRetime
+    /// instead. What must never happen is audio at 1× laid over the segment: it would run
+    /// past the end of it and desynchronise everything after. This pins the absence, and
+    /// the timing of the run that follows it.
     /// </summary>
     [TestMethod]
-    public void AudioRuns_LeavesASpeedSegmentSilentRatherThanLettingItRunOnAtOneToOne()
+    public void AudioRuns_ProduceNothingForASpeedRatherThanLettingItRunOnAtOneToOne()
     {
         var runs = VideoTimeline.AudioRuns(
             VideoTimeline.Pieces([new VideoTimeRange(0, 10)], [new VideoSpeedSegment(4, 8, 2)], []));

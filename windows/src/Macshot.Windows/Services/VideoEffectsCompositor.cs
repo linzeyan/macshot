@@ -68,13 +68,21 @@ internal sealed record VideoCaption(VideoTextSegment Segment, FrameOverlay.Video
 /// <para>
 /// <strong>The audio.</strong> Frames written this way carry none, which is why a zoom
 /// export used to be silent. The fix is a second pass: the frames go to a scratch file,
-/// and a <see cref="MediaComposition"/> then puts that file's video beside the original
-/// recording's audio, one <see cref="BackgroundAudioTrack"/> per stretch that still plays
-/// at 1×, each trimmed to its own piece of source and delayed to where the timeline puts
-/// it. That is the only route Windows offers — there is no muxer here that would copy an
-/// encoded video track next to a new audio one — so the second pass re-encodes the video
-/// once more. It is paid only when the recording has audio to carry, which a great many
-/// screen recordings do not.
+/// and a <see cref="MediaComposition"/> then puts that file's video beside the recording's
+/// own audio. That is the only route Windows offers — there is no muxer here that would
+/// copy an encoded video track next to a new audio one — so the second pass re-encodes the
+/// video once more. It is paid only when the recording has audio to carry, which a great
+/// many screen recordings do not.
+/// </para>
+/// <para>
+/// What goes on that pass depends on whether anything changes how fast the sound plays.
+/// Nothing does for a zoom, a censor, a caption or a cut, so those get one
+/// <see cref="BackgroundAudioTrack"/> per stretch still running at 1×, trimmed and delayed
+/// into place — the platform's own decoders, and nothing decoded that did not have to be.
+/// A speed segment is the other case: it has to be resampled, so the track is transcoded
+/// to PCM once, re-timed by <see cref="AudioRetime"/>, and put back as a single track
+/// already on the output's clock. See <see cref="RetimedAudioAsync"/> for why that is
+/// arithmetic rather than signal processing.
 /// </para>
 /// <para>
 /// <strong>What it costs.</strong> Every frame of the export is decoded by seeking to it,
@@ -112,7 +120,12 @@ internal static class VideoEffectsCompositor
     /// assumed, because the second pass exists only to carry it and a recording with none
     /// should not pay for a re-encode that would add silence.
     /// </param>
-    public static async Task WriteAsync(
+    /// <returns>
+    /// Whether the recording's sound made it into the export. False for a recording that
+    /// had none, and false when it had some the machine would not decode — the caller is
+    /// expected to say so rather than leave it to be found on playback.
+    /// </returns>
+    public static async Task<bool> WriteAsync(
         StorageFile source,
         StorageFile destination,
         VideoTrim trim,
@@ -148,15 +161,28 @@ internal static class VideoEffectsCompositor
                 "The cuts and the trim between them leave nothing of this recording to export.");
         }
 
-        IReadOnlyList<VideoAudioRun> runs = hasAudio ? VideoTimeline.AudioRuns(pieces) : [];
-        var carriesAudio = runs.Count > 0;
+        // A speed segment has to have the track resampled; everything else only moves it
+        // about, which background tracks and their trims already do far more cheaply than
+        // decoding the whole thing to PCM.
+        var resamples = hasAudio && effects.NeedsAudioRetime;
+        IReadOnlyList<VideoAudioRun> runs = hasAudio && !resamples
+            ? VideoTimeline.AudioRuns(pieces)
+            : [];
 
-        // Written straight to where it was asked for when there is no audio to add, so a
-        // silent recording is encoded once rather than twice.
-        var frames = carriesAudio ? await ScratchFileAsync() : destination;
+        var carriesAudio = resamples || runs.Count > 0;
+        var scratch = new List<StorageFile>(3);
 
         try
         {
+            // Written straight to where it was asked for when there is no audio to add,
+            // so a silent recording is encoded once rather than twice.
+            var frames = destination;
+            if (carriesAudio)
+            {
+                frames = await ScratchFileAsync("macshot-effects.mp4");
+                scratch.Add(frames);
+            }
+
             await WriteFramesAsync(
                 source,
                 frames,
@@ -172,12 +198,28 @@ internal static class VideoEffectsCompositor
                 bitrate,
                 progress);
 
+            var retimed = resamples ? await RetimedAudioAsync(source, pieces, scratch) : null;
+
+            if (resamples && retimed is null)
+            {
+                // The track could not be read as samples on this machine. The frames are
+                // already written, so they are put where they were asked for and the
+                // caller is told the sound did not come with them — an export that failed
+                // outright because the audio could not be carried is the worse answer.
+                //
+                // Copied rather than moved: a move repoints this StorageFile at the
+                // destination, and the cleanup below would then delete the export.
+                await frames.CopyAndReplaceAsync(destination);
+                return false;
+            }
+
             if (carriesAudio)
             {
                 await MuxAsync(
                     frames,
                     source,
                     destination,
+                    retimed,
                     runs,
                     sourceSeconds,
                     outputWidth,
@@ -185,32 +227,33 @@ internal static class VideoEffectsCompositor
                     frameRate,
                     bitrate);
             }
+
+            return carriesAudio;
         }
         finally
         {
-            if (carriesAudio)
+            foreach (var file in scratch)
             {
                 // Best effort. A scratch file left behind in the temporary directory is
                 // untidy; an export that failed because it could not tidy up would be
                 // worse, and the name says what left it there.
                 try
                 {
-                    await frames.DeleteAsync();
+                    await file.DeleteAsync();
                 }
-                catch (Exception error) when (error is IOException or UnauthorizedAccessException or COMException)
+                catch (Exception error) when (error is IOException
+                    or UnauthorizedAccessException or COMException or FileNotFoundException)
                 {
                 }
             }
         }
     }
 
-    private static async Task<StorageFile> ScratchFileAsync()
+    private static async Task<StorageFile> ScratchFileAsync(string name)
     {
         var folder = await StorageFolder.GetFolderFromPathAsync(Path.GetTempPath());
 
-        return await folder.CreateFileAsync(
-            "macshot-effects.mp4",
-            CreationCollisionOption.GenerateUniqueName);
+        return await folder.CreateFileAsync(name, CreationCollisionOption.GenerateUniqueName);
     }
 
     /// <summary>Writes every frame of the export, with no audio track at all.</summary>
@@ -449,14 +492,19 @@ internal static class VideoEffectsCompositor
     /// Puts the frames that were just written beside the recording's own audio.
     /// </summary>
     /// <remarks>
-    /// One background track per stretch that still plays at 1×: trimmed to its own piece
-    /// of the recording and delayed to where the timeline puts it, which is what carries
-    /// the sound across a cut without it drifting out of step with the picture.
+    /// Two ways in, and which one is used is decided by whether anything on the band
+    /// changes how fast the sound plays. <paramref name="retimed"/> is one track already
+    /// laid out on the output's own clock, so it goes on at the start and nothing here has
+    /// to reason about where it belongs. Otherwise it is one background track per stretch
+    /// that still plays at 1×, each trimmed to its own piece of the recording and delayed
+    /// to where the timeline puts it, which carries the sound across a cut without paying
+    /// to decode a track that did not need changing.
     /// </remarks>
     private static async Task MuxAsync(
         StorageFile frames,
         StorageFile source,
         StorageFile destination,
+        StorageFile? retimed,
         IReadOnlyList<VideoAudioRun> runs,
         double sourceSeconds,
         int outputWidth,
@@ -466,6 +514,11 @@ internal static class VideoEffectsCompositor
     {
         var composition = new MediaComposition();
         composition.Clips.Add(await MediaClip.CreateFromFileAsync(frames));
+
+        if (retimed is not null)
+        {
+            composition.BackgroundAudioTracks.Add(await BackgroundAudioTrack.CreateFromFileAsync(retimed));
+        }
 
         foreach (var run in runs)
         {
@@ -497,6 +550,161 @@ internal static class VideoEffectsCompositor
         {
             throw new InvalidOperationException(
                 $"Windows could not put the audio back beside the video ({reason}).");
+        }
+    }
+
+    /// <summary>
+    /// The largest source track this will decode to samples, in bytes.
+    /// </summary>
+    /// <remarks>
+    /// The whole PCM track is held in memory, because the read order is monotonic but not
+    /// contiguous — a speed reads every Nth frame — and a windowed reader would be a
+    /// second thing to get wrong for a case that barely occurs. 400 MB is a little over
+    /// half an hour at the rate macshot records, which is far past any screen recording
+    /// this editor is meant for; past it the sound is dropped and the window says so,
+    /// rather than the export dying of an allocation nobody could act on.
+    /// </remarks>
+    private const long LargestTrackBytes = 400L * 1024 * 1024;
+
+    /// <summary>How many frames are built up before they are pushed at the file.</summary>
+    private const int WriteBlockFrames = 4096;
+
+    /// <summary>
+    /// Reads the recording's audio, re-times it onto the export's clock, and hands back a
+    /// WAV of the result — or nothing when this machine will not decode it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This is what macOS gets from <c>scaleTimeRange</c>, which resamples a track along
+    /// with the picture and lets the pitch move with it. The pitch shift is not an
+    /// approximation of that behaviour — it <em>is</em> that behaviour: playing the same
+    /// samples at a different rate is what changes both the duration and the pitch, and it
+    /// is what a sped-up recording is supposed to sound like. There is no time-stretching
+    /// here and none is wanted.
+    /// </para>
+    /// <para>
+    /// Which leaves only arithmetic, and the arithmetic is in <see cref="AudioRetime"/>
+    /// where it is tested. This does the plumbing either side of it: one transcode to PCM
+    /// because that is the only encoding Windows will both write and let this read back as
+    /// numbers, then a copy of frames in the order it is told, then a WAV header.
+    /// </para>
+    /// <para>
+    /// An <c>AudioGraph</c> would be the obvious route and is the wrong one — it renders
+    /// at real time, so a two-minute recording would take two minutes of export to
+    /// re-time. This pass is bounded by disk and memcpy instead.
+    /// </para>
+    /// </remarks>
+    private static async Task<StorageFile?> RetimedAudioAsync(
+        StorageFile source,
+        IReadOnlyList<VideoPiece> pieces,
+        List<StorageFile> scratch)
+    {
+        var extracted = await ScratchFileAsync("macshot-source.wav");
+        scratch.Add(extracted);
+
+        var profile = MediaEncodingProfile.CreateWav(AudioEncodingQuality.High);
+
+        // Pinned rather than left to the quality preset. What comes back is read here as
+        // numbers, and a preset free to change its rate or its depth between Windows
+        // versions would change what those numbers mean without anything failing.
+        profile.Audio = AudioEncodingProperties.CreatePcm(
+            (uint)AudioPlan.SampleRate,
+            (uint)AudioPlan.Channels,
+            (uint)AudioPlan.BitsPerSample);
+
+        var prepared = await new MediaTranscoder().PrepareFileTranscodeAsync(source, extracted, profile);
+        if (!prepared.CanTranscode)
+        {
+            return null;
+        }
+
+        await prepared.TranscodeAsync();
+
+        if ((await extracted.GetBasicPropertiesAsync()).Size > LargestTrackBytes)
+        {
+            return null;
+        }
+
+        var pcm = await File.ReadAllBytesAsync(extracted.Path);
+
+        // Read rather than assumed, though the profile above asked for exactly this: a
+        // transcoder that answered with something else would otherwise have its output
+        // read as though it were 48 kHz stereo, which is noise rather than a failure.
+        if (WavAudio.Read(pcm) is not { } wav || wav.Frames <= 0)
+        {
+            return null;
+        }
+
+        var spans = AudioRetime.Spans(pieces, wav.SampleRate);
+        if (AudioRetime.TotalFrames(spans) <= 0)
+        {
+            return null;
+        }
+
+        var retimed = await ScratchFileAsync("macshot-retimed.wav");
+        scratch.Add(retimed);
+
+        // Off the UI thread: this is a straight memcpy loop over the whole track, and on
+        // the dispatcher it would freeze the editor for as long as it ran.
+        await Task.Run(() => WriteRetimed(retimed.Path, pcm, wav, spans));
+
+        return retimed;
+    }
+
+    /// <summary>Copies frames where <see cref="AudioRetime"/> says they go.</summary>
+    /// <remarks>
+    /// Synchronous and buffered, deliberately. There are forty-eight thousand frames in a
+    /// second of output and each is four bytes, so an awaited write per frame would spend
+    /// far more on state machines than on the copy; a block of frames at a time makes the
+    /// whole pass a sequence of memcpys into a stream that flushes in megabytes.
+    /// </remarks>
+    private static void WriteRetimed(string path, byte[] pcm, WavLayout wav, IReadOnlyList<AudioSpan> spans)
+    {
+        var frame = wav.BytesPerFrame;
+        var total = AudioRetime.TotalFrames(spans);
+
+        using var output = new FileStream(
+            path,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.None,
+            1 << 20);
+
+        output.Write(WavAudio.Header(wav.SampleRate, wav.Channels, wav.BitsPerSample, total * frame));
+
+        var block = new byte[frame * WriteBlockFrames];
+        var filled = 0;
+
+        foreach (var span in spans)
+        {
+            for (var at = span.OutputFrame; at < span.OutputEnd; at++)
+            {
+                var read = AudioRetime.Read(span, at, wav.Frames);
+                var into = block.AsSpan(filled * frame, frame);
+
+                if (read < 0)
+                {
+                    // A freeze, or a span reaching past the end of a track that is a hair
+                    // shorter than its video. Zeroes are silence in signed PCM.
+                    into.Clear();
+                }
+                else
+                {
+                    // Both offsets fit an int because the track is capped at 400 MB above.
+                    pcm.AsSpan((int)(wav.DataOffset + (read * frame)), frame).CopyTo(into);
+                }
+
+                if (++filled == WriteBlockFrames)
+                {
+                    output.Write(block, 0, block.Length);
+                    filled = 0;
+                }
+            }
+        }
+
+        if (filled > 0)
+        {
+            output.Write(block, 0, filled * frame);
         }
     }
 

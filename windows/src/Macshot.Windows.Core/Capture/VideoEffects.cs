@@ -93,14 +93,15 @@ public sealed class VideoEffects
     public bool ChangesAnything => NeedsFramePipeline || HasCuts;
 
     /// <summary>
-    /// Whether the export will drop the recording's audio anywhere.
+    /// Whether the recording's audio has to be resampled rather than merely repositioned.
     /// </summary>
     /// <remarks>
-    /// Only a speed segment does, and the editor says so before writing rather than
-    /// leaving it to be discovered on playback. See <see cref="VideoTimeline.AudioRuns"/>
-    /// for why Windows cannot do what macOS does here.
+    /// Only a speed segment does. Everything else moves sound about without changing how
+    /// fast it plays, which Windows can do with background tracks and their trims — far
+    /// cheaper than decoding the track to PCM and writing it back. This picks between
+    /// those two routes; see <see cref="AudioRetime"/> for the one it turns on.
     /// </remarks>
-    public bool SilencesAnything =>
+    public bool NeedsAudioRetime =>
         Speeds.Any(speed => speed.SourceDuration > 0 && Math.Abs(speed.Factor - 1) > 0.0001);
 
     /// <summary>How many segments of <paramref name="kind"/> are on the band.</summary>

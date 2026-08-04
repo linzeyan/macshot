@@ -66,8 +66,9 @@ public readonly record struct VideoTimeMapEntry(
 /// </summary>
 /// <remarks>
 /// Only 1× stretches produce one. A freeze is silent because a held frame has no sound,
-/// which is macshot's behaviour too; a speed segment is silent because Windows has no
-/// way to re-time an audio track — see <see cref="VideoTimeline.AudioRuns"/>.
+/// which is macshot's behaviour too; a speed produces none because it cannot be carried
+/// by repositioning alone, and takes the recording down the <see cref="AudioRetime"/>
+/// route instead — see <see cref="VideoTimeline.AudioRuns"/>.
 /// </remarks>
 public readonly record struct VideoAudioRun(double SourceStart, double SourceEnd, double OutputStart)
 {
@@ -293,15 +294,13 @@ public static class VideoTimeline
     /// is a chirp.
     /// </para>
     /// <para>
-    /// A speed segment is silent here and is <em>not</em> on macOS, which is the one
-    /// place these two products differ on this feature. AVFoundation's
-    /// <c>scaleTimeRange</c> re-times an audio track along with the video and re-pitches
-    /// it while it does; Windows exposes no equivalent anywhere —
-    /// <see cref="System.Collections.Generic.IEnumerable{T}"/> of PCM through an
-    /// <c>AudioGraph</c> is the only route, and an <c>AudioGraph</c> renders in real time,
-    /// so a two-minute recording would take two minutes to export. Silence over the
-    /// sped-up stretch is the honest answer, and the editor says so before writing the
-    /// file.
+    /// A speed segment produces no run, and that is <em>not</em> the export giving up on
+    /// it: this route can only reposition sound, and a speed has to resample it. A
+    /// recording carrying one goes through <see cref="AudioRetime"/> instead, which reads
+    /// the track as PCM and writes it back re-timed, and never reaches here. So the
+    /// absence of a run for a speed is the signal that this is the wrong route for the
+    /// recording, not that the stretch is silent — <see cref="VideoEffects.NeedsAudioRetime"/>
+    /// is what chooses between them.
     /// </para>
     /// </remarks>
     public static IReadOnlyList<VideoAudioRun> AudioRuns(IEnumerable<VideoPiece> pieces)
