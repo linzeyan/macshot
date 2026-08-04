@@ -1130,11 +1130,30 @@ public sealed class CaptureController : IDisposable
     /// already cropped the selection and burned in the annotations, so this stage
     /// only decides where the pixels go.
     /// </summary>
+    /// <remarks>
+    /// <paramref name="annotate"/> is what a scroll capture arrives with and nothing else
+    /// does. Every other capture was drawn on before it got here, on an overlay that was
+    /// already up; a scroll capture is taken with every overlay dismissed — the wheel goes
+    /// to whatever is under the pointer, so an always-on-top window covering the desktop
+    /// would swallow every notch of it — and what comes back is a page many times taller
+    /// than the display, which a window that is exactly the display has nowhere to put.
+    /// The editor is macshot's own answer to a capture bigger than the screen
+    /// (<c>DetachedEditorWindowController</c> and the scroll view in it), and this port
+    /// shares its toolbar and its drawing surface with that window, so the tools behave
+    /// there exactly as they do on the overlay.
+    /// </remarks>
+    /// <param name="annotate">
+    /// Whether this capture has still to be offered its annotation phase. False for
+    /// anything that came off an overlay, where the toolbar was already in front of the
+    /// user: an editor opening on top of a capture they had just finished marking up is
+    /// the preference's business and not this parameter's.
+    /// </param>
     private async Task DeliverAsync(
         CapturedFrame frame,
         EditableCapture? editable = null,
         string? windowTitle = null,
-        string? origin = null)
+        string? origin = null,
+        bool annotate = false)
     {
         var settings = _settings.Current;
 
@@ -1174,9 +1193,15 @@ public sealed class CaptureController : IDisposable
         // Alongside whatever else was done with it, not instead: someone who wants every
         // capture annotated still wants it copied, and an editor that swallowed the copy
         // would make the setting cost something. macshot's quickCaptureOpenEditor.
-        if (settings.QuickCaptureOpenEditor)
+        //
+        // With the archive entry, so that marking the capture up and pressing Enter writes
+        // back over the entry it already has instead of leaving the history holding the
+        // same capture twice, once with the marks and once without — which is exactly what
+        // the thumbnail's Edit does, and there is no reading of "annotate the capture I
+        // just took" under which the two should differ.
+        if (settings.QuickCaptureOpenEditor || annotate)
         {
-            await ShowEditorAsync(frame);
+            await ShowEditorAsync(frame, origin: archived);
             return;
         }
 
@@ -1634,7 +1659,8 @@ public sealed class CaptureController : IDisposable
     }
 
     /// <summary>
-    /// Runs a scroll capture of one window and delivers the tall image it produces.
+    /// Runs a scroll capture of one window, delivers the tall image it produces, and opens
+    /// it for the annotation phase it could not be given while it was being taken.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -1710,7 +1736,10 @@ public sealed class CaptureController : IDisposable
                 "That page was longer than macshot will capture in one go, so the bottom of it is missing.");
         }
 
-        await DeliverAsync(result.Frame);
+        // Annotated, which is the one thing a scroll capture used to be delivered without:
+        // it is taken with no overlay up, so it never passed through the phase every other
+        // capture does on the way here.
+        await DeliverAsync(result.Frame, annotate: true);
     }
 
     /// <summary>
