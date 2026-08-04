@@ -1,3 +1,5 @@
+using Macshot.Windows.Core.Imaging;
+
 using Microsoft.Windows.AI;
 using Microsoft.Windows.AI.Imaging;
 
@@ -28,12 +30,19 @@ namespace Macshot.Windows.Services;
 /// be asking for something they have just told us.
 /// </para>
 /// <para>
-/// <b>Package identity is required.</b> Windows AI Foundry is unreachable from a process
-/// with no MSIX identity, and macshot currently builds unpackaged
-/// (<c>WindowsPackageType=None</c>), so on today's builds this reports unavailable even
-/// on hardware that could run it. The check below is written against the capability
-/// rather than the packaging so it starts working the moment macshot ships with identity,
-/// and <see cref="Unavailable"/> names both reasons.
+/// <b>Package identity is required</b> for that backend: Windows AI Foundry is unreachable
+/// from a process with no MSIX identity, and macshot builds unpackaged
+/// (<c>WindowsPackageType=None</c>), so today it is unavailable even on hardware that could
+/// run it. The check below asks about the capability rather than the packaging, so it
+/// starts working the moment macshot ships with identity.
+/// </para>
+/// <para>
+/// Which is why it is no longer the only backend. Anything Foundry will not answer for
+/// falls through to <see cref="OnnxBackgroundRemover"/>, which runs a model macshot fetches
+/// and executes itself and needs neither an NPU nor a package. Foundry is still preferred
+/// where it exists — it is on the machine already, so it costs no download, and its model
+/// is the larger of the two. The offline variant has no fallback, since fetching the model
+/// is a network call: there this is the whole feature, as it was before.
 /// </para>
 /// </remarks>
 internal static class BackgroundRemover
@@ -79,7 +88,13 @@ internal static class BackgroundRemover
 
         if (!IsSupported)
         {
+#if OFFLINE
+            // Nothing else to fall back to: the local model is fetched over the network, so
+            // the variant that makes no network calls has only this backend.
             throw new InvalidOperationException(Unavailable);
+#else
+            return await OnnxBackgroundRemover.CutOutAsync(frame);
+#endif
         }
 
         await EnsureModelAsync();
@@ -99,14 +114,22 @@ internal static class BackgroundRemover
         return Cut(frame, mask);
     }
 
+#if OFFLINE
     /// <summary>What to say when the model cannot run here.</summary>
     /// <remarks>
+    /// <para>
     /// Both reasons in one sentence. "Needs a Copilot+ PC" alone would be a lie on the
     /// machine that has one and is running an unpackaged build, and the user would go
     /// looking at their hardware for a fault that is in ours.
+    /// </para>
+    /// <para>
+    /// Offline only. The ordinary build never says this, because it falls back to the
+    /// model it runs itself — and a member nothing reads is a warning, which is an error.
+    /// </para>
     /// </remarks>
     private static string Unavailable =>
         L("Remove Background needs a Copilot+ PC and an installed build of macshot.");
+#endif
 
     /// <summary>
     /// Waits for the model to be on the machine, fetching it the first time.
@@ -143,10 +166,10 @@ internal static class BackgroundRemover
     /// <see cref="CapturedFrame.HasAlpha"/>.
     /// </para>
     /// <para>
-    /// Sampled by position rather than copied byte for byte. Nothing promises the mask
-    /// comes back at the size it went in, and a mask read at the wrong stride is a
-    /// cut-out sheared diagonally across the picture — a failure that looks like a bad
-    /// model rather than a bad loop.
+    /// The pixels themselves go through <see cref="SubjectCutout"/>, which is also what the
+    /// local model's backend uses. Two backends that disagreed about what to do with a mask
+    /// would hand back visibly different edges for the same capture depending on which
+    /// machine cut it, and only one of the two can be tested off Windows.
     /// </para>
     /// </remarks>
     private static CapturedFrame Cut(CapturedFrame frame, SoftwareBitmap mask)
@@ -157,26 +180,14 @@ internal static class BackgroundRemover
             throw new InvalidOperationException(NoSubject);
         }
 
-        var pixels = new byte[frame.BgraPixels.Length];
-        frame.BgraPixels.CopyTo(pixels, 0);
-
-        var lifted = 0;
-        for (var y = 0; y < frame.Height; y++)
-        {
-            var maskRow = y * maskHeight / frame.Height * maskWidth;
-            var row = y * frame.Width * 4;
-
-            for (var x = 0; x < frame.Width; x++)
-            {
-                var alpha = coverage[maskRow + (x * maskWidth / frame.Width)];
-                pixels[row + (x * 4) + 3] = alpha;
-
-                if (alpha > 0)
-                {
-                    lifted++;
-                }
-            }
-        }
+        var pixels = SubjectCutout.Cut(
+            frame.BgraPixels,
+            frame.Width,
+            frame.Height,
+            coverage,
+            maskWidth,
+            maskHeight,
+            out var lifted);
 
         // macshot says the same thing rather than handing back a blank rectangle, and
         // the empty result is the common failure here: the model was given a region with

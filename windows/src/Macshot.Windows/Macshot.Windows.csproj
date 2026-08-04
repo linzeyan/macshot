@@ -108,6 +108,18 @@
     <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="2.2.1" />
   </ItemGroup>
 
+  <!--
+    Background removal's own runtime, and only where it can be reached. The offline variant
+    fetches no model, so it has no use for a 15 MB native library - and shipping one for a
+    code path that is compiled out is exactly what taking .ML out of the SDK above was for.
+
+    CPU only. A GPU execution provider is another hundred megabytes of native code to make a
+    tenth of a second faster, for a button pressed by hand.
+  -->
+  <ItemGroup Condition="'$(Variant)' != 'Offline'">
+    <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.28.0" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Macshot.Windows.Core\Macshot.Windows.Core.csproj" />
   </ItemGroup>
