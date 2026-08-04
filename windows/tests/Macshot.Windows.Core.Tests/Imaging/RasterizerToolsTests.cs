@@ -30,6 +30,37 @@ public sealed class RasterizerToolsTests
             || pixels[offset + 2] != byte.MaxValue;
     }
 
+    /// <summary>
+    /// Alternating black and white columns. A frame the redaction tools can be seen on:
+    /// blurring or pixelating anything here lands between the two values, and a pixel
+    /// left alone is still exactly one of them. A blank frame would hide all four modes.
+    /// </summary>
+    private static byte[] Striped()
+    {
+        var pixels = new byte[Size * Size * 4];
+        for (var row = 0; row < Size; row++)
+        {
+            for (var column = 0; column < Size; column++)
+            {
+                var value = column % 2 == 0 ? byte.MinValue : byte.MaxValue;
+                var offset = ((row * Size) + column) * 4;
+                pixels[offset] = value;
+                pixels[offset + 1] = value;
+                pixels[offset + 2] = value;
+                pixels[offset + 3] = byte.MaxValue;
+            }
+        }
+
+        return pixels;
+    }
+
+    /// <summary>Whether a striped pixel has been averaged with its neighbours.</summary>
+    private static bool IsFlattened(byte[] pixels, int column, int row)
+    {
+        var offset = ((row * Size) + column) * 4;
+        return pixels[offset] is > byte.MinValue and < byte.MaxValue;
+    }
+
     private static byte[] Render(byte[] source, params Annotation[] annotations) =>
         AnnotationRasterizer.Render(Size, Size, source, annotations);
 
@@ -207,6 +238,54 @@ public sealed class RasterizerToolsTests
         var asked = covered with { Style = covered.Style with { CornerRadius = 12 } };
 
         CollectionAssert.AreEqual(Render(Blank(), covered), Render(Blank(), asked));
+    }
+
+    [TestMethod]
+    public void Rotation_TurnsARedactionRatherThanOnlyItsHandles()
+    {
+        // The redaction tool was the one area shape whose mark is not a path, so it was
+        // the one the rotation handle moved without moving what was drawn: the grips
+        // swung round and the black box stayed square to the screen. Something covered at
+        // an angle then needed a box large enough to cover its surroundings as well.
+        var box = Shape(AnnotationTool.Censor, 24, 24, 40, 40);
+        var solid = box with { Style = box.Style with { CensorMode = CensorMode.Solid } };
+
+        var upright = Render(Blank(), solid);
+        var turned = Render(Blank(), solid with { Rotation = Math.PI / 4 });
+
+        // Turned an eighth, the box becomes a diamond whose tips reach past the upright
+        // bounds — the clearest place to see the fill follow the shape.
+        Assert.IsFalse(IsInked(upright, 32, 21), "the upright box stops at its own top edge");
+        Assert.IsTrue(IsInked(turned, 32, 21), "and the turned one reaches past it");
+    }
+
+    [TestMethod]
+    public void Rotation_TakesBackTheCornersARedactionNeverCovered()
+    {
+        // Pixelating cannot be done along a turned axis, so it runs over the upright
+        // rectangle the diamond sits in. Without putting those corners back, a turned
+        // redaction would smear a square region and only look like a diamond in outline.
+        var box = Shape(AnnotationTool.Censor, 24, 24, 40, 40) with { Rotation = Math.PI / 4 };
+
+        var turned = Render(Striped(), box);
+
+        Assert.IsTrue(IsFlattened(turned, 32, 32), "the middle of the diamond is covered");
+        Assert.IsFalse(
+            IsFlattened(turned, 22, 22),
+            "and a corner of the rectangle it was worked out in is untouched");
+    }
+
+    [TestMethod]
+    public void Rotation_OfZeroLeavesARedactionExactlyWhereItWas()
+    {
+        // The upright path is the one every redaction takes, and it composites its edge
+        // differently from the turned one. A shape that changed the moment the property
+        // was written down would make every existing capture's redaction shift.
+        var box = Shape(AnnotationTool.Censor, 20, 26, 44, 38);
+
+        CollectionAssert.AreEqual(
+            Render(Striped(), box),
+            Render(Striped(), box with { Rotation = 0 }));
     }
 
     [TestMethod]

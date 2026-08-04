@@ -365,11 +365,72 @@ public static class AnnotationRasterizer
     private const double CensorBlock = 16;
 
     /// <summary>
-    /// Blurs, solids, pixelates or fills in the region, by the mode the mark carries.
+    /// Blurs, solids, pixelates or fills in the region, by the mode the mark carries,
+    /// turned with the mark when it has been turned.
     /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The redaction tool is the one area shape whose mark is not a path, so it was the
+    /// one the rotation handle moved without moving what was drawn: the grips and the
+    /// outline swung round and the black box stayed square to the screen. A redaction
+    /// laid over something at an angle — a signature, a name in a screenshot of a
+    /// rotated card — could only be covered by a box big enough to cover its
+    /// surroundings too.
+    /// </para>
+    /// <para>
+    /// Everything but the solid fill rewrites the pixels it covers by walking the
+    /// frame's own rows and columns, and none of them can be walked along a turned
+    /// axis. So each runs over the upright rectangle the turned shape sits in and
+    /// <see cref="CoverageMask.KeepInside"/> takes back the corners that were never
+    /// inside it. A blur then samples a little of what is beside the shape, which the
+    /// upright path is careful not to do — but what it pulls in is the unredacted
+    /// surroundings the reader can already see, never the covered pixels, so it costs
+    /// nothing the redaction was for.
+    /// </para>
+    /// </remarks>
     private static void Censor(byte[] pixels, int width, int height, Annotation annotation)
     {
-        var region = annotation.BoundingRect;
+        if (annotation.Rotation == 0)
+        {
+            CensorUpright(pixels, width, height, annotation, annotation.BoundingRect);
+            return;
+        }
+
+        var quad = Oriented(annotation, [BuildRectanglePath(annotation.BoundingRect)])[0];
+        if (!TryGetPathBounds([quad], out var swept))
+        {
+            return;
+        }
+
+        var mask = CoverageMask.ForBounds(swept, 0, width, height);
+        if (mask is null)
+        {
+            return;
+        }
+
+        mask.AddPolygon(quad);
+
+        // The solid mode paints rather than rewrites, so it goes straight through the
+        // mask: laying it over the whole rectangle first and taking the corners back
+        // after would blend the colour twice at every fractional edge pixel.
+        if (annotation.Style.CensorMode == CensorMode.Solid)
+        {
+            mask.Composite(pixels, width, annotation.Style.Color, annotation.Style.Opacity);
+            return;
+        }
+
+        var before = mask.Snapshot(pixels, width);
+        CensorUpright(pixels, width, height, annotation, mask.Bounds);
+        mask.KeepInside(pixels, width, before);
+    }
+
+    private static void CensorUpright(
+        byte[] pixels,
+        int width,
+        int height,
+        Annotation annotation,
+        CaptureRegion region)
+    {
         switch (annotation.Style.CensorMode)
         {
         case CensorMode.Blur:
