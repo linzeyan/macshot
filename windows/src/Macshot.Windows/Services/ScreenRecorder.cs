@@ -146,8 +146,58 @@ public sealed class ScreenRecorder : IDisposable
 
         var item = GraphicsCaptureService.OpenDisplay(monitorHandle);
         return format == RecordingFormat.Gif
-            ? RecordGifAsync(item, path, region, frameRate ?? GifRecordingPlan.DefaultFrameRate, cancellation)
-            : RecordMp4Async(item, path, region, frameRate ?? RecordingPlan.DefaultFrameRate, audio, cancellation);
+            ? RecordGifAsync(item, path, region, null, frameRate ?? GifRecordingPlan.DefaultFrameRate, cancellation)
+            : RecordMp4Async(item, path, region, null, frameRate ?? RecordingPlan.DefaultFrameRate, audio, cancellation);
+    }
+
+    /// <summary>
+    /// Records one window until <paramref name="cancellation"/> asks it to stop, and
+    /// writes it to <paramref name="path"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The window's own capture item rather than a rectangle of the display, which is what
+    /// makes this follow: the compositor renders that window's tree, so the recording holds
+    /// the window wherever it is dragged to and holds only the window — a dialog or another
+    /// app in front of it is simply not in the file.
+    /// </para>
+    /// <para>
+    /// That is also what the overlays cost. The click ring, the keystroke pill and the
+    /// webcam bubble are macshot's own windows laid over the desktop, and none of them is
+    /// in this window's tree, so a window recording cannot carry any of the three. The
+    /// caller leaves them down rather than showing the user three overlays that will not be
+    /// in what they are recording.
+    /// </para>
+    /// <para>
+    /// A window that is closed mid-recording closes its capture item, which ends the stream
+    /// with what it has: the file is written rather than lost. Everything else the window
+    /// can do — move, resize, minimize — is <see cref="WindowRecordingArea"/>'s.
+    /// </para>
+    /// </remarks>
+    public Task<RecordingResult> RecordWindowAsync(
+        CaptureWindow window,
+        string path,
+        RecordingFormat format,
+        CancellationToken cancellation,
+        int? frameRate = null,
+        RecordingAudio audio = default)
+    {
+        ObjectDisposedException.ThrowIf(_disposed, this);
+
+        var item = GraphicsCaptureService.OpenWindow(window.Id);
+        var size = item.Size;
+
+        // Both rectangles or neither: with nothing to compare, the whole item is kept and
+        // the recording carries the invisible resize border rather than a guess at where
+        // it is. Asked here rather than taken from the enumeration behind the overlay,
+        // because that list was made before the user chose anything.
+        var follow = WindowEnumerator.TryGetBounds(window.Id, out var windowRect, out var visible)
+            ? WindowRecordingArea.Resolve(windowRect, visible, size.Width, size.Height)
+            : WindowRecordingArea.Resolve(default, default, size.Width, size.Height);
+
+        return format == RecordingFormat.Gif
+            ? RecordGifAsync(item, path, null, follow, frameRate ?? GifRecordingPlan.DefaultFrameRate, cancellation)
+            : RecordMp4Async(item, path, null, follow, frameRate ?? RecordingPlan.DefaultFrameRate, audio, cancellation);
     }
 
     public void Dispose()
@@ -166,13 +216,21 @@ public sealed class ScreenRecorder : IDisposable
         GraphicsCaptureItem item,
         string path,
         CaptureRegion? region,
+        WindowRecordingArea? follow,
         int frameRate,
         RecordingAudio audio,
         CancellationToken cancellation)
     {
         var size = item.Size;
         var crop = CropperOrNull(size, region);
-        var plan = RecordingPlan.Resolve(crop?.Width ?? size.Width, crop?.Height ?? size.Height, frameRate);
+
+        // What each sample holds, which is what the stream has to be told and what the
+        // profile is resolved from. The three cases are the whole item, a fixed rectangle
+        // of a display, and the pinned rectangle of a window that may still resize.
+        var sourceWidth = follow?.Width ?? crop?.Width ?? size.Width;
+        var sourceHeight = follow?.Height ?? crop?.Height ?? size.Height;
+
+        var plan = RecordingPlan.Resolve(sourceWidth, sourceHeight, frameRate);
         var kept = 0;
 
         using var frames = new FrameStream(Device(), item, plan.FrameInterval, cancellation);
@@ -182,7 +240,7 @@ public sealed class ScreenRecorder : IDisposable
         // machine with no microphone records without one rather than not at all.
         using var track = audio.IsSilent ? null : AudioTrack.Open(audio.SystemAudio, audio.Microphone);
 
-        var source = BuildSource(crop?.Width ?? size.Width, crop?.Height ?? size.Height, track is not null);
+        var source = BuildSource(sourceWidth, sourceHeight, track is not null);
         source.Starting += (_, args) =>
         {
             // Capture starts here rather than earlier, because here is when the
@@ -214,6 +272,17 @@ public sealed class ScreenRecorder : IDisposable
                 }
 
                 kept++;
+
+                if (follow is { } area)
+                {
+                    // Through main memory for the same reason a crop is, and for one
+                    // more: the window may not be the size it was, and only a fitted
+                    // buffer is still the size the stream was told.
+                    request.Sample = MediaStreamSample.CreateFromBuffer(
+                        await FitToBufferAsync(timed.Frame, area),
+                        timed.Timestamp);
+                    return;
+                }
 
                 if (crop is { } cropper)
                 {
@@ -277,12 +346,17 @@ public sealed class ScreenRecorder : IDisposable
         GraphicsCaptureItem item,
         string path,
         CaptureRegion? region,
+        WindowRecordingArea? follow,
         int frameRate,
         CancellationToken cancellation)
     {
         var size = item.Size;
         var crop = CropperOrNull(size, region);
-        var plan = GifRecordingPlan.Resolve(crop?.Width ?? size.Width, crop?.Height ?? size.Height, frameRate);
+        var plan = GifRecordingPlan.Resolve(
+            follow?.Width ?? crop?.Width ?? size.Width,
+            follow?.Height ?? crop?.Height ?? size.Height,
+            frameRate);
+
         var timing = new GifFrameTiming();
 
         using var frames = new FrameStream(Device(), item, plan.FrameInterval, cancellation);
@@ -299,7 +373,7 @@ public sealed class ScreenRecorder : IDisposable
 
         while (written < GifRecordingPlan.MaximumFrames && await frames.NextAsync() is { } timed)
         {
-            var current = await ToGifFrameAsync(timed, plan, crop);
+            var current = await ToGifFrameAsync(timed, plan, crop, follow);
             if (previous is not null)
             {
                 await WriteGifFrameAsync(encoder, previous, timing.Next(current.Timestamp - previous.Timestamp), written, plan);
@@ -472,16 +546,46 @@ public sealed class ScreenRecorder : IDisposable
     }
 
     /// <summary>
+    /// Copies one captured frame down to the CPU and fits the pinned rectangle of a
+    /// followed window into a buffer of the size the encoder was promised.
+    /// </summary>
+    /// <remarks>
+    /// The content size is read off the frame before anything is copied, because it is
+    /// what says how much of the pool's buffer is this delivery. They differ from the
+    /// moment the window is resized, and reading the difference as pixels would keep the
+    /// picture from before the resize in every frame after it.
+    /// </remarks>
+    private static async Task<IBuffer> FitToBufferAsync(Direct3D11CaptureFrame frame, WindowRecordingArea area)
+    {
+        using (frame)
+        {
+            var content = frame.ContentSize;
+            using var bitmap = await SoftwareBitmap.CreateCopyFromSurfaceAsync(frame.Surface);
+
+            var pixels = new byte[checked(bitmap.PixelWidth * bitmap.PixelHeight * 4)];
+            bitmap.CopyToBuffer(pixels.AsBuffer());
+
+            return area
+                .Fit(bitmap.PixelWidth, bitmap.PixelHeight, pixels, content.Width, content.Height)
+                .AsBuffer();
+        }
+    }
+
+    /// <summary>
     /// Copies one captured frame down to the CPU, cuts the recorded rectangle out of it
     /// if there is one, and shrinks it to the size the GIF is being written at.
     /// </summary>
     private static async Task<GifFrame> ToGifFrameAsync(
         TimedFrame timed,
         GifRecordingPlan plan,
-        RecordedArea? crop)
+        RecordedArea? crop,
+        WindowRecordingArea? follow)
     {
         using (timed.Frame)
         {
+            // Before the copy: the frame says how much of the surface is this delivery
+            // rather than the one before it, and the surface outlives neither.
+            var content = timed.Frame.ContentSize;
             using var bitmap = await SoftwareBitmap.CreateCopyFromSurfaceAsync(timed.Frame.Surface);
 
             var pixels = new byte[checked(bitmap.PixelWidth * bitmap.PixelHeight * 4)];
@@ -489,7 +593,13 @@ public sealed class ScreenRecorder : IDisposable
 
             var width = bitmap.PixelWidth;
             var height = bitmap.PixelHeight;
-            if (crop is { } cropper)
+            if (follow is { } area)
+            {
+                pixels = area.Fit(width, height, pixels, content.Width, content.Height);
+                width = area.Width;
+                height = area.Height;
+            }
+            else if (crop is { } cropper)
             {
                 (width, height, pixels) = FrameTransforms.Crop(width, height, pixels, cropper.AsRegion);
             }

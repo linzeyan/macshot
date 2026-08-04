@@ -291,6 +291,24 @@ public sealed partial class CaptureOverlayWindow : Window
     private CaptureWindow? _hoveredWindow;
 
     /// <summary>
+    /// The window the chosen region <em>is</em>, when it was chosen by clicking one rather
+    /// than by dragging a rectangle. Null for every region that came from a drag.
+    /// </summary>
+    /// <remarks>
+    /// Only recording reads it, and only to record the window itself rather than the
+    /// rectangle it currently occupies. Kept as the window rather than as a flag because a
+    /// recording opens a capture item on it, which needs the identity and not the bounds.
+    /// </remarks>
+    private CaptureWindow? _snappedWindow;
+
+    /// <summary>
+    /// The open microphone behind the meter in the mic button, while a recording is being
+    /// set up with it switched on. Null the rest of the time, which is what says the
+    /// microphone is not open.
+    /// </summary>
+    private MicrophoneMeter? _micMeter;
+
+    /// <summary>
     /// Where the region was when the move button was pressed. Non-null for as long as the
     /// region is following the pointer.
     /// </summary>
@@ -442,8 +460,10 @@ public sealed partial class CaptureOverlayWindow : Window
             AnnotationToolbar.PersistStyle();
 
             // A camera left running behind a closed window is the one failure here
-            // nobody would forgive: the light beside the lens would stay on.
+            // nobody would forgive: the light beside the lens would stay on. An open
+            // microphone is the same failure without the light to give it away.
             HideWebcamPreview();
+            HideMicMeter();
         };
 
         var appWindow = this.GetAppWindow();
@@ -1052,7 +1072,7 @@ public sealed partial class CaptureOverlayWindow : Window
                 captured = null;
             }
 
-            EnterAnnotationPhase(window.Bounds, captured, window.Title);
+            EnterAnnotationPhase(window.Bounds, captured, window.Title, window);
 
             if (captured is null)
             {
@@ -1068,10 +1088,15 @@ public sealed partial class CaptureOverlayWindow : Window
         }
     }
 
+    /// <param name="snapped">
+    /// The window the region is, when it came from clicking one. Defaulted to null so
+    /// every other way of choosing a region clears it rather than having to remember to.
+    /// </param>
     private void EnterAnnotationPhase(
         CaptureRegion region,
         CapturedFrame? capturedWindow = null,
-        string? windowTitle = null)
+        string? windowTitle = null,
+        CaptureWindow? snapped = null)
     {
         // Where the annotation phase's pixels came from, which is the difference between
         // "the window itself" and "the screenshot with whatever was over it". The two
@@ -1084,6 +1109,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         _selection = region;
         _hoveredWindow = null;
+        _snappedWindow = snapped;
         _capturedWindow = capturedWindow;
         _capturedWindowTitle = windowTitle;
         _regionIsAdjustable = capturedWindow is null;
@@ -1155,8 +1181,10 @@ public sealed partial class CaptureOverlayWindow : Window
         case CaptureIntent.Record:
             // Nothing to start: the strip is already the recording one, and Start is the
             // user's press. What this does is put the camera up, so the bubble can be
-            // seen and dragged before it is in the file rather than after.
+            // seen and dragged before it is in the file rather than after, and open the
+            // microphone, so its button says whether it is hearing anything.
             ShowWebcamPreview();
+            ShowMicMeter();
             break;
         case CaptureIntent.Recognize:
             _ = ReadTextAsync();
@@ -1480,6 +1508,21 @@ public sealed partial class CaptureOverlayWindow : Window
     /// has happened the mouse is already up — so "let go to place it" would place the
     /// region before it had moved at all.
     /// </remarks>
+    /// <summary>
+    /// Says that the region has stopped being the window it was clicked out of.
+    /// </summary>
+    /// <remarks>
+    /// The two together rather than each on its own: the grips coming back and the
+    /// recording stopping following are the same fact, and a site that set one without
+    /// the other would either record a window the user has moved the region off, or leave
+    /// a region that cannot be adjusted still claiming to be a window.
+    /// </remarks>
+    private void RegionIsNoLongerAWindow()
+    {
+        _regionIsAdjustable = true;
+        _snappedWindow = null;
+    }
+
     private void BeginRegionMove()
     {
         if (_selection is not { } region || _movingFrom is not null)
@@ -1490,7 +1533,7 @@ public sealed partial class CaptureOverlayWindow : Window
         // Moving a window capture makes it an ordinary region: its pixels stop being the
         // window's own the moment it is over something else, so from here it is cropped
         // out of the screenshot like any other and its grips come back with it.
-        _regionIsAdjustable = true;
+        RegionIsNoLongerAWindow();
 
         _movingFrom = region;
         _movePending = region;
@@ -1981,7 +2024,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         // Same as moving it: a window capture typed to a different size is no longer the
         // window, so it becomes an ordinary region cropped out of the screenshot.
-        _regionIsAdjustable = true;
+        RegionIsNoLongerAWindow();
 
         ApplyRegion(SelectionSizing.Resize(
             current,
@@ -2007,7 +2050,7 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
 
-        _regionIsAdjustable = true;
+        RegionIsNoLongerAWindow();
 
         if (preset.IsExact)
         {
@@ -2139,6 +2182,13 @@ public sealed partial class CaptureOverlayWindow : Window
 
             case ToolbarCommand.Webcam:
                 ShowWebcamPreview();
+                return;
+
+            // The switch itself is the toolbar's, as the other four recording switches
+            // are. What arrives here is the consequence of it: the microphone has to be
+            // opened or closed to match, and the toolbar has nowhere to keep one.
+            case ToolbarCommand.MicAudio:
+                ShowMicMeter();
                 return;
 
             case ToolbarCommand.RecordingSettings:
@@ -2638,6 +2688,12 @@ public sealed partial class CaptureOverlayWindow : Window
     public string? TranslateTarget { get; set; }
 
     /// <summary>Asks for the region to be recorded rather than captured.</summary>
+    /// <remarks>
+    /// A region that came from clicking a window asks for that window instead, following
+    /// it wherever it goes. The gesture is the one that already takes a still of a window,
+    /// rather than a mode of its own: what is being recorded is what was pointed at, and
+    /// the highlight said which that was.
+    /// </remarks>
     private void RequestRecording()
     {
         if (_selection is not { } region)
@@ -2646,10 +2702,14 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         // Before the request, because the recording opens a bubble of its own and this
-        // one is over the same corner of the same region.
+        // one is over the same corner of the same region — and a microphone of its own,
+        // which this one has no reason to still be holding.
         HideWebcamPreview();
+        HideMicMeter();
 
-        RecordingRequested?.Invoke(this, new RecordingRequest(_monitor, _layout.FrameToVirtual(region)));
+        RecordingRequested?.Invoke(
+            this,
+            new RecordingRequest(_monitor, _layout.FrameToVirtual(region), _snappedWindow));
     }
 
     /// <summary>
@@ -2661,6 +2721,7 @@ public sealed partial class CaptureOverlayWindow : Window
         AnnotationToolbar.RecordingSetup = true;
         ShowFrame();
         ShowWebcamPreview();
+        ShowMicMeter();
     }
 
     /// <summary>Goes back to the ordinary strip, having recorded nothing.</summary>
@@ -2669,6 +2730,65 @@ public sealed partial class CaptureOverlayWindow : Window
         AnnotationToolbar.RecordingSetup = false;
         ShowFrame();
         HideWebcamPreview();
+        HideMicMeter();
+    }
+
+    /// <summary>
+    /// Opens the microphone and feeds its level to the button that switches it on, or
+    /// closes it again to match what that switch now says.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only while the recording is being set up, and never during the recording itself: it
+    /// is a check on the microphone before the one moment the answer still matters, and
+    /// once the file is being written the strip it draws into is gone.
+    /// </para>
+    /// <para>
+    /// A microphone that will not open leaves the switch on and the bar at nothing, which
+    /// is what a machine with the microphone turned off in Windows privacy settings looks
+    /// like — and is the reading the meter exists to give.
+    /// </para>
+    /// </remarks>
+    private void ShowMicMeter()
+    {
+        if (!AnnotationToolbar.RecordingSetup || !_settings.Current.RecordMicAudio)
+        {
+            HideMicMeter();
+            return;
+        }
+
+        if (_micMeter is not null)
+        {
+            return;
+        }
+
+        if (MicrophoneMeter.Start() is not { } meter)
+        {
+            DiagnosticLog.Write("No microphone would open for the level meter, so it stays at nothing.");
+            return;
+        }
+
+        meter.LevelChanged += (_, level) => AnnotationToolbar.ShowMicLevel(level);
+        _micMeter = meter;
+    }
+
+    /// <summary>
+    /// Closes the microphone and takes the bar down with it.
+    /// </summary>
+    /// <remarks>
+    /// Before the recording starts as well as when the switch goes off: the recording opens
+    /// the microphone for itself, and an open stream left behind by a window that is about
+    /// to close would be macshot holding the microphone with nothing on screen saying so.
+    /// </remarks>
+    private void HideMicMeter()
+    {
+        if (_micMeter is not { } meter)
+        {
+            return;
+        }
+
+        _micMeter = null;
+        meter.Dispose();
     }
 
     /// <summary>
