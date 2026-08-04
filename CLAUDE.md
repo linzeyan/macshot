@@ -356,7 +356,9 @@ start the macOS pipeline on `main`, and vice versa.
 
 ## Known gaps
 
-- The video editor's effects band is not done.
+- The video editor's effects band is one effect deep: a zoom segment can be placed over
+  the timeline and is applied on export. macOS's other five — censor, cut, freeze, speed
+  and text — are not there, and a zoom export drops the audio.
 - The MSIX is built but never signed: there is no certificate, so no release has carried an
   installer yet. `windows.startupTask` and `windows.protocol` are the two manifest entries
   it still needs before it is the recommended way to install macshot — see Releasing.
