@@ -84,8 +84,28 @@
       StandardOutputImportance="low" />
   </Target>
 
+  <!--
+    The Windows App SDK by its parts rather than by its aggregate package, for one reason:
+    the aggregate pulls Microsoft.WindowsAppSDK.ML, which pulls
+    Microsoft.Windows.AI.MachineLearning — onnxruntime.dll and DirectML.dll, 42 MB of the
+    publish and 17.8 of the 88 MB zip, for an inference runtime nothing here calls.
+
+    Removing it does not remove background removal. That comes from .AI's
+    Microsoft.Graphics.Imaging, and .AI depends only on .Base and .Foundation.
+
+    These are the versions Microsoft.WindowsAppSDK 2.2.0 pins, which is what makes this a
+    subset of that package rather than a different set of components. They move together:
+    to take a new SDK, read the aggregate's dependency list and copy it, minus .ML.
+  -->
   <ItemGroup>
-    <PackageReference Include="Microsoft.WindowsAppSDK" Version="2.2.0" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.AI" Version="2.2.3" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Base" Version="2.0.4" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.DWrite" Version="2.1.0" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Foundation" Version="2.1.0" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" Version="2.0.15" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" Version="2.2.0" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.Widgets" Version="2.0.5" />
+    <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="2.2.1" />
   </ItemGroup>
 
   <ItemGroup>
