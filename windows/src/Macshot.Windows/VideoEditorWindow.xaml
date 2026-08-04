@@ -28,6 +28,35 @@
             Stretch="Uniform"
             Visibility="Collapsed" />
 
+        <!-- macshot's EffectsPreviewOverlayView: where a censor or a caption goes on the
+             picture, dragged on top of the player itself rather than typed as numbers.
+             Only up while one of those two is selected on the band — a frame drawn over
+             the video the rest of the time would read as part of the recording. -->
+        <Canvas
+            x:Name="RectOverlay"
+            Grid.Row="0"
+            Background="Transparent"
+            Visibility="Collapsed"
+            SizeChanged="RectOverlay_SizeChanged"
+            PointerPressed="RectOverlay_PointerPressed"
+            PointerMoved="RectOverlay_PointerMoved"
+            PointerReleased="RectOverlay_PointerReleased"
+            PointerCaptureLost="RectOverlay_PointerCaptureLost">
+            <Rectangle
+                x:Name="RectFrame"
+                Stroke="#FFFFC74D"
+                StrokeThickness="2"
+                Fill="#1AFFFFFF" />
+            <!-- One corner rather than macshot's eight handles: the other seven would each
+                 need their own hit region on a surface this port cannot photograph to
+                 check. Drag the middle to move it, this corner to resize it. -->
+            <Rectangle
+                x:Name="RectHandle"
+                Width="12"
+                Height="12"
+                Fill="#FFFFC74D" />
+        </Canvas>
+
         <StackPanel Grid.Row="1" Padding="16,10,16,12" Spacing="8">
             <StackPanel x:Name="TrimPanel" Spacing="8">
                 <!-- The timeline: the whole recording as a track, the kept piece lit, a
@@ -49,62 +78,115 @@
                     <Rectangle x:Name="Playhead" Width="2" Height="48" Canvas.Top="4" Fill="#FFFFFFFF" />
                 </Canvas>
 
-                <!-- macshot's effects band, less five of its six effects. One zoom pill:
-                     drag its middle to move it, an end to resize it, and the box beside
-                     the band says how far in it goes. The band is only there for an MP4
-                     export, since nothing re-encodes a GIF here. -->
-                <Grid x:Name="EffectsPanel">
-                    <Grid.ColumnDefinitions>
-                        <ColumnDefinition Width="*" />
-                        <ColumnDefinition Width="Auto" />
-                    </Grid.ColumnDefinitions>
+                <!-- macshot's effects band, with all six of its effects. A pill per
+                     segment: drag its middle to move it, an end to resize it, click it to
+                     select it, and the box beside the band sets whatever that kind of
+                     effect has to set. Pills are built in code rather than declared here
+                     because there is one per segment and the band stacks them into rows.
+                     The band is only there for an MP4 export, since nothing re-encodes a
+                     GIF here. -->
+                <StackPanel x:Name="EffectsPanel" Spacing="6">
+                    <Grid>
+                        <Grid.ColumnDefinitions>
+                            <ColumnDefinition Width="*" />
+                            <ColumnDefinition Width="Auto" />
+                        </Grid.ColumnDefinitions>
 
-                    <Canvas
-                        x:Name="EffectsBand"
-                        Grid.Column="0"
-                        Height="26"
-                        Background="#14FFFFFF"
-                        PointerPressed="EffectsBand_PointerPressed"
-                        PointerMoved="EffectsBand_PointerMoved"
-                        PointerReleased="EffectsBand_PointerReleased"
-                        PointerCaptureLost="EffectsBand_PointerCaptureLost">
-                        <Rectangle
-                            x:Name="ZoomPill"
-                            Height="22"
-                            Canvas.Top="2"
-                            RadiusX="5"
-                            RadiusY="5"
-                            Fill="#CC2F7CF6"
-                            Visibility="Collapsed" />
-                        <TextBlock
-                            x:Name="ZoomPillLabel"
-                            Canvas.Top="5"
-                            FontSize="11"
-                            Foreground="#FFFFFFFF"
-                            IsHitTestVisible="False"
-                            Visibility="Collapsed" />
-                    </Canvas>
-
-                    <StackPanel
-                        Grid.Column="1"
-                        Orientation="Horizontal"
-                        Spacing="8"
-                        Margin="8,0,0,0"
-                        VerticalAlignment="Center">
-                        <ComboBox
-                            x:Name="ZoomLevelBox"
-                            Width="82"
-                            FontSize="12"
-                            SelectionChanged="ZoomLevel_Changed" />
-                        <Button
-                            x:Name="ZoomButton"
+                        <Canvas
+                            x:Name="EffectsBand"
+                            Grid.Column="0"
                             Height="26"
+                            Background="#14FFFFFF"
+                            PointerPressed="EffectsBand_PointerPressed"
+                            PointerMoved="EffectsBand_PointerMoved"
+                            PointerReleased="EffectsBand_PointerReleased"
+                            PointerCaptureLost="EffectsBand_PointerCaptureLost">
+                            <TextBlock
+                                x:Name="BandHintText"
+                                Canvas.Top="5"
+                                FontSize="11"
+                                Foreground="#8CFFFFFF"
+                                IsHitTestVisible="False"
+                                Text="Click to add effects" />
+                        </Canvas>
+
+                        <StackPanel
+                            Grid.Column="1"
+                            Orientation="Horizontal"
+                            Spacing="6"
+                            Margin="8,0,0,0"
+                            VerticalAlignment="Center">
+                            <ComboBox
+                                x:Name="EffectKindBox"
+                                Width="104"
+                                FontSize="12"
+                                SelectionChanged="EffectKind_Changed" />
+                            <Button
+                                x:Name="AddButton"
+                                Height="26"
+                                FontSize="12"
+                                Padding="10,0"
+                                Click="Add_Click"
+                                Content="Add Zoom" />
+                            <ComboBox
+                                x:Name="OptionBox"
+                                Width="88"
+                                FontSize="12"
+                                SelectionChanged="Option_Changed" />
+                            <Button
+                                x:Name="DeleteButton"
+                                Height="26"
+                                FontSize="12"
+                                Padding="10,0"
+                                Click="Delete_Click"
+                                Content="Delete Zoom" />
+                        </StackPanel>
+                    </Grid>
+
+                    <!-- Only up while a caption is selected. macshot puts these on the
+                         pill's own context menu; this port has no band menu, so they are a
+                         row that appears with the thing they belong to. -->
+                    <StackPanel
+                        x:Name="CaptionPanel"
+                        Orientation="Horizontal"
+                        Spacing="6"
+                        Visibility="Collapsed">
+                        <TextBox
+                            x:Name="CaptionBox"
+                            Width="280"
+                            Height="28"
                             FontSize="12"
-                            Padding="10,0"
-                            Click="Zoom_Click"
-                            Content="Add Zoom" />
+                            TextChanged="Caption_Changed" />
+                        <ComboBox
+                            x:Name="CaptionAlignBox"
+                            Width="96"
+                            FontSize="12"
+                            SelectionChanged="CaptionStyle_Changed" />
+                        <!-- A CheckBox is shaped for a settings page by default: the label
+                             sits above the box on a row this short unless the alignment,
+                             the padding and the minimum height are all said here. -->
+                        <CheckBox
+                            x:Name="CaptionBoldBox"
+                            Content="Bold"
+                            FontSize="12"
+                            MinWidth="0"
+                            MinHeight="28"
+                            Padding="8,0,0,0"
+                            VerticalContentAlignment="Center"
+                            Checked="CaptionStyle_Changed"
+                            Unchecked="CaptionStyle_Changed" />
+                        <CheckBox
+                            x:Name="CaptionItalicBox"
+                            Content="Italic"
+                            FontSize="12"
+                            MinWidth="0"
+                            MinHeight="28"
+                            Padding="8,0,0,0"
+                            VerticalContentAlignment="Center"
+                            Checked="CaptionStyle_Changed"
+                            Unchecked="CaptionStyle_Changed" />
                     </StackPanel>
-                </Grid>
+                </StackPanel>
 
                 <Grid>
                     <TextBlock x:Name="ElapsedText" FontSize="11" Foreground="#8CFFFFFF" HorizontalAlignment="Left" />
