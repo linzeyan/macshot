@@ -29,6 +29,10 @@ TOOLS="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 VM="${MACSHOT_VM:-macshot-vm}"
 ROOT="${MACSHOT_VM_ROOT:-C:/src/macshot}"
 OUT=/c/tmp/relsmoke
+OUT_WINDOWS=C:/tmp/relsmoke
+
+# The order the four are built and then run in.
+ARTIFACTS='normal-x64 offline-x64 normal-arm64 offline-arm64'
 
 version=0.0.0-smoke
 
@@ -52,38 +56,53 @@ done
 echo "→ sending the tree and compiling it"
 "$TOOLS/vm-build.sh" >/dev/null
 
-ssh "$VM" "cat > /c/tmp/release-smoke.ps1" <<PS1
+# One leg per ssh call rather than one PowerShell loop over all four. Run together they
+# failed on a different leg each time — a leg that succeeded by hand a minute later — and
+# whatever the failure was never made it out of the loop. A process per leg isolates them
+# and lets the error arrive here as itself.
+#
 # Exactly what build-release.yml does, minus the upload: publish self-contained per
 # architecture and variant, zip the output, expand the zip somewhere clean.
-\$ErrorActionPreference = 'Stop'
-Remove-Item -Recurse -Force '$OUT' -ErrorAction SilentlyContinue
-New-Item -ItemType Directory -Force '$OUT' | Out-Null
-
-foreach (\$arch in @('x64', 'arm64')) {
-    foreach (\$variant in @('normal', 'offline')) {
-        \$v = if (\$variant -eq 'offline') { 'Offline' } else { '' }
-        \$pub = "$OUT\pub-\$variant-\$arch"
-
-        dotnet publish '$ROOT/windows/src/Macshot.Windows/Macshot.Windows.csproj' \`
-            -c Release -r "win-\$arch" --self-contained true -p:Variant=\$v \`
-            -p:Version=$version -p:InformationalVersion=$version \`
-            -o \$pub --nologo 2>&1 | Out-Null
-        if (\$LASTEXITCODE -ne 0) { throw "publish failed: \$variant \$arch" }
-
-        \$offline = if (\$variant -eq 'offline') { '-Offline' } else { '' }
-        \$zip = "$OUT\macshot\$offline-$version-win-\$arch.zip"
-        Compress-Archive -Path "\$pub\*" -DestinationPath \$zip -CompressionLevel Optimal
-        Expand-Archive -Path \$zip -DestinationPath "$OUT\run-\$variant-\$arch"
-    }
-}
-PS1
-
 echo "→ publishing and packaging four artifacts"
-ssh "$VM" "powershell -ExecutionPolicy Bypass -File C:/tmp/release-smoke.ps1"
+ssh "$VM" "rm -rf '$OUT' && mkdir -p '$OUT'"
+
+for artifact in $ARTIFACTS; do
+    variant="${artifact%-*}"
+    arch="${artifact#*-}"
+
+    property=""
+    tag=""
+    if [ "$variant" = offline ]; then
+        property="-p:Variant=Offline"
+        tag="-Offline"
+    fi
+
+    echo "  · $artifact"
+    if ! output="$(ssh "$VM" "dotnet publish '$ROOT/windows/src/Macshot.Windows/Macshot.Windows.csproj' \
+        -c Release -r win-$arch --self-contained true $property \
+        -p:Version=$version -p:InformationalVersion=$version \
+        -o '$OUT/pub-$artifact' --nologo" 2>&1)"; then
+        # Only on failure: four publishes are four hundred lines of success nobody reads,
+        # and the one that fails is the only thing that matters.
+        printf '%s\n' "$output" | tail -25
+        echo "✗ publish failed: $artifact" >&2
+        exit 1
+    fi
+
+    # Windows-shaped paths from here on. PowerShell reads /c/tmp as a path rooted on the
+    # current drive and writes C:\c\tmp — which is where an earlier version of this put
+    # all four artifacts while the checks below read the right directory and found
+    # somebody else's leftovers there. A tool that can pass against stale files is worse
+    # than one that fails.
+    zip="$OUT_WINDOWS/macshot$tag-$version-win-$arch.zip"
+    ssh "$VM" "powershell -NoProfile -Command \"
+        Compress-Archive -Path '$OUT_WINDOWS/pub-$artifact/*' -DestinationPath '$zip' -CompressionLevel Optimal
+        Expand-Archive -Path '$zip' -DestinationPath '$OUT_WINDOWS/run-$artifact'\""
+done
 
 status=0
 
-for artifact in normal-x64 offline-x64 normal-arm64 offline-arm64; do
+for artifact in $ARTIFACTS; do
     case "$artifact" in
     offline-*) name=Macshot.Windows.Offline ;;
     *) name=Macshot.Windows ;;
