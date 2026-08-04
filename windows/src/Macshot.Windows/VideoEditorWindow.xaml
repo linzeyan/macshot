@@ -49,6 +49,63 @@
                     <Rectangle x:Name="Playhead" Width="2" Height="48" Canvas.Top="4" Fill="#FFFFFFFF" />
                 </Canvas>
 
+                <!-- macshot's effects band, less five of its six effects. One zoom pill:
+                     drag its middle to move it, an end to resize it, and the box beside
+                     the band says how far in it goes. The band is only there for an MP4
+                     export, since nothing re-encodes a GIF here. -->
+                <Grid x:Name="EffectsPanel">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+
+                    <Canvas
+                        x:Name="EffectsBand"
+                        Grid.Column="0"
+                        Height="26"
+                        Background="#14FFFFFF"
+                        PointerPressed="EffectsBand_PointerPressed"
+                        PointerMoved="EffectsBand_PointerMoved"
+                        PointerReleased="EffectsBand_PointerReleased"
+                        PointerCaptureLost="EffectsBand_PointerCaptureLost">
+                        <Rectangle
+                            x:Name="ZoomPill"
+                            Height="22"
+                            Canvas.Top="2"
+                            RadiusX="5"
+                            RadiusY="5"
+                            Fill="#CC2F7CF6"
+                            Visibility="Collapsed" />
+                        <TextBlock
+                            x:Name="ZoomPillLabel"
+                            Canvas.Top="5"
+                            FontSize="11"
+                            Foreground="#FFFFFFFF"
+                            IsHitTestVisible="False"
+                            Visibility="Collapsed" />
+                    </Canvas>
+
+                    <StackPanel
+                        Grid.Column="1"
+                        Orientation="Horizontal"
+                        Spacing="8"
+                        Margin="8,0,0,0"
+                        VerticalAlignment="Center">
+                        <ComboBox
+                            x:Name="ZoomLevelBox"
+                            Width="82"
+                            FontSize="12"
+                            SelectionChanged="ZoomLevel_Changed" />
+                        <Button
+                            x:Name="ZoomButton"
+                            Height="26"
+                            FontSize="12"
+                            Padding="10,0"
+                            Click="Zoom_Click"
+                            Content="Add Zoom" />
+                    </StackPanel>
+                </Grid>
+
                 <Grid>
                     <TextBlock x:Name="ElapsedText" FontSize="11" Foreground="#8CFFFFFF" HorizontalAlignment="Left" />
                     <TextBlock x:Name="SelectionText" FontSize="11" Foreground="#8CFFFFFF" HorizontalAlignment="Center" />

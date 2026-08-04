@@ -1,5 +1,6 @@
 using System.ComponentModel;
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Output;
@@ -40,12 +41,13 @@ namespace Macshot.Windows;
 /// the GIF frame rate, the estimate, and then Save, Save As, Upload, the folder and Copy.
 /// </para>
 /// <para>
-/// What is <em>not</em> here is macshot's effects band: the zoom, censor, cut, freeze,
-/// speed and text segments laid over the timeline. Those are a video compositor rather
-/// than a window — <c>EffectsBandView</c> and <c>EffectsVideoCompositor</c> together are
-/// larger than everything in this file — and Windows has no <c>AVVideoComposition</c> to
-/// build one on. The parity notes record the gap rather than this window pretending to
-/// close it.
+/// macshot's effects band is here for one of its six effects. A zoom can be placed on
+/// the band, dragged, resized and given a level, and the export applies it —
+/// <see cref="ZoomVideoCompositor"/>, whose head explains at length why Windows needs a
+/// hand-built frame pipeline where macOS has an <c>AVVideoComposition</c>. Censor, cut,
+/// freeze, speed and text are still absent; the point of building one effect all the way
+/// through was to find out what the other five would cost, and the answer is in that
+/// file. The parity notes record the remaining gap.
 /// </para>
 /// <para>
 /// Trimming goes through <see cref="MediaComposition"/>, which is the platform's own
@@ -74,6 +76,19 @@ public sealed partial class VideoEditorWindow : Window
     /// <summary>How near a handle a press has to land to count as a drag of it.</summary>
     private const double HandleGrab = 14;
 
+    /// <summary>
+    /// How near a pill's end a press has to land to resize rather than move it.
+    /// </summary>
+    /// <remarks>
+    /// Smaller than <see cref="HandleGrab"/> because a pill can be short: a zoom half a
+    /// second long on a two-minute recording is a few pixels wide, and a grab margin the
+    /// size of the trim handles' would leave no middle to take hold of.
+    /// </remarks>
+    private const double PillEdgeGrab = 6;
+
+    /// <summary>The levels the box beside the band offers. macshot's range.</summary>
+    private static readonly double[] ZoomLevels = [1.2, 1.5, 2.0, 2.5, 3.0, 4.0, 5.0];
+
     /// <summary>How often the playhead is moved along while something is playing.</summary>
     private static readonly TimeSpan TickInterval = TimeSpan.FromMilliseconds(60);
 
@@ -99,6 +114,19 @@ public sealed partial class VideoEditorWindow : Window
     private VideoTrim _trim;
     private Handle _dragging;
 
+    /// <summary>The zoom on the band, or nothing when there is none.</summary>
+    /// <remarks>
+    /// One, not a list. macshot's band stacks as many as fit and gives each a UUID to tell
+    /// them apart; this is the first effect of the six to be built here, and one of them is
+    /// what says whether the pipeline underneath works.
+    /// </remarks>
+    private VideoZoomSegment? _zoom;
+
+    private PillGrab _zoomDragging;
+
+    /// <summary>Where in the pill the press landed, so a move does not jump.</summary>
+    private double _zoomGrabOffset;
+
     /// <summary>Where the last export went, which is what the folder button opens.</summary>
     private string? _exported;
 
@@ -111,6 +139,15 @@ public sealed partial class VideoEditorWindow : Window
         Start,
         End,
         Playhead,
+    }
+
+    /// <summary>Which part of the zoom pill a press took hold of.</summary>
+    private enum PillGrab
+    {
+        None,
+        Start,
+        End,
+        Body,
     }
 
     public VideoEditorWindow(string path, SettingsStore settings)
@@ -358,6 +395,11 @@ public sealed partial class VideoEditorWindow : Window
                 0,
                 GifFrameRateBox.Items.Count - 1);
 
+            // macshot's own label for a zoom level, and the reason the box is filled even
+            // with no zoom placed: the row would otherwise resize the moment one was.
+            ZoomLevelBox.ItemsSource = ZoomLevels.Select(FormatZoom).ToList();
+            ZoomLevelBox.SelectedIndex = Array.IndexOf(ZoomLevels, VideoZoomSegment.DefaultLevel);
+
             SourceInfoText.Text = _sourceWidth > 0
                 ? $"{Bytes(_sourceBytes)}  ·  {_sourceWidth} × {_sourceHeight}"
                 : Bytes(_sourceBytes);
@@ -388,6 +430,13 @@ public sealed partial class VideoEditorWindow : Window
 
         // A GIF has no audio track to silence, so the button would do nothing.
         MuteButton.Visibility = editable ? Visibility.Visible : Visibility.Collapsed;
+
+        // Taken off the window rather than greyed out for a GIF export, which goes through
+        // a frame-by-frame encoder of its own that knows nothing about the band. A disabled
+        // band would read as one that is temporarily unavailable.
+        EffectsPanel.Visibility = editable && !gif ? Visibility.Visible : Visibility.Collapsed;
+        ZoomLevelBox.IsEnabled = _zoom is not null;
+        ZoomButton.Content = _zoom is null ? L("Add Zoom") : L("Delete Zoom");
 
         var estimated = editable
             && _sourceWidth > 0
@@ -636,7 +685,170 @@ public sealed partial class VideoEditorWindow : Window
         DurationText.Text = VideoTrim.Format(_duration);
         SelectionText.Text = L("%@ selected")
             .Replace("%@", VideoTrim.Format(_trim.Duration), StringComparison.Ordinal);
+
+        DrawEffectsBand();
     }
+
+    // Effects band
+
+    /// <summary>Puts the zoom pill under the stretch of timeline it covers.</summary>
+    /// <remarks>
+    /// Measured against the timeline rather than against the band, though the two are the
+    /// same width. What a band is for is that a pill sits under the moment it applies to,
+    /// and two widths that could drift apart would eventually put it under a different one.
+    /// </remarks>
+    private void DrawEffectsBand()
+    {
+        if (_zoom is not { } zoom)
+        {
+            ZoomPill.Visibility = Visibility.Collapsed;
+            ZoomPillLabel.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var left = XFor(zoom.Start);
+        var width = Math.Max(2, XFor(zoom.End) - left);
+
+        ZoomPill.Visibility = Visibility.Visible;
+        ZoomPill.Width = width;
+        Canvas.SetLeft(ZoomPill, left);
+
+        // Inside the pill where it fits, and out of the way rather than clipped where it
+        // does not: a short zoom on a long recording is a few pixels wide, and a label
+        // painted over it would be unreadable in either place.
+        ZoomPillLabel.Text = FormatZoom(zoom.Level);
+        ZoomPillLabel.Visibility = Visibility.Visible;
+        Canvas.SetLeft(ZoomPillLabel, width >= 44 ? left + 6 : left + width + 6);
+    }
+
+    private void Zoom_Click(object sender, RoutedEventArgs e)
+    {
+        if (_zoom is not null)
+        {
+            _zoom = null;
+        }
+        else if (_duration >= VideoZoomSegment.MinDuration)
+        {
+            // At the playhead, which is where the user is looking. macshot places it at
+            // the point the band was right-clicked; this port has no band menu, so the
+            // playhead is the equivalent statement of where.
+            var at = _player?.PlaybackSession.Position.TotalSeconds ?? _trim.Start;
+            _zoom = VideoZoomSegment.Placed(at, _duration).WithLevel(SelectedZoomLevel);
+        }
+        else
+        {
+            StatusText.Text = L("Not enough room here");
+            return;
+        }
+
+        // What was exported no longer matches the band, so the folder and Copy buttons go
+        // back to pointing at the source.
+        _exported = null;
+        ShowExportChoices();
+        DrawTimeline();
+    }
+
+    private void ZoomLevel_Changed(object sender, SelectionChangedEventArgs e)
+    {
+        if (_filling || _zoom is not { } zoom)
+        {
+            return;
+        }
+
+        _zoom = zoom.WithLevel(SelectedZoomLevel);
+        _exported = null;
+        ShowExportChoices();
+        DrawTimeline();
+    }
+
+    private void EffectsBand_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (_zoom is not { } zoom)
+        {
+            return;
+        }
+
+        var x = e.GetCurrentPoint(EffectsBand).Position.X;
+        var left = XFor(zoom.Start);
+        var right = XFor(zoom.End);
+
+        // Outside the pill entirely: a press on bare band does nothing, rather than
+        // moving the zoom the user was not pointing at.
+        if (x < left - PillEdgeGrab || x > right + PillEdgeGrab)
+        {
+            return;
+        }
+
+        _zoomDragging = x <= left + PillEdgeGrab
+            ? PillGrab.Start
+            : x >= right - PillEdgeGrab
+                ? PillGrab.End
+                : PillGrab.Body;
+
+        _zoomGrabOffset = SecondsFor(x) - zoom.Start;
+        EffectsBand.CapturePointer(e.Pointer);
+    }
+
+    private void EffectsBand_PointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (_zoomDragging is PillGrab.None || _zoom is not { } zoom)
+        {
+            return;
+        }
+
+        var seconds = SecondsFor(e.GetCurrentPoint(EffectsBand).Position.X);
+
+        _zoom = _zoomDragging switch
+        {
+            PillGrab.Start => zoom.WithStart(seconds, _duration),
+            PillGrab.End => zoom.WithEnd(seconds, _duration),
+            _ => zoom.MovedTo(seconds - _zoomGrabOffset, _duration),
+        };
+
+        _exported = null;
+        DrawTimeline();
+    }
+
+    private void EffectsBand_PointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        EffectsBand.ReleasePointerCapture(e.Pointer);
+        EndZoomDrag();
+    }
+
+    /// <summary>
+    /// Ends the drag when the pointer is taken away rather than let go, for the same
+    /// reason <see cref="Timeline_PointerCaptureLost"/> does.
+    /// </summary>
+    private void EffectsBand_PointerCaptureLost(object sender, PointerRoutedEventArgs e) => EndZoomDrag();
+
+    private void EndZoomDrag()
+    {
+        if (_zoomDragging is PillGrab.None)
+        {
+            return;
+        }
+
+        _zoomDragging = PillGrab.None;
+
+        // The ramps are scaled to the segment's length, which the drag may just have
+        // changed. Re-applying the level is what rescales them.
+        if (_zoom is { } zoom)
+        {
+            _zoom = zoom.WithLevel(zoom.Level);
+        }
+
+        ShowExportChoices();
+        DrawTimeline();
+    }
+
+    private double SelectedZoomLevel => ZoomLevelBox.SelectedIndex >= 0
+        && ZoomLevelBox.SelectedIndex < ZoomLevels.Length
+            ? ZoomLevels[ZoomLevelBox.SelectedIndex]
+            : VideoZoomSegment.DefaultLevel;
+
+    /// <summary>macshot's <c>formatZoom</c>: one decimal, and an x.</summary>
+    private static string FormatZoom(double level) =>
+        level.ToString("0.0", CultureInfo.InvariantCulture) + "x";
 
     // Output
 
@@ -739,6 +951,7 @@ public sealed partial class VideoEditorWindow : Window
         && (!_trim.IsWhole(_duration)
             || ExportPercent < 100
             || ExportsGif
+            || _zoom is { IsFlat: false }
             || ExportQuality != VideoQuality.High);
 
     /// <summary>
@@ -770,6 +983,10 @@ public sealed partial class VideoEditorWindow : Window
             else if (ExportsGif)
             {
                 note = await WriteGifAsync(source, file);
+            }
+            else if (_zoom is { IsFlat: false } zoom)
+            {
+                note = await WriteZoomedMp4Async(source, file, zoom);
             }
             else
             {
@@ -826,6 +1043,55 @@ public sealed partial class VideoEditorWindow : Window
         return result.Truncated
             ? $"stopped after {result.Frames} frames, which is as long as a GIF goes here"
             : null;
+    }
+
+    /// <summary>
+    /// Writes the MP4 with the band's zoom applied, and returns what the caller has to say
+    /// about it beyond where it went.
+    /// </summary>
+    /// <remarks>
+    /// A separate path from <see cref="WriteMp4Async"/> rather than the same one with an
+    /// effect switched on, because the two do genuinely different work:
+    /// <see cref="MediaComposition"/> hands the file to the platform and lets it re-encode,
+    /// while <see cref="ZoomVideoCompositor"/> decodes every frame, magnifies it here and
+    /// encodes it again. The second is several times slower, so a recording with no zoom on
+    /// it must not be made to pay for one.
+    /// </remarks>
+    private async Task<string?> WriteZoomedMp4Async(
+        StorageFile source,
+        StorageFile destination,
+        VideoZoomSegment zoom)
+    {
+        var (width, height) = SizeForExport();
+        if (width <= 0 || height <= 0)
+        {
+            throw new InvalidOperationException("This recording does not say what size its frames are.");
+        }
+
+        // Reported as it goes, as the GIF export is: a zoom export seeks to every frame,
+        // and a bar that does not move on a minute of recording reads as one that has
+        // stopped.
+        var progress = new Progress<double>(done =>
+            StatusText.Text = L("Exporting...") + $" {done:P0}");
+
+        await ZoomVideoCompositor.WriteAsync(
+            source,
+            destination,
+            _trim,
+            zoom,
+            _sourceWidth,
+            _sourceHeight,
+            width,
+            height,
+            FrameRate,
+            VideoExportPlan.Bitrate(width, height, FrameRate, ExportQuality),
+            progress);
+
+        // Said rather than left to be discovered on playback. The compositor builds the
+        // file out of frames it decoded itself, and carrying the recording's audio through
+        // that would mean demuxing and re-muxing a track nothing else here touches. Not
+        // through L, since macshot has no string for a limit it does not have.
+        return "the zoom export carries no audio";
     }
 
     private async Task WriteMp4Async(StorageFile source, StorageFile destination)
