@@ -136,7 +136,7 @@ public sealed partial class TextRecognitionWindow : Window
         try
         {
             var bitmap = new SoftwareBitmapSource();
-            await bitmap.SetBitmapAsync(source.ToSoftwareBitmap());
+            await bitmap.SetBitmapAsync(source.ToDisplayBitmap());
             PreviewImage.Source = bitmap;
         }
         catch (Exception exception)

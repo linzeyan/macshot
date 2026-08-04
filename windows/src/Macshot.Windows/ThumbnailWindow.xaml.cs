@@ -103,7 +103,7 @@ public sealed partial class ThumbnailWindow : Window
     public async Task ShowAsync(int stackIndex = 0)
     {
         var source = new SoftwareBitmapSource();
-        await source.SetBitmapAsync(_frame.ToSoftwareBitmap());
+        await source.SetBitmapAsync(_frame.ToDisplayBitmap());
         ThumbnailImage.Source = source;
 
         var appWindow = this.GetAppWindow();

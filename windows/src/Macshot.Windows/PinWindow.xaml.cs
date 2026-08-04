@@ -65,7 +65,7 @@ public sealed partial class PinWindow : Window
     public async Task ShowPinnedAsync()
     {
         var source = new SoftwareBitmapSource();
-        await source.SetBitmapAsync(_frame.ToSoftwareBitmap());
+        await source.SetBitmapAsync(_frame.ToDisplayBitmap());
         PinImage.Source = source;
 
         var appWindow = this.GetAppWindow();

@@ -425,7 +425,7 @@ public sealed partial class CaptureOverlayWindow : Window
     public async Task ShowAsync()
     {
         var source = new SoftwareBitmapSource();
-        await source.SetBitmapAsync(_monitorFrame.ToSoftwareBitmap());
+        await source.SetBitmapAsync(_monitorFrame.ToDisplayBitmap());
         PreviewImage.Source = source;
         BuildGrips();
         WireZoom();

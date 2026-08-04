@@ -1,3 +1,5 @@
+using Macshot.Windows.Core.Imaging;
+
 using Windows.Graphics.Imaging;
 using Windows.Security.Cryptography;
 
@@ -70,5 +72,43 @@ public sealed class CapturedFrame
             Width,
             Height,
             AlphaMode);
+    }
+
+    /// <summary>
+    /// The same pixels in the one form <see cref="SoftwareBitmapSource"/> accepts.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Every surface that shows a capture — the overlay's preview, the thumbnail panel, the
+    /// pin window, the recognition window — hands its bitmap to a
+    /// <c>SoftwareBitmapSource</c>, and that class takes premultiplied or no alpha and
+    /// refuses straight. A cut-out frame carries straight alpha, so all four threw
+    /// <c>ArgumentException</c> the moment one reached them.
+    /// </para>
+    /// <para>
+    /// It went unnoticed because nothing ever produced such a frame on a machine anyone
+    /// ran: background removal needed a Copilot+ PC and a packaged build, so
+    /// <see cref="HasAlpha"/> was false everywhere. Making it reachable made this reachable.
+    /// </para>
+    /// <para>
+    /// Converted here rather than at each of the four, and on the way out rather than in
+    /// storage: what is saved and what is encoded must stay straight, because premultiplying
+    /// is not reversible — a colour multiplied by a small alpha cannot be recovered.
+    /// </para>
+    /// </remarks>
+    public SoftwareBitmap ToDisplayBitmap()
+    {
+        if (!HasAlpha)
+        {
+            return ToSoftwareBitmap();
+        }
+
+        var buffer = CryptographicBuffer.CreateFromByteArray(PremultipliedAlpha.From(BgraPixels));
+        return SoftwareBitmap.CreateCopyFromBuffer(
+            buffer,
+            BitmapPixelFormat.Bgra8,
+            Width,
+            Height,
+            BitmapAlphaMode.Premultiplied);
     }
 }
