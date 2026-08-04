@@ -1,4 +1,5 @@
 using Macshot.Windows.Core.Annotations;
+using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -38,11 +39,19 @@ internal sealed partial class ToolbarButton : UserControl
 
     private const double MarkInset = 3;
 
+    /// <summary>
+    /// Where the face sits among the surface's children: over the microphone meter, under
+    /// the menu mark. Named because <see cref="SetFace"/> replaces that child by position,
+    /// and the meter going in below it moved the position by one.
+    /// </summary>
+    private const int FaceIndex = 1;
+
     private readonly Border _surface;
 
-    /// <summary>Holds the face and, over its bottom-right corner, the menu mark.</summary>
+    /// <summary>Holds the face, the meter under it and the menu mark over its corner.</summary>
     private readonly Grid _content;
 
+    private readonly Border _level;
     private readonly Polygon _menuMark;
     private bool _isHovered;
     private bool _isPressed;
@@ -51,8 +60,10 @@ internal sealed partial class ToolbarButton : UserControl
     {
         Item = item;
 
+        _level = LevelMeter();
         _menuMark = MenuMark();
         _content = new Grid();
+        _content.Children.Add(_level);
         _content.Children.Add(FaceOf(item));
         _content.Children.Add(_menuMark);
 
@@ -102,6 +113,15 @@ internal sealed partial class ToolbarButton : UserControl
         var hintChanged = iconChanged || !string.Equals(item.Shortcut, Item.Shortcut, StringComparison.Ordinal);
         Item = item;
 
+        // A reused slot that has stopped being the microphone must not keep its meter:
+        // the strips reuse buttons rather than rebuilding them, so a bar left standing
+        // would end up under whatever icon took the position. macshot clears it in
+        // configure(with:) for the same reason.
+        if (item.Command != ToolbarCommand.MicAudio)
+        {
+            SetLevel(0);
+        }
+
         if (iconChanged)
         {
             SetFace(FaceOf(item));
@@ -127,13 +147,41 @@ internal sealed partial class ToolbarButton : UserControl
     }
 
     /// <summary>
-    /// Puts a new face in, leaving the menu mark over it. Replaced rather than the whole
-    /// child, so the mark does not have to be rebuilt every time an icon changes.
+    /// Shows how loud the microphone is, on the one button that is the microphone.
+    /// </summary>
+    /// <remarks>
+    /// Guarded here rather than at the caller for the same reason <see cref="ShowSwatch"/>
+    /// is: the strip hands the reading to every button it has and lets the one it is about
+    /// take it, so nothing outside has to know where on the strip the microphone ended up.
+    /// </remarks>
+    public void ShowLevel(double level)
+    {
+        if (Item.Command == ToolbarCommand.MicAudio)
+        {
+            SetLevel(level);
+        }
+    }
+
+    /// <summary>
+    /// Puts a new face in, leaving the meter under it and the menu mark over it. Replaced
+    /// rather than the whole child, so neither has to be rebuilt when an icon changes.
     /// </summary>
     private void SetFace(UIElement face)
     {
-        _content.Children.RemoveAt(0);
-        _content.Children.Insert(0, face);
+        _content.Children.RemoveAt(FaceIndex);
+        _content.Children.Insert(FaceIndex, face);
+    }
+
+    /// <summary>
+    /// Sizes the meter, and takes it away entirely below the level nothing should be drawn
+    /// at — a hairline of green over a silent room says the microphone hears something.
+    /// </summary>
+    private void SetLevel(double level)
+    {
+        var height = Math.Clamp(level, 0, 1) * ToolbarPalette.ButtonSize;
+
+        _level.Height = height;
+        _level.Visibility = level < MicrophoneLevel.Silent ? Visibility.Collapsed : Visibility.Visible;
     }
 
     private void Surface_PointerPressed(object sender, PointerRoutedEventArgs e)
@@ -199,6 +247,32 @@ internal sealed partial class ToolbarButton : UserControl
     /// </summary>
     private static UIElement FaceOf(ToolbarItem item) =>
         ToolbarIcons.For(item) ?? Swatch(ToolbarPalette.Icon);
+
+    /// <summary>
+    /// The microphone meter: a bar of green rising from the bottom of the button, behind
+    /// the icon.
+    /// </summary>
+    /// <remarks>
+    /// The bottom corners are rounded on the meter itself rather than left to the button
+    /// it sits in, because a WinUI <see cref="Border"/> does not clip what it holds to its
+    /// own corner radius — an unrounded bar would square off the two corners of the button
+    /// the moment the microphone heard anything. The top is left square: at full scale it
+    /// is the one edge that reaches a rounded corner, and a quarter of a pixel there is not
+    /// worth a second geometry.
+    /// </remarks>
+    private static Border LevelMeter() => new()
+    {
+        CornerRadius = new CornerRadius(0, 0, ToolbarPalette.ButtonRadius, ToolbarPalette.ButtonRadius),
+        Background = ToolbarPalette.LevelBrush,
+        HorizontalAlignment = HorizontalAlignment.Stretch,
+        VerticalAlignment = VerticalAlignment.Bottom,
+        Height = 0,
+        Visibility = Visibility.Collapsed,
+
+        // A reading, not a target: the click it would swallow is the one that turns the
+        // microphone off, and it covers the bottom of the button it belongs to.
+        IsHitTestVisible = false,
+    };
 
     /// <summary>
     /// The triangle in the bottom-right corner of a button that has a menu behind it: a

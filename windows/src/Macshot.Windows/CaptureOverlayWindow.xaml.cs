@@ -302,6 +302,13 @@ public sealed partial class CaptureOverlayWindow : Window
     private CaptureWindow? _snappedWindow;
 
     /// <summary>
+    /// The open microphone behind the meter in the mic button, while a recording is being
+    /// set up with it switched on. Null the rest of the time, which is what says the
+    /// microphone is not open.
+    /// </summary>
+    private MicrophoneMeter? _micMeter;
+
+    /// <summary>
     /// Where the region was when the move button was pressed. Non-null for as long as the
     /// region is following the pointer.
     /// </summary>
@@ -453,8 +460,10 @@ public sealed partial class CaptureOverlayWindow : Window
             AnnotationToolbar.PersistStyle();
 
             // A camera left running behind a closed window is the one failure here
-            // nobody would forgive: the light beside the lens would stay on.
+            // nobody would forgive: the light beside the lens would stay on. An open
+            // microphone is the same failure without the light to give it away.
             HideWebcamPreview();
+            HideMicMeter();
         };
 
         var appWindow = this.GetAppWindow();
@@ -1172,8 +1181,10 @@ public sealed partial class CaptureOverlayWindow : Window
         case CaptureIntent.Record:
             // Nothing to start: the strip is already the recording one, and Start is the
             // user's press. What this does is put the camera up, so the bubble can be
-            // seen and dragged before it is in the file rather than after.
+            // seen and dragged before it is in the file rather than after, and open the
+            // microphone, so its button says whether it is hearing anything.
             ShowWebcamPreview();
+            ShowMicMeter();
             break;
         case CaptureIntent.Recognize:
             _ = ReadTextAsync();
@@ -2173,6 +2184,13 @@ public sealed partial class CaptureOverlayWindow : Window
                 ShowWebcamPreview();
                 return;
 
+            // The switch itself is the toolbar's, as the other four recording switches
+            // are. What arrives here is the consequence of it: the microphone has to be
+            // opened or closed to match, and the toolbar has nowhere to keep one.
+            case ToolbarCommand.MicAudio:
+                ShowMicMeter();
+                return;
+
             case ToolbarCommand.RecordingSettings:
                 PreferencesRequested?.Invoke(this, EventArgs.Empty);
                 return;
@@ -2684,8 +2702,10 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         // Before the request, because the recording opens a bubble of its own and this
-        // one is over the same corner of the same region.
+        // one is over the same corner of the same region — and a microphone of its own,
+        // which this one has no reason to still be holding.
         HideWebcamPreview();
+        HideMicMeter();
 
         RecordingRequested?.Invoke(
             this,
@@ -2701,6 +2721,7 @@ public sealed partial class CaptureOverlayWindow : Window
         AnnotationToolbar.RecordingSetup = true;
         ShowFrame();
         ShowWebcamPreview();
+        ShowMicMeter();
     }
 
     /// <summary>Goes back to the ordinary strip, having recorded nothing.</summary>
@@ -2709,6 +2730,65 @@ public sealed partial class CaptureOverlayWindow : Window
         AnnotationToolbar.RecordingSetup = false;
         ShowFrame();
         HideWebcamPreview();
+        HideMicMeter();
+    }
+
+    /// <summary>
+    /// Opens the microphone and feeds its level to the button that switches it on, or
+    /// closes it again to match what that switch now says.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Only while the recording is being set up, and never during the recording itself: it
+    /// is a check on the microphone before the one moment the answer still matters, and
+    /// once the file is being written the strip it draws into is gone.
+    /// </para>
+    /// <para>
+    /// A microphone that will not open leaves the switch on and the bar at nothing, which
+    /// is what a machine with the microphone turned off in Windows privacy settings looks
+    /// like — and is the reading the meter exists to give.
+    /// </para>
+    /// </remarks>
+    private void ShowMicMeter()
+    {
+        if (!AnnotationToolbar.RecordingSetup || !_settings.Current.RecordMicAudio)
+        {
+            HideMicMeter();
+            return;
+        }
+
+        if (_micMeter is not null)
+        {
+            return;
+        }
+
+        if (MicrophoneMeter.Start() is not { } meter)
+        {
+            DiagnosticLog.Write("No microphone would open for the level meter, so it stays at nothing.");
+            return;
+        }
+
+        meter.LevelChanged += (_, level) => AnnotationToolbar.ShowMicLevel(level);
+        _micMeter = meter;
+    }
+
+    /// <summary>
+    /// Closes the microphone and takes the bar down with it.
+    /// </summary>
+    /// <remarks>
+    /// Before the recording starts as well as when the switch goes off: the recording opens
+    /// the microphone for itself, and an open stream left behind by a window that is about
+    /// to close would be macshot holding the microphone with nothing on screen saying so.
+    /// </remarks>
+    private void HideMicMeter()
+    {
+        if (_micMeter is not { } meter)
+        {
+            return;
+        }
+
+        _micMeter = null;
+        meter.Dispose();
     }
 
     /// <summary>

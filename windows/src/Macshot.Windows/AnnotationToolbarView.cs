@@ -651,6 +651,18 @@ public sealed partial class AnnotationToolbarView : UserControl
     }
 
     /// <summary>
+    /// How loud the microphone is, from nothing to full scale, drawn as a bar rising
+    /// inside the mic button on the recording strip.
+    /// </summary>
+    /// <remarks>
+    /// Written straight through to the strip rather than kept and replayed on the next
+    /// refresh. The reading is only true for the fiftieth of a second it was taken in, and
+    /// a strip rebuilt from a stored one would show a level from whenever the last button
+    /// was pressed.
+    /// </remarks>
+    public void ShowMicLevel(double level) => _actions.ShowMicLevel(level);
+
+    /// <summary>
     /// Whether the capture is set to be framed, which lights the Beautify button.
     /// </summary>
     /// <remarks>
@@ -1103,8 +1115,12 @@ public sealed partial class AnnotationToolbarView : UserControl
             Toggle(current => current with { RecordSystemAudio = !current.RecordSystemAudio });
             return;
 
+        // The switch is this control's, as the other four are, but the host hears about it
+        // too: the meter drawn in this button is fed by an audio endpoint that has to be
+        // opened and closed with the switch, and only the host outlives a strip rebuild.
         case ToolbarCommand.MicAudio:
             Toggle(current => current with { RecordMicAudio = !current.RecordMicAudio });
+            CommandInvoked?.Invoke(this, item.Command);
             return;
 
         case ToolbarCommand.Webcam:

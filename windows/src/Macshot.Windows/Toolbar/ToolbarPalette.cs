@@ -70,6 +70,18 @@ internal static class ToolbarPalette
     public static SolidColorBrush PressedBrush { get; } = new(Pressed);
 
     /// <summary>
+    /// The microphone meter's fill: macshot's <c>NSColor.systemGreen</c> at 0.45, which is
+    /// what it floods the mic button with while the microphone is hearing something
+    /// (<c>ToolbarButtonView.swift:93-100</c>).
+    /// </summary>
+    /// <remarks>
+    /// Not one of the five the user can repaint, and not derived from them: this is a
+    /// reading rather than decoration, and a meter tinted to match a strip somebody has
+    /// turned green would say nothing at all.
+    /// </remarks>
+    public static SolidColorBrush LevelBrush { get; } = new(Color.FromArgb(115, 52, 199, 89));
+
+    /// <summary>
     /// A flyout with no chrome of its own, for the popovers that paint their own slab.
     /// </summary>
     /// <remarks>

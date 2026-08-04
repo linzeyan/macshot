@@ -116,4 +116,15 @@ internal sealed partial class ToolbarStrip : UserControl
             button.ShowSwatch(color);
         }
     }
+
+    /// <summary>
+    /// Shows how loud the microphone is on the mic button, if this strip has one.
+    /// </summary>
+    public void ShowMicLevel(double level)
+    {
+        foreach (var button in _buttons)
+        {
+            button.ShowLevel(level);
+        }
+    }
 }
