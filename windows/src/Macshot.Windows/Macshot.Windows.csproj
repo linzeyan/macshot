@@ -5,13 +5,12 @@
     <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
     <UseWinUI>true</UseWinUI>
     <!-- Unpackaged unless the command line asks otherwise, which is the only thing that
-         differs between the zip and the MSIX. It is not cosmetic: None wires the Windows
-         App SDK bootstrapper into startup, and the bootstrapper refuses to run inside a
-         package — so a package built from the unpackaged publish would install and then
-         fail at launch. Conditional rather than fixed for the same reason as
-         RuntimeIdentifier below: -p:WindowsPackageType=MSIX has to be able to win.
-         See windows/tools/pack-msix.ps1. -->
-    <WindowsPackageType Condition="'$(WindowsPackageType)' == ''">None</WindowsPackageType>
+         is the same in both, because there is only one publish. Setting it to MSIX was
+         tried and does not build at all — a single-project MSIX wants the manifest as a
+         project item, and this one keeps its manifest out in windows/packaging/msix so
+         that one template serves all four legs. The package is made from this publish,
+         and it installs and launches. See windows/tools/pack-msix.ps1. -->
+    <WindowsPackageType>None</WindowsPackageType>
     <WindowsAppSDKSelfContained>true</WindowsAppSDKSelfContained>
 
     <!-- Not about MSIX, despite the name, and not optional. It is what brings in the

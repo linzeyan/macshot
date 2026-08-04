@@ -308,11 +308,15 @@ pins the eight names the workflow produces; a rename there has to be made here t
 
 ### The MSIX, and signing it
 
-Each matrix leg publishes twice. The zip is the unpackaged publish, unchanged. The MSIX is
-a second publish with `-p:WindowsPackageType=MSIX`, packed by `windows/tools/pack-msix.ps1`
-from `windows/packaging/msix/`. The two cannot share a publish: the unpackaged setting
-wires the Windows App SDK bootstrapper into startup and the bootstrapper refuses to run
-inside a package.
+Each matrix leg publishes once. `windows/tools/pack-msix.ps1` packs that same directory,
+with the manifest and logos from `windows/packaging/msix/`, after the zip has been made
+and uploaded — packing writes an `AppxManifest.xml` and an `Assets/` into the directory it
+is given, so the order matters.
+
+A second publish with `-p:WindowsPackageType=MSIX` looks like the right way to do this and
+is not: it fails with *no AppxManifest is specified*, because a single-project MSIX build
+wants the manifest as an item in the project, and this one keeps a single template outside
+it for all four legs. The package made from the ordinary publish installs and launches.
 
 Signing reads two repository secrets:
 
@@ -346,8 +350,14 @@ writing to `HKCU` are what a packaged app is supposed to declare in its manifest
 **Launch at login** (`StartupRegistration`, the `Run` key → `windows.startupTask`) and the
 **`macshot:` URL scheme** (`UrlSchemeHost` → `windows.protocol`). Expect both to be dead in
 the MSIX build. Where settings and history land under the container has not been checked.
-Until all of that is settled the MSIX is an addition and the zip is still how macshot is
-meant to be run.
+
+**And the packaged build cannot take a screenshot yet.** Installed and launched from
+`C:\Program Files\WindowsApps`, it starts, logs *Screen capture fell back to the older
+backend: access denied*, and the capture hotkey raises no overlay — the container denies
+what the unpackaged build is simply allowed. That is a capability the manifest has to ask
+for, and it is unfinished work rather than a footnote: an installer that installs an app
+which cannot do the one thing it is for is not shippable. Until it is settled the MSIX is
+an addition and the zip is still how macshot is meant to be run.
 
 A tag push runs the workflow **as it exists at the tagged commit**, so tagging here cannot
 start the macOS pipeline on `main`, and vice versa.
@@ -359,9 +369,11 @@ start the macOS pipeline on `main`, and vice versa.
 - The video editor's effects band is one effect deep: a zoom segment can be placed over
   the timeline and is applied on export. macOS's other five — censor, cut, freeze, speed
   and text — are not there, and a zoom export drops the audio.
-- The MSIX is built but never signed: there is no certificate, so no release has carried an
-  installer yet. `windows.startupTask` and `windows.protocol` are the two manifest entries
-  it still needs before it is the recommended way to install macshot — see Releasing.
+- The MSIX installs and launches but cannot capture: the container denies the screen, and
+  the manifest has still to ask for it. It is also never signed — there is no certificate,
+  so no release has carried an installer yet. With `windows.startupTask` and
+  `windows.protocol`, that is what stands between it and being the way macshot is
+  installed. See Releasing.
 - Save formats stop at PNG, JPEG and HEIC. macOS also offers WebP and AVIF; WinRT exposes
   no encoder for either — WIC's WebP support is a decoder — so both would mean bundling a
   third-party codec. HEIC is offered only where its codec is registered, and the encode
