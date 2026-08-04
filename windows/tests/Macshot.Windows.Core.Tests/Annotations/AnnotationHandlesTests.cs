@@ -7,14 +7,22 @@ namespace Macshot.Windows.Core.Tests.Annotations;
 public sealed class AnnotationHandlesTests
 {
     [TestMethod]
-    public void LinearMark_OffersItsTwoEndsAndItsBend()
+    public void LinearMark_OffersItsTwoEndsAndBothOfItsBends()
     {
+        // Two bends, not one: a cubic has a control for each half, and with only one of
+        // them the curve could bow but never change direction along its length.
         var line = Shape(AnnotationTool.Line, 10, 10, 50, 30);
 
         var kinds = AnnotationHandles.For(line).Select(handle => handle.Kind).ToArray();
 
         CollectionAssert.AreEquivalent(
-            new[] { AnnotationHandleKind.Start, AnnotationHandleKind.End, AnnotationHandleKind.Bend },
+            new[]
+            {
+                AnnotationHandleKind.Start,
+                AnnotationHandleKind.End,
+                AnnotationHandleKind.Bend,
+                AnnotationHandleKind.BendEnd,
+            },
             kinds);
     }
 
@@ -130,13 +138,14 @@ public sealed class AnnotationHandlesTests
     }
 
     [TestMethod]
-    public void BendHandle_SitsOnTheStraightLineWhileItIsStraight()
+    public void BendHandles_SitOnTheStraightLineWhileItIsStraight()
     {
         var line = Shape(AnnotationTool.Line, 10, 20, 50, 20);
 
-        var bend = HandleAt(line, AnnotationHandleKind.Bend);
-
-        Assert.AreEqual(new CapturePoint(30, 20), bend);
+        // A third and two thirds along, which is where a cubic's two controls belong and
+        // so where the two grips can be told apart. Both on the line while it is straight.
+        Assert.AreEqual(new CapturePoint(30 - (20d / 3), 20), HandleAt(line, AnnotationHandleKind.Bend));
+        Assert.AreEqual(new CapturePoint(30 + (20d / 3), 20), HandleAt(line, AnnotationHandleKind.BendEnd));
     }
 
     [TestMethod]
@@ -146,10 +155,49 @@ public sealed class AnnotationHandlesTests
 
         var bend = HandleAt(line, AnnotationHandleKind.Bend);
 
-        // The rasterizer doubles the bend into a quadratic control point, so the curve
-        // itself passes through the fraction of the length the handle was dragged to.
-        Assert.AreEqual(20, bend.X, 1e-9);
+        // The rasterizer solves the two control points back out of the two bends, so the
+        // curve itself passes through the fraction of the length the handle was dragged
+        // to — the grip is a point of the line rather than something floating beside it.
+        Assert.AreEqual(40d / 3, bend.X, 1e-9);
         Assert.AreEqual(10, bend.Y, 1e-9);
+    }
+
+    [TestMethod]
+    public void EachBendHandle_MovesOnlyItsOwnHalf()
+    {
+        // The whole point of the pair. One bend for the whole line could bow it but never
+        // steer it back, so an arrow could not be routed around anything in its way.
+        var line = Shape(AnnotationTool.Line, 0, 0, 60, 0);
+
+        var bowed = AnnotationHandles.Drag(line, AnnotationHandleKind.Bend, new CapturePoint(20, 12));
+
+        Assert.AreEqual(0.2, bowed.Bend, 1e-9);
+        Assert.AreEqual(0, bowed.BendEnd, 1e-9, "the far half must not follow the near one");
+
+        var essed = AnnotationHandles.Drag(bowed, AnnotationHandleKind.BendEnd, new CapturePoint(40, -12));
+
+        Assert.AreEqual(0.2, essed.Bend, 1e-9, "and setting the far half must not disturb the near one");
+        Assert.AreEqual(-0.2, essed.BendEnd, 1e-9);
+    }
+
+    [TestMethod]
+    public void TheSecondBendIsClampedLikeTheFirst()
+    {
+        var line = Shape(AnnotationTool.Line, 0, 0, 40, 0);
+
+        var dragged = AnnotationHandles.Drag(line, AnnotationHandleKind.BendEnd, new CapturePoint(27, -4000));
+
+        Assert.AreEqual(-AnnotationHandles.MaximumBend, dragged.BendEnd, 1e-9);
+    }
+
+    [TestMethod]
+    public void Differ_SeesASecondBendThatLeftEveryPointWhereItWas()
+    {
+        // Without this a released drag on the far grip would read as "nothing happened"
+        // and the curve would snap back to what it was before the drag.
+        var line = Shape(AnnotationTool.Line, 10, 10, 60, 10);
+
+        Assert.IsTrue(AnnotationHandles.Differ(line with { BendEnd = 0.2 }, line));
     }
 
     [TestMethod]

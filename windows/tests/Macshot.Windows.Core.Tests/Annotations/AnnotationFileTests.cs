@@ -54,6 +54,7 @@ public sealed class AnnotationFileTests
         {
             Rotation = 0.75,
             Bend = -0.25,
+            BendEnd = 0.4,
             GroupId = group,
             Text = "note",
             NumberValue = 4,
@@ -89,6 +90,7 @@ public sealed class AnnotationFileTests
         Assert.AreEqual(original.Style.DimOpacity, restored[0].Style.DimOpacity);
         Assert.AreEqual(original.Rotation, restored[0].Rotation);
         Assert.AreEqual(original.Bend, restored[0].Bend);
+        Assert.AreEqual(original.BendEnd, restored[0].BendEnd);
         Assert.AreEqual(group, restored[0].GroupId);
         Assert.AreEqual("note", restored[0].Text);
         Assert.AreEqual(4, restored[0].NumberValue);
@@ -154,6 +156,31 @@ public sealed class AnnotationFileTests
             [Annotation.CreateSprite(AnnotationTool.Stamp, new CapturePoint(0, 0), blank)]);
 
         Assert.IsTrue(written.Length < 64 * 64 * 4 / 4, $"the document is {written.Length} bytes");
+    }
+
+    [TestMethod]
+    public void Read_KeepsTheShapeOfALineBentBeforeThereWereTwoBends()
+    {
+        // A lone stored bend meant the offset of the curve's own middle. Read as one of a
+        // symmetric pair it would describe a curve an eighth deeper, so a capture reopened
+        // from the history would come back with a mark subtly different from the one that
+        // was saved — the exact failure this file exists to prevent.
+        const string Document =
+            """
+            {"version":1,"annotations":[{"id":"00000000-0000-0000-0000-000000000001",
+            "tool":"Line","startX":0,"startY":0,"endX":90,"endY":0,
+            "color":"#FF000000","strokeWidth":3,"lineStyle":"Solid","opacity":1,
+            "arrowStyle":"Filled","cornerRadius":0,"bend":0.45}]}
+            """;
+
+        var restored = AnnotationFile.Read(Document);
+
+        Assert.AreEqual(1, restored.Count);
+        Assert.AreEqual(restored[0].Bend, restored[0].BendEnd, 1e-12, "a lone bend was symmetric");
+
+        // A symmetric pair carries the middle to 1.125 times each bend, so the middle is
+        // back where the saved 0.45 of the length put it.
+        Assert.AreEqual(0.45, restored[0].Bend * 1.125, 1e-12);
     }
 
     [TestMethod]

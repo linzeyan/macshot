@@ -148,6 +148,7 @@ public static class AnnotationFile
             GroupId = annotation.GroupId,
             Rotation = annotation.Rotation,
             Bend = annotation.Bend,
+            BendEnd = annotation.BendEnd,
             Sprite = annotation.Sprite is { } sprite
                 ? new StoredSprite(sprite.Width, sprite.Height, Pack(sprite.Pixels))
                 : null,
@@ -261,6 +262,7 @@ public static class AnnotationFile
         }
 
         var points = ToPoints(stored.Points);
+        var (bend, bendEnd) = ToBendPair(stored);
 
         return new Annotation(
             stored.Id == Guid.Empty ? Guid.NewGuid() : stored.Id,
@@ -281,9 +283,33 @@ public static class AnnotationFile
             NumberValue = stored.NumberValue,
             GroupId = stored.GroupId,
             Rotation = double.IsFinite(stored.Rotation) ? stored.Rotation : 0,
-            Bend = double.IsFinite(stored.Bend) ? stored.Bend : 0,
+            Bend = bend,
+            BendEnd = bendEnd,
             Sprite = sprite,
         };
+    }
+
+    /// <summary>
+    /// The two bends a stored mark carries, and what a file written before there were two
+    /// of them means.
+    /// </summary>
+    /// <remarks>
+    /// A single stored <c>bend</c> meant the offset of the curve's own <em>middle</em>. A
+    /// symmetric pair puts that middle at <c>1.125</c> times each bend, so a legacy number
+    /// is scaled by eight ninths to leave the reopened curve exactly the shape it was
+    /// saved as. Cheaper than a format version, which an older build would answer by
+    /// discarding every mark in the file rather than by drawing one bow slightly wrong.
+    /// </remarks>
+    private static (double Bend, double BendEnd) ToBendPair(StoredAnnotation stored)
+    {
+        var bend = double.IsFinite(stored.Bend) ? stored.Bend : 0;
+
+        if (stored.BendEnd is not { } second || !double.IsFinite(second))
+        {
+            return (bend * 8 / 9, bend * 8 / 9);
+        }
+
+        return (bend, second);
     }
 
     /// <summary>
@@ -478,6 +504,13 @@ public static class AnnotationFile
         public double Rotation { get; init; }
 
         public double Bend { get; init; }
+
+        /// <summary>
+        /// Nullable so that "written before the second bend existed" is distinguishable
+        /// from "deliberately straight at that end", which a plain zero would not be. See
+        /// <see cref="ToBendPair"/>.
+        /// </summary>
+        public double? BendEnd { get; init; }
 
         public StoredSprite? Sprite { get; init; }
     }

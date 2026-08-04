@@ -414,7 +414,10 @@ public sealed partial class AnnotationCanvasView : UserControl
             });
         }
 
-        var round = handle.Kind is AnnotationHandleKind.Rotate or AnnotationHandleKind.Bend;
+        var round = handle.Kind
+            is AnnotationHandleKind.Rotate
+            or AnnotationHandleKind.Bend
+            or AnnotationHandleKind.BendEnd;
         var shape = new Rectangle
         {
             Width = HandleSize,

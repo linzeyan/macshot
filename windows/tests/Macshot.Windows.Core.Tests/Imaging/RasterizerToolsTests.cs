@@ -103,23 +103,41 @@ public sealed class RasterizerToolsTests
     }
 
     [TestMethod]
-    public void Bend_PullsTheMiddleOfALineOffTheStraightPath()
+    public void Bend_PullsTheLineThroughTheOffsetEachHandleWasDraggedTo()
     {
         var straight = Render(Blank(), Shape(AnnotationTool.Line, 10, 32, 54, 32));
-        var bent = Render(Blank(), Shape(AnnotationTool.Line, 10, 32, 54, 32) with { Bend = 0.2 });
+        var bent = Render(
+            Blank(),
+            Shape(AnnotationTool.Line, 10, 32, 54, 32) with { Bend = 0.2, BendEnd = 0.2 });
 
-        // The line is 44 long and the bend is a fifth of that, so its middle sits
-        // 8.8 pixels below the straight path — which is what doubling the control
-        // point buys, since a quadratic curve only reaches halfway towards it.
+        // The line is 44 long, so a fifth of it is 8.8 pixels. The two grips sit a third
+        // and two thirds along — x = 24.7 and x = 39.3 — and the curve has to pass
+        // through each of them, or a handle would not be a point of the line it bends.
         Assert.IsTrue(IsInked(straight, 32, 32));
-        Assert.IsFalse(IsInked(straight, 32, 41), "A straight line has nothing this far off the path.");
-        Assert.IsTrue(IsInked(bent, 32, 41), "The bend should carry the middle of the line down to it.");
+        Assert.IsFalse(IsInked(straight, 25, 40), "A straight line has nothing this far off the path.");
+        Assert.IsTrue(IsInked(bent, 25, 40), "The near grip should carry the line down to it.");
+        Assert.IsTrue(IsInked(bent, 39, 40), "And the far one likewise.");
+    }
+
+    [TestMethod]
+    public void Bend_BowsEachHalfSeparatelySoALineCanChangeDirection()
+    {
+        // What the second control point buys: one bend can only ever bulge to one side,
+        // and an arrow that has to get round something in its way needs both.
+        var essed = Render(
+            Blank(),
+            Shape(AnnotationTool.Line, 10, 32, 54, 32) with { Bend = 0.2, BendEnd = -0.2 });
+
+        Assert.IsTrue(IsInked(essed, 25, 40), "the near half bows down");
+        Assert.IsTrue(IsInked(essed, 39, 23), "and the far half bows up");
     }
 
     [TestMethod]
     public void Bend_LeavesTheEndsWhereTheyWere()
     {
-        var bent = Render(Blank(), Shape(AnnotationTool.Line, 10, 32, 54, 32) with { Bend = 0.2 });
+        var bent = Render(
+            Blank(),
+            Shape(AnnotationTool.Line, 10, 32, 54, 32) with { Bend = 0.2, BendEnd = -0.1 });
 
         Assert.IsTrue(IsInked(bent, 10, 32));
         Assert.IsTrue(IsInked(bent, 54, 32));
@@ -129,7 +147,9 @@ public sealed class RasterizerToolsTests
     public void Bend_OfZeroIsTheStraightLineItAlwaysWas()
     {
         var straight = Render(Blank(), Shape(AnnotationTool.Line, 10, 20, 54, 44));
-        var explicitlyStraight = Render(Blank(), Shape(AnnotationTool.Line, 10, 20, 54, 44) with { Bend = 0 });
+        var explicitlyStraight = Render(
+            Blank(),
+            Shape(AnnotationTool.Line, 10, 20, 54, 44) with { Bend = 0, BendEnd = 0 });
 
         CollectionAssert.AreEqual(straight, explicitlyStraight);
     }

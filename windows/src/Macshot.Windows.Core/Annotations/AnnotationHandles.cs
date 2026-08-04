@@ -11,8 +11,11 @@ public enum AnnotationHandleKind
     /// <summary>Moves the end a linear mark was drawn to.</summary>
     End,
 
-    /// <summary>Pulls the middle of a line or arrow off the straight path.</summary>
+    /// <summary>Pulls the first third of a line or arrow off the straight path.</summary>
     Bend,
+
+    /// <summary>Pulls the last third off it, which is what makes an S-curve reachable.</summary>
+    BendEnd,
 
     TopLeft,
     TopRight,
@@ -186,7 +189,14 @@ public static class AnnotationHandles
             {
                 End = Constrain(annotation.Start, upright, modifiers),
             },
-            AnnotationHandleKind.Bend => annotation with { Bend = BendTo(annotation, upright) },
+            AnnotationHandleKind.Bend => annotation with
+            {
+                Bend = BendTo(annotation, upright, FirstStation),
+            },
+            AnnotationHandleKind.BendEnd => annotation with
+            {
+                BendEnd = BendTo(annotation, upright, SecondStation),
+            },
             AnnotationHandleKind.TopLeft
                 or AnnotationHandleKind.TopRight
                 or AnnotationHandleKind.BottomLeft
@@ -253,7 +263,8 @@ public static class AnnotationHandles
         return left.Start != right.Start
             || left.End != right.End
             || left.Rotation != right.Rotation
-            || left.Bend != right.Bend;
+            || left.Bend != right.Bend
+            || left.BendEnd != right.BendEnd;
     }
 
     /// <summary>
@@ -281,7 +292,10 @@ public static class AnnotationHandles
         {
             handles.Add(new AnnotationHandle(
                 AnnotationHandleKind.Bend,
-                Turn(BendGrip(annotation), centre, annotation.Rotation)));
+                Turn(BendGrip(annotation, FirstStation, annotation.Bend), centre, annotation.Rotation)));
+            handles.Add(new AnnotationHandle(
+                AnnotationHandleKind.BendEnd,
+                Turn(BendGrip(annotation, SecondStation, annotation.BendEnd), centre, annotation.Rotation)));
         }
 
         return handles;
@@ -314,42 +328,58 @@ public static class AnnotationHandles
     }
 
     /// <summary>
-    /// Where the bend handle sits: on the curve's own middle, so the handle is a point of
-    /// the line it bends rather than a control point floating beside it.
+    /// How far along the straight path each of the two bend handles sits.
     /// </summary>
-    private static CapturePoint BendGrip(Annotation annotation)
+    /// <remarks>
+    /// Thirds rather than the midpoint one handle used, because two handles at the same
+    /// place cannot be told apart, and because a cubic's two controls are naturally
+    /// stationed there — which is what makes each handle land exactly on the curve it
+    /// bends. See <c>AnnotationRasterizer.BendControlPoints</c>.
+    /// </remarks>
+    private const double FirstStation = 1d / 3;
+
+    private const double SecondStation = 2d / 3;
+
+    /// <summary>
+    /// Where a bend handle sits: on the curve itself, at its station along the straight
+    /// path, so the handle is a point of the line it bends rather than a control point
+    /// floating beside it.
+    /// </summary>
+    private static CapturePoint BendGrip(Annotation annotation, double station, double bend)
     {
-        var (mid, acrossX, acrossY) = Across(annotation);
-        return new CapturePoint(
-            mid.X + (acrossX * annotation.Bend),
-            mid.Y + (acrossY * annotation.Bend));
+        var (at, acrossX, acrossY) = Across(annotation, station);
+        return new CapturePoint(at.X + (acrossX * bend), at.Y + (acrossY * bend));
     }
 
-    private static double BendTo(Annotation annotation, CapturePoint point)
+    private static double BendTo(Annotation annotation, CapturePoint point, double station)
     {
-        var (mid, acrossX, acrossY) = Across(annotation);
+        var (at, acrossX, acrossY) = Across(annotation, station);
         var lengthSquared = (acrossX * acrossX) + (acrossY * acrossY);
         if (lengthSquared == 0)
         {
-            return annotation.Bend;
+            return station == FirstStation ? annotation.Bend : annotation.BendEnd;
         }
 
         // The component of the drag along the perpendicular, as a fraction of the line's
         // length: sideways pulls bow the line, along-the-line movement does nothing.
-        var bend = (((point.X - mid.X) * acrossX) + ((point.Y - mid.Y) * acrossY)) / lengthSquared;
+        var bend = (((point.X - at.X) * acrossX) + ((point.Y - at.Y) * acrossY)) / lengthSquared;
         return Math.Clamp(bend, -MaximumBend, MaximumBend);
     }
 
-    /// <summary>The midpoint of a linear mark, and the perpendicular a bend runs along.</summary>
-    private static (CapturePoint Mid, double AcrossX, double AcrossY) Across(Annotation annotation)
+    /// <summary>
+    /// A point a given fraction along a linear mark, and the perpendicular a bend runs
+    /// along there. The perpendicular is as long as the mark, so a bend fraction times it
+    /// is that fraction of the mark's length sideways.
+    /// </summary>
+    private static (CapturePoint At, double AcrossX, double AcrossY) Across(Annotation annotation, double station)
     {
         var deltaX = annotation.End.X - annotation.Start.X;
         var deltaY = annotation.End.Y - annotation.Start.Y;
-        var mid = new CapturePoint(
-            (annotation.Start.X + annotation.End.X) / 2,
-            (annotation.Start.Y + annotation.End.Y) / 2);
+        var at = new CapturePoint(
+            annotation.Start.X + (deltaX * station),
+            annotation.Start.Y + (deltaY * station));
 
-        return (mid, -deltaY, deltaX);
+        return (at, -deltaY, deltaX);
     }
 
     private static Annotation ResizeCorner(

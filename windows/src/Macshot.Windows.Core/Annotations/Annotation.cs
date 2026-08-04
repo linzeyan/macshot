@@ -441,15 +441,42 @@ public sealed record Annotation(
     public double Rotation { get; init; }
 
     /// <summary>
-    /// How far the middle of a line or arrow is pulled off the straight path between
-    /// its ends, as a fraction of that path's length. Zero is straight.
+    /// How far the point a third of the way along a line or arrow is pulled off the
+    /// straight path between its ends, as a fraction of that path's length. Zero is
+    /// straight.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// The first of the pair — see <see cref="BendEnd"/> for why there are two.
+    /// </para>
+    /// <para>
     /// A fraction rather than a distance, so a bent arrow keeps its shape when it is
     /// dragged longer — which is what the user drew, rather than what a control point
     /// pinned at an absolute offset would give them.
+    /// </para>
     /// </remarks>
     public double Bend { get; init; }
+
+    /// <summary>
+    /// The same for the point two thirds of the way along: how far it is pulled off the
+    /// straight path, as a fraction of that path's length.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The second of macshot's cubic pair. macOS bows a line with
+    /// <c>curve(to:controlPoint1:controlPoint2:)</c> (<c>Annotation.swift:891</c>), and a
+    /// cubic has two controls where this port had one — so a bow could only ever be
+    /// symmetric about the line's middle, and the S-curve and the off-centre bulge that
+    /// steer an arrow round something in the way were unreachable.
+    /// </para>
+    /// <para>
+    /// Stated as the curve's own offset at its station rather than as a control point's,
+    /// so both numbers mean the same kind of thing and each handle sits on the line it
+    /// bends. The rasterizer solves back for the two controls; see
+    /// <c>AnnotationRasterizer.BendControlPoints</c>.
+    /// </para>
+    /// </remarks>
+    public double BendEnd { get; init; }
 
     public static Annotation Create(
         AnnotationTool tool,
