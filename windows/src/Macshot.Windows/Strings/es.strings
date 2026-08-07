@@ -13,6 +13,7 @@
 "0 sets no limit of your own. macshot stops at 40,000 px either way — the picture is held whole while it grows." = "0 no establece un límite propio. macshot se detiene en 40.000 px de todos modos: la imagen se mantiene entera mientras crece.";
 "A new version of macshot is available." = "Hay una nueva versión de macshot disponible.";
 "A screenshot and annotation tool. This is the Windows build of the macOS app of the same name, with the same tools, the same toolbar and the same shortcuts." = "Una herramienta de capturas y anotaciones. Esta es la versión para Windows de la app de macOS del mismo nombre, con las mismas herramientas, la misma barra y los mismos atajos.";
+"Add capture" = "Añadir captura";
 "Authentication expired" = "La autenticación ha caducado";
 "Automatic" = "Automático";
 "Automatic uses Windows AI where it runs, and macshot's own 4 MB model everywhere else." = "«Automático» usa Windows AI donde funciona y, en el resto, el modelo propio de 4 MB de macshot.";
@@ -46,11 +47,14 @@
 "Esc or Stop keeps what has been captured so far" = "Esc o Detener conserva lo capturado hasta ahora";
 "Exported {0} settings." = "Se han exportado {0} ajustes.";
 "Files are uploaded to a \"macshot\" folder in your Google Drive. Everything stays private — nothing is shared publicly." = "Los archivos se suben a una carpeta «macshot» de tu Google Drive. Todo permanece privado: no se comparte nada públicamente.";
+"Fit canvas" = "Ajustar al lienzo";
+"Frame" = "Marco";
 "Framed in {0}" = "Enmarcado en {0}";
 "GIF:" = "GIF:";
 "Google Drive not signed in" = "No has iniciado sesión en Google Drive";
 "Hide {0}" = "Ocultar {0}";
 "History cleared." = "Historial borrado.";
+"Horizontal" = "Horizontal";
 "How far the page moves between frames. A faster setting takes fewer frames over a long page, and on a short region can move further than one frame's worth — which is what macshot has to line the frames up by, so the capture stops early instead." = "Cuánto avanza la página entre fotogramas. Un ajuste más rápido necesita menos fotogramas en una página larga y, en una región corta, puede avanzar más de lo que ocupa un fotograma, que es justo por donde macshot los alinea, así que la captura termina antes de tiempo.";
 "imgbb cannot take videos — choose another provider in Settings" = "imgbb no acepta vídeos: elige otro proveedor en Ajustes";
 "Keystrokes:" = "Pulsaciones de teclas:";
@@ -112,6 +116,7 @@
 "Unknown error" = "Error desconocido";
 "Upload credentials, your save and recording folders, and your captures are not included." = "No se incluyen las credenciales de subida, tus carpetas de guardado y grabación ni tus capturas.";
 "Uploading..." = "Subiendo…";
+"Vertical" = "Vertical";
 "Waiting for the browser..." = "Esperando al navegador…";
 "Windows AI (Copilot+ PC)" = "Windows AI (Copilot+ PC)";
 "Windows icon files (.ico) only. Pick one that stays legible on both a light and a dark taskbar — unlike macOS, Windows draws the file as it is rather than recolouring it. A file it cannot read falls back to macshot's icon." = "Solo archivos de icono de Windows (.ico). Elige uno que se lea bien en una barra de tareas clara y en una oscura: a diferencia de macOS, Windows dibuja el archivo tal cual en vez de recolorearlo. Si no puede leerlo, se usa el icono de macshot.";
@@ -120,5 +125,7 @@
 "Write a detailed log" = "Escribir un registro detallado";
 "You're up to date!" = "¡Todo está actualizado!";
 "Your own picture" = "Tu propia imagen";
+"Zoom in" = "Acercar";
+"Zoom out" = "Alejar";
 "{0:0}% • Scroll to zoom • Middle-drag to pan" = "{0:0}% • Desplaza para hacer zoom • Arrastra con el botón central para mover";
 "{0} chars · {1} words" = "{0} caracteres · {1} palabras";

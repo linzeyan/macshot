@@ -14,6 +14,7 @@
 #   windows/tools/vm-shot.sh --click 640,400     # click there, then photograph
 #   windows/tools/vm-shot.sh --right-click 1823,1519  # …with the other button
 #   windows/tools/vm-shot.sh --right-click 1712,1546 --click 1734,1439  # …then take an item
+#   windows/tools/vm-shot.sh --click 1056,1250 --click 1066,1190  # open a flyout, use it
 #   windows/tools/vm-shot.sh --drag 100,100,500,400  # drag a region, then photograph
 #   windows/tools/vm-shot.sh --start 'C:\\x.exe'  # launch it, then photograph
 #   windows/tools/vm-shot.sh --wait 3 out.png    # wait longer; write somewhere specific
@@ -60,7 +61,10 @@ while [ $# -gt 0 ]; do
         shift 2
         ;;
     --click)
-        click="$2"
+        # Repeatable, and they run in order with a pause between. A flyout is dismissed
+        # by the next call's task starting, so opening one and using it has to happen
+        # inside a single run: --click <the swatch> --click <the button in its grid>.
+        click="${click:+$click;}$2"
         shift 2
         ;;
     --right-click)
@@ -165,11 +169,17 @@ if ($Click) {
     # menu is a modal loop inside macshot's own thread, and SendKeys arrives at whatever
     # window is foreground instead — {DOWN 16}{ENTER} dismissed the menu and chose nothing.
     # The menu does survive the wait above, so the second press lands on it.
-    $at = $Click.Split(",")
-    [VmShot.Pointer]::SetCursorPos([int]$at[0], [int]$at[1]) | Out-Null
-    Start-Sleep -Milliseconds 120
-    [VmShot.Pointer]::mouse_event(0x0002, 0, 0, 0, 0)
-    [VmShot.Pointer]::mouse_event(0x0004, 0, 0, 0, 0)
+    #
+    # Several points, in order: the same problem again one level down, where the thing to
+    # press is inside a flyout that only exists because of the press before it.
+    foreach ($point in $Click.Split(";")) {
+        $at = $point.Split(",")
+        [VmShot.Pointer]::SetCursorPos([int]$at[0], [int]$at[1]) | Out-Null
+        Start-Sleep -Milliseconds 120
+        [VmShot.Pointer]::mouse_event(0x0002, 0, 0, 0, 0)
+        [VmShot.Pointer]::mouse_event(0x0004, 0, 0, 0, 0)
+        Start-Sleep -Milliseconds 400
+    }
 }
 
 if ($Drag) {

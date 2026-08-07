@@ -13,6 +13,7 @@
 "0 sets no limit of your own. macshot stops at 40,000 px either way — the picture is held whole while it grows." = "0 означает, что своего предела нет. macshot в любом случае остановится на 40 000 px — изображение удерживается целиком, пока растёт.";
 "A new version of macshot is available." = "Доступна новая версия macshot.";
 "A screenshot and annotation tool. This is the Windows build of the macOS app of the same name, with the same tools, the same toolbar and the same shortcuts." = "Инструмент для снимков экрана и заметок. Это сборка для Windows одноимённого приложения для macOS — с теми же инструментами, той же панелью и теми же сочетаниями клавиш.";
+"Add capture" = "Добавить снимок";
 "Authentication expired" = "Срок действия аутентификации истёк";
 "Automatic" = "Автоматически";
 "Automatic uses Windows AI where it runs, and macshot's own 4 MB model everywhere else." = "«Автоматически» использует Windows AI там, где он доступен, а в остальных случаях — собственную модель macshot на 4 МБ.";
@@ -46,11 +47,14 @@
 "Esc or Stop keeps what has been captured so far" = "Esc или «Стоп» сохранит уже снятое";
 "Exported {0} settings." = "Экспортировано настроек: {0}.";
 "Files are uploaded to a \"macshot\" folder in your Google Drive. Everything stays private — nothing is shared publicly." = "Файлы загружаются в папку «macshot» на вашем Google Диске. Всё остаётся приватным — ничего не публикуется.";
+"Fit canvas" = "Уместить целиком";
+"Frame" = "Рамка";
 "Framed in {0}" = "Рамка: {0}";
 "GIF:" = "GIF:";
 "Google Drive not signed in" = "Вход в Google Диск не выполнен";
 "Hide {0}" = "Скрыть «{0}»";
 "History cleared." = "История очищена.";
+"Horizontal" = "По горизонтали";
 "How far the page moves between frames. A faster setting takes fewer frames over a long page, and on a short region can move further than one frame's worth — which is what macshot has to line the frames up by, so the capture stops early instead." = "Насколько страница смещается между кадрами. При более быстрой настройке на длинной странице нужно меньше кадров, а на коротком участке смещение может превысить высоту кадра — именно по нему macshot сшивает кадры, поэтому съёмка обрывается раньше времени.";
 "imgbb cannot take videos — choose another provider in Settings" = "imgbb не принимает видео — выберите другой сервис в настройках";
 "Keystrokes:" = "Нажатия клавиш:";
@@ -112,6 +116,7 @@
 "Unknown error" = "Неизвестная ошибка";
 "Upload credentials, your save and recording folders, and your captures are not included." = "Учётные данные для загрузки, папки сохранения и записи, а также сами снимки не включаются.";
 "Uploading..." = "Загрузка…";
+"Vertical" = "По вертикали";
 "Waiting for the browser..." = "Ожидание браузера…";
 "Windows AI (Copilot+ PC)" = "Windows AI (Copilot+ PC)";
 "Windows icon files (.ico) only. Pick one that stays legible on both a light and a dark taskbar — unlike macOS, Windows draws the file as it is rather than recolouring it. A file it cannot read falls back to macshot's icon." = "Только файлы значков Windows (.ico). Выберите такой, который остаётся разборчивым и на светлой, и на тёмной панели задач: в отличие от macOS, Windows рисует файл как есть, не перекрашивая его. Нечитаемый файл заменяется значком macshot.";
@@ -120,5 +125,7 @@
 "Write a detailed log" = "Вести подробный журнал";
 "You're up to date!" = "Установлена последняя версия!";
 "Your own picture" = "Ваше изображение";
+"Zoom in" = "Увеличить";
+"Zoom out" = "Уменьшить";
 "{0:0}% • Scroll to zoom • Middle-drag to pan" = "{0:0}% • Прокрутка — масштаб • Средняя кнопка — панорама";
 "{0} chars · {1} words" = "{0} симв. · {1} слов";

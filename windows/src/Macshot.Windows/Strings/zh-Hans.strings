@@ -13,6 +13,7 @@
 "0 sets no limit of your own. macshot stops at 40,000 px either way — the picture is held whole while it grows." = "0 表示不设你自己的上限。无论如何 macshot 都会在 40,000 px 停止 — 图像在增长期间会整张保留。";
 "A new version of macshot is available." = "macshot 有新版本可用。";
 "A screenshot and annotation tool. This is the Windows build of the macOS app of the same name, with the same tools, the same toolbar and the same shortcuts." = "截图与标注工具。这是同名 macOS App 的 Windows 版本，工具、工具栏与快捷键都相同。";
+"Add capture" = "添加截图";
 "Authentication expired" = "身份验证已过期";
 "Automatic" = "自动";
 "Automatic uses Windows AI where it runs, and macshot's own 4 MB model everywhere else." = "“自动”会在可用的机器上使用 Windows AI，其余则使用 macshot 自己的 4 MB 模型。";
@@ -46,11 +47,14 @@
 "Esc or Stop keeps what has been captured so far" = "按 Esc 或“停止”会保留目前已捕获的内容";
 "Exported {0} settings." = "已导出 {0} 项设置。";
 "Files are uploaded to a \"macshot\" folder in your Google Drive. Everything stays private — nothing is shared publicly." = "文件会上传至你 Google 云端硬盘中的“macshot”文件夹。一切保持私密 — 不会公开分享任何内容。";
+"Fit canvas" = "适合画布";
+"Frame" = "边框";
 "Framed in {0}" = "已套用外框：{0}";
 "GIF:" = "GIF：";
 "Google Drive not signed in" = "尚未登录 Google 云端硬盘";
 "Hide {0}" = "隐藏{0}";
 "History cleared." = "已清除记录。";
+"Horizontal" = "水平";
 "How far the page moves between frames. A faster setting takes fewer frames over a long page, and on a short region can move further than one frame's worth — which is what macshot has to line the frames up by, so the capture stops early instead." = "每一帧之间页面移动的距离。设得越快，长页面所需的帧数越少；但在较短的区域上，可能一次移动超过一帧的量 — 而 macshot 正是靠那段重叠对齐帧，于是捕获会提早停止。";
 "imgbb cannot take videos — choose another provider in Settings" = "imgbb 无法接受视频 — 请在“设置”中选择其他服务";
 "Keystrokes:" = "按键：";
@@ -112,6 +116,7 @@
 "Unknown error" = "未知的错误";
 "Upload credentials, your save and recording folders, and your captures are not included." = "不包含上传凭证、你的保存与录制文件夹，以及你的捕获内容。";
 "Uploading..." = "正在上传…";
+"Vertical" = "垂直";
 "Waiting for the browser..." = "正在等待浏览器…";
 "Windows AI (Copilot+ PC)" = "Windows AI（Copilot+ PC）";
 "Windows icon files (.ico) only. Pick one that stays legible on both a light and a dark taskbar — unlike macOS, Windows draws the file as it is rather than recolouring it. A file it cannot read falls back to macshot's icon." = "仅限 Windows 图标文件（.ico）。请挑选在浅色与深色任务栏上都清晰可辨的图标 — 与 macOS 不同，Windows 会照原样绘制该文件，而不会替它重新着色。无法读取的文件会退回 macshot 自己的图标。";
@@ -120,5 +125,7 @@
 "Write a detailed log" = "记录详细日志";
 "You're up to date!" = "已是最新版本！";
 "Your own picture" = "你自己的图像";
+"Zoom in" = "放大";
+"Zoom out" = "缩小";
 "{0:0}% • Scroll to zoom • Middle-drag to pan" = "{0:0}% • 滚动以缩放 • 中键拖移以平移";
 "{0} chars · {1} words" = "{0} 个字符 · {1} 个词";

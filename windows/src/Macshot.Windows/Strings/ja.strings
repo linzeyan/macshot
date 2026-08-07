@@ -13,6 +13,7 @@
 "0 sets no limit of your own. macshot stops at 40,000 px either way — the picture is held whole while it grows." = "0 は独自の上限を設けないという意味です。いずれにせよ macshot は 40,000 px で停止します — 画像は大きくなる間、丸ごと保持されます。";
 "A new version of macshot is available." = "macshot の新しいバージョンがあります。";
 "A screenshot and annotation tool. This is the Windows build of the macOS app of the same name, with the same tools, the same toolbar and the same shortcuts." = "スクリーンショットと注釈のツールです。同名の macOS App の Windows 版で、ツールもツールバーもショートカットも同じです。";
+"Add capture" = "キャプチャを追加";
 "Authentication expired" = "認証の有効期限が切れました";
 "Automatic" = "自動";
 "Automatic uses Windows AI where it runs, and macshot's own 4 MB model everywhere else." = "「自動」は Windows AI が動く環境ではそれを使い、それ以外では macshot 自身の 4 MB モデルを使います。";
@@ -46,11 +47,14 @@
 "Esc or Stop keeps what has been captured so far" = "Esc または「停止」で、ここまでに取り込んだ分が残ります";
 "Exported {0} settings." = "{0} 件の設定を書き出しました。";
 "Files are uploaded to a \"macshot\" folder in your Google Drive. Everything stays private — nothing is shared publicly." = "ファイルは Google ドライブ内の「macshot」フォルダにアップロードされます。すべて非公開のままで、公開されることはありません。";
+"Fit canvas" = "全体を表示";
+"Frame" = "フレーム";
 "Framed in {0}" = "フレーム：{0}";
 "GIF:" = "GIF:";
 "Google Drive not signed in" = "Google ドライブにサインインしていません";
 "Hide {0}" = "{0}を非表示";
 "History cleared." = "履歴を消去しました。";
+"Horizontal" = "水平";
 "How far the page moves between frames. A faster setting takes fewer frames over a long page, and on a short region can move further than one frame's worth — which is what macshot has to line the frames up by, so the capture stops early instead." = "フレームごとにページがどれだけ進むかです。速い設定は長いページで必要なフレームが減りますが、狭い範囲では 1 フレーム分を超えて動くことがあります。macshot はその重なりでフレームをつなぐため、取り込みが途中で止まります。";
 "imgbb cannot take videos — choose another provider in Settings" = "imgbb は動画に対応していません — 「設定」で別のサービスを選んでください";
 "Keystrokes:" = "キー入力:";
@@ -112,6 +116,7 @@
 "Unknown error" = "不明なエラー";
 "Upload credentials, your save and recording folders, and your captures are not included." = "アップロードの認証情報、保存先と録画先のフォルダ、取り込んだ画像は含まれません。";
 "Uploading..." = "アップロード中…";
+"Vertical" = "垂直";
 "Waiting for the browser..." = "ブラウザを待っています…";
 "Windows AI (Copilot+ PC)" = "Windows AI（Copilot+ PC）";
 "Windows icon files (.ico) only. Pick one that stays legible on both a light and a dark taskbar — unlike macOS, Windows draws the file as it is rather than recolouring it. A file it cannot read falls back to macshot's icon." = "Windows のアイコンファイル（.ico）のみです。明るいタスクバーでも暗いタスクバーでも読めるものを選んでください。macOS と違い、Windows はファイルを塗り替えずそのまま描画します。読めないファイルの場合は macshot のアイコンに戻ります。";
@@ -120,5 +125,7 @@
 "Write a detailed log" = "詳細なログを記録";
 "You're up to date!" = "最新バージョンです！";
 "Your own picture" = "自分の画像";
+"Zoom in" = "拡大";
+"Zoom out" = "縮小";
 "{0:0}% • Scroll to zoom • Middle-drag to pan" = "{0:0}% • スクロールでズーム • 中ボタンドラッグでパン";
 "{0} chars · {1} words" = "{0} 文字 · {1} 単語";

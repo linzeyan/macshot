@@ -431,18 +431,18 @@ public sealed partial class EditorWindow : Window
         };
         Typography.SetNumeralAlignment(_sizeLabel, FontNumeralAlignment.Tabular);
 
-        _cropButton = new ToggleButton { Content = "Crop" };
+        _cropButton = new ToggleButton { Content = L("Crop") };
         _cropButton.Click += Crop_Click;
 
-        var flip = new Button { Content = "Flip" };
+        var flip = new Button { Content = L("Flip") };
         var flipMenu = new MenuFlyout { Placement = FlyoutPlacementMode.Bottom };
-        flipMenu.Items.Add(MenuItem("Horizontal", () => FlipImage(horizontal: true)));
-        flipMenu.Items.Add(MenuItem("Vertical", () => FlipImage(horizontal: false)));
+        flipMenu.Items.Add(MenuItem(L("Horizontal"), () => FlipImage(horizontal: true)));
+        flipMenu.Items.Add(MenuItem(L("Vertical"), () => FlipImage(horizontal: false)));
         flip.Flyout = flipMenu;
 
         // A grid of the backgrounds themselves rather than 48 rows of their names, which
         // is how macshot offers them and the only way the choice can be made by eye.
-        var frame = new Button { Content = "Frame" };
+        var frame = new Button { Content = L("Frame") };
         var frames = new BeautifySwatchGrid();
         var frameFlyout = new Flyout { Placement = FlyoutPlacementMode.Bottom, Content = frames };
         frames.Picked += (_, index) =>
@@ -459,11 +459,12 @@ public sealed partial class EditorWindow : Window
         // macshot's Add Capture: another capture, taken now, landing under this one. It
         // is what turns the editor from somewhere a screenshot is marked up into
         // somewhere several are put together.
-        var add = new Button { Content = "Add capture" };
+        var add = new Button { Content = L("Add capture") };
         add.Click += (_, _) => AddCaptureRequested?.Invoke(this, EventArgs.Empty);
 
-        // Localized here rather than by the page-wide pass, which ran in the constructor
-        // before this bar existed. macshot's own key, so it is already translated.
+        // Every label on this bar is localized here rather than by the page-wide pass,
+        // which ran in the constructor before the bar existed. Done was the only one that
+        // did, so a Chinese editor read 完成 beside Crop, Flip, Frame and Add capture.
         _doneButton = new Button { Content = L("Done"), Visibility = Visibility.Collapsed };
         _doneButton.Click += (_, _) => _ = CommitAsync();
 
@@ -521,10 +522,10 @@ public sealed partial class EditorWindow : Window
     private MenuFlyout ZoomMenu()
     {
         var menu = new MenuFlyout { Placement = FlyoutPlacementMode.Bottom };
-        menu.Items.Add(MenuItem("Zoom in", () => ZoomBy(ZoomStep)));
-        menu.Items.Add(MenuItem("Zoom out", () => ZoomBy(1 / ZoomStep)));
+        menu.Items.Add(MenuItem(L("Zoom in"), () => ZoomBy(ZoomStep)));
+        menu.Items.Add(MenuItem(L("Zoom out"), () => ZoomBy(1 / ZoomStep)));
         menu.Items.Add(new MenuFlyoutSeparator());
-        menu.Items.Add(MenuItem("Fit canvas", ZoomToFit));
+        menu.Items.Add(MenuItem(L("Fit canvas"), ZoomToFit));
         menu.Items.Add(new MenuFlyoutSeparator());
 
         foreach (var preset in new[] { 0.5, 1.0, 2.0 })
