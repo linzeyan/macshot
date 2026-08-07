@@ -1224,7 +1224,9 @@ public sealed partial class AnnotationToolbarView : UserControl
 
         var menu = new MenuFlyout();
 
-        var hide = new MenuFlyoutItem { Text = $"Hide {item.Tooltip}" };
+        // The tool's own name goes through L as well: it is the same string its tooltip is
+        // keyed by, so it is already translated everywhere else on the strip.
+        var hide = new MenuFlyoutItem { Text = L("Hide {0}", L(item.Tooltip)) };
         hide.Click += (_, _) => HideTool(tool);
 
         // Not offered when it would empty the strip: a toolbar with no tools on it is not
@@ -1234,7 +1236,7 @@ public sealed partial class AnnotationToolbarView : UserControl
 
         if (settings.Current.HiddenTools.Count > 0)
         {
-            var restore = new MenuFlyoutItem { Text = "Show every tool" };
+            var restore = new MenuFlyoutItem { Text = L("Show every tool") };
             restore.Click += (_, _) => SetHiddenTools([]);
             menu.Items.Add(restore);
         }
