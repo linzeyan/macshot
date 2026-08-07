@@ -366,9 +366,12 @@ start the macOS pipeline on `main`, and vice versa.
 
 ## Known gaps
 
-- The video editor's effects band is one effect deep: a zoom segment can be placed over
-  the timeline and is applied on export. macOS's other five — censor, cut, freeze, speed
-  and text — are not there, and a zoom export drops the audio.
+- The effects band carries all six of macOS's kinds — zoom, censor, cut, speed, freeze
+  and text — through `VideoEffects`, the compositor and the band's own picker, and an
+  export carries the audio, re-timed where a speed or freeze moved it. What has not been
+  worked through on a real desktop is placing and exporting each kind in turn; the entry
+  that used to sit here said the band was zoom-only and dropped the audio, which the code
+  contradicts on both counts.
 - The MSIX installs and launches but cannot capture: the container denies the screen, and
   the manifest has still to ask for it. It is also never signed — there is no certificate,
   so no release has carried an installer yet. With `windows.startupTask` and
