@@ -20,6 +20,11 @@
 # One action per call, so they compose: launch, shoot, press, shoot, click, shoot. What is
 # on screen persists between calls, which is what makes a sequence of them a session.
 #
+# The exception is a menu, which does not: a flyout is dismissed by this script's own task
+# starting, so it cannot be opened by one call and clicked by the next. Pass both at once —
+# the keys are sent after the pointer has acted, so --right-click with --keys '{DOWN}{ENTER}'
+# opens the menu and takes its first item.
+#
 # SendKeys notation: ^ is Ctrl, + is Shift, % is Alt, {ESC} {ENTER} {TAB} {F1} and so on.
 #
 # Setup is vm-build.sh's, plus nothing: the helper and the scheduled task that runs it are
@@ -124,12 +129,6 @@ if ($Start) {
     Start-Process -FilePath $Start
 }
 
-if ($Keys) {
-    # Whatever the user was last looking at is what has focus, which for a tray app with
-    # a global hotkey is exactly right: the keystroke has to reach the shell, not macshot.
-    [System.Windows.Forms.SendKeys]::SendWait($Keys)
-}
-
 # Out here rather than in the branch that first needed it: it was declared inside the click
 # and used by the drag as well, so a drag on its own threw on a type nobody had added — and
 # the failure looked exactly like a desktop that had not changed.
@@ -186,6 +185,16 @@ if ($Drag) {
     [VmShot.Pointer]::mouse_event(0x0004, 0, 0, 0, 0)
 }
 
+if ($Keys) {
+    # Last, after whatever the pointer did. Alone it reaches whatever the user was looking
+    # at, which for a tray app with a global hotkey is exactly right. Paired with a click it
+    # reaches what the click opened — and a menu is the only way to reach several of
+    # macshot's commands, while a flyout does not survive between two runs of this script:
+    # the task's own activation dismisses it. Sent first, it could only ever have talked to
+    # the window the click was about to replace.
+    [System.Windows.Forms.SendKeys]::SendWait($Keys)
+}
+
 Start-Sleep -Seconds $Wait
 
 $area = [System.Windows.Forms.SystemInformation]::VirtualScreen
@@ -204,12 +213,16 @@ windows_image="$(ssh "$VM" "cygpath -m '$remote_image'")"
 # MSYS_NO_PATHCONV, because git's bash rewrites anything that looks like a POSIX path —
 # /create and /tn arrive at schtasks as C:/Program Files/Git/create and it fails on an
 # argument nobody wrote.
-if ! ssh "$VM" "MSYS_NO_PATHCONV=1 schtasks /query /tn $TASK" >/dev/null 2>&1; then
-    echo "→ installing the capture task in $VM"
-    ssh "$VM" "MSYS_NO_PATHCONV=1 schtasks /create /tn $TASK \
-        /tr 'powershell -ExecutionPolicy Bypass -File \"$windows_script\"' \
-        /sc once /st 00:00 /it /f" >/dev/null
-fi
+#
+# -WindowStyle Hidden, because the helper's own console is on the desktop it is
+# photographing. It opens on top of whatever is being examined, which means a --click lands
+# on the console rather than on the app, and the picture is of the console. Rewritten every
+# run rather than only when missing: a guest that already carries the visible-window version
+# would keep it forever, and the symptom — clicks quietly hitting the wrong window — reads
+# as the app ignoring them.
+ssh "$VM" "MSYS_NO_PATHCONV=1 schtasks /create /tn $TASK \
+    /tr 'powershell -ExecutionPolicy Bypass -WindowStyle Hidden -File \"$windows_script\"' \
+    /sc once /st 00:00 /it /f" >/dev/null 2>&1
 
 # The task takes no arguments, so what to press is left where the helper reads it. A
 # scheduled task's command line is fixed at registration; this is not.
