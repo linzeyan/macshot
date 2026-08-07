@@ -195,9 +195,28 @@
                 </Grid>
             </StackPanel>
 
-            <Grid>
-                <!-- Left: play, mute, the format toggle, and everything the file is.
-                     Right: what to do with it. macshot's two groups, in its order. -->
+            <!-- Left: play, mute, the format toggle, and everything the file is.
+                 Right: what to do with it. macshot's two groups, in its order.
+
+                 In two columns, and the left one in a scroller. Both groups used to sit
+                 in one cell, one aligned to each edge, which draws them on top of each
+                 other the moment their widths add up to more than the row: a horizontal
+                 StackPanel measures at infinity and arranges past its bounds rather than
+                 shrinking. English fitted and Chinese did not, so "另存新檔…" came up
+                 over the quality picker. The buttons are what must never be covered, so
+                 they take their natural width and the readouts take what is left. -->
+            <Grid ColumnSpacing="12">
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="Auto" />
+                </Grid.ColumnDefinitions>
+
+                <ScrollViewer
+                    Grid.Column="0"
+                    HorizontalScrollMode="Auto"
+                    HorizontalScrollBarVisibility="Auto"
+                    VerticalScrollMode="Disabled"
+                    VerticalScrollBarVisibility="Disabled">
                 <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left" VerticalAlignment="Center">
                     <Button x:Name="PlayButton" Width="34" Height="28" Padding="0" Click="Play_Click" Content="▶" />
                     <Button x:Name="MuteButton" Width="34" Height="28" Padding="0" Click="Mute_Click" Content="🔊" />
@@ -208,8 +227,9 @@
                     <ComboBox x:Name="GifFrameRateBox" Width="90" FontSize="12" SelectionChanged="Export_Changed" />
                     <TextBlock x:Name="EstimateText" FontSize="11" Foreground="#59FFFFFF" VerticalAlignment="Center" />
                 </StackPanel>
+                </ScrollViewer>
 
-                <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Center">
+                <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="8" HorizontalAlignment="Right" VerticalAlignment="Center">
                     <Button x:Name="SaveButton" MinWidth="100" Height="28" Click="Save_Click" Content="Save" />
                     <Button x:Name="SaveAsButton" Height="28" Click="SaveAs_Click" Content="Save As..." />
                     <Button x:Name="UploadButton" MinWidth="100" Height="28" Click="Upload_Click" Content="Upload" />

@@ -541,7 +541,7 @@ public sealed class ScreenRecorder : IDisposable
                 pixels,
                 crop.AsRegion);
 
-            return cropped.AsBuffer();
+            return AsEncoderBuffer(crop.Width, crop.Height, cropped);
         }
     }
 
@@ -565,11 +565,33 @@ public sealed class ScreenRecorder : IDisposable
             var pixels = new byte[checked(bitmap.PixelWidth * bitmap.PixelHeight * 4)];
             bitmap.CopyToBuffer(pixels.AsBuffer());
 
-            return area
-                .Fit(bitmap.PixelWidth, bitmap.PixelHeight, pixels, content.Width, content.Height)
-                .AsBuffer();
+            return AsEncoderBuffer(
+                area.Width,
+                area.Height,
+                area.Fit(bitmap.PixelWidth, bitmap.PixelHeight, pixels, content.Width, content.Height));
         }
     }
+
+    /// <summary>
+    /// Turns a top-down BGRA frame into the buffer the encoder reads, which is bottom-up.
+    /// </summary>
+    /// <remarks>
+    /// Media Foundation reads an uncompressed RGB type from the bottom row up, and a
+    /// <see cref="SoftwareBitmap"/> copied down from a capture surface is top-down, so
+    /// every recording that went through main memory — a crop, and a followed window —
+    /// came out upside down. A full-screen one did not: handing over the Direct3D texture
+    /// instead carries its orientation with it.
+    ///
+    /// Declaring a negative <c>MF_MT_DEFAULT_STRIDE</c> on the stream is what the format
+    /// offers for saying "this one is top-down", and it was tried first. It changed
+    /// nothing — the properties bag on <see cref="VideoEncodingProperties"/> did not reach
+    /// the media type, or did not reach it as the UINT32 the attribute is — and a
+    /// declaration nothing reads is worse than no declaration. Rewriting the rows is the
+    /// thing that can be seen to work, and it costs one pass over a buffer that has
+    /// already been copied twice by the time it gets here.
+    /// </remarks>
+    private static IBuffer AsEncoderBuffer(int width, int height, byte[] topDownPixels) =>
+        FrameTransforms.FlipVertical(width, height, topDownPixels).AsBuffer();
 
     /// <summary>
     /// Copies one captured frame down to the CPU, cuts the recorded rectangle out of it
