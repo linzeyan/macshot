@@ -1,10 +1,15 @@
 using System.Globalization;
 using Macshot.Windows.Core.Annotations;
+using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Output;
 
 namespace Macshot.Windows.Services;
 
-/// <summary>One past capture: where it is, and when it was taken.</summary>
+/// <summary>One past capture: where it is, how big it is, and when it was taken.</summary>
+/// <param name="PixelWidth">
+/// What the file says it is, or zero when it would not say — a capture pruned between
+/// the listing and the read, or a file something else put in macshot's folder.
+/// </param>
 /// <param name="RawPath">
 /// The same capture before any mark was drawn on it, when the marks were archived
 /// beside it. Null for a capture with none, where the image itself is already the
@@ -14,11 +19,20 @@ namespace Macshot.Windows.Services;
 public sealed record HistoryEntry(
     string Path,
     DateTimeOffset TakenAt,
+    int PixelWidth = 0,
+    int PixelHeight = 0,
     string? RawPath = null,
     string? NotesPath = null)
 {
-    /// <summary>What the tray menu calls it.</summary>
-    public string Label => TakenAt.ToLocalTime().ToString("t", CultureInfo.CurrentCulture);
+    /// <summary>
+    /// What the tray menu calls it, which is what macshot calls it: the size and how long
+    /// ago. Falls back to the time alone for an entry whose size could not be read, since
+    /// "0 × 0" would be worse than saying nothing about the size at all.
+    /// </summary>
+    public string Label =>
+        PixelWidth > 0 && PixelHeight > 0
+            ? RecentCaptureLabel.Of(PixelWidth, PixelHeight, TakenAt, DateTimeOffset.Now, Localization.L)
+            : RecentCaptureLabel.Age(TakenAt, DateTimeOffset.Now, Localization.L);
 
     /// <summary>
     /// Whether reopening this gives back the marks as marks rather than as pixels.
@@ -343,12 +357,40 @@ public static class ScreenshotHistory
         var stem = Path.Combine(Directory, Path.GetFileNameWithoutExtension(path));
         var raw = stem + RawSuffix;
         var notes = stem + NotesSuffix;
+        var (width, height) = SizeOf(path);
 
         // Both or neither. One without the other cannot reopen anything: the marks with
         // no clean pixels to put them back on would draw them twice.
         return File.Exists(raw) && File.Exists(notes)
-            ? new HistoryEntry(path, TakenAt(path), raw, notes)
-            : new HistoryEntry(path, TakenAt(path));
+            ? new HistoryEntry(path, TakenAt(path), width, height, raw, notes)
+            : new HistoryEntry(path, TakenAt(path), width, height);
+    }
+
+    /// <summary>
+    /// How big the archived capture is, without decoding it.
+    /// </summary>
+    /// <remarks>
+    /// Every file here is a PNG, whatever the save format was, so its IHDR is all this
+    /// needs. Decoding instead would mean decoding every capture in the menu each time
+    /// the notification area's icon is right-clicked, to print two numbers.
+    /// </remarks>
+    private static (int Width, int Height) SizeOf(string path)
+    {
+        try
+        {
+            using var file = File.OpenRead(path);
+            var head = new byte[PngHeader.Length];
+            return file.ReadAtLeast(head, head.Length, throwOnEndOfStream: false) >= head.Length
+                && PngHeader.TryReadSize(head, out var width, out var height)
+                ? (width, height)
+                : (0, 0);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            // The menu is still worth building without the size, and this runs while the
+            // user is holding the pointer over a submenu that is about to appear.
+            return (0, 0);
+        }
     }
 
     /// <summary>
