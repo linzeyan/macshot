@@ -1,4 +1,5 @@
 using Macshot.Windows.Core.Imaging;
+using Macshot.Windows.Core.Output;
 
 using Microsoft.Windows.AI;
 using Microsoft.Windows.AI.Imaging;
@@ -82,9 +83,18 @@ internal static class BackgroundRemover
     /// no subject to lift. All three are things to tell the user rather than log: they
     /// pressed a button and are owed an answer.
     /// </exception>
-    public static async Task<CapturedFrame> CutOutAsync(CapturedFrame frame)
+    public static async Task<CapturedFrame> CutOutAsync(CapturedFrame frame, BackgroundRemovalBackend backend)
     {
         ArgumentNullException.ThrowIfNull(frame);
+
+#if !OFFLINE
+        // Asked for by name rather than resolved: someone who has chosen this has a reason,
+        // and falling back would hide the machine that could not honour it.
+        if (backend == BackgroundRemovalBackend.LocalModel)
+        {
+            return await OnnxBackgroundRemover.CutOutAsync(frame);
+        }
+#endif
 
         if (!IsSupported)
         {
@@ -93,6 +103,14 @@ internal static class BackgroundRemover
             // the variant that makes no network calls has only this backend.
             throw new InvalidOperationException(Unavailable);
 #else
+            // Named explicitly, so say why it cannot run rather than quietly running the
+            // other one — the whole value of naming a backend is finding out when it is
+            // absent.
+            if (backend == BackgroundRemovalBackend.WindowsAi)
+            {
+                throw new InvalidOperationException(Unavailable);
+            }
+
             return await OnnxBackgroundRemover.CutOutAsync(frame);
 #endif
         }
@@ -114,22 +132,16 @@ internal static class BackgroundRemover
         return Cut(frame, mask);
     }
 
-#if OFFLINE
-    /// <summary>What to say when the model cannot run here.</summary>
+    /// <summary>What to say when Windows AI Foundry cannot run here.</summary>
     /// <remarks>
-    /// <para>
     /// Both reasons in one sentence. "Needs a Copilot+ PC" alone would be a lie on the
     /// machine that has one and is running an unpackaged build, and the user would go
-    /// looking at their hardware for a fault that is in ours.
-    /// </para>
-    /// <para>
-    /// Offline only. The ordinary build never says this, because it falls back to the
-    /// model it runs itself — and a member nothing reads is a warning, which is an error.
-    /// </para>
+    /// looking at their hardware for a fault that is in ours. Said in the offline build,
+    /// which has no other backend, and in the ordinary one only when this backend was
+    /// asked for by name.
     /// </remarks>
     private static string Unavailable =>
         L("Remove Background needs a Copilot+ PC and an installed build of macshot.");
-#endif
 
     /// <summary>
     /// Waits for the model to be on the machine, fetching it the first time.

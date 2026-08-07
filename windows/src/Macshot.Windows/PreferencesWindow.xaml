@@ -637,6 +637,18 @@
                         <TextBlock
                             Text="Saves at the size the display shows them, for much smaller files"
                             Style="{StaticResource Caption}" />
+                        <!-- A choice macshot does not have, because a Mac has only one
+                             subject-lifting model. Here there are two for different
+                             machines rather than for different tastes, so it defaults to
+                             deciding by itself and is collapsed in the offline build,
+                             which carries only one of them. -->
+                        <StackPanel x:Name="BackgroundRemovalPanel" Style="{StaticResource Row}">
+                            <TextBlock Text="Remove Background:" Style="{StaticResource RowLabel}" />
+                            <ComboBox x:Name="BackgroundRemovalBox" FontSize="13" Width="200" SelectionChanged="Setting_SelectionChanged" />
+                        </StackPanel>
+                        <TextBlock
+                            x:Name="BackgroundRemovalCaption"
+                            Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="History size:" Style="{StaticResource RowLabel}" />
                             <NumberBox

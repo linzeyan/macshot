@@ -1183,7 +1183,7 @@ public sealed partial class EditorWindow : Window
         CapturedFrame lifted;
         try
         {
-            lifted = await BackgroundRemover.CutOutAsync(_frame);
+            lifted = await BackgroundRemover.CutOutAsync(_frame, _settings.Current.BackgroundRemoval);
         }
         catch (InvalidOperationException failure)
         {
@@ -1333,7 +1333,7 @@ public sealed partial class EditorWindow : Window
                 return;
             }
 
-            var cut = await BackgroundRemover.CutOutAsync(finished);
+            var cut = await BackgroundRemover.CutOutAsync(finished, _settings.Current.BackgroundRemoval);
             await ImageDelivery.CopyToClipboardAsync(cut);
             HintText.Text = L("Copied to the clipboard");
         }

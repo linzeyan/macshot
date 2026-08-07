@@ -996,6 +996,22 @@ public sealed partial class PreferencesWindow : Window
         QualitySlider.Value = settings.Quality;
         RecordingFormatBox.ItemsSource = Enum.GetValues<RecordingFormat>().Select(format => format.ToString()).ToList();
         RecordingFormatBox.SelectedIndex = (int)settings.RecordingFormat;
+
+        // Built after the page-wide localization pass has run, so these call L themselves.
+        BackgroundRemovalBox.ItemsSource = new List<string>
+        {
+            L("Automatic"),
+            L("Windows AI (Copilot+ PC)"),
+            L("Downloaded model"),
+        };
+        BackgroundRemovalBox.SelectedIndex = (int)settings.BackgroundRemoval;
+        BackgroundRemovalCaption.Text = L("Automatic uses Windows AI where it runs, and macshot's own 4 MB model everywhere else.");
+#if OFFLINE
+        // Collapsed rather than disabled: this build carries one backend, so the choice is
+        // absent rather than temporarily unavailable.
+        BackgroundRemovalPanel.Visibility = Visibility.Collapsed;
+        BackgroundRemovalCaption.Visibility = Visibility.Collapsed;
+#endif
         DirectoryBox.Text = settings.SaveDirectory ?? string.Empty;
         TemplateBox.Text = settings.FilenameTemplate;
         RecordingTemplateBox.Text = settings.RecordingFilenameTemplate;
@@ -1453,6 +1469,9 @@ public sealed partial class PreferencesWindow : Window
             RecordingFormat = RecordingFormatBox.SelectedIndex >= 0
                 ? (RecordingFormat)RecordingFormatBox.SelectedIndex
                 : RecordingFormat.Mp4,
+            BackgroundRemoval = BackgroundRemovalBox.SelectedIndex >= 0
+                ? (BackgroundRemovalBackend)BackgroundRemovalBox.SelectedIndex
+                : BackgroundRemovalBackend.Automatic,
             SaveDirectory = DirectoryBox.Text,
             FilenameTemplate = TemplateBox.Text,
             RecordingFilenameTemplate = RecordingTemplateBox.Text,

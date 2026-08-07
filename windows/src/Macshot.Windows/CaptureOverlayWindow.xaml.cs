@@ -3115,7 +3115,7 @@ public sealed partial class CaptureOverlayWindow : Window
         CapturedFrame lifted;
         try
         {
-            lifted = await BackgroundRemover.CutOutAsync(PixelsFor(region));
+            lifted = await BackgroundRemover.CutOutAsync(PixelsFor(region), _settings.Current.BackgroundRemoval);
         }
         catch (InvalidOperationException failure)
         {
@@ -3232,7 +3232,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         try
         {
-            var cut = await BackgroundRemover.CutOutAsync(finished);
+            var cut = await BackgroundRemover.CutOutAsync(finished, _settings.Current.BackgroundRemoval);
 
             if (_selection is { } taken)
             {

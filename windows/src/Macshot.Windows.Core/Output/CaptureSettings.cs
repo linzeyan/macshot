@@ -110,6 +110,14 @@ public sealed record CaptureSettings
     /// </summary>
     public RecordingFormat RecordingFormat { get; init; } = RecordingFormat.Mp4;
 
+    /// <summary>
+    /// Which model Remove Background asks. Automatic by default, which is Windows AI
+    /// Foundry where it works and macshot's own model everywhere else — the two exist for
+    /// different machines rather than for different tastes, so almost nobody should have
+    /// to touch this.
+    /// </summary>
+    public BackgroundRemovalBackend BackgroundRemoval { get; init; } = BackgroundRemovalBackend.Automatic;
+
     public int ThumbnailSeconds { get; init; } = 6;
 
     /// <summary>
@@ -1385,6 +1393,7 @@ public sealed record CaptureSettings
         {
             Format = Enum.IsDefined(Format) ? Format : CaptureImageFormat.Png,
             RecordingFormat = Enum.IsDefined(RecordingFormat) ? RecordingFormat : RecordingFormat.Mp4,
+            BackgroundRemoval = Enum.IsDefined(BackgroundRemoval) ? BackgroundRemoval : BackgroundRemovalBackend.Automatic,
             UploadProvider = Enum.IsDefined(UploadProvider) ? UploadProvider : Upload.UploadProvider.Imgbb,
 
             // Trimmed rather than validated. Every one of these is pasted from a console
