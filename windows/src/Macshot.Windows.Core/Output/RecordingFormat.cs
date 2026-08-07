@@ -21,4 +21,17 @@ public static class RecordingFormatExtensions
         RecordingFormat.Gif => ".gif",
         _ => throw new ArgumentOutOfRangeException(nameof(format), format, "Unknown recording format."),
     };
+
+    /// <summary>
+    /// What to call the format where a user reads it, which is not what the enum calls
+    /// it. The preferences page listed <c>Enum.ToString()</c> and so offered "Mp4" —
+    /// this port's own identifiers leaking into the interface, the same mistake
+    /// <see cref="CaptureImageFormatExtensions.DisplayName"/> exists to prevent.
+    /// </summary>
+    public static string DisplayName(this RecordingFormat format) => format switch
+    {
+        RecordingFormat.Mp4 => "MP4",
+        RecordingFormat.Gif => "GIF",
+        _ => throw new ArgumentOutOfRangeException(nameof(format), format, "Unknown recording format."),
+    };
 }

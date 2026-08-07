@@ -996,7 +996,8 @@ public sealed partial class PreferencesWindow : Window
         FormatBox.ItemsSource = _formatChoices.Select(format => format.DisplayName()).ToList();
         FormatBox.SelectedIndex = Math.Max(_formatChoices.IndexOf(ImageEncoders.Resolve(settings.Format)), 0);
         QualitySlider.Value = settings.Quality;
-        RecordingFormatBox.ItemsSource = Enum.GetValues<RecordingFormat>().Select(format => format.ToString()).ToList();
+        RecordingFormatBox.ItemsSource =
+            Enum.GetValues<RecordingFormat>().Select(format => format.DisplayName()).ToList();
         RecordingFormatBox.SelectedIndex = (int)settings.RecordingFormat;
 
         // Built after the page-wide localization pass has run, so these call L themselves.
@@ -1228,6 +1229,13 @@ public sealed partial class PreferencesWindow : Window
 
         UpdateQualityVisibility();
         UpdateTemplatePreview();
+
+        // Both previews, at the end, once every box holding a template has its text. The
+        // recording one was missing here and showed "Screenshot ….mp4" on every open: it
+        // is written during this method by the format picker's SelectionChanged, which
+        // runs before the template box is filled, and Resolve falls back to the
+        // screenshot template for an empty one.
+        UpdateRecordingTemplatePreview();
     }
 
     private void ShowToolbarColors(ToolbarColors colors)
