@@ -91,6 +91,18 @@ public sealed partial class AnnotationToolbarView : UserControl
     private readonly ColorPickerView _colorPicker = new();
     private readonly EffectsPickerView _effectsPicker = new();
     private readonly BeautifySwatchGrid _frames = new();
+
+    // One popover per picker, made on the first opening and reused. A second Flyout
+    // around a control the first one still owns throws "Element is already the child of
+    // another element": a Flyout parents its content to its presenter and only gives it
+    // back when the flyout itself is collected. The colour and effects pickers escaped
+    // that by accident — nothing held their old flyout, so the collector unparented the
+    // control before the next opening — while the frame picker's handlers captured
+    // theirs, which pinned it and made every opening after the first throw.
+    private Flyout? _colorFlyout;
+    private Flyout? _effectsFlyout;
+    private Flyout? _frameFlyout;
+
     private readonly TextBlock _sizeLabel = OptionLabel();
     /// <summary>macshot's stroke slider — <c>ToolOptionsRowView.swift:313</c>.</summary>
     private const double StrokeSliderWidth = 100;
@@ -1310,11 +1322,15 @@ public sealed partial class AnnotationToolbarView : UserControl
         // Chromeless: the picker paints its own dark slab at macshot's exact size, and
         // the presenter's own 12 of padding and light background would sit around it as
         // a second popover.
-        var bare = ToolbarPalette.BareFlyoutStyle;
+        _colorFlyout ??= new Flyout
+        {
+            Content = _colorPicker,
+            FlyoutPresenterStyle = ToolbarPalette.BareFlyoutStyle,
+        };
 
-        // Detached from any previous anchor first: a Flyout can only be shown from one
-        // place at a time, and the strip rebuilds its buttons.
-        new Flyout { Content = _colorPicker, FlyoutPresenterStyle = bare }.ShowAt(anchor);
+        // The same flyout at whatever button the strip has rebuilt since: ShowAt takes a
+        // new anchor, and re-wrapping the picker would not.
+        _colorFlyout.ShowAt(anchor);
     }
 
     /// <summary>
@@ -1405,35 +1421,42 @@ public sealed partial class AnnotationToolbarView : UserControl
         _frames.Show(settings.Current.ToBeautifyOptions(BeautifyBackgroundStore.Current).StyleIndex);
         _frames.ShowPicture(BeautifySwatchGrid.PaintPicture(BeautifyBackgroundStore.Current));
 
-        var bare = ToolbarPalette.BareFlyoutStyle;
-
-        var flyout = new Flyout { Content = _frames, FlyoutPresenterStyle = bare };
-
-        void Chosen(object? sender, int index)
+        if (_frameFlyout is null)
         {
-            _frames.Picked -= Chosen;
-            _frames.ImageRequested -= Asked;
-            flyout.Hide();
-            Remember(current => current with { BeautifyStyleIndex = index });
+            _frameFlyout = new Flyout
+            {
+                Content = _frames,
+                FlyoutPresenterStyle = ToolbarPalette.BareFlyoutStyle,
+            };
 
-            // The whole row rather than only the swatch, because the blur slider comes and
-            // goes with this choice: it is the one control whose presence a background
-            // decides. Repainting the swatch alone would leave it behind.
-            ShowFrameOptions();
-            FrameStyleChosen?.Invoke(this, index);
+            // Subscribed once with the flyout rather than per opening. The old code
+            // subscribed on the way in and unsubscribed only when something was chosen,
+            // so dismissing the picker left a handler behind — and the closure it left
+            // behind held the flyout that owned the grid, which is what stopped the grid
+            // from ever being shown again.
+            _frames.Picked += FramePicked;
+            _frames.ImageRequested += FrameImageAsked;
         }
 
-        async void Asked(object? sender, EventArgs e)
-        {
-            _frames.Picked -= Chosen;
-            _frames.ImageRequested -= Asked;
-            flyout.Hide();
-            await ChooseFrameImageAsync();
-        }
+        _frameFlyout.ShowAt(anchor);
+    }
 
-        _frames.Picked += Chosen;
-        _frames.ImageRequested += Asked;
-        flyout.ShowAt(anchor);
+    private void FramePicked(object? sender, int index)
+    {
+        _frameFlyout?.Hide();
+        Remember(current => current with { BeautifyStyleIndex = index });
+
+        // The whole row rather than only the swatch, because the blur slider comes and
+        // goes with this choice: it is the one control whose presence a background
+        // decides. Repainting the swatch alone would leave it behind.
+        ShowFrameOptions();
+        FrameStyleChosen?.Invoke(this, index);
+    }
+
+    private async void FrameImageAsked(object? sender, EventArgs e)
+    {
+        _frameFlyout?.Hide();
+        await ChooseFrameImageAsync();
     }
 
     /// <summary>
@@ -1496,14 +1519,15 @@ public sealed partial class AnnotationToolbarView : UserControl
             return;
         }
 
-        // Detached from any previous anchor first, for the same reason the colour picker
-        // is: a Flyout can be shown from one place at a time, and the strip rebuilds its
-        // buttons whenever anything on it lights up.
-        new Flyout
+        _effectsFlyout ??= new Flyout
         {
             Content = _effectsPicker,
             FlyoutPresenterStyle = ToolbarPalette.BareFlyoutStyle,
-        }.ShowAt(anchor);
+        };
+
+        // Shown at whatever button the strip has rebuilt since, for the reason the colour
+        // picker is.
+        _effectsFlyout.ShowAt(anchor);
     }
 
     /// <summary>
