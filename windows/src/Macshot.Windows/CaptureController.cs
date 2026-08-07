@@ -324,6 +324,11 @@ public sealed class CaptureController : IDisposable
         _urlScheme.Apply(_settings.Current.UrlSchemeEnabled);
         _settings.Changed += (_, settings) => _urlScheme.Apply(settings.UrlSchemeEnabled);
 
+        // Read once, here, rather than by whichever window first needs it: decoding a
+        // screen-sized picture is not something to do while a capture overlay is going up,
+        // and every surface that frames a capture reads the same one.
+        Post(BeautifyBackgroundStore.RefreshAsync);
+
         // Last, and only after everything a command can reach exists. Queued rather than
         // run here, because this is still the constructor: a command that puts overlays
         // up would be doing it with the controller half-built.

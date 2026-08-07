@@ -1,4 +1,5 @@
 using Macshot.Windows.Services;
+using static Macshot.Windows.Services.Localization;
 using System.Runtime.InteropServices.WindowsRuntime;
 using Macshot.Windows.Core.Imaging;
 using Microsoft.UI.Xaml;
@@ -45,10 +46,17 @@ internal sealed class BeautifySwatchGrid : Grid
 
     private readonly List<Border> _rings = [];
 
+    private readonly Border _custom;
+
+    private readonly Button _choose;
+
     private int _selected;
 
     public BeautifySwatchGrid()
     {
+        _custom = CustomSwatch();
+        _choose = ChooseButton();
+
         RequestedTheme = ElementTheme.Dark;
         Padding = new Thickness(Gap + Ring);
 
@@ -72,18 +80,126 @@ internal sealed class BeautifySwatchGrid : Grid
             _rings.Add(swatch);
         }
 
+        // The forty-ninth: whatever picture the user last chose. macshot puts the same
+        // thing in its picker (OverlayView+Popovers.swift:166) rather than on the options
+        // row, because it is a background like the others — it just is not a gradient.
+        RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        SetColumn(_custom, BeautifyRenderer.Styles.Count % Columns);
+        SetRow(_custom, BeautifyRenderer.Styles.Count / Columns);
+        Children.Add(_custom);
+        _rings.Add(_custom);
+
+        RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+        SetRow(_choose, RowDefinitions.Count - 1);
+        SetColumnSpan(_choose, Columns);
+        Children.Add(_choose);
+
         Show(0);
     }
 
     /// <summary>Raised with the style that was clicked.</summary>
     public event EventHandler<int>? Picked;
 
+    /// <summary>Raised when the user asks to choose a picture rather than a gradient.</summary>
+    public event EventHandler? ImageRequested;
+
     /// <summary>Rings the style currently in use, so the grid says where it is.</summary>
     public void Show(int styleIndex)
     {
         _rings[_selected].BorderBrush = ToolbarPalette.TransparentBrush;
-        _selected = Math.Clamp(styleIndex, 0, _rings.Count - 1);
+
+        // The custom background's sentinel is negative and its swatch is the last one, so
+        // it cannot be clamped into range like the rest.
+        _selected = styleIndex == BeautifyOptions.CustomBackgroundStyle
+            ? _rings.Count - 1
+            : Math.Clamp(styleIndex, 0, _rings.Count - 2);
+
         _rings[_selected].BorderBrush = ToolbarPalette.AccentBrush;
+    }
+
+    /// <summary>
+    /// Paints the custom swatch as the picture now stored, or leaves it empty when there
+    /// is none.
+    /// </summary>
+    public void ShowPicture(ImageBrush? picture)
+    {
+        if (_custom.Child is not Border face)
+        {
+            return;
+        }
+
+        face.Background = picture ?? (Brush)ToolbarPalette.IconBrush(0.15);
+        ((TextBlock)face.Child).Visibility = picture is null ? Visibility.Visible : Visibility.Collapsed;
+    }
+
+    /// <summary>
+    /// The picture's own swatch. Empty until one is chosen, and marked with a plus rather
+    /// than left blank: an unringed empty square in a grid of colours reads as a gradient
+    /// that failed to paint.
+    /// </summary>
+    private Border CustomSwatch()
+    {
+        var face = new Border
+        {
+            Width = Extent,
+            Height = Extent,
+            CornerRadius = new CornerRadius(6),
+            Background = ToolbarPalette.IconBrush(0.15),
+            Child = new TextBlock
+            {
+                Text = "+",
+                FontSize = 14,
+                Foreground = ToolbarPalette.IconBrush(0.7),
+                HorizontalAlignment = HorizontalAlignment.Center,
+                VerticalAlignment = VerticalAlignment.Center,
+            },
+        };
+
+        var ring = new Border
+        {
+            BorderThickness = new Thickness(Ring),
+            BorderBrush = ToolbarPalette.TransparentBrush,
+            CornerRadius = new CornerRadius(6 + Ring),
+            Margin = new Thickness(Gap / 2.0),
+            Child = face,
+        };
+
+        ToolTipService.SetToolTip(ring, AppFonts.Tip(L("Your own picture")));
+
+        ring.PointerPressed += (_, _) =>
+        {
+            // Nothing stored yet means the click can only have meant "let me choose one":
+            // selecting a background that is not there would ring an empty square.
+            if (!BeautifyBackgroundStore.Exists)
+            {
+                ImageRequested?.Invoke(this, EventArgs.Empty);
+                return;
+            }
+
+            Show(BeautifyOptions.CustomBackgroundStyle);
+            Picked?.Invoke(this, BeautifyOptions.CustomBackgroundStyle);
+        };
+
+        return ring;
+    }
+
+    /// <summary>
+    /// How a different picture is chosen once one is already in use, which the swatch
+    /// alone cannot offer: clicking it then means "use this one".
+    /// </summary>
+    private Button ChooseButton()
+    {
+        var button = new Button
+        {
+            Content = L("Choose an image..."),
+            FontSize = 11,
+            Padding = new Thickness(6, 3, 6, 3),
+            Margin = new Thickness(Gap / 2.0, Gap, Gap / 2.0, 0),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+        };
+
+        button.Click += (_, _) => ImageRequested?.Invoke(this, EventArgs.Empty);
+        return button;
     }
 
     /// <summary>
@@ -99,6 +215,28 @@ internal sealed class BeautifySwatchGrid : Grid
     {
         var (width, height, pixels) = BeautifyRenderer.Swatch(styleIndex, extent);
         var bitmap = new WriteableBitmap(width, height);
+        using (var stream = bitmap.PixelBuffer.AsStream())
+        {
+            stream.Write(pixels, 0, pixels.Length);
+        }
+
+        return new ImageBrush { ImageSource = bitmap, Stretch = Stretch.UniformToFill };
+    }
+
+    /// <summary>
+    /// The custom background as a brush, for the swatch on the row and the one in the
+    /// grid. Sharp rather than blurred: the swatch says which background is on, and a
+    /// blurred thumbnail 28 points across says nothing at all.
+    /// </summary>
+    internal static ImageBrush? PaintPicture(BeautifyBackdrop? picture)
+    {
+        if (picture is null)
+        {
+            return null;
+        }
+
+        var bitmap = new WriteableBitmap(picture.Width, picture.Height);
+        var pixels = picture.PixelsBlurredBy(0);
         using (var stream = bitmap.PixelBuffer.AsStream())
         {
             stream.Write(pixels, 0, pixels.Length);

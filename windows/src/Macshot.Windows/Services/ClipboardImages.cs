@@ -21,7 +21,7 @@ internal static class ClipboardImages
     /// What "Open Image..." offers. macshot's list, plus the two Windows adds: a picker
     /// with no filter shows every file on the machine, and most of them are not images.
     /// </summary>
-    private static readonly string[] ImageExtensions =
+    internal static readonly string[] ImageExtensions =
         [".png", ".jpg", ".jpeg", ".bmp", ".gif", ".tif", ".tiff", ".heic", ".webp"];
 
     /// <summary>

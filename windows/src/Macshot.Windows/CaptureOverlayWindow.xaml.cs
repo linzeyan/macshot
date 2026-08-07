@@ -1114,6 +1114,10 @@ public sealed partial class CaptureOverlayWindow : Window
         _capturedWindowTitle = windowTitle;
         _regionIsAdjustable = capturedWindow is null;
         AnnotationToolbar.SnappedWindow = windowTitle is not null;
+
+        // The row opens one dialog — the frame's background picture — and this window is
+        // topmost, so a dialog it does not own would open behind it.
+        AnnotationToolbar.OwnerHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
         SnapHighlight.Visibility = Visibility.Collapsed;
 
         // Brings the marquee onto the region actually taken, which is the whole
@@ -2349,7 +2353,7 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         get
         {
-            var options = _settings.Current.ToBeautifyOptions();
+            var options = _settings.Current.ToBeautifyOptions(BeautifyBackgroundStore.Current);
             return _capturedWindowTitle is null
                 ? options
                 : options with { Mode = BeautifyMode.Rounded, CornerRadius = ShellWindowCorner };

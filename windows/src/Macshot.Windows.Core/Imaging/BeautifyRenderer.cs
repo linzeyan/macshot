@@ -129,8 +129,22 @@ public sealed record BeautifyOptions(
     double ShadowRadius = 20,
     double ShadowOpacity = 0.35,
     bool Enabled = false,
-    BeautifyMode Mode = BeautifyMode.Window)
+    BeautifyMode Mode = BeautifyMode.Window,
+    double BackgroundBlur = 0,
+    BeautifyBackdrop? Backdrop = null)
 {
+    /// <summary>
+    /// The style index that means "not one of the gradients — the picture in
+    /// <see cref="Backdrop"/>". macshot's own sentinel
+    /// (<c>OverlayView+Popovers.swift:152</c>), and the only value outside the styles
+    /// list that <see cref="Normalized"/> lets through.
+    /// </summary>
+    public const int CustomBackgroundStyle = -1;
+
+    /// <summary>The far end of the blur slider, in points
+    /// (<c>ToolOptionsRowView.swift:1311</c>).</summary>
+    public const double MaximumBackgroundBlur = 50;
+
     /// <summary>
     /// How tall the window mode's title bar is, in points
     /// (<c>BeautifyRenderer.swift:741</c>).
@@ -166,9 +180,17 @@ public sealed record BeautifyOptions(
     {
         return this with
         {
-            StyleIndex = BeautifyRenderer.Styles.Count == 0
-                ? 0
-                : Math.Clamp(StyleIndex, 0, BeautifyRenderer.Styles.Count - 1),
+            // The sentinel survives only while there is a picture to honour it. A
+            // settings file that asks for the custom background after the image behind
+            // it has gone draws the first gradient, which is a frame the user can see
+            // and change, rather than a style index that indexes nothing.
+            StyleIndex = StyleIndex == CustomBackgroundStyle && Backdrop is not null
+                ? CustomBackgroundStyle
+                : BeautifyRenderer.Styles.Count == 0
+                    ? 0
+                    : Math.Clamp(StyleIndex, 0, BeautifyRenderer.Styles.Count - 1),
+
+            BackgroundBlur = Math.Clamp(BackgroundBlur, 0, MaximumBackgroundBlur),
             // The far ends the sliders offer, so a settings file cannot ask for a frame
             // the row has no way to ask back down again. The near end is not enforced:
             // macshot's slider starts at 16 but its stored value is unclamped, and no
@@ -499,7 +521,14 @@ public static class BeautifyRenderer
     {
         var framing = bgraPixels.Length > 0;
         var resolved = (options ?? BeautifyOptions.Default).Normalized();
-        var style = Styles.Count == 0
+
+        // Normalized() has already refused the sentinel unless there is a picture behind
+        // it, so a custom background here always has one to sample.
+        var picture = resolved.StyleIndex == BeautifyOptions.CustomBackgroundStyle
+            ? resolved.Backdrop
+            : null;
+
+        var style = Styles.Count == 0 || picture is not null
             ? new BeautifyStyle("None", 0, new AnnotationColor(0, 0, 0))
             : Styles[resolved.StyleIndex];
 
@@ -539,6 +568,17 @@ public static class BeautifyRenderer
         // that skips ground gets the same colours as one that does not.
         var mesh = style.Mesh is { IsUsable: true } definition ? definition.CreateSampler() : null;
 
+        // Blurred once for the whole scan rather than per pixel, and scaled to cover the
+        // frame the way macshot does (BeautifyRenderer.swift:645): the larger of the two
+        // ratios, centred, so the picture fills the background whatever shape either is
+        // and no corner of the frame is left empty.
+        var picturePixels = picture?.PixelsBlurredBy(resolved.BackgroundBlur);
+        var pictureScale = picture is null
+            ? 1
+            : Math.Max((double)outputWidth / picture.Width, (double)outputHeight / picture.Height);
+        var pictureLeft = picture is null ? 0 : (outputWidth - (picture.Width * pictureScale)) / 2;
+        var pictureTop = picture is null ? 0 : (outputHeight - (picture.Height * pictureScale)) / 2;
+
         for (var row = 0; row < outputHeight; row++)
         {
             for (var column = 0; column < outputWidth; column++)
@@ -566,11 +606,28 @@ public static class BeautifyRenderer
                     continue;
                 }
 
-                var background = mesh is null
-                    ? style.Sample(GradientProgress(style.Angle, column, row, outputWidth, outputHeight))
-                    : mesh.Sample(
-                        (column + 0.5) / outputWidth,
-                        (row + 0.5) / outputHeight);
+                AnnotationColor background;
+                if (picture is not null && picturePixels is not null)
+                {
+                    var sourceX = Math.Clamp(
+                        (int)((column + 0.5 - pictureLeft) / pictureScale), 0, picture.Width - 1);
+                    var sourceY = Math.Clamp(
+                        (int)((row + 0.5 - pictureTop) / pictureScale), 0, picture.Height - 1);
+                    var sample = ((sourceY * picture.Width) + sourceX) * 4;
+
+                    background = new AnnotationColor(
+                        picturePixels[sample + 2],
+                        picturePixels[sample + 1],
+                        picturePixels[sample]);
+                }
+                else
+                {
+                    background = mesh is null
+                        ? style.Sample(GradientProgress(style.Angle, column, row, outputWidth, outputHeight))
+                        : mesh.Sample(
+                            (column + 0.5) / outputWidth,
+                            (row + 0.5) / outputHeight);
+                }
 
                 var blue = background.Blue;
                 var green = background.Green;

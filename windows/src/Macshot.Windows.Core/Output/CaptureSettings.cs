@@ -1138,8 +1138,17 @@ public sealed record CaptureSettings
         return slots;
     }
 
-    /// <summary>Which of <see cref="BeautifyRenderer.Styles"/> the Beautify action uses.</summary>
+    /// <summary>
+    /// Which of <see cref="BeautifyRenderer.Styles"/> the Beautify action uses, or
+    /// <see cref="BeautifyOptions.CustomBackgroundStyle"/> for the picture the user chose.
+    /// </summary>
     public int BeautifyStyleIndex { get; init; }
+
+    /// <summary>
+    /// How far the custom background picture is softened, in points. Inert for a gradient,
+    /// and kept across a switch to one so that going back does not reset the slider.
+    /// </summary>
+    public double BeautifyBackgroundBlur { get; init; }
 
     public double BeautifyPadding { get; init; } = BeautifyOptions.Default.Padding;
 
@@ -1162,14 +1171,22 @@ public sealed record CaptureSettings
     /// </remarks>
     public BeautifyMode BeautifyMode { get; init; } = BeautifyOptions.Default.Mode;
 
-    public BeautifyOptions ToBeautifyOptions() => new BeautifyOptions(
+    /// <param name="backdrop">
+    /// The picture behind the frame, when one has been chosen. Core cannot read the file
+    /// it came from, so it arrives from the caller — and without it the custom-background
+    /// style falls back to a gradient, which is what <see cref="BeautifyOptions.Normalized"/>
+    /// does with a sentinel it has nothing to honour.
+    /// </param>
+    public BeautifyOptions ToBeautifyOptions(BeautifyBackdrop? backdrop = null) => new BeautifyOptions(
         BeautifyStyleIndex,
         BeautifyPadding,
         BeautifyCornerRadius,
         BeautifyShadowRadius,
         BeautifyOptions.Default.ShadowOpacity,
         BeautifyEnabled,
-        BeautifyMode).Normalized();
+        BeautifyMode,
+        BeautifyBackgroundBlur,
+        backdrop).Normalized();
 
     /// <summary>
     /// Where the Upload button sends a capture. macshot's <c>uploadProvider</c>.
@@ -1577,7 +1594,15 @@ public sealed record CaptureSettings
             ToolbarBackgroundColor = Color(ToolbarBackgroundColor, ToolbarColors.DefaultBackground).ToHex(),
             ToolbarAccentColor = Color(ToolbarAccentColor, ToolbarColors.DefaultAccent).ToHex(),
             ToolbarIconColor = Color(ToolbarIconColor, ToolbarColors.DefaultIcon).ToHex(),
-            BeautifyStyleIndex = Math.Clamp(BeautifyStyleIndex, 0, Math.Max(0, BeautifyRenderer.Styles.Count - 1)),
+            // The custom-background sentinel is let through here and refused later, by
+            // BeautifyOptions.Normalized(), which is the only place that can see whether
+            // there is still a picture to honour it. Clamping it away here would lose the
+            // user's choice every time the settings were re-read before the image loaded.
+            BeautifyStyleIndex = BeautifyStyleIndex == BeautifyOptions.CustomBackgroundStyle
+                ? BeautifyOptions.CustomBackgroundStyle
+                : Math.Clamp(BeautifyStyleIndex, 0, Math.Max(0, BeautifyRenderer.Styles.Count - 1)),
+            BeautifyBackgroundBlur = Math.Clamp(
+                BeautifyBackgroundBlur, 0, BeautifyOptions.MaximumBackgroundBlur),
             // The sliders' own ends, which are the frame's widths in points. They read as
             // fractions of the capture until you notice that a padding of 0.5 is half a
             // pixel, not half the picture — and a build that did store them as fractions

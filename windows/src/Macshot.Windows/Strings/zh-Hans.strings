@@ -20,6 +20,7 @@
 "Background removal failed — no clear subject found." = "背景移除失败 — 未找到明确的主体。";
 "Captured from the screen, so anything over the window is included" = "从屏幕截取，因此窗口上方的任何内容都会包含在内";
 "captures" = "张";
+"Choose an image..." = "选择图像…";
 "Click to take the colour under the pointer • Esc to stop" = "点按以取得指针下的颜色 • Esc 停止";
 "Click to take the colour under the pointer • {0}" = "点按以取得指针下的颜色 • {0}";
 "Click to take this window • Shift+click to scroll-capture it • Esc to cancel" = "点按以截取此窗口 • Shift+点按以滚动截取 • Esc 取消";
@@ -118,5 +119,6 @@
 "Windows would not let macshot change its startup entry." = "Windows 不允许 macshot 更改其开机启动项。";
 "Write a detailed log" = "记录详细日志";
 "You're up to date!" = "已是最新版本！";
+"Your own picture" = "你自己的图像";
 "{0:0}% • Scroll to zoom • Middle-drag to pan" = "{0:0}% • 滚动以缩放 • 中键拖移以平移";
 "{0} chars · {1} words" = "{0} 个字符 · {1} 个词";

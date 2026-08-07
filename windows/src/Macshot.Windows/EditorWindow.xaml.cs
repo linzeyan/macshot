@@ -262,6 +262,10 @@ public sealed partial class EditorWindow : Window
         // capture or moving a region are not among them here.
         AnnotationToolbar.EditorMode = true;
 
+        // The row opens one dialog — the frame's background picture — and a common dialog
+        // has to be owned by a real window rather than by the control that raised it.
+        AnnotationToolbar.OwnerHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
+
         AnnotationToolbar.Bind(_editor, _settings);
         AnnotationToolbar.Changed += (_, _) => AnnotationCanvas.Render();
         AnnotationToolbar.ColorSamplingToggled += (_, armed) => SetColorSampling(armed);
@@ -347,7 +351,7 @@ public sealed partial class EditorWindow : Window
                 // The style last chosen from the Frame menu, which is where a different
                 // one is picked. One press for the usual answer, the menu for the rest —
                 // and the pixels change here and then, so Ctrl+Z is the way back.
-                FrameImage(_settings.Current.ToBeautifyOptions().StyleIndex);
+                FrameImage(_settings.Current.ToBeautifyOptions(BeautifyBackgroundStore.Current).StyleIndex);
                 return;
 
             case ToolbarCommand.RemoveBackground:
@@ -449,7 +453,7 @@ public sealed partial class EditorWindow : Window
 
         // Opened rather than built each time: painting 48 gradients is not free, and the
         // only thing that changes between openings is which one is ringed.
-        frameFlyout.Opening += (_, _) => frames.Show(_settings.Current.ToBeautifyOptions().StyleIndex);
+        frameFlyout.Opening += (_, _) => frames.Show(_settings.Current.ToBeautifyOptions(BeautifyBackgroundStore.Current).StyleIndex);
         frame.Flyout = frameFlyout;
 
         // macshot's Add Capture: another capture, taken now, landing under this one. It
@@ -1004,7 +1008,7 @@ public sealed partial class EditorWindow : Window
     /// </summary>
     private void FrameImage(int styleIndex)
     {
-        var options = _settings.Current.ToBeautifyOptions() with { StyleIndex = styleIndex };
+        var options = _settings.Current.ToBeautifyOptions(BeautifyBackgroundStore.Current) with { StyleIndex = styleIndex };
 
         ApplyImageOperation(
             frame =>

@@ -20,6 +20,7 @@
 "Background removal failed — no clear subject found." = "背景の削除に失敗しました — 明確な被写体が見つかりません。";
 "Captured from the screen, so anything over the window is included" = "画面から取得するため、ウインドウの上に重なるものも含まれます";
 "captures" = "件";
+"Choose an image..." = "画像を選択…";
 "Click to take the colour under the pointer • Esc to stop" = "クリックでポインタの下の色を取得 • Esc で終了";
 "Click to take the colour under the pointer • {0}" = "クリックでポインタの下の色を取得 • {0}";
 "Click to take this window • Shift+click to scroll-capture it • Esc to cancel" = "クリックでこのウインドウを取得 • Shift+クリックでスクロールキャプチャ • Esc でキャンセル";
@@ -118,5 +119,6 @@
 "Windows would not let macshot change its startup entry." = "Windows が macshot のスタートアップ登録の変更を許可しませんでした。";
 "Write a detailed log" = "詳細なログを記録";
 "You're up to date!" = "最新バージョンです！";
+"Your own picture" = "自分の画像";
 "{0:0}% • Scroll to zoom • Middle-drag to pan" = "{0:0}% • スクロールでズーム • 中ボタンドラッグでパン";
 "{0} chars · {1} words" = "{0} 文字 · {1} 単語";

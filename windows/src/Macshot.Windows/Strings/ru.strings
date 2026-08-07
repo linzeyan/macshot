@@ -20,6 +20,7 @@
 "Background removal failed — no clear subject found." = "Не удалось удалить фон — чёткий объект не найден.";
 "Captured from the screen, so anything over the window is included" = "Снимается с экрана, поэтому всё поверх окна тоже попадёт в кадр";
 "captures" = "снимков";
+"Choose an image..." = "Выбрать изображение…";
 "Click to take the colour under the pointer • Esc to stop" = "Щёлкните, чтобы взять цвет под указателем • Esc — выход";
 "Click to take the colour under the pointer • {0}" = "Щёлкните, чтобы взять цвет под указателем • {0}";
 "Click to take this window • Shift+click to scroll-capture it • Esc to cancel" = "Щёлкните, чтобы снять это окно • Shift+щелчок — снимок с прокруткой • Esc — отмена";
@@ -118,5 +119,6 @@
 "Windows would not let macshot change its startup entry." = "Windows не позволила macshot изменить запись автозапуска.";
 "Write a detailed log" = "Вести подробный журнал";
 "You're up to date!" = "Установлена последняя версия!";
+"Your own picture" = "Ваше изображение";
 "{0:0}% • Scroll to zoom • Middle-drag to pan" = "{0:0}% • Прокрутка — масштаб • Средняя кнопка — панорама";
 "{0} chars · {1} words" = "{0} симв. · {1} слов";

@@ -20,6 +20,7 @@
 "Background removal failed — no clear subject found." = "Rimozione dello sfondo non riuscita: nessun soggetto chiaro trovato.";
 "Captured from the screen, so anything over the window is included" = "Acquisito dallo schermo, quindi include tutto ciò che sta sopra la finestra";
 "captures" = "acquisizioni";
+"Choose an image..." = "Scegli un'immagine…";
 "Click to take the colour under the pointer • Esc to stop" = "Fai clic per prendere il colore sotto il puntatore • Esc per uscire";
 "Click to take the colour under the pointer • {0}" = "Fai clic per prendere il colore sotto il puntatore • {0}";
 "Click to take this window • Shift+click to scroll-capture it • Esc to cancel" = "Fai clic per acquisire questa finestra • Maiusc+clic per l'acquisizione a scorrimento • Esc per annullare";
@@ -118,5 +119,6 @@
 "Windows would not let macshot change its startup entry." = "Windows non ha consentito a macshot di modificare la voce di avvio.";
 "Write a detailed log" = "Scrivi un log dettagliato";
 "You're up to date!" = "Tutto aggiornato!";
+"Your own picture" = "Una tua immagine";
 "{0:0}% • Scroll to zoom • Middle-drag to pan" = "{0:0}% • Scorri per lo zoom • Trascina col tasto centrale per spostare";
 "{0} chars · {1} words" = "{0} caratteri · {1} parole";

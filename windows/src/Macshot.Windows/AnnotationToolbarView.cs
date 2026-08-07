@@ -17,8 +17,10 @@ using Microsoft.UI.Xaml.Media;
 // Imported rather than written out at each use site: inside namespace Macshot.Windows
 // the name "Windows" binds to Macshot.Windows, so a qualified Color resolves to
 // Macshot.Color and does not compile.
+using Windows.Storage.Pickers;
 using Windows.System;
 using Windows.UI;
+using WinRT.Interop;
 
 namespace Macshot.Windows;
 
@@ -452,6 +454,17 @@ public sealed partial class AnnotationToolbarView : UserControl
 
     private readonly Slider _frameShadow = OptionSlider(
         FrameSliderWidth, 0, BeautifyOptions.MaximumShadowRadius);
+
+    /// <summary>
+    /// The fourth slider, and the only one that is not always there: macshot shows it
+    /// while a picture is the background and not while a gradient is
+    /// (<c>ToolOptionsRowView.swift:1310</c>), because there is nothing to soften about a
+    /// gradient and a slider that does nothing is worse than one that is absent.
+    /// </summary>
+    private readonly TextBlock _frameBlurLabel = OptionLabel(L("Blur"));
+
+    private readonly Slider _frameBlur = OptionSlider(
+        FrameSliderWidth, 0, BeautifyOptions.MaximumBackgroundBlur);
 
     /// <summary>
     /// The background in use, and the way to the other forty-seven. macshot draws the
@@ -1389,7 +1402,8 @@ public sealed partial class AnnotationToolbarView : UserControl
 
         // Painting 48 gradients is not free, so the grid is filled as it opens rather
         // than held ready; the only thing that changes between openings is the ring.
-        _frames.Show(settings.Current.ToBeautifyOptions().StyleIndex);
+        _frames.Show(settings.Current.ToBeautifyOptions(BeautifyBackgroundStore.Current).StyleIndex);
+        _frames.ShowPicture(BeautifySwatchGrid.PaintPicture(BeautifyBackgroundStore.Current));
 
         var bare = ToolbarPalette.BareFlyoutStyle;
 
@@ -1398,17 +1412,81 @@ public sealed partial class AnnotationToolbarView : UserControl
         void Chosen(object? sender, int index)
         {
             _frames.Picked -= Chosen;
+            _frames.ImageRequested -= Asked;
             flyout.Hide();
             Remember(current => current with { BeautifyStyleIndex = index });
 
-            // The swatch on the row is how you know which of the forty-eight is on, so it
-            // is repainted here rather than waiting for the row to be rebuilt.
-            SyncFrameOptions();
+            // The whole row rather than only the swatch, because the blur slider comes and
+            // goes with this choice: it is the one control whose presence a background
+            // decides. Repainting the swatch alone would leave it behind.
+            ShowFrameOptions();
             FrameStyleChosen?.Invoke(this, index);
         }
 
+        async void Asked(object? sender, EventArgs e)
+        {
+            _frames.Picked -= Chosen;
+            _frames.ImageRequested -= Asked;
+            flyout.Hide();
+            await ChooseFrameImageAsync();
+        }
+
         _frames.Picked += Chosen;
+        _frames.ImageRequested += Asked;
         flyout.ShowAt(anchor);
+    }
+
+    /// <summary>
+    /// Asks for a picture to put behind the frame, keeps a copy of it, and turns it on.
+    /// </summary>
+    /// <remarks>
+    /// Turning it on is the point of the dialog: macshot sets the style to its custom
+    /// sentinel as soon as the file is read (<c>OverlayView+Popovers.swift:203</c>) rather
+    /// than asking a second time. Choosing a picture and then having to choose it again in
+    /// the grid would read as the first choice having failed.
+    /// </remarks>
+    private async Task ChooseFrameImageAsync()
+    {
+        var picker = new FileOpenPicker { SuggestedStartLocation = PickerLocationId.PicturesLibrary };
+        foreach (var extension in ClipboardImages.ImageExtensions)
+        {
+            picker.FileTypeFilter.Add(extension);
+        }
+
+        // A desktop app has no CoreWindow for the picker to belong to, so it is given a
+        // window handle instead. It has to be the host's own: the capture overlay is
+        // topmost, and a dialog it does not own opens behind it — visible nowhere, while
+        // the keystrokes meant for it reach the overlay and are read as tool shortcuts.
+        InitializeWithWindow.Initialize(picker, OwnerHandle);
+
+        if (await picker.PickSingleFileAsync() is not { } file)
+        {
+            return;
+        }
+
+        try
+        {
+            BeautifyBackgroundStore.Keep(file.Path);
+            await BeautifyBackgroundStore.RefreshAsync();
+        }
+        catch (Exception exception)
+        {
+            DiagnosticLog.Write($"The beautify background could not be kept: {exception.Message}");
+            return;
+        }
+
+        if (BeautifyBackgroundStore.Current is null)
+        {
+            return;
+        }
+
+        Remember(current => current with
+        {
+            BeautifyStyleIndex = BeautifyOptions.CustomBackgroundStyle,
+        });
+
+        ShowFrameOptions();
+        FrameStyleChosen?.Invoke(this, BeautifyOptions.CustomBackgroundStyle);
     }
 
     private void ShowEffectsPicker()
@@ -1625,6 +1703,24 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// <see cref="AnnotationToolOptions"/> answers because the answers are facts about
     /// the rasterizer, not about this row.
     /// </remarks>
+    /// <summary>
+    /// Lays the frame's row out again, which the background can change and not only the
+    /// tool: the blur slider is there for a picture and not for a gradient.
+    /// </summary>
+    private void ShowFrameOptions()
+    {
+        foreach (var (_, group) in _optionGroups)
+        {
+            foreach (var control in group)
+            {
+                control.Visibility = Show(_frameControls.Contains(control) && FramedHere(control));
+            }
+        }
+
+        SyncFrameOptions();
+        ShowGroupRules();
+    }
+
     private void ShowOptionsFor(AnnotationTool tool)
     {
         // The frame's controls stand in for the tool's rather than joining them, which is
@@ -1633,16 +1729,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         // and the tool in hand has nothing to say about any of them.
         if (_frameOptions)
         {
-            foreach (var (_, group) in _optionGroups)
-            {
-                foreach (var control in group)
-                {
-                    control.Visibility = Show(_frameControls.Contains(control) && FramedHere(control));
-                }
-            }
-
-            SyncFrameOptions();
-            ShowGroupRules();
+            ShowFrameOptions();
             return;
         }
 
@@ -2459,11 +2546,13 @@ public sealed partial class AnnotationToolbarView : UserControl
         ToolTipService.SetToolTip(_framePadding, AppFonts.Tip("How much background shows around the capture"));
         ToolTipService.SetToolTip(_frameRadius, AppFonts.Tip("How far the capture's corners are rounded off"));
         ToolTipService.SetToolTip(_frameShadow, AppFonts.Tip("How far the capture's shadow spreads"));
+        ToolTipService.SetToolTip(_frameBlur, AppFonts.Tip("How far the background picture is softened"));
         ToolTipService.SetToolTip(_frameStyle, AppFonts.Tip(L("Gradient Style")));
 
         _framePadding.ValueChanged += (_, _) => FrameOptionMoved();
         _frameRadius.ValueChanged += (_, _) => FrameOptionMoved();
         _frameShadow.ValueChanged += (_, _) => FrameOptionMoved();
+        _frameBlur.ValueChanged += (_, _) => FrameOptionMoved();
 
         // The chevron beside the swatch, at macshot's 9 points and its six-tenths.
         _frameStyle.Content = new StackPanel
@@ -2490,7 +2579,15 @@ public sealed partial class AnnotationToolbarView : UserControl
         _frameOn.Unchecked += (_, _) => FrameArmed(false);
 
         AddGroup(_frameMode);
-        AddGroup(_framePaddingLabel, _framePadding, _frameRadiusLabel, _frameRadius, _frameShadowLabel, _frameShadow);
+        AddGroup(
+            _framePaddingLabel,
+            _framePadding,
+            _frameRadiusLabel,
+            _frameRadius,
+            _frameShadowLabel,
+            _frameShadow,
+            _frameBlurLabel,
+            _frameBlur);
         AddGroup(_frameStyle);
         AddGroup(_frameOn);
 
@@ -2503,6 +2600,8 @@ public sealed partial class AnnotationToolbarView : UserControl
             _frameRadius,
             _frameShadowLabel,
             _frameShadow,
+            _frameBlurLabel,
+            _frameBlur,
             _frameStyle,
             _frameOn,
         ]);
@@ -2526,6 +2625,7 @@ public sealed partial class AnnotationToolbarView : UserControl
             BeautifyPadding = Math.Round(_framePadding.Value),
             BeautifyCornerRadius = Math.Round(_frameRadius.Value),
             BeautifyShadowRadius = Math.Round(_frameShadow.Value),
+            BeautifyBackgroundBlur = Math.Round(_frameBlur.Value),
         });
 
         FrameOptionsChanged?.Invoke(this, EventArgs.Empty);
@@ -2553,14 +2653,34 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// (<c>ToolOptionsRowView.swift:1286</c> and <c>:1302</c>) rather than showing them
     /// doing nothing.
     /// </remarks>
-    private bool FramedHere(FrameworkElement control) =>
-        !SnappedWindow
-        || (control != _frameMode && control != _frameRadius && control != _frameRadiusLabel);
+    private bool FramedHere(FrameworkElement control)
+    {
+        // Only while a picture is the background, whatever the region is: macshot hides
+        // the blur slider behind the same condition (ToolOptionsRowView.swift:1310).
+        if (control == _frameBlur || control == _frameBlurLabel)
+        {
+            return _settings?.Current.BeautifyStyleIndex == BeautifyOptions.CustomBackgroundStyle
+                && BeautifyBackgroundStore.Current is not null;
+        }
+
+        return !SnappedWindow
+            || (control != _frameMode && control != _frameRadius && control != _frameRadiusLabel);
+    }
 
     /// <summary>
     /// Whether the region came from clicking a window rather than from a drag.
     /// </summary>
     public bool SnappedWindow { get; set; }
+
+    /// <summary>
+    /// The window this row is drawn on, for the one thing here that opens a dialog.
+    /// </summary>
+    /// <remarks>
+    /// Set by the host rather than derived from the XamlRoot: a UserControl can be asked
+    /// which island it is on, but the answer is not the handle a common dialog has to be
+    /// owned by, and an unowned dialog opens behind the topmost capture overlay.
+    /// </remarks>
+    public IntPtr OwnerHandle { get; set; }
 
     /// <summary>
     /// Fills the frame's row from the settings, and paints the swatch as the background
@@ -2573,7 +2693,7 @@ public sealed partial class AnnotationToolbarView : UserControl
             return;
         }
 
-        var options = settings.Current.ToBeautifyOptions();
+        var options = settings.Current.ToBeautifyOptions(BeautifyBackgroundStore.Current);
 
         _loadingFrame = true;
         try
@@ -2581,6 +2701,7 @@ public sealed partial class AnnotationToolbarView : UserControl
             _framePadding.Value = options.Padding;
             _frameRadius.Value = options.CornerRadius;
             _frameShadow.Value = options.ShadowRadius;
+            _frameBlur.Value = options.BackgroundBlur;
             _frameOn.IsChecked = options.Enabled;
         }
         finally
@@ -2592,7 +2713,11 @@ public sealed partial class AnnotationToolbarView : UserControl
         // the row from the settings cannot be mistaken for the user choosing a mode.
         _frameMode.SelectedIndex = options.Mode == BeautifyMode.Window ? 0 : 1;
 
-        _frameSwatch.Background = BeautifySwatchGrid.Paint(options.StyleIndex, FrameSwatchExtent);
+        _frameSwatch.Background =
+            options.StyleIndex == BeautifyOptions.CustomBackgroundStyle
+                ? BeautifySwatchGrid.PaintPicture(options.Backdrop)
+                  ?? BeautifySwatchGrid.Paint(0, FrameSwatchExtent)
+                : BeautifySwatchGrid.Paint(options.StyleIndex, FrameSwatchExtent);
     }
 
     /// <summary>
