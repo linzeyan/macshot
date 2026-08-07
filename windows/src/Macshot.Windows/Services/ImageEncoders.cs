@@ -4,8 +4,8 @@ using Windows.Graphics.Imaging;
 namespace Macshot.Windows.Services;
 
 /// <summary>
-/// Which of macshot's save formats this particular machine can write, and the WIC
-/// encoder id behind each one.
+/// Which of macshot's save formats this particular machine can write, and the encoder
+/// behind each one.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -42,6 +42,10 @@ internal static class ImageEncoders
     public static CaptureImageFormat Resolve(CaptureImageFormat format) =>
         Supports(format) ? format : format.Fallback();
 
+    /// <summary>
+    /// The WIC encoder behind a format. Not every format has one — WebP is written by
+    /// <see cref="WebpEncoder"/> and never reaches here.
+    /// </summary>
     public static Guid EncoderIdOf(CaptureImageFormat format) => format switch
     {
         CaptureImageFormat.Png => BitmapEncoder.PngEncoderId,
@@ -50,9 +54,24 @@ internal static class ImageEncoders
         _ => throw new ArgumentOutOfRangeException(nameof(format), format, "Unknown capture image format."),
     };
 
+    /// <param name="registered">
+    /// What WIC answered, or null where the question could not be put to it.
+    /// </param>
+    private static bool CanWrite(
+        CaptureImageFormat format,
+        IReadOnlyList<BitmapCodecInformation>? registered) => format switch
+    {
+        // Not WIC's to answer for. The encoder is libwebp, carried beside the app, so the
+        // question is whether that library loaded rather than what Windows registered —
+        // and it stays answerable even when the enumeration above failed.
+        CaptureImageFormat.Webp => WebpEncoder.IsAvailable,
+        _ => !format.RequiresOptionalCodec()
+            || (registered is not null && registered.Any(codec => codec.CodecId == EncoderIdOf(format))),
+    };
+
     private static HashSet<CaptureImageFormat> Probe()
     {
-        IReadOnlyList<BitmapCodecInformation> registered;
+        IReadOnlyList<BitmapCodecInformation>? registered;
         try
         {
             registered = BitmapEncoder.GetEncoderInformationEnumerator();
@@ -63,7 +82,7 @@ internal static class ImageEncoders
             // optional codec are part of WIC itself and cannot be absent on a machine
             // running this app at all.
             DiagnosticLog.Write($"Could not enumerate the image encoders: {exception.Message}");
-            return [.. Enum.GetValues<CaptureImageFormat>().Where(format => !format.RequiresOptionalCodec())];
+            return [.. Enum.GetValues<CaptureImageFormat>().Where(format => CanWrite(format, null))];
         }
 
         // The one place the real encoder list is visible. It is written once per run and
@@ -73,11 +92,6 @@ internal static class ImageEncoders
             "Image encoders registered: "
             + string.Join(", ", registered.Select(codec => $"{codec.FriendlyName} {codec.CodecId:B}")));
 
-        return
-        [
-            .. Enum.GetValues<CaptureImageFormat>().Where(format =>
-                !format.RequiresOptionalCodec()
-                || registered.Any(codec => codec.CodecId == EncoderIdOf(format))),
-        ];
+        return [.. Enum.GetValues<CaptureImageFormat>().Where(format => CanWrite(format, registered))];
     }
 }

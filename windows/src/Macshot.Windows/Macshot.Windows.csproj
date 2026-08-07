@@ -120,6 +120,23 @@
     <PackageReference Include="Microsoft.ML.OnnxRuntime" Version="1.28.0" />
   </ItemGroup>
 
+  <!--
+    libwebp, which is the whole of WebP support: Windows enumerates no WebP encoder, so
+    the format exists here only because this library is carried beside the app. About
+    300 KB per architecture, BSD-licensed, and only the native binaries - the managed
+    wrapper in the same family is not referenced, because Services/WebpEncoder.cs is four
+    DllImports against the simple API.
+
+    Both architectures, unconditionally. NuGet copies only runtimes/<the RID being built>,
+    so an arm64 publish carries no x64 DLL and the other way round; a Condition on
+    RuntimeIdentifier would say the same thing and be one more property to be wrong about
+    during restore.
+  -->
+  <ItemGroup>
+    <PackageReference Include="Imazen.WebP.NativeRuntime.win-x64" Version="1.6.1" />
+    <PackageReference Include="Imazen.WebP.NativeRuntime.win-arm64" Version="1.6.1" />
+  </ItemGroup>
+
   <ItemGroup>
     <ProjectReference Include="..\Macshot.Windows.Core\Macshot.Windows.Core.csproj" />
   </ItemGroup>

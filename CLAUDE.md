@@ -377,10 +377,14 @@ start the macOS pipeline on `main`, and vice versa.
   so no release has carried an installer yet. With `windows.startupTask` and
   `windows.protocol`, that is what stands between it and being the way macshot is
   installed. See Releasing.
-- Save formats stop at PNG, JPEG and HEIC. macOS also offers WebP and AVIF; WinRT exposes
-  no encoder for either — WIC's WebP support is a decoder — so both would mean bundling a
-  third-party codec. HEIC is offered only where its codec is registered, and the encode
-  falls back to JPEG (renaming the file) where it is registered but broken.
+- Save formats stop at PNG, JPEG, HEIC and WebP; macOS also offers AVIF. WIC writes
+  neither WebP nor AVIF — its support for both is a decoder — so WebP is written by
+  libwebp instead, carried per architecture from `Imazen.WebP.NativeRuntime.win-*` and
+  called through `Services/WebpEncoder.cs`. AVIF would mean bundling an AV1 encoder,
+  which is a different order of dependency. Both optional codecs are probed before they
+  are offered: HEIC against WIC's registered encoders, WebP against whether libwebp
+  loaded. Where the probe says yes and the encode still fails, it falls back to JPEG and
+  renames the file — which is also what a WebP taller than 16383 pixels does.
 - `docs/` is a symlink to a private directory outside the repository — the architecture
   notes and the manual verification procedure live there and resolve on Ricky's machine
   only.

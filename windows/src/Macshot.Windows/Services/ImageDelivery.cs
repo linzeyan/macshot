@@ -52,6 +52,8 @@ public static class ImageDelivery
     /// A capture the user has already taken is worth more than the container it was
     /// going to be in, so the substitute is written instead. The answer carries the
     /// format that was actually used because the caller has to name the file from it.
+    /// WebP fails in a second way this covers: it cannot hold a side longer than 16383
+    /// pixels, which is a scroll capture of a long enough page.
     /// </remarks>
     public static async Task<EncodedCapture> EncodeAsync(
         CapturedFrame frame,
@@ -82,6 +84,15 @@ public static class ImageDelivery
         CaptureImageFormat format,
         int quality)
     {
+        // WebP has no WIC encoder to hand a stream to: libwebp writes the whole file into
+        // one buffer of its own and gives it back. Branching here rather than inside
+        // EncodeIntoAsync keeps that method the WIC path it reads as, and the clipboard —
+        // its only other caller — is always PNG.
+        if (format is CaptureImageFormat.Webp)
+        {
+            return WebpEncoder.Encode(frame, quality);
+        }
+
         using var stream = new InMemoryRandomAccessStream();
         await EncodeIntoAsync(frame, format, quality, stream);
         return await ReadAllAsync(stream);
