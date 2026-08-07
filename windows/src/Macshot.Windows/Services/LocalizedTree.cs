@@ -63,6 +63,18 @@ public static class LocalizedTree
             ToolTipService.SetToolTip(node, AppFonts.Tip(Localization.L(tip)));
         }
 
+        // A context menu hangs off the element rather than sitting inside it, exactly as a
+        // button's flyout does, so nothing in the switch below reaches it. Without this the
+        // thumbnail and pin panels came up translated with an English right-click menu —
+        // and only for whoever opened one.
+        if (node is UIElement { ContextFlyout: MenuFlyout menu })
+        {
+            foreach (var entry in menu.Items)
+            {
+                Walk(entry, depth + 1);
+            }
+        }
+
         switch (node)
         {
         case TextBlock text:
@@ -82,6 +94,12 @@ public static class LocalizedTree
                 box.Header = Localization.L(boxHeader);
             }
 
+            break;
+
+        case MenuFlyoutItem item:
+            // Its label is Text, not Content: MenuFlyoutItemBase is not a ContentControl,
+            // so the case below never sees one.
+            item.Text = Localization.L(item.Text);
             break;
 
         case ContentControl control:

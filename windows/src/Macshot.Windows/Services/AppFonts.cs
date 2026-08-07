@@ -186,6 +186,12 @@ internal static class AppFonts
         case ContentControl control when control.Content is string content && ChineseText.Contains(content):
             control.FontWeight = FontWeights.Bold;
             break;
+
+        // A menu item is neither, and it is the one place a translated label would
+        // otherwise sit at the ordinary weight beside controls that are heavier.
+        case MenuFlyoutItem item when ChineseText.Contains(item.Text):
+            item.FontWeight = FontWeights.Bold;
+            break;
         }
     }
 

@@ -46,7 +46,7 @@
             <MenuFlyout>
                 <MenuFlyoutItem Text="Copy" Click="Copy_Click" />
                 <MenuFlyoutItem Text="Save" Click="Save_Click" />
-                <MenuFlyoutItem Text="Save as..." Click="SaveAs_Click" />
+                <MenuFlyoutItem Text="Save As..." Click="SaveAs_Click" />
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="Pin" Click="Pin_Click" />
                 <MenuFlyoutItem Text="Open in Editor Window" Click="Edit_Click" />
@@ -54,7 +54,7 @@
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="Delete" Click="Delete_Click" />
                 <MenuFlyoutItem Text="Close" Click="Close_Click" />
-                <MenuFlyoutItem Text="Close all" Click="CloseAll_Click" />
+                <MenuFlyoutItem Text="Close All" Click="CloseAll_Click" />
             </MenuFlyout>
         </Grid.ContextFlyout>
 
