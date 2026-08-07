@@ -12,6 +12,7 @@
 #   windows/tools/vm-shot.sh --keys '^+x'        # press Ctrl+Shift+X, then photograph
 #   windows/tools/vm-shot.sh --keys '{ESC}'      # …and this dismisses it again
 #   windows/tools/vm-shot.sh --click 640,400     # click there, then photograph
+#   windows/tools/vm-shot.sh --right-click 1823,1519  # …with the other button
 #   windows/tools/vm-shot.sh --drag 100,100,500,400  # drag a region, then photograph
 #   windows/tools/vm-shot.sh --start 'C:\\x.exe'  # launch it, then photograph
 #   windows/tools/vm-shot.sh --wait 3 out.png    # wait longer; write somewhere specific
@@ -39,6 +40,7 @@ TASK=macshot-vm-shot
 
 keys=""
 click=""
+right_click=""
 drag=""
 start=""
 wait_for=1
@@ -52,6 +54,10 @@ while [ $# -gt 0 ]; do
         ;;
     --click)
         click="$2"
+        shift 2
+        ;;
+    --right-click)
+        right_click="$2"
         shift 2
         ;;
     --drag)
@@ -112,6 +118,7 @@ $Wait = if ($arguments.Count -ge 2 -and $arguments[1]) { [double]$arguments[1] }
 $Click = if ($arguments.Count -ge 3) { $arguments[2] } else { "" }
 $Start = if ($arguments.Count -ge 4) { $arguments[3] } else { "" }
 $Drag = if ($arguments.Count -ge 5) { $arguments[4] } else { "" }
+$RightClick = if ($arguments.Count -ge 6) { $arguments[5] } else { "" }
 
 if ($Start) {
     Start-Process -FilePath $Start
@@ -140,6 +147,21 @@ if ($Click) {
     Start-Sleep -Milliseconds 120
     [VmShot.Pointer]::mouse_event(0x0002, 0, 0, 0, 0)
     [VmShot.Pointer]::mouse_event(0x0004, 0, 0, 0, 0)
+}
+
+if ($RightClick) {
+    # The other button, because several things have no other way in: the notification
+    # area's menu is the only route to Preferences and History, the colour wheel opens
+    # only on a right-click over the capture, and a tool leaves the strip by being
+    # right-clicked. Without this a whole class of the checklist cannot be reached at all.
+    #
+    # Nothing is clicked first to focus anything. A menu that needs its owner foregrounded
+    # would be a bug in macshot rather than something to paper over here.
+    $at = $RightClick.Split(",")
+    [VmShot.Pointer]::SetCursorPos([int]$at[0], [int]$at[1]) | Out-Null
+    Start-Sleep -Milliseconds 120
+    [VmShot.Pointer]::mouse_event(0x0008, 0, 0, 0, 0)
+    [VmShot.Pointer]::mouse_event(0x0010, 0, 0, 0, 0)
 }
 
 if ($Drag) {
@@ -192,7 +214,7 @@ fi
 # The task takes no arguments, so what to press is left where the helper reads it. A
 # scheduled task's command line is fixed at registration; this is not.
 ssh "$VM" \
-    "printf '%s\n%s\n%s\n%s\n%s\n' '$keys' '$wait_for' '$click' '$start' '$drag' > '$home/vm-shot.args'" \
+    "printf '%s\n%s\n%s\n%s\n%s\n%s\n' '$keys' '$wait_for' '$click' '$start' '$drag' '$right_click' > '$home/vm-shot.args'" \
     2>/dev/null || true
 
 ssh "$VM" "rm -f '$remote_image'; MSYS_NO_PATHCONV=1 schtasks /run /tn $TASK" >/dev/null
