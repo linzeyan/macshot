@@ -128,7 +128,7 @@ public sealed partial class TextRecognitionWindow : Window
     private void ShowCount(string text)
     {
         var words = text.Split((char[]?)null, StringSplitOptions.RemoveEmptyEntries).Length;
-        CountText.Text = $"{text.Length} chars · {words} words";
+        CountText.Text = L("{0} chars · {1} words", text.Length, words);
     }
 
     private async Task ShowPreviewAsync(CapturedFrame source)
@@ -249,7 +249,7 @@ public sealed partial class TextRecognitionWindow : Window
         {
             // Another process can hold the clipboard open. Saying so beats a button
             // that silently does nothing.
-            StatusText.Text = $"Could not copy: {exception.Message}";
+            StatusText.Text = L("Could not copy: {0}", exception.Message);
         }
     }
 
@@ -303,16 +303,18 @@ public sealed partial class TextRecognitionWindow : Window
             {
                 RecognizedTextBox.Text = translated;
                 ShowCount(translated);
-                StatusText.Text = $"Translated into {TranslationLanguages.All[TranslationLanguages.IndexOf(target)].Name}.";
+                StatusText.Text = L(
+                    "Translated into {0}.",
+                    TranslationLanguages.All[TranslationLanguages.IndexOf(target)].Name);
             }
             else
             {
-                StatusText.Text = outcome.Failure ?? "The translation failed.";
+                StatusText.Text = outcome.Failure ?? L("The translation failed.");
             }
         }
         catch (Exception exception)
         {
-            StatusText.Text = $"Could not translate: {exception.Message}";
+            StatusText.Text = L("Could not translate: {0}", exception.Message);
         }
         finally
         {

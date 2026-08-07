@@ -86,8 +86,9 @@ public partial class App : Application
             DiagnosticLog.Write("A second macshot was started and refused.");
             FailureReport.Notice(
                 IntPtr.Zero,
-                "macshot is already running. Its icon is in the notification area, "
-                    + "at the right-hand end of the taskbar.");
+                Localization.L(
+                    "macshot is already running. Its icon is in the notification area, "
+                        + "at the right-hand end of the taskbar."));
             Exit();
             return;
         }

@@ -1,5 +1,6 @@
 #if !OFFLINE
 using Macshot.Windows.Core.Upload;
+using Macshot.Windows.Services;
 
 namespace Macshot.Windows.Upload;
 
@@ -25,7 +26,7 @@ internal static class S3Uploader
         var plan = S3Request.Build(settings, filename, contentType, payload, DateTimeOffset.UtcNow, out var failure);
         if (plan is null)
         {
-            return UploadOutcome.Failed(failure ?? "S3 not configured — check Settings");
+            return UploadOutcome.Failed(failure ?? Localization.L("S3 not configured — check Settings"));
         }
 
         using var request = new HttpRequestMessage(HttpMethod.Put, plan.Url)
@@ -57,7 +58,8 @@ internal static class S3Uploader
 
             var body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
             var message = S3Request.ErrorMessage(body) ?? $"HTTP {(int)response.StatusCode}";
-            return UploadOutcome.Failed($"S3 error ({(int)response.StatusCode}): {message}");
+            return UploadOutcome.Failed(
+                Localization.L("S3 error ({0}): {1}", (int)response.StatusCode, message));
         }
         catch (Exception error) when (error is HttpRequestException or TaskCanceledException)
         {

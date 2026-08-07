@@ -439,7 +439,7 @@ public sealed class CaptureController : IDisposable
         {
             FailureReport.Notice(
                 _messageWindow.Handle,
-                $"macshot could not open '{path}': {exception.Message}");
+                L("macshot could not open '{0}': {1}", path, exception.Message));
         }
     }
 
@@ -473,7 +473,7 @@ public sealed class CaptureController : IDisposable
         {
             FailureReport.Notice(
                 _messageWindow.Handle,
-                $"macshot has no capture called '{id}' in its history.");
+                L("macshot has no capture called '{0}' in its history.", id));
             return;
         }
 
@@ -485,7 +485,7 @@ public sealed class CaptureController : IDisposable
         {
             FailureReport.Notice(
                 _messageWindow.Handle,
-                $"macshot could not open '{entry.Path}': {exception.Message}");
+                L("macshot could not open '{0}': {1}", entry.Path, exception.Message));
         }
     }
 
@@ -623,9 +623,10 @@ public sealed class CaptureController : IDisposable
         {
             FailureReport.Notice(
                 _messageWindow.Handle,
-                "Windows would not give macshot these shortcuts, so they are not active: "
-                    + string.Join(", ", refused)
-                    + ". Another program may already own them. The notification-area menu still works.");
+                L(
+                    "Windows would not give macshot these shortcuts, so they are not active: {0}. "
+                        + "Another program may already own them. The notification-area menu still works.",
+                    string.Join(", ", refused)));
         }
 
         void Bind(int hotkey, int command, string label, HotkeyBinding? binding, Func<Task> action)
@@ -898,7 +899,7 @@ public sealed class CaptureController : IDisposable
             _reportedCaptureFallback = true;
             FailureReport.Notice(
                 _messageWindow.Handle,
-                $"Screen capture fell back to the older backend: {_screenCapture.FallbackReason}");
+                L("Screen capture fell back to the older backend: {0}", _screenCapture.FallbackReason));
         }
 
         return frame;
@@ -1767,7 +1768,7 @@ public sealed class CaptureController : IDisposable
         {
             FailureReport.Notice(
                 _messageWindow.Handle,
-                "That page was longer than macshot will capture in one go, so the bottom of it is missing.");
+                L("That page was longer than macshot will capture in one go, so the bottom of it is missing."));
         }
 
         // Annotated, which is the one thing a scroll capture used to be delivered without:
@@ -2161,11 +2162,10 @@ public sealed class CaptureController : IDisposable
         {
             // A file the picker offered and the decoder then refused: named as a picture,
             // and not one Windows can read. macshot returns silently here; the user chose
-            // the file, so they are told why nothing opened. Not through L: macshot has no
-            // string for this, and inventing a key would look translated and never be.
+            // the file, so they are told why nothing opened.
             FailureReport.Notice(
                 _messageWindow.Handle,
-                $"macshot could not open that image: {exception.Message}");
+                L("macshot could not open that image: {0}", exception.Message));
         }
     }
 

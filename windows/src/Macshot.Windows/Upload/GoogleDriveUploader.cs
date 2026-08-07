@@ -4,6 +4,7 @@ using System.Net.Http.Headers;
 using System.Text;
 using System.Text.Json;
 using Macshot.Windows.Core.Upload;
+using Macshot.Windows.Services;
 
 namespace Macshot.Windows.Upload;
 
@@ -121,13 +122,13 @@ internal sealed class GoogleDriveUploader
         var accessToken = await ValidTokenAsync(cancellationToken).ConfigureAwait(false);
         if (accessToken is null)
         {
-            return UploadOutcome.Failed("Not signed in");
+            return UploadOutcome.Failed(Localization.L("Not signed in"));
         }
 
         var folder = await FolderIdAsync(accessToken, cancellationToken).ConfigureAwait(false);
         if (folder.Id is null)
         {
-            return UploadOutcome.Failed(folder.Failure ?? "Could not reach the macshot folder");
+            return UploadOutcome.Failed(folder.Failure ?? Localization.L("Could not reach the macshot folder"));
         }
 
         return await SendAsync(payload, filename, contentType, folder.Id, accessToken, progress, attempt: 1, cancellationToken)
@@ -176,7 +177,7 @@ internal sealed class GoogleDriveUploader
                 var refreshed = await RefreshAsync(cancellationToken).ConfigureAwait(false);
                 if (refreshed is null)
                 {
-                    return UploadOutcome.Failed("Authentication expired");
+                    return UploadOutcome.Failed(Localization.L("Authentication expired"));
                 }
 
                 return await SendAsync(

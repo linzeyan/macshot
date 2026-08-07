@@ -237,18 +237,18 @@ public sealed partial class PinWindow : Window
 
     private async void Copy_Click(object sender, RoutedEventArgs e)
     {
-        await RunAsync("Copy failed", () => ImageDelivery.CopyToClipboardAsync(_frame));
+        await RunAsync(L("Copy failed"), () => ImageDelivery.CopyToClipboardAsync(_frame));
     }
 
     private async void Save_Click(object sender, RoutedEventArgs e)
     {
-        await RunAsync("Save failed", async () =>
+        await RunAsync(L("Save failed"), async () =>
         {
             // Null means the user dismissed the dialog they asked for, which is not a
             // failure and not a save: nothing to report either way.
             if (await SavePrompt.SaveAsync(this, _frame, _settings.Current) is { } path)
             {
-                await ShowMessageAsync("Saved", path);
+                await ShowMessageAsync(L("Saved"), path);
             }
         });
     }

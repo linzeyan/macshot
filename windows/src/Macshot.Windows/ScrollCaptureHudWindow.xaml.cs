@@ -67,7 +67,7 @@ public sealed partial class ScrollCaptureHudWindow : Window
     /// <summary>Says how much has been captured so far.</summary>
     public void Report(int frames, int rows)
     {
-        ProgressText.Text = $"Scrolling — {frames} frames, {rows} px tall";
+        ProgressText.Text = Localization.L("Scrolling — {0} frames, {1} px tall", frames, rows);
     }
 
     /// <summary>

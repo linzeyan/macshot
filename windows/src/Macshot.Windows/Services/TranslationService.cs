@@ -71,7 +71,7 @@ internal static class TranslationService
     {
         if (string.IsNullOrWhiteSpace(text))
         {
-            return TranslationOutcome.Failed("There is no text to translate.");
+            return TranslationOutcome.Failed(Localization.L("There is no text to translate."));
         }
 
         try
@@ -94,11 +94,13 @@ internal static class TranslationService
             // HttpClient reports its own timeout as a cancellation, which is
             // indistinguishable from the user closing the window unless the token is
             // checked. Only the timeout is worth a message.
-            return TranslationOutcome.Failed("The translation service did not answer in time.");
+            return TranslationOutcome.Failed(
+                Localization.L("The translation service did not answer in time."));
         }
         catch (Exception exception) when (exception is HttpRequestException or InvalidOperationException)
         {
-            return TranslationOutcome.Failed($"Could not reach the translation service: {exception.Message}");
+            return TranslationOutcome.Failed(
+                Localization.L("Could not reach the translation service: {0}", exception.Message));
         }
     }
 }

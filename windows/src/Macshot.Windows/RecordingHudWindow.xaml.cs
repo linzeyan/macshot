@@ -158,7 +158,7 @@ public sealed partial class RecordingHudWindow : Window
     {
         _ticker.Stop();
 
-        SavedText.Text = $"Saved {fileName}";
+        SavedText.Text = Localization.L("Saved {0}", fileName);
         SavedDuration.Text = Format(Elapsed);
         RunningLayer.Visibility = Visibility.Collapsed;
         SavedLayer.Visibility = Visibility.Visible;

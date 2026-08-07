@@ -795,7 +795,9 @@ public sealed partial class PreferencesWindow : Window
 
         if (unreadable.Length > 0)
         {
-            StatusText.Text = $"Not a shortcut: {string.Join(", ", unreadable)}. Click it and press the keys — nothing is being kept until then.";
+            StatusText.Text = L(
+                "Not a shortcut: {0}. Click it and press the keys — nothing is being kept until then.",
+                string.Join(", ", unreadable));
             return;
         }
 
@@ -823,7 +825,7 @@ public sealed partial class PreferencesWindow : Window
         // stored is never a reason to take the app down.
         catch (Exception exception)
         {
-            StatusText.Text = $"Could not save preferences: {exception.Message}";
+            StatusText.Text = L("Could not save preferences: {0}", exception.Message);
             return;
         }
 
@@ -1730,11 +1732,11 @@ public sealed partial class PreferencesWindow : Window
         {
             var export = SettingsPortability.Export(_settings.Current, Version, DateTimeOffset.Now);
             await File.WriteAllTextAsync(file.Path, export.Json);
-            StatusText.Text = $"Exported {export.KeyCount} settings.";
+            StatusText.Text = L("Exported {0} settings.", export.KeyCount);
         }
         catch (Exception exception)
         {
-            StatusText.Text = $"Could not export the settings: {exception.Message}";
+            StatusText.Text = L("Could not export the settings: {0}", exception.Message);
         }
     }
 
@@ -1765,7 +1767,7 @@ public sealed partial class PreferencesWindow : Window
         }
         catch (Exception exception)
         {
-            StatusText.Text = $"Could not read that file: {exception.Message}";
+            StatusText.Text = L("Could not read that file: {0}", exception.Message);
             return;
         }
 
@@ -1954,7 +1956,7 @@ public sealed partial class PreferencesWindow : Window
         }
         catch (Exception exception)
         {
-            StatusText.Text = $"Could not open the folder: {exception.Message}";
+            StatusText.Text = L("Could not open the folder: {0}", exception.Message);
         }
     }
 

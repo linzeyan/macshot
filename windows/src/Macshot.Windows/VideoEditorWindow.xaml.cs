@@ -401,9 +401,7 @@ public sealed partial class VideoEditorWindow : Window
         catch (Exception error) when (error is IOException or UnauthorizedAccessException
             or ArgumentException or NotSupportedException or COMException)
         {
-            // Not through L: macshot has no string for this, and inventing a key would
-            // look translated and never be.
-            StatusText.Text = $"macshot could not open that recording: {error.Message}";
+            StatusText.Text = L("macshot could not open that recording: {0}", error.Message);
         }
     }
 
