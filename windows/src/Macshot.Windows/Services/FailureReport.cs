@@ -68,13 +68,25 @@ public static class FailureReport
     /// exception was, and where it came from.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The type matters as much as the message. WinUI reports every markup fault as
     /// "XAML parsing failed." and names neither the window nor the key, so without the
     /// stack there is nothing to look at.
+    /// </para>
+    /// <para>
+    /// Except for the failures macshot saw coming, which are their message and nothing
+    /// else. Decided here rather than at each call site, so that every route to the user
+    /// — this one, and the unhandled-exception net in <c>App</c> — draws the same line.
+    /// </para>
     /// </remarks>
     public static string Describe(Exception exception)
     {
         ArgumentNullException.ThrowIfNull(exception);
+
+        if (exception is ExpectedFailureException)
+        {
+            return exception.Message;
+        }
 
         var text = new StringBuilder();
         for (var current = exception; current is not null; current = current.InnerException)

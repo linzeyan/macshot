@@ -135,7 +135,7 @@ public sealed class ScrollCaptureSession
             // afterwards for the same reason.
             if (!ScrollDriver.TryBringForward(window))
             {
-                throw new InvalidOperationException("macshot could not bring that window forward.");
+                throw new ExpectedFailureException("macshot could not bring that window forward.");
             }
 
             return await CaptureAsync(window, region, cancellation);
@@ -147,7 +147,7 @@ public sealed class ScrollCaptureSession
 
         if (!_driver.TryTakeOver(window, out var cursor, over))
         {
-            throw new InvalidOperationException("macshot could not bring that window forward to scroll it.");
+            throw new ExpectedFailureException("macshot could not bring that window forward to scroll it.");
         }
 
         try
@@ -169,7 +169,7 @@ public sealed class ScrollCaptureSession
         CancellationToken cancellation)
     {
         var first = await _captureWindow(window.Id)
-            ?? throw new InvalidOperationException("Windows would not capture that window.");
+            ?? throw new ExpectedFailureException("Windows would not capture that window.");
 
         // Resolved once, against the first frame, and then held. Every later frame is
         // the same window after scrolling, so a crop that followed each frame's own
@@ -180,7 +180,7 @@ public sealed class ScrollCaptureSession
 
         if (band.Height < ScrollStitcher.BandHeight)
         {
-            throw new InvalidOperationException(region is null
+            throw new ExpectedFailureException(region is null
                 ? "That window is too short to scroll-capture."
                 : "That region is too short to scroll-capture.");
         }

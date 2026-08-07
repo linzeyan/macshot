@@ -69,8 +69,13 @@ public sealed class ScrollDriver
             ? new CapturePoint(cursor.X, cursor.Y)
             : default;
 
+        // Both failures below reach the user as the same sentence, because there is
+        // nothing they could do differently about either. The log is the only place they
+        // can be told apart afterwards, and without it a scroll capture that refuses
+        // leaves no evidence of which half refused.
         if (!WindowEnumerator.TryGetBounds(window.Id, out _, out var bounds) || bounds.IsEmpty)
         {
+            DiagnosticLog.Write("Scroll capture: Windows no longer reports bounds for that window.");
             return false;
         }
 
@@ -80,7 +85,13 @@ public sealed class ScrollDriver
         // on almost anything: a corner is as likely to be a sidebar or a ruler, and
         // wheel input lands wherever the pointer actually is.
         var at = over ?? new CapturePoint(bounds.X + (bounds.Width / 2), bounds.Y + (bounds.Height / 2));
-        return SetCursorPos((int)at.X, (int)at.Y);
+        if (!SetCursorPos((int)at.X, (int)at.Y))
+        {
+            DiagnosticLog.Write($"Scroll capture: the pointer could not be put at {at.X},{at.Y}.");
+            return false;
+        }
+
+        return true;
     }
 
     /// <summary>
