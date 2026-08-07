@@ -378,8 +378,6 @@ start the macOS pipeline on `main`, and vice versa.
   no encoder for either — WIC's WebP support is a decoder — so both would mean bundling a
   third-party codec. HEIC is offered only where its codec is registered, and the encode
   falls back to JPEG (renaming the file) where it is registered but broken.
-- The beautify options row is short one of macOS's controls: the Blur slider (`:1311`)
-  applies only to a custom image background, which the port cannot load.
 - `docs/` is a symlink to a private directory outside the repository — the architecture
   notes and the manual verification procedure live there and resolve on Ricky's machine
   only.
