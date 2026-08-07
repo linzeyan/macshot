@@ -13,6 +13,7 @@
 #   windows/tools/vm-shot.sh --keys '{ESC}'      # …and this dismisses it again
 #   windows/tools/vm-shot.sh --click 640,400     # click there, then photograph
 #   windows/tools/vm-shot.sh --right-click 1823,1519  # …with the other button
+#   windows/tools/vm-shot.sh --right-click 1712,1546 --click 1734,1439  # …then take an item
 #   windows/tools/vm-shot.sh --drag 100,100,500,400  # drag a region, then photograph
 #   windows/tools/vm-shot.sh --start 'C:\\x.exe'  # launch it, then photograph
 #   windows/tools/vm-shot.sh --wait 3 out.png    # wait longer; write somewhere specific
@@ -22,8 +23,9 @@
 #
 # The exception is a menu, which does not: a flyout is dismissed by this script's own task
 # starting, so it cannot be opened by one call and clicked by the next. Pass both at once —
-# the keys are sent after the pointer has acted, so --right-click with --keys '{DOWN}{ENTER}'
-# opens the menu and takes its first item.
+# --right-click opens it and --click, which runs after, takes an item off it. Keys do not
+# work on a menu: it is a modal loop inside macshot's thread and SendKeys goes to whatever
+# window is foreground, so '{DOWN 16}{ENTER}' dismisses it and chooses nothing.
 #
 # SendKeys notation: ^ is Ctrl, + is Shift, % is Alt, {ESC} {ENTER} {TAB} {F1} and so on.
 #
@@ -137,17 +139,6 @@ Add-Type -Namespace VmShot -Name Pointer -MemberDefinition @"
 [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint x, uint y, uint data, int extra);
 "@
 
-if ($Click) {
-    # Moved, then given a moment, then pressed. An overlay that tracks the pointer places
-    # its chrome from the moves, and a press in the same breath as the move arrives before
-    # the window has been told where the pointer now is.
-    $at = $Click.Split(",")
-    [VmShot.Pointer]::SetCursorPos([int]$at[0], [int]$at[1]) | Out-Null
-    Start-Sleep -Milliseconds 120
-    [VmShot.Pointer]::mouse_event(0x0002, 0, 0, 0, 0)
-    [VmShot.Pointer]::mouse_event(0x0004, 0, 0, 0, 0)
-}
-
 if ($RightClick) {
     # The other button, because several things have no other way in: the notification
     # area's menu is the only route to Preferences and History, the colour wheel opens
@@ -161,6 +152,24 @@ if ($RightClick) {
     Start-Sleep -Milliseconds 120
     [VmShot.Pointer]::mouse_event(0x0008, 0, 0, 0, 0)
     [VmShot.Pointer]::mouse_event(0x0010, 0, 0, 0, 0)
+    Start-Sleep -Milliseconds 400
+}
+
+if ($Click) {
+    # Moved, then given a moment, then pressed. An overlay that tracks the pointer places
+    # its chrome from the moves, and a press in the same breath as the move arrives before
+    # the window has been told where the pointer now is.
+    #
+    # After the right button rather than before it, which is what makes --right-click and
+    # --click together the way to take an item off the tray menu. Keys cannot do it: the
+    # menu is a modal loop inside macshot's own thread, and SendKeys arrives at whatever
+    # window is foreground instead — {DOWN 16}{ENTER} dismissed the menu and chose nothing.
+    # The menu does survive the wait above, so the second press lands on it.
+    $at = $Click.Split(",")
+    [VmShot.Pointer]::SetCursorPos([int]$at[0], [int]$at[1]) | Out-Null
+    Start-Sleep -Milliseconds 120
+    [VmShot.Pointer]::mouse_event(0x0002, 0, 0, 0, 0)
+    [VmShot.Pointer]::mouse_event(0x0004, 0, 0, 0, 0)
 }
 
 if ($Drag) {
