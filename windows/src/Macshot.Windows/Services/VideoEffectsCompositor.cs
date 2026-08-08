@@ -327,7 +327,15 @@ internal static class VideoEffectsCompositor
                     outputWidth,
                     outputHeight);
 
-                var sample = MediaStreamSample.CreateFromBuffer(pixels.AsBuffer(), at);
+                // Flipped for the same reason ScreenRecorder flips what it hands over:
+                // Media Foundation reads an uncompressed RGB type from the bottom row up,
+                // and everything upstream here is top-down — the decoder's frame, and the
+                // rectangles the censors and captions were placed in. Missing it made
+                // every effects export upside down, which no preview shows because the
+                // preview plays the source rather than the buffer.
+                var sample = MediaStreamSample.CreateFromBuffer(
+                    FrameTransforms.FlipVertical(outputWidth, outputHeight, pixels).AsBuffer(),
+                    at);
 
                 // Said rather than left to the encoder to infer: an uncompressed stream
                 // carries no timing of its own, and samples with no duration are written
