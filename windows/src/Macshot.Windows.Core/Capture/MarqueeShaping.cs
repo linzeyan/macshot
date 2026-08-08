@@ -65,4 +65,56 @@ public static class MarqueeShaping
             moving.X > anchor.X ? anchor.X + width : anchor.X - width,
             moving.Y > anchor.Y ? anchor.Y + height : anchor.Y - height);
     }
+
+    /// <summary>
+    /// The region an exact-size preset produces: a box of that many pixels centred on
+    /// <paramref name="centre"/> and kept inside <paramref name="bounds"/>.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The other kind of first drag, and not really a drag at all — the size was chosen in
+    /// a menu, so the press only says where. The anchor plays no part, which is why this
+    /// takes a point rather than the two <see cref="Corner"/> works between.
+    /// </para>
+    /// <para>
+    /// A preset larger than the display is shrunk to fit rather than clipped or refused: a
+    /// 1080 × 1920 box on a 1080p screen would otherwise have edges the user could neither
+    /// see nor drag. It stops being that size, which is the lesser of the two lies — the
+    /// size box says what it came to. macshot scales it the same way
+    /// (<c>OverlayView.swift:6745-6749</c>).
+    /// </para>
+    /// <para>
+    /// Pixels throughout, unlike the macOS original: <c>fixedPreSelectionRect</c> divides
+    /// the preset by the backing scale because AppKit's selection is in points, and this
+    /// port's regions are already in the display's own pixels.
+    /// </para>
+    /// </remarks>
+    public static CaptureRegion FixedRegion(
+        CapturePoint centre,
+        double width,
+        double height,
+        CaptureRegion bounds)
+    {
+        var boxWidth = Math.Max(1, width);
+        var boxHeight = Math.Max(1, height);
+
+        if (boxWidth > bounds.Width || boxHeight > bounds.Height)
+        {
+            var fit = Math.Min(bounds.Width / boxWidth, bounds.Height / boxHeight);
+            boxWidth *= fit;
+            boxHeight *= fit;
+        }
+
+        return new CaptureRegion(
+            Math.Clamp(
+                centre.X - (boxWidth / 2),
+                bounds.X,
+                Math.Max(bounds.X, bounds.Right - boxWidth)),
+            Math.Clamp(
+                centre.Y - (boxHeight / 2),
+                bounds.Y,
+                Math.Max(bounds.Y, bounds.Bottom - boxHeight)),
+            boxWidth,
+            boxHeight);
+    }
 }

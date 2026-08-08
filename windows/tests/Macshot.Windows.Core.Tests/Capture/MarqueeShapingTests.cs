@@ -91,4 +91,63 @@ public sealed class MarqueeShapingTests
         Assert.AreEqual(moving.X, shaped.X, 1e-9);
         Assert.AreEqual(moving.Y, shaped.Y, 1e-9);
     }
+
+    [TestMethod]
+    public void FixedRegion_PutsTheChosenSizeUnderThePointerRatherThanBesideIt()
+    {
+        // The size came from a menu, so the press only says where. Anchored at a corner
+        // instead, the user would be aiming a box whose middle is nowhere near the pointer.
+        var region = MarqueeShaping.FixedRegion(
+            new CapturePoint(960, 540), 1920, 1080, new CaptureRegion(0, 0, 3840, 2160));
+
+        Assert.AreEqual(1920, region.Width, 1e-9);
+        Assert.AreEqual(1080, region.Height, 1e-9);
+        Assert.AreEqual(0, region.X, 1e-9);
+        Assert.AreEqual(0, region.Y, 1e-9);
+    }
+
+    [TestMethod]
+    public void FixedRegion_KeepsTheBoxOnTheDisplayWhenThePointerNearsAnEdge()
+    {
+        // Half of a preset hanging off the screen is half a capture: there are no pixels
+        // out there to take. It slides in rather than being cropped, so the size the box
+        // reports is still the size that is delivered.
+        var screen = new CaptureRegion(0, 0, 1920, 1080);
+
+        var region = MarqueeShaping.FixedRegion(new CapturePoint(1918, 2), 800, 600, screen);
+
+        Assert.AreEqual(800, region.Width, 1e-9);
+        Assert.AreEqual(600, region.Height, 1e-9);
+        Assert.AreEqual(screen.Right - 800, region.X, 1e-9);
+        Assert.AreEqual(0, region.Y, 1e-9);
+    }
+
+    [TestMethod]
+    public void FixedRegion_TakesTheDisplaysOriginRatherThanAssumingZero()
+    {
+        // Regions are in the whole desktop's coordinates, so a second display starts
+        // somewhere other than the origin. Clamping against zero would drag every box on
+        // it back onto the primary.
+        var second = new CaptureRegion(1920, 0, 1920, 1080);
+
+        var region = MarqueeShaping.FixedRegion(new CapturePoint(1921, 540), 800, 600, second);
+
+        Assert.AreEqual(second.X, region.X, 1e-9);
+        Assert.AreEqual(240, region.Y, 1e-9);
+    }
+
+    [TestMethod]
+    public void FixedRegion_ShrinksAPresetTallerThanTheDisplayInsteadOfCroppingIt()
+    {
+        // 1080 × 1920 on a 1080p screen. Cropped, the box would have edges off the screen
+        // that cannot be seen or dragged; scaled, it keeps its shape and the size box says
+        // honestly what it came to.
+        var screen = new CaptureRegion(0, 0, 1920, 1080);
+
+        var region = MarqueeShaping.FixedRegion(new CapturePoint(960, 540), 1080, 1920, screen);
+
+        Assert.AreEqual(1080, region.Height, 1e-9);
+        Assert.AreEqual(607.5, region.Width, 1e-9);
+        Assert.IsTrue(region.Right <= screen.Right && region.Bottom <= screen.Bottom);
+    }
 }

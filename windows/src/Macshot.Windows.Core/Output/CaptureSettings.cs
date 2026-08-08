@@ -313,6 +313,28 @@ public sealed record CaptureSettings
     public bool ResolutionUnitIsPoints { get; init; }
 
     /// <summary>
+    /// What the next capture's first drag is shaped to before there is a region.
+    /// macshot's <c>preSelectionResolutionPresetKind</c>.
+    /// </summary>
+    /// <remarks>
+    /// Stored apart from <see cref="KeepAspectRatio"/> rather than derived from it, because
+    /// the two answer different questions: keep-ratio says whether a shape picked over a
+    /// region outlives it, and this says what the drag that has not happened yet will be.
+    /// A file that has never been asked reads
+    /// <see cref="PreSelectionPresetKind.Inherited"/> and takes the keep-ratio answer, so
+    /// nothing anyone has already set is thrown away.
+    /// </remarks>
+    public PreSelectionPresetKind PreSelectionKind { get; init; }
+
+    /// <summary>The held shape, as width ÷ height. macshot's <c>…PresetAspect</c>.</summary>
+    public double PreSelectionAspect { get; init; }
+
+    /// <summary>The exact size, in pixels. macshot's <c>…PresetWidth</c> / <c>…Height</c>.</summary>
+    public int PreSelectionWidth { get; init; }
+
+    public int PreSelectionHeight { get; init; }
+
+    /// <summary>
     /// Whether taking a capture the usual way also opens it in the editor.
     /// macshot's <c>quickCaptureOpenEditor</c>.
     /// </summary>
@@ -1282,6 +1304,48 @@ public sealed record CaptureSettings
     }
 
     /// <summary>
+    /// What the next drag will be shaped to: the preset that was picked, or the shape
+    /// keep-ratio is holding when none ever was.
+    /// </summary>
+    /// <remarks>
+    /// The whole reason the kind is stored alongside the values: a ratio of zero and an
+    /// unset ratio are the same number, so without it there would be no way to tell
+    /// "freeform, deliberately" from "never asked". macshot resolves it here
+    /// (<c>OverlayView.swift:2667-2681</c>).
+    /// </remarks>
+    public PreSelectionPreset ActivePreSelection => PreSelectionKind switch
+    {
+        PreSelectionPresetKind.Freeform => PreSelectionPreset.Freeform,
+        PreSelectionPresetKind.Ratio => PreSelectionPreset.OfRatio(PreSelectionAspect),
+        PreSelectionPresetKind.Resolution =>
+            PreSelectionPreset.OfSize(PreSelectionWidth, PreSelectionHeight),
+
+        // Inherited, and anything a hand-edited file invented: the keep-ratio answer.
+        _ => KeepAspectRatio ? PreSelectionPreset.OfRatio(KeepAspectRatioValue) : PreSelectionPreset.Freeform,
+    };
+
+    /// <summary>
+    /// Records what the next drag should be shaped to.
+    /// </summary>
+    /// <remarks>
+    /// Freeform is written down rather than left as the absence of a choice, because the
+    /// absence means "inherit" — a user who picks Freeform after picking 16 : 9 is asking
+    /// for the next drag to be free, not for it to fall back to whatever the size box last
+    /// held.
+    /// </remarks>
+    public CaptureSettings WithPreSelection(PreSelectionPreset preset) => this with
+    {
+        PreSelectionKind = preset.IsExact
+            ? PreSelectionPresetKind.Resolution
+            : preset.Ratio is not null
+                ? PreSelectionPresetKind.Ratio
+                : PreSelectionPresetKind.Freeform,
+        PreSelectionAspect = preset.Ratio ?? 0,
+        PreSelectionWidth = preset.IsExact ? preset.Width : 0,
+        PreSelectionHeight = preset.IsExact ? preset.Height : 0,
+    };
+
+    /// <summary>
     /// Records the region a capture was taken from, or forgets it when it is too
     /// small to have been chosen deliberately.
     /// </summary>
@@ -1577,6 +1641,16 @@ public sealed record CaptureSettings
             KeepAspectRatioValue = double.IsFinite(KeepAspectRatioValue) && KeepAspectRatioValue > 0
                 ? KeepAspectRatioValue
                 : 0,
+
+            // A kind the enum does not know cannot be resolved into a shape, and falling
+            // back to Inherited is the one answer that loses nothing: it hands the question
+            // to keep-ratio, which is where it came from before this was ever stored. The
+            // three values are left alone — each is refused on its own by
+            // ActivePreSelection, and clearing them here would throw away a size the user
+            // could otherwise still see ticked in the menu.
+            PreSelectionKind = Enum.IsDefined(PreSelectionKind)
+                ? PreSelectionKind
+                : PreSelectionPresetKind.Inherited,
 
             // Only shortcuts this build has, on keys it can actually match. A binding for
             // a tool that no longer exists is unreachable, and one holding more than a

@@ -143,6 +143,13 @@ public sealed partial class CaptureOverlayWindow : Window
     private readonly ResolutionBox _sizeBox = new();
 
     /// <summary>
+    /// The one control the overlay offers before anything has been chosen: it picks the
+    /// shape, or the size, the next drag will come out as. Held here rather than declared
+    /// in the markup so it can stay internal to the assembly like the toolbar's own parts.
+    /// </summary>
+    private readonly PreSelectionPresetButton _preSelectionButton = new();
+
+    /// <summary>
     /// The ring of colours a right-click opens. Added to the overlay in code, above
     /// everything else, because it is drawn over whatever the pointer happens to be on.
     /// </summary>
@@ -334,6 +341,13 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private double? _lockedAspect;
 
+    /// <summary>
+    /// What the next drag is to produce: a shape to hold it to, an exact size to place
+    /// instead of dragging, or freeform. Read on every pointer move of a marquee drag, so
+    /// it is kept here rather than resolved out of the settings each time.
+    /// </summary>
+    private PreSelectionPreset _preSelection;
+
     /// <summary>How far into the capture the overlay is, and where.</summary>
     private Viewport _viewport = Viewport.Identity;
 
@@ -449,6 +463,7 @@ public sealed partial class CaptureOverlayWindow : Window
         WireZoom();
         WireToolbar();
         WireSizeBox();
+        WirePreSelectionButton();
         WireColorWheel();
         WireCanvas();
         WireFrameAnchor();
@@ -1011,6 +1026,16 @@ public sealed partial class CaptureOverlayWindow : Window
         _marqueeAt = null;
         ShowIdleInstruction();
 
+        // With an exact size chosen there was never a gesture to measure: the press placed
+        // a box the menu had already sized, and asking how far the pointer travelled would
+        // turn every one of them into a click for the whole screen. macshot measures the
+        // rectangle rather than the gesture for this reason (OverlayView.swift:6584).
+        if (_preSelection.IsExact && !taken.IsEmpty)
+        {
+            EnterAnnotationPhase(taken);
+            return;
+        }
+
         // The gesture measured where the pointer went, not where the snap put it: a drag
         // of two pixels that landed on a line is still a click asking for the window
         // under it.
@@ -1136,6 +1161,11 @@ public sealed partial class CaptureOverlayWindow : Window
         // topmost, so a dialog it does not own would open behind it.
         AnnotationToolbar.OwnerHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
         SnapHighlight.Visibility = Visibility.Collapsed;
+
+        // The next drag has become this one. Taken away here rather than left to the pill,
+        // because the automatic intents below never clear the pill — a quick capture or a
+        // scroll would carry the button into the finished picture.
+        PlacePreSelectionButton(shown: false);
 
         // Brings the marquee onto the region actually taken, which is the whole
         // point when the region came from a snapped window rather than from a drag
@@ -1992,13 +2022,13 @@ public sealed partial class CaptureOverlayWindow : Window
         _sizeBox.ShowPoints = _settings.Current.ResolutionUnitIsPoints;
         _sizeBox.KeepRatio = _settings.Current.KeepAspectRatio;
 
-        // A shape held over from a previous capture is in hand before the first drag, so a
-        // region dragged out under keep-ratio is already the shape that was chosen.
-        if (_sizeBox.KeepRatio && _settings.Current.KeepAspectRatioValue > 0)
-        {
-            _lockedAspect = _settings.Current.KeepAspectRatioValue;
-        }
-
+        // Whatever the last capture left behind is in hand before the first drag, so a
+        // region dragged out is already the shape that was chosen — and a ratio is the only
+        // one of the three that becomes a lock, because an exact size is placed rather than
+        // dragged. macshot takes the same value at the same moment
+        // (OverlayView.swift:9946, :6662-6669).
+        _preSelection = _settings.Current.ActivePreSelection;
+        _lockedAspect = _preSelection.Ratio;
         _sizeBox.LockedAspect = _lockedAspect;
 
         _sizeBox.UnitPicked += (_, points) =>
@@ -2014,23 +2044,94 @@ public sealed partial class CaptureOverlayWindow : Window
             }
         };
 
-        _sizeBox.KeepRatioToggled += (_, on) =>
-        {
-            _sizeBox.KeepRatio = on;
-            _settings.Save(_settings.Current with
-            {
-                KeepAspectRatio = on,
-
-                // Stored as it is switched on, so the shape in hand is the one that
-                // carries over — switching it on and then having to re-pick the shape
-                // would make the switch look like it did nothing.
-                KeepAspectRatioValue = on ? _lockedAspect ?? 0 : _settings.Current.KeepAspectRatioValue,
-            });
-        };
+        _sizeBox.KeepRatioToggled += (_, on) => KeepRatioChanged(on);
 
         // The overlay's keyboard is only on loan to the fields. Without this, Escape and
         // every tool shortcut would keep going to a text box the user has finished with.
         _sizeBox.EditingEnded += (_, _) => OverlayRoot.Focus(FocusState.Programmatic);
+    }
+
+    /// <summary>
+    /// Binds the button that shapes the next drag, which stands under the instruction while
+    /// nothing has been chosen.
+    /// </summary>
+    private void WirePreSelectionButton()
+    {
+        PreSelectionLayer.Children.Add(_preSelectionButton);
+        _preSelectionButton.Visibility = Visibility.Collapsed;
+        _preSelectionButton.KeepRatio = _sizeBox.KeepRatio;
+        _preSelectionButton.Update(_preSelection);
+        _preSelectionButton.PresetPicked += (_, preset) => PickPreSelectionPreset(preset);
+        _preSelectionButton.KeepRatioToggled += (_, on) => KeepRatioChanged(on);
+    }
+
+    /// <summary>
+    /// Whether a shape picked anywhere outlives the capture it was picked on.
+    /// </summary>
+    /// <remarks>
+    /// Shared by the two panels that carry the switch — the size box's and the
+    /// pre-selection button's. They are the same panel showing the same stored answer, and
+    /// one of them left holding the state before the flick would show it wrong the next
+    /// time it opened.
+    /// </remarks>
+    private void KeepRatioChanged(bool on)
+    {
+        _sizeBox.KeepRatio = on;
+        _preSelectionButton.KeepRatio = on;
+
+        _settings.Save(_settings.Current with
+        {
+            KeepAspectRatio = on,
+
+            // Stored as it is switched on, so the shape in hand is the one that
+            // carries over — switching it on and then having to re-pick the shape
+            // would make the switch look like it did nothing.
+            KeepAspectRatioValue = on ? _lockedAspect ?? 0 : _settings.Current.KeepAspectRatioValue,
+        });
+    }
+
+    /// <summary>
+    /// Takes a shape or a size for the drag that has not happened yet.
+    /// </summary>
+    /// <remarks>
+    /// A ratio becomes the lock the marquee is held to as it is dragged out; an exact size
+    /// clears the lock, because from here the press places a box of that size rather than
+    /// dragging one. macshot's <c>setPreSelectionPreset</c> does both
+    /// (<c>OverlayView.swift:2777-2791</c>).
+    /// </remarks>
+    private void PickPreSelectionPreset(ResolutionPreset preset)
+    {
+        StorePreSelection(preset.IsExact
+            ? PreSelectionPreset.OfSize(preset.Width, preset.Height)
+            : PreSelectionPreset.OfRatio(preset.Aspect ?? 0));
+
+        _lockedAspect = _preSelection.Ratio;
+        _sizeBox.LockedAspect = _lockedAspect;
+
+        // The pill is unchanged, but the button on it now says something else — and it is
+        // placed and repainted from here.
+        PlaceHint();
+    }
+
+    /// <summary>
+    /// Remembers what the next drag is to produce, on this overlay and in the settings.
+    /// </summary>
+    private void StorePreSelection(PreSelectionPreset preset)
+    {
+        _preSelection = preset;
+        _preSelectionButton.Update(preset);
+
+        try
+        {
+            _settings.Save(_settings.Current.WithPreSelection(preset));
+        }
+        catch (Exception exception)
+        {
+            // This capture still honours the choice — only the next one loses it. Said out
+            // loud rather than swallowed, because the button goes on showing the shape and
+            // would otherwise be the only thing that knew.
+            DiagnosticLog.Write($"Could not remember the pre-selection preset: {exception.Message}");
+        }
     }
 
     /// <summary>
@@ -2054,6 +2155,17 @@ public sealed partial class CaptureOverlayWindow : Window
             MonitorBounds,
             _lockedAspect,
             request.Edited));
+
+        // A size typed over the one a preset placed is the user leaving that preset. Left
+        // stored, the next capture would open with a box they have just resized away from,
+        // and the menu would go on ticking a size the region is not. macshot clears it from
+        // this same commit (OverlayView.swift:2482-2483, :2726-2732).
+        if (_preSelection.IsExact && _selection is { } resized
+            && (Math.Abs(resized.Width - _preSelection.Width) >= 0.5
+                || Math.Abs(resized.Height - _preSelection.Height) >= 0.5))
+        {
+            StorePreSelection(PreSelectionPreset.Freeform);
+        }
     }
 
     /// <summary>
@@ -2072,6 +2184,16 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         RegionIsNoLongerAWindow();
+
+        // Whether the choice reaches the next capture is the keep-ratio switch's business,
+        // and that is the whole difference between picking 16 : 9 for this screenshot and
+        // working in 16 : 9. With it off the next drag starts freeform whatever was picked
+        // here, which is macshot's rule at OverlayView.swift:2577-2589 and :2628-2635.
+        StorePreSelection(!_sizeBox.KeepRatio
+            ? PreSelectionPreset.Freeform
+            : preset.IsExact
+                ? PreSelectionPreset.OfSize(preset.Width, preset.Height)
+                : PreSelectionPreset.OfRatio(preset.Aspect ?? 0));
 
         if (preset.IsExact)
         {
@@ -3803,12 +3925,20 @@ public sealed partial class CaptureOverlayWindow : Window
     private CaptureRegion DrawMarquee(Point start, Point end)
     {
         var anchor = _layout.PointerToFrame(_monitor, start.X, start.Y);
+        var pointer = _layout.PointerToFrame(_monitor, end.X, end.Y);
+
+        // An exact size was chosen, so this is not a drag: the box is already the size it
+        // will be and the pointer only says where. Ahead of the ratio and the snap because
+        // neither has anything left to decide, which is where macshot returns from too
+        // (OverlayView.swift:6687-6692).
+        if (_preSelection.IsExact)
+        {
+            return ShowMarquee(MarqueeShaping.FixedRegion(
+                pointer, _preSelection.Width, _preSelection.Height, MonitorBounds));
+        }
+
         var square = IsDown(VirtualKey.Shift);
-        var moving = MarqueeShaping.Corner(
-            anchor,
-            _layout.PointerToFrame(_monitor, end.X, end.Y),
-            _lockedAspect,
-            square);
+        var moving = MarqueeShaping.Corner(anchor, pointer, _lockedAspect, square);
 
         // A drag that has been given a shape is not then nudged off it: the snap would
         // take back exactly the ratio or the square that was asked for, by a pixel or two,
@@ -3822,16 +3952,24 @@ public sealed partial class CaptureOverlayWindow : Window
             BoundaryRadius);
 
         ShowBoundaryGuides(snap);
+        return ShowMarquee(snap.Region);
+    }
 
-        var region = ToLayout(snap.Region);
-        UpdateDim(region);
-        Canvas.SetLeft(SelectionRectangle, region.X);
-        Canvas.SetTop(SelectionRectangle, region.Y);
-        SelectionRectangle.Width = region.Width;
-        SelectionRectangle.Height = region.Height;
+    /// <summary>
+    /// Draws the rubber band over a frame-space region and hands the same region back, so
+    /// the release takes exactly what was on screen.
+    /// </summary>
+    private CaptureRegion ShowMarquee(CaptureRegion region)
+    {
+        var drawn = ToLayout(region);
+        UpdateDim(drawn);
+        Canvas.SetLeft(SelectionRectangle, drawn.X);
+        Canvas.SetTop(SelectionRectangle, drawn.Y);
+        SelectionRectangle.Width = drawn.Width;
+        SelectionRectangle.Height = drawn.Height;
         SelectionRectangle.Visibility = Visibility.Visible;
         PlaceHint();
-        return snap.Region;
+        return region;
     }
 
     /// <summary>
@@ -3856,6 +3994,12 @@ public sealed partial class CaptureOverlayWindow : Window
         if (text.Length == 0)
         {
             HintPill.Visibility = Visibility.Collapsed;
+
+            // The button lives in the pill and goes with it. macshot hides the two together
+            // for the same reason (OverlayView.swift:1648-1663): the pill is what says what
+            // the overlay is for, and a lone control in the middle of a dimmed screen —
+            // which is what "hide capture instructions" would leave — explains nothing.
+            PlacePreSelectionButton(shown: false);
             return;
         }
 
@@ -3990,30 +4134,94 @@ public sealed partial class CaptureOverlayWindow : Window
         var screen = LayoutBounds;
         var anchor = HintAnchor();
 
-        HintPill.Padding = anchor is null ? new Thickness(14) : new Thickness(10, 5, 10, 5);
+        // The button stands in the pill, so the pill is grown to carry it before it is
+        // measured — macshot adds the same block to its own background rectangle
+        // (OverlayView.swift:2236-2239). It is only ever offered while the pill is in the
+        // middle of the screen, because both conditions for it are conditions for that.
+        var carries = ShowsPreSelectionButton;
+        var padding = PreSelectionButtonPlacement.Padding;
+
+        HintPill.Padding = anchor is null
+            ? new Thickness(
+                padding,
+                padding,
+                padding,
+                carries ? padding + PreSelectionButtonPlacement.Reserved(PreSelectionButtonPlacement.Height) : padding)
+            : new Thickness(10, 5, 10, 5);
+
+        // The instruction is wider than the button in every language macshot ships, so this
+        // only binds on a pill carrying something short — where without it the button would
+        // be wider than the slab it is drawn on.
+        HintPill.MinWidth = carries
+            ? PreSelectionButtonPlacement.LeastWidth(PreSelectionButtonPlacement.Width)
+            : 0;
+
         HintPill.CornerRadius = new CornerRadius(anchor is null ? 8 : 6);
         HintPill.Measure(new Size(screen.Width, screen.Height));
         var size = HintPill.DesiredSize;
 
-        if (anchor is not { } region)
+        if (anchor is { } region)
+        {
+            // Everything the overlay has already placed, so the pill is the one that gives
+            // way. It is the only piece of chrome here that can move without taking a
+            // meaning with it: the size box says what the region measures and the strips
+            // say what the tools are, and neither reads the same somewhere else.
+            var placed = new List<CaptureRegion>(4) { _sizeBoxBounds };
+            placed.AddRange(AnnotationToolbar.Occupies);
+
+            var pill = HintPlacement.For(
+                region, screen, new CaptureRegion(0, 0, size.Width, size.Height), placed);
+
+            Canvas.SetLeft(HintPill, pill.X);
+            Canvas.SetTop(HintPill, pill.Y);
+        }
+        else
         {
             Canvas.SetLeft(HintPill, (screen.Width - size.Width) / 2);
             Canvas.SetTop(HintPill, (screen.Height - size.Height) / 2);
+        }
+
+        PlacePreSelectionButton(carries);
+    }
+
+    /// <summary>
+    /// Whether the button that shapes the next drag belongs on screen.
+    /// </summary>
+    /// <remarks>
+    /// While nothing has been chosen and nothing is being dragged out, which is macshot's
+    /// idle state (<c>OverlayView.swift:2734-2742</c>). Not while text is being read out of
+    /// the capture: a region picked for its words has no shape worth choosing, and macshot
+    /// hides it under <c>autoOCRMode</c> for that reason.
+    /// </remarks>
+    private bool ShowsPreSelectionButton =>
+        !IsAnnotating && _selectionStart is null && Intent is not CaptureIntent.Recognize;
+
+    /// <summary>
+    /// Puts the button in the strip the pill has left for it along its bottom edge, or
+    /// takes it away.
+    /// </summary>
+    private void PlacePreSelectionButton(bool shown)
+    {
+        if (!shown)
+        {
+            _preSelectionButton.Visibility = Visibility.Collapsed;
             return;
         }
 
-        // Everything the overlay has already placed, so the pill is the one that gives way.
-        // It is the only piece of chrome here that can move without taking a meaning with
-        // it: the size box says what the region measures and the strips say what the tools
-        // are, and neither reads the same somewhere else.
-        var placed = new List<CaptureRegion>(4) { _sizeBoxBounds };
-        placed.AddRange(AnnotationToolbar.Occupies);
+        var pill = new CaptureRegion(
+            Canvas.GetLeft(HintPill),
+            Canvas.GetTop(HintPill),
+            HintPill.DesiredSize.Width,
+            HintPill.DesiredSize.Height);
 
-        var pill = HintPlacement.For(
-            region, screen, new CaptureRegion(0, 0, size.Width, size.Height), placed);
+        var where = PreSelectionButtonPlacement.For(
+            pill,
+            new CaptureRegion(
+                0, 0, PreSelectionButtonPlacement.Width, PreSelectionButtonPlacement.Height));
 
-        Canvas.SetLeft(HintPill, pill.X);
-        Canvas.SetTop(HintPill, pill.Y);
+        Canvas.SetLeft(_preSelectionButton, where.X);
+        Canvas.SetTop(_preSelectionButton, where.Y);
+        _preSelectionButton.Visibility = Visibility.Visible;
     }
 
     /// <summary>

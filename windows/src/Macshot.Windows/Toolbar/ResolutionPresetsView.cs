@@ -34,7 +34,18 @@ internal sealed partial class ResolutionPresetsView : UserControl
     private const double RowHeight = 26;
     private const double HeaderHeight = 22;
     private const double VerticalPad = 8;
-    private const double FooterHeight = 78;
+
+    /// <summary>The footer's padding above and below its rows.</summary>
+    private const double FooterPad = 8;
+
+    /// <summary>
+    /// One row of the footer: macshot's 78-tall footer less its padding, halved. Written
+    /// this way round because the panel is offered with one row as well as two — the
+    /// pre-selection button has no size to report, so it has no unit to choose
+    /// (<c>OverlayView.swift:2809</c>) — and a hard 78 would stretch a single row to fill it.
+    /// </summary>
+    private const double FooterRow = (78 - (FooterPad * 2)) / 2;
+
     private const double RowIndent = 14;
 
     /// <summary>The footer's two labels — <c>ResolutionPresetsView.swift:96, 115</c>.</summary>
@@ -62,29 +73,34 @@ internal sealed partial class ResolutionPresetsView : UserControl
 
     private readonly StyleSegments _units = new();
 
+    /// <summary>Held so the unit row can be taken out of the footer and it can shrink.</summary>
+    private readonly Grid _footer;
+    private readonly RowDefinition _unitsRow = new() { Height = new GridLength(FooterRow) };
+    private readonly TextBlock _unitsLabel;
+
     public ResolutionPresetsView()
     {
         _units.SetSegments([new StyleSegment(null, "px", 40), new StyleSegment(null, "pt", 40)]);
         _units.SelectionChanged += (_, index) => UnitPicked?.Invoke(this, index == 1);
         _keepRatio.Toggled += (_, _) => KeepRatioToggled?.Invoke(this, _keepRatio.IsOn);
+        _unitsLabel = Label(L("Units"));
 
         var columns = new Grid { ColumnDefinitions = { Fixed(), Fixed(1), Fixed() } };
         Add(columns, _ratios, 0, 0);
         Add(columns, Rule(vertical: true), 0, 1);
         Add(columns, _sizes, 0, 2);
 
-        var footer = new Grid
+        _footer = new Grid
         {
-            Height = FooterHeight,
-            RowDefinitions = { new RowDefinition(), new RowDefinition() },
+            RowDefinitions = { new RowDefinition { Height = new GridLength(FooterRow) }, _unitsRow },
             ColumnDefinitions = { new ColumnDefinition(), Fixed(80) },
-            Padding = new Thickness(RowIndent, 8, 12, 8),
+            Padding = new Thickness(RowIndent, FooterPad, 12, FooterPad),
         };
 
-        Add(footer, Label(L("Keep ratio for next captures")), 0, 0);
-        Add(footer, _keepRatio, 0, 1);
-        Add(footer, Label(L("Units")), 1, 0);
-        Add(footer, _units, 1, 1);
+        Add(_footer, Label(L("Keep ratio for next captures")), 0, 0);
+        Add(_footer, _keepRatio, 0, 1);
+        Add(_footer, _unitsLabel, 1, 0);
+        Add(_footer, _units, 1, 1);
 
         var rule = Rule(vertical: false);
         rule.Margin = new Thickness(12, 0, 12, 0);
@@ -92,10 +108,21 @@ internal sealed partial class ResolutionPresetsView : UserControl
         var body = new StackPanel { Padding = new Thickness(0, VerticalPad, 0, VerticalPad) };
         body.Children.Add(columns);
         body.Children.Add(rule);
-        body.Children.Add(footer);
+        body.Children.Add(_footer);
 
         Content = new Border { RequestedTheme = ElementTheme.Dark, Child = body };
     }
+
+    /// <summary>
+    /// Whether the panel offers the unit choice. Off for the pre-selection button, which is
+    /// opened when there is no size on screen for a unit to be about.
+    /// </summary>
+    /// <remarks>
+    /// Read by <see cref="Show"/> rather than applied when it is set, because the panel is
+    /// filled from scratch every time the flyout opens and nothing else about it survives
+    /// between two openings either.
+    /// </remarks>
+    public bool ShowsUnits { get; set; } = true;
 
     /// <summary>Raised when a shape or a size is chosen.</summary>
     public event EventHandler<ResolutionPreset>? PresetPicked;
@@ -134,6 +161,15 @@ internal sealed partial class ResolutionPresetsView : UserControl
 
         _keepRatio.IsOn = keepRatio;
         _units.SelectedIndex = points ? 1 : 0;
+
+        // The row is collapsed to nothing rather than merely hidden: a Grid row keeps its
+        // height whatever its children do, so leaving it there would put a band of empty
+        // footer under the switch where macshot has none.
+        var visibility = ShowsUnits ? Visibility.Visible : Visibility.Collapsed;
+        _unitsLabel.Visibility = visibility;
+        _units.Visibility = visibility;
+        _unitsRow.Height = new GridLength(ShowsUnits ? FooterRow : 0);
+        _footer.Height = (FooterPad * 2) + (ShowsUnits ? FooterRow * 2 : FooterRow);
     }
 
     /// <summary>Whether a preset's shape is the one being held, to within a rounding.</summary>
