@@ -50,15 +50,31 @@
                 Background="Transparent"
                 PointerPressed="Pause_PointerPressed">
                 <!-- Two bars while running, a triangle while held. Both are built once
-                     and one is shown, so a press changes nothing but a visibility. -->
+                     and one is shown, so a press changes nothing but a visibility.
+
+                     Both carry their own size and their own centring rather than leaning
+                     on the default Stretch to place them. A Shape's Stretch is None
+                     unless it is a Rectangle or an Ellipse, so the triangle's points were
+                     laid out from the corner of the 24 button while the bars, which are
+                     Rectangles with a panel of their own around them, were centred in it
+                     — which is why the triangle sat above the square beside it. -->
                 <Grid>
-                    <StackPanel x:Name="PauseBars" Orientation="Horizontal" Spacing="3">
+                    <StackPanel
+                        x:Name="PauseBars"
+                        Orientation="Horizontal"
+                        Spacing="3"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center">
                         <Rectangle Width="3.5" Height="12" Fill="#FFFFFF" />
                         <Rectangle Width="3.5" Height="12" Fill="#FFFFFF" />
                     </StackPanel>
                     <Polygon
                         x:Name="ResumeTriangle"
                         Points="0,0 11,6 0,12"
+                        Width="11"
+                        Height="12"
+                        HorizontalAlignment="Center"
+                        VerticalAlignment="Center"
                         Fill="#FFFFFF"
                         Visibility="Collapsed" />
                 </Grid>

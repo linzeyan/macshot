@@ -211,10 +211,17 @@
                     <ColumnDefinition Width="Auto" />
                 </Grid.ColumnDefinitions>
 
+                <!-- The bar is hidden, not the scrolling: at the window's 900 minimum the
+                     left group is wider than its column, so an Auto scroll bar drew a
+                     thin rail along the bottom of the row from under the play button to
+                     wherever its thumb ended. Under a row of controls that reads as a
+                     rule someone meant to put there, and macshot's own row — which it is
+                     copying — has nothing under it at all. The wheel still reaches the
+                     readouts a narrow window pushes out of sight. -->
                 <ScrollViewer
                     Grid.Column="0"
                     HorizontalScrollMode="Auto"
-                    HorizontalScrollBarVisibility="Auto"
+                    HorizontalScrollBarVisibility="Hidden"
                     VerticalScrollMode="Disabled"
                     VerticalScrollBarVisibility="Disabled">
                 <StackPanel Orientation="Horizontal" Spacing="8" HorizontalAlignment="Left" VerticalAlignment="Center">
