@@ -188,6 +188,74 @@ public sealed class RasterizerToolsTests
     }
 
     [TestMethod]
+    public void Waypoints_DrawTheLineThroughTheAnchorsAndAwayFromTheChord()
+    {
+        // Both halves. Ink at the anchor is what says the mark went where it was sent, and
+        // clean canvas on the chord is what says the straight path is no longer drawn — a
+        // rasterizer that drew both would leave a stray line under every bent mark.
+        var bent = Render(
+            Blank(),
+            Shape(AnnotationTool.Line, 10, 32, 54, 32) with
+            {
+                Waypoints = new[] { new CapturePoint(32, 12) },
+            });
+
+        Assert.IsTrue(IsInked(bent, 32, 12), "the curve must reach the anchor");
+        Assert.IsFalse(IsInked(bent, 32, 32), "and leave the chord it used to run along");
+    }
+
+    [TestMethod]
+    public void Waypoints_TakeTheArrowheadWithThemSoItPointsAlongTheCurve()
+    {
+        // The head's angle comes from where the shaft arrives, and the shaft now arrives
+        // along the curve. Left on the chord it would point across its own line.
+        var bent = Render(
+            Blank(),
+            Shape(AnnotationTool.Arrow, 10, 48, 50, 48) with
+            {
+                Waypoints = new[] { new CapturePoint(30, 12) },
+            });
+
+        // The mark climbs to the anchor and dives back, so the head is spread across the
+        // descent rather than sitting flat either side of the tip.
+        Assert.IsTrue(IsInked(bent, 47, 40), "the head must lie along the curve's last leg");
+    }
+
+    [TestMethod]
+    public void BentRuler_MarksItsEndsSquareToTheCurveRatherThanToTheChord()
+    {
+        // A bar square to the chord no longer crosses the line it belongs to, so it stops
+        // saying which pixel the reading starts from — which is the only thing the bar is
+        // for.
+        var bent = Render(
+            Blank(),
+            Shape(AnnotationTool.Measure, 32, 50, 32, 12) with
+            {
+                Waypoints = new[] { new CapturePoint(10, 31) },
+            });
+
+        // The rule leaves its lower end heading up and to the left, so its bar climbs to
+        // the right — where the horizontal bar a vertical chord would give runs flat.
+        Assert.IsTrue(IsInked(bent, 35, 46), "the bar must be square to the curve where it leaves");
+        Assert.IsFalse(IsInked(bent, 38, 50), "and not square to the chord between the ends");
+    }
+
+    [TestMethod]
+    public void Waypoints_WinOverABendBecauseOnlyOneOfThemCanBeDrawn()
+    {
+        // Adding an anchor clears the bend, so the two never both apply in the app. A file
+        // hand-edited to carry both must still draw one curve rather than a blend of two.
+        var anchored = Shape(AnnotationTool.Line, 10, 32, 54, 32) with
+        {
+            Waypoints = new[] { new CapturePoint(32, 12) },
+        };
+
+        CollectionAssert.AreEqual(
+            Render(Blank(), anchored),
+            Render(Blank(), anchored with { Bend = 0.4, BendAlong = 0.2 }));
+    }
+
+    [TestMethod]
     public void Rotation_TurnsAShapeOutsideItsUprightBounds()
     {
         var upright = Shape(AnnotationTool.Rectangle, 20, 28, 44, 36);

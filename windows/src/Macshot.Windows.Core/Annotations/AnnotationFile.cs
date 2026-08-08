@@ -143,6 +143,13 @@ public static class AnnotationFile
                 ? null
                 : [.. annotation.Points.SelectMany(point => new[] { point.X, point.Y })],
             Pressures = annotation.Pressures.Count == 0 ? null : [.. annotation.Pressures],
+
+            // Flattened for the reason the samples are, and separate from them because a
+            // pencil stroke and a bent arrow are not the same list. See
+            // <see cref="Annotation.Waypoints"/>.
+            Waypoints = annotation.Waypoints.Count == 0
+                ? null
+                : [.. annotation.Waypoints.SelectMany(anchor => new[] { anchor.X, anchor.Y })],
             Text = annotation.Text,
             NumberValue = annotation.NumberValue,
             GroupId = annotation.GroupId,
@@ -279,6 +286,7 @@ public static class AnnotationFile
             Pressures = stored.Pressures is { } weights && weights.Length == points.Count
                 ? weights
                 : [],
+            Waypoints = ToPoints(stored.Waypoints),
             Text = stored.Text,
             NumberValue = stored.NumberValue,
             GroupId = stored.GroupId,
@@ -495,6 +503,13 @@ public static class AnnotationFile
         /// sample, so there is nothing to pair up.
         /// </summary>
         public double[]? Pressures { get; init; }
+
+        /// <summary>
+        /// The intermediate anchors a line, arrow or ruler is bent through, flattened the
+        /// way <see cref="Points"/> is. Absent from every file written before a mark could
+        /// carry them, which reads back as a mark with two ends and nothing between.
+        /// </summary>
+        public double[]? Waypoints { get; init; }
 
         public string? Text { get; init; }
 

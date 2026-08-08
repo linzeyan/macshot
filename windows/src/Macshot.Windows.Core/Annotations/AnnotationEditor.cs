@@ -22,6 +22,19 @@ public enum EditorModifiers
     /// (<c>OverlayView.swift:8211-8215</c>).
     /// </remarks>
     DrawThrough = 2,
+
+    /// <summary>
+    /// Ctrl — macOS's Control: a press on a line, arrow or ruler bends it through another
+    /// anchor there instead of starting a gesture.
+    /// </summary>
+    /// <remarks>
+    /// macOS reaches this two ways, Control-click and right-click
+    /// (<c>OverlayView.swift:5491</c> and <c>:6851</c>). Only the first is ported: over a
+    /// capture the right button already opens the ring of colours where the pointer is, and
+    /// taking that away would send every colour change back across the screen to the
+    /// toolbar.
+    /// </remarks>
+    AddAnchor = 4,
 }
 
 /// <summary>
@@ -57,7 +70,10 @@ public sealed class AnnotationEditor
     private List<CapturePoint>? _freeformSamples;
     private List<double>? _freeformPressures;
     private Annotation? _dragTarget;
-    private AnnotationHandleKind? _handle;
+
+    // The whole handle rather than its kind, because an anchor grip is told apart from the
+    // ones beside it only by its index — the kind alone would drag whichever came first.
+    private AnnotationHandle? _handle;
     private bool _isPressed;
     private double _scale = 1;
 
@@ -314,6 +330,17 @@ public sealed class AnnotationEditor
         _isPressed = true;
         _origin = point;
 
+        // Ahead of everything else, and whatever tool is in hand. Adding an anchor is a
+        // command rather than the start of a gesture: the mark is edited and committed
+        // here, so the press is closed out and the release that follows has nothing left
+        // to do. Answered as a grab, which is what keeps a label or a badge from also
+        // being placed where the press landed.
+        if (modifiers.HasFlag(EditorModifiers.AddAnchor) && AddAnchor(point))
+        {
+            _isPressed = false;
+            return true;
+        }
+
         if (GrabsExistingMarks(_tool, modifiers) && BeginSelection(point))
         {
             return true;
@@ -387,7 +414,7 @@ public sealed class AnnotationEditor
         {
             if (_handle is { } handle)
             {
-                Draft = AnnotationHandles.Drag(_dragTarget, handle, point, modifiers);
+                Draft = AnnotationHandles.Drag(_dragTarget, handle.Kind, point, modifiers, handle.Index);
                 Snap = SnapResult.None;
                 return;
             }
@@ -634,6 +661,73 @@ public sealed class AnnotationEditor
     }
 
     /// <summary>
+    /// Bends the line, arrow or ruler under <paramref name="point"/> through one more
+    /// anchor, put where the press landed. False when nothing under the pointer takes one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The selected mark is tried first and anything under the pointer second, selecting
+    /// what it finds — macshot's own order (<c>OverlayView.swift:6853-6875</c>). The reason
+    /// for it is that the selected mark wears the chrome the user is aiming at, so a press
+    /// on the curve they can see has to reach the mark they can see it on rather than
+    /// whatever else happens to be within a few pixels.
+    /// </para>
+    /// <para>
+    /// One undo step, because it is one edit to one mark: <see cref="AnnotationDocument.Replace"/>
+    /// rather than <c>Amend</c>, so Ctrl+Z takes the anchor back off instead of leaving a
+    /// bend the user cannot undo.
+    /// </para>
+    /// </remarks>
+    public bool AddAnchor(CapturePoint point)
+    {
+        var target = Anchorable(Selected, point) ?? TopmostAnchorable(point);
+        if (target is null)
+        {
+            return false;
+        }
+
+        var bent = target.WithAnchorAt(point);
+        if (!_document.Replace(bent))
+        {
+            return false;
+        }
+
+        Selected = bent;
+        return true;
+    }
+
+    private static Annotation? Anchorable(Annotation? annotation, CapturePoint point) =>
+        annotation is not null
+            && Annotation.AcceptsWaypoints(annotation.Tool)
+            && annotation.HitTest(point)
+                ? annotation
+                : null;
+
+    /// <summary>
+    /// The topmost line, arrow or ruler under the pointer, ignoring whatever else is over
+    /// it.
+    /// </summary>
+    /// <remarks>
+    /// Not <see cref="AnnotationDocument.HitTest"/>, which answers with the topmost mark of
+    /// any kind: a curve is a few pixels wide and is very often crossed by the very shape
+    /// it points at, so refusing the anchor because a rectangle is in front would make the
+    /// gesture unreliable exactly where it is most wanted. macshot searches the same way.
+    /// </remarks>
+    private Annotation? TopmostAnchorable(CapturePoint point)
+    {
+        var annotations = _document.Annotations;
+        for (var index = annotations.Count - 1; index >= 0; index--)
+        {
+            if (Anchorable(annotations[index], point) is { } found)
+            {
+                return found;
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>
     /// Takes hold of the mark under the pointer, or of a handle on the one already
     /// selected. False when there was nothing there to take.
     /// </summary>
@@ -644,7 +738,7 @@ public sealed class AnnotationEditor
         // rectangle under a stamp would be impossible without moving the stamp first.
         if (Selected is { } selected && AnnotationHandles.At(selected, point, _scale) is { } handle)
         {
-            _handle = handle.Kind;
+            _handle = handle;
             _dragTarget = selected;
             Draft = selected;
             return true;

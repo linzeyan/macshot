@@ -3718,14 +3718,20 @@ public sealed partial class CaptureOverlayWindow : Window
     /// off for the drag (see <see cref="Boundaries"/>), and held while a mark is being
     /// drawn it draws through whatever is under the pointer instead of grabbing it. The
     /// two never overlap — one is the selection phase and the other the annotation phase.
+    /// Ctrl is macOS's Control: a press on a line, arrow or ruler bends it through another
+    /// anchor.
     /// </summary>
     /// <remarks>
     /// Alt is read from the keyboard rather than from the pointer event, the way
     /// <see cref="Boundaries"/> already reads it: Windows treats Alt as a menu key and
-    /// does not reliably carry it in a pointer event's modifiers.
+    /// does not reliably carry it in a pointer event's modifiers. Shift and Ctrl are not
+    /// menu keys and do arrive on the event, so they are read from it.
+    /// <c>EditorWindow.ToModifiers</c> is the same mapping over the same editor and has to
+    /// stay in step with this one.
     /// </remarks>
     private static EditorModifiers ToModifiers(PointerRoutedEventArgs e) =>
         (e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift) ? EditorModifiers.Constrain : EditorModifiers.None)
+        | (e.KeyModifiers.HasFlag(VirtualKeyModifiers.Control) ? EditorModifiers.AddAnchor : EditorModifiers.None)
         | (IsDown(VirtualKey.Menu) ? EditorModifiers.DrawThrough : EditorModifiers.None);
 
     private static bool IsDown(VirtualKey key) =>

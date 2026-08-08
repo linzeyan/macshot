@@ -14,6 +14,9 @@ public enum AnnotationHandleKind
     /// <summary>Moves the control point that bows a line or arrow.</summary>
     Bend,
 
+    /// <summary>Moves one of the intermediate anchors a mark is bent through.</summary>
+    Waypoint,
+
     TopLeft,
     TopRight,
     BottomLeft,
@@ -24,7 +27,16 @@ public enum AnnotationHandleKind
 }
 
 /// <summary>One grab point, in frame space, already turned with the shape it belongs to.</summary>
-public readonly record struct AnnotationHandle(AnnotationHandleKind Kind, CapturePoint Position);
+/// <param name="Index">
+/// Which of <see cref="Annotation.Waypoints"/> a <see cref="AnnotationHandleKind.Waypoint"/>
+/// grabs, and zero for every other kind. An index rather than one kind per anchor, because
+/// nothing bounds how many a mark can be given — macshot identifies them by array position
+/// for the same reason (<c>OverlayView.swift:4352-4353</c>).
+/// </param>
+public readonly record struct AnnotationHandle(
+    AnnotationHandleKind Kind,
+    CapturePoint Position,
+    int Index = 0);
 
 /// <summary>
 /// The grab points that let an annotation already drawn be reshaped: its ends moved, its
@@ -146,15 +158,20 @@ public static class AnnotationHandles
     /// throwing: a drag that outlived the shape it started on is a UI mistake, and losing
     /// the mark over it would be a worse one.
     /// </summary>
+    /// <param name="index">
+    /// Which anchor is being dragged, for <see cref="AnnotationHandleKind.Waypoint"/>.
+    /// Ignored by every other kind, which is why it comes last and defaults.
+    /// </param>
     public static Annotation Drag(
         Annotation annotation,
         AnnotationHandleKind kind,
         CapturePoint point,
-        EditorModifiers modifiers = EditorModifiers.None)
+        EditorModifiers modifiers = EditorModifiers.None,
+        int index = 0)
     {
         ArgumentNullException.ThrowIfNull(annotation);
 
-        if (!Offers(annotation, kind))
+        if (!Offers(annotation, kind, index))
         {
             return annotation;
         }
@@ -180,6 +197,7 @@ public static class AnnotationHandles
                 End = Constrain(annotation.Start, upright, modifiers),
             },
             AnnotationHandleKind.Bend => BentTo(annotation, upright),
+            AnnotationHandleKind.Waypoint => MovedAnchor(annotation, index, upright),
             AnnotationHandleKind.TopLeft
                 or AnnotationHandleKind.TopRight
                 or AnnotationHandleKind.BottomLeft
@@ -215,17 +233,19 @@ public static class AnnotationHandles
 
     /// <summary>
     /// Drops a reading that is about to become wrong. A ruler's sprite says how long the
-    /// span was, so moving an end has to take the old number with it — the UI renders a
-    /// new one once the drag is over.
+    /// span was, so moving an end — or an anchor the span now runs through — has to take
+    /// the old number with it; the UI renders a new one once the drag is over.
     /// </summary>
     private static Annotation Restretched(Annotation annotation) =>
         annotation.Tool == AnnotationTool.Measure ? annotation with { Sprite = null } : annotation;
 
-    private static bool Offers(Annotation annotation, AnnotationHandleKind kind)
+    private static bool Offers(Annotation annotation, AnnotationHandleKind kind, int index)
     {
         foreach (var handle in For(annotation))
         {
-            if (handle.Kind == kind)
+            // The index only distinguishes anchors from each other; every other kind
+            // appears once, and comparing an index it never carries would refuse them all.
+            if (handle.Kind == kind && (kind != AnnotationHandleKind.Waypoint || handle.Index == index))
             {
                 return true;
             }
@@ -247,7 +267,8 @@ public static class AnnotationHandles
             || left.End != right.End
             || left.Rotation != right.Rotation
             || left.Bend != right.Bend
-            || left.BendAlong != right.BendAlong;
+            || left.BendAlong != right.BendAlong
+            || !left.Waypoints.SequenceEqual(right.Waypoints);
     }
 
     /// <summary>
@@ -269,6 +290,22 @@ public static class AnnotationHandles
             new(AnnotationHandleKind.End, Turn(annotation.End, centre, annotation.Rotation)),
         };
 
+        // Anchors instead of the bend, never both. They are two ways of describing the
+        // same shape and only the anchors are drawn once a mark has them, so a bend grip
+        // offered here would follow the pointer and change nothing on screen.
+        if (annotation.HasWaypoints)
+        {
+            for (var index = 0; index < annotation.Waypoints.Count; index++)
+            {
+                handles.Add(new AnnotationHandle(
+                    AnnotationHandleKind.Waypoint,
+                    Turn(annotation.Waypoints[index], centre, annotation.Rotation),
+                    index));
+            }
+
+            return handles;
+        }
+
         // Only where the rasterizer can draw the curve. A ruler bowed off its own reading
         // would be measuring a distance it no longer spans.
         if (annotation.Tool is AnnotationTool.Line or AnnotationTool.Arrow)
@@ -279,6 +316,23 @@ public static class AnnotationHandles
         }
 
         return handles;
+    }
+
+    /// <summary>
+    /// The mark with one of its anchors moved to <paramref name="point"/>.
+    /// </summary>
+    /// <remarks>
+    /// Nothing is constrained. Shift on an end snaps the whole mark to 45 degrees off the
+    /// other end, which is a statement about the mark as a whole; an anchor in the middle
+    /// of a chain has no such reference, and snapping it to an angle off whichever
+    /// neighbour was chosen would put it somewhere the user cannot predict. macshot leaves
+    /// this drag unconstrained too (<c>OverlayView.swift:6001-6008</c>).
+    /// </remarks>
+    private static Annotation MovedAnchor(Annotation annotation, int index, CapturePoint point)
+    {
+        var anchors = annotation.Waypoints.ToArray();
+        anchors[index] = point;
+        return Restretched(annotation) with { Waypoints = anchors };
     }
 
     private static IReadOnlyList<AnnotationHandle> AreaHandles(Annotation annotation, double scale)

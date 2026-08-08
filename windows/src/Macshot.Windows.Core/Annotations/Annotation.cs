@@ -441,6 +441,38 @@ public sealed record Annotation(
     public double Rotation { get; init; }
 
     /// <summary>
+    /// Intermediate anchors a line, arrow or ruler is bent through, in the order they are
+    /// passed, between <see cref="Start"/> and <see cref="End"/>. Empty for a mark with two
+    /// ends and nothing between them.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Its own list rather than a second use of <see cref="Points"/>, though both are a run
+    /// of points on the same record. A non-empty <see cref="Points"/> means "this mark
+    /// <em>is</em> its samples", and three places read it that way —
+    /// <see cref="BoundingRect"/> takes the bounds from the samples alone,
+    /// <see cref="HitTest"/> grabs along them at a stroke's tolerance, and
+    /// <see cref="AnnotationHandles.For"/> offers no handles at all. A three-anchor arrow
+    /// stored there would inherit every one of those. They are not the same kind of list
+    /// either: a pencil's samples are the path that was drawn, and these are waypoints a
+    /// curve is fitted through.
+    /// </para>
+    /// <para>
+    /// The intermediate anchors only, where macOS stores the whole chain including both
+    /// ends (<c>anchorPoints</c>, <c>Annotation.swift:183</c>) and then keeps
+    /// <c>startPoint</c> and <c>endPoint</c> agreeing with its first and last by hand in
+    /// five separate places. On an immutable record that duplication is a bug waiting for
+    /// the sixth: here <see cref="AnchorPath"/> derives the chain, so the ends cannot drift
+    /// away from it.
+    /// </para>
+    /// <para>
+    /// Treated as immutable, the way <see cref="Points"/> is — derive an edited mark with a
+    /// <c>with</c> expression rather than writing into the list.
+    /// </para>
+    /// </remarks>
+    public IReadOnlyList<CapturePoint> Waypoints { get; init; } = [];
+
+    /// <summary>
     /// How far the bend's control point sits to the side of the straight path between the
     /// ends, as a fraction of that path's length. Zero is straight.
     /// </summary>
@@ -457,6 +489,11 @@ public sealed record Annotation(
     /// pinned at an absolute offset would give them. This is the one place the port does
     /// not copy macOS, which stores the point in screen coordinates and so lets a bow
     /// flatten out as the line it belongs to is stretched.
+    /// </para>
+    /// <para>
+    /// Dead once the mark carries <see cref="Waypoints"/>: the two describe the same shape
+    /// and only one of them can be drawn, so adding the first anchor clears this — as
+    /// macshot clears its <c>controlPoint</c> (<c>OverlayView.swift:8797</c>).
     /// </para>
     /// </remarks>
     public double Bend { get; init; }
@@ -545,18 +582,58 @@ public sealed record Annotation(
         tool is AnnotationTool.Text or AnnotationTool.Number or AnnotationTool.Stamp;
 
     /// <summary>
-    /// The straight distance from one end to the other, in frame pixels: what the ruler
-    /// reports, and the length a bend is a fraction of.
+    /// Tools that can be given intermediate <see cref="Waypoints"/>: the three macOS offers
+    /// them on (<c>OverlayView.swift:5493</c>). An area shape is its bounding rectangle and
+    /// a freehand stroke is already a path, so neither has anywhere to put one.
     /// </summary>
-    public double Span
+    public static bool AcceptsWaypoints(AnnotationTool tool) =>
+        tool is AnnotationTool.Line or AnnotationTool.Arrow or AnnotationTool.Measure;
+
+    /// <summary>Whether this mark has been bent through anchors — macshot's <c>hasMultiAnchor</c>.</summary>
+    public bool HasWaypoints => Waypoints.Count > 0;
+
+    /// <summary>
+    /// The full ordered chain the mark runs along: its start, each anchor in turn, its end.
+    /// macshot's <c>waypoints</c> (<c>Annotation.swift:187</c>), derived here rather than
+    /// stored so the ends cannot disagree with it.
+    /// </summary>
+    public IReadOnlyList<CapturePoint> AnchorPath
     {
         get
         {
-            var deltaX = End.X - Start.X;
-            var deltaY = End.Y - Start.Y;
-            return Math.Sqrt((deltaX * deltaX) + (deltaY * deltaY));
+            if (Waypoints.Count == 0)
+            {
+                return [Start, End];
+            }
+
+            var chain = new CapturePoint[Waypoints.Count + 2];
+            chain[0] = Start;
+            for (var index = 0; index < Waypoints.Count; index++)
+            {
+                chain[index + 1] = Waypoints[index];
+            }
+
+            chain[^1] = End;
+            return chain;
         }
     }
+
+    /// <summary>
+    /// How long the mark is as drawn, in frame pixels: what the ruler reports, and the
+    /// length a bend is a fraction of.
+    /// </summary>
+    /// <remarks>
+    /// The straight distance between the ends until the mark is bent through anchors, and
+    /// the length of the curve after that — a ruler that still reported the chord would be
+    /// writing a number on the picture that does not describe the line beside it. This is
+    /// the one place the port goes past macOS rather than matching it: macshot's own
+    /// <c>drawMeasure</c> (<c>Annotation.swift:1843</c>) draws a bent ruler as a straight
+    /// line between its ends and reports that, while its hit test follows the curve, so a
+    /// ruler there can be grabbed along a path nothing drew.
+    /// </remarks>
+    public double Span => HasWaypoints
+        ? SmoothPath.Length(AnchorPath)
+        : Distance(Start, End);
 
     /// <summary>Tools that describe an interaction rather than a drawn mark cannot be dragged.</summary>
     public bool IsMovable => Tool is not (AnnotationTool.Crop or AnnotationTool.ColorSampler or AnnotationTool.Select);
@@ -570,7 +647,28 @@ public sealed record Annotation(
         {
             if (Points.Count == 0)
             {
-                return CaptureRegion.FromPoints(Start.X, Start.Y, End.X, End.Y);
+                if (Waypoints.Count == 0)
+                {
+                    return CaptureRegion.FromPoints(Start.X, Start.Y, End.X, End.Y);
+                }
+
+                // The anchors as well as the ends. A mark bent well clear of the straight
+                // line between them has to be outlined and hit tested where it actually
+                // runs, or the selection chrome sits beside the mark it belongs to.
+                // macshot widens its own bounding rect the same way (Annotation.swift:349).
+                var left = Math.Min(Start.X, End.X);
+                var right = Math.Max(Start.X, End.X);
+                var top = Math.Min(Start.Y, End.Y);
+                var bottom = Math.Max(Start.Y, End.Y);
+                foreach (var anchor in Waypoints)
+                {
+                    left = Math.Min(left, anchor.X);
+                    right = Math.Max(right, anchor.X);
+                    top = Math.Min(top, anchor.Y);
+                    bottom = Math.Max(bottom, anchor.Y);
+                }
+
+                return CaptureRegion.FromPoints(left, top, right, bottom);
             }
 
             var minX = Points[0].X;
@@ -617,6 +715,15 @@ public sealed record Annotation(
             return HitTestPolyline(Points, point, tolerance);
         }
 
+        // A mark bent through anchors is grabbed along the curve it is drawn as, never
+        // along the chord between its ends — macshot's own branch for the same three tools
+        // (Annotation.swift:394-422). Without it a bent arrow answers to clicks on empty
+        // canvas and ignores clicks on itself.
+        if (HasWaypoints && AcceptsWaypoints(Tool))
+        {
+            return HitTestPolyline(SmoothPath.Through(AnchorPath), point, tolerance);
+        }
+
         return Tool switch
         {
             AnnotationTool.Rectangle => Contains(bounds, point, tolerance)
@@ -635,6 +742,82 @@ public sealed record Annotation(
             Points = Points.Count == 0
                 ? Points
                 : Points.Select(point => new CapturePoint(point.X + deltaX, point.Y + deltaY)).ToArray(),
+            Waypoints = Waypoints.Count == 0
+                ? Waypoints
+                : Waypoints.Select(anchor => new CapturePoint(anchor.X + deltaX, anchor.Y + deltaY)).ToArray(),
+        };
+    }
+
+    /// <summary>
+    /// This mark with one more anchor in it, put on the span of <see cref="AnchorPath"/>
+    /// nearest <paramref name="point"/>. Unchanged for a tool that has nowhere to put one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// macshot's <c>addAnchorPoint</c> (<c>OverlayView.swift:8763</c>). Inserted into the
+    /// chain at the span it was aimed at rather than appended, so a press near the start of
+    /// a mark bends it near its start — appended, every new anchor would land at the far
+    /// end and the second one would fold the mark back over itself.
+    /// </para>
+    /// <para>
+    /// Projected onto that span rather than dropped where the pointer was, and held a
+    /// twentieth clear of both its ends as macshot holds it: an anchor landing on top of
+    /// the point beside it gives the spline a span of no length, which comes out as a kink
+    /// rather than as the curve the user asked for.
+    /// </para>
+    /// </remarks>
+    public Annotation WithAnchorAt(CapturePoint point)
+    {
+        if (!AcceptsWaypoints(Tool))
+        {
+            return this;
+        }
+
+        var chain = AnchorPath;
+        var nearest = 1;
+        var nearestDistance = double.MaxValue;
+        for (var span = 1; span < chain.Count; span++)
+        {
+            var distance = DistanceToSegment(chain[span - 1], chain[span], point);
+            if (distance < nearestDistance)
+            {
+                nearestDistance = distance;
+                nearest = span;
+            }
+        }
+
+        var from = chain[nearest - 1];
+        var to = chain[nearest];
+        var deltaX = to.X - from.X;
+        var deltaY = to.Y - from.Y;
+        var lengthSquared = (deltaX * deltaX) + (deltaY * deltaY);
+        var along = lengthSquared < 0.001
+            ? 0.5
+            : Math.Clamp(
+                (((point.X - from.X) * deltaX) + ((point.Y - from.Y) * deltaY)) / lengthSquared,
+                0.05,
+                0.95);
+
+        // The chain's span index counts from Start, so inserting before the anchor that
+        // ends the span means inserting one place earlier in the intermediate list.
+        var anchors = new List<CapturePoint>(Waypoints.Count + 1);
+        anchors.AddRange(Waypoints);
+        anchors.Insert(nearest - 1, new CapturePoint(from.X + (deltaX * along), from.Y + (deltaY * along)));
+
+        return this with
+        {
+            Waypoints = anchors,
+
+            // The single bend goes the moment the first anchor arrives: the two describe
+            // the same shape, only the anchors are drawn, and a bend left set would sit
+            // under a grip that no longer exists.
+            Bend = 0,
+            BendAlong = 0,
+
+            // A ruler's reading is a claim about a length this has just changed, so the
+            // old glyphs have to go. The host renders a new sprite for any ruler without
+            // one as soon as the gesture ends.
+            Sprite = Tool == AnnotationTool.Measure ? null : Sprite,
         };
     }
 

@@ -285,6 +285,40 @@ public sealed class AnnotationFileTests
     }
 
     [TestMethod]
+    public void RoundTrip_KeepsTheAnchorsAMarkWasBentThrough()
+    {
+        // Reopening a capture is the whole point of the file. Dropped, a three-segment
+        // arrow would come back as a straight one — which is not a lost detail but a
+        // different mark, pointing somewhere else.
+        var arrow = Annotation.Create(AnnotationTool.Arrow, new CapturePoint(0, 0), new CapturePoint(100, 0))
+            with { Waypoints = new[] { new CapturePoint(30, 40), new CapturePoint(70, -20) } };
+
+        var restored = AnnotationFile.Read(AnnotationFile.Write([arrow]))[0];
+
+        CollectionAssert.AreEqual(arrow.Waypoints.ToArray(), restored.Waypoints.ToArray());
+        Assert.AreEqual(arrow.Span, restored.Span, 1e-9);
+    }
+
+    [TestMethod]
+    public void Read_LeavesAMarkFromBeforeAnchorsExistedWithTwoEndsAndNoMore()
+    {
+        // A new optional field is not a format break, so an older file must still open —
+        // and must open as the straight line it was drawn as rather than as an empty one.
+        const string Document =
+            """
+            {"version":1,"annotations":[{"id":"00000000-0000-0000-0000-000000000001",
+            "tool":"Line","startX":0,"startY":0,"endX":10,"endY":0,
+            "color":"#FF000000","strokeWidth":3,"lineStyle":"Solid","opacity":1,
+            "arrowStyle":"Filled","cornerRadius":0}]}
+            """;
+
+        var restored = AnnotationFile.Read(Document)[0];
+
+        Assert.IsFalse(restored.HasWaypoints);
+        Assert.AreEqual(10, restored.Span, 1e-9);
+    }
+
+    [TestMethod]
     public void Read_AnswersNothingForRubbish()
     {
         Assert.AreEqual(0, AnnotationFile.Read(null).Count);
