@@ -72,6 +72,74 @@ public sealed class AnnotationDocumentTests
     }
 
     [TestMethod]
+    public void ReplaceRange_MovesAWholeSelectionInOneUndoStep()
+    {
+        // Dragging a multi-selection is one gesture, so it has to be one step. Replacing
+        // the marks one at a time would leave Ctrl+Z walking the group back to where it
+        // started a member at a time, and the half-moved states in between are
+        // arrangements the user never made.
+        var document = new AnnotationDocument();
+        var first = NewLine();
+        var second = NewCensor();
+        document.AddRange([first, second]);
+
+        Assert.IsTrue(document.ReplaceRange([first.Translate(10, 10), second.Translate(10, 10)]));
+        Assert.AreEqual(10, document.Annotations[0].Start.X, 1e-9);
+        Assert.AreEqual(20, document.Annotations[1].Start.X, 1e-9);
+
+        document.Undo();
+
+        Assert.AreEqual(first.Start.X, document.Annotations[0].Start.X, 1e-9);
+        Assert.AreEqual(second.Start.X, document.Annotations[1].Start.X, 1e-9);
+    }
+
+    [TestMethod]
+    public void ReplaceRange_RefusesABatchWithAStrangerInItRatherThanApplyingHalfOfIt()
+    {
+        // Half a move is a state no hand could have produced, and it would cost an undo
+        // step to get back out of. A batch aimed at a mark the document has moved on from
+        // means the caller's selection is stale, which is worth failing on.
+        var document = new AnnotationDocument();
+        var present = NewLine();
+        document.Add(present);
+
+        Assert.IsFalse(document.ReplaceRange([present.Translate(5, 5), NewCensor()]));
+        Assert.AreEqual(present.Start.X, document.Annotations[0].Start.X, 1e-9);
+        Assert.AreEqual(1, document.UndoDepth, "a refused edit must not consume a step");
+    }
+
+    [TestMethod]
+    public void RemoveRange_TakesAWholeSelectionOffInOneStep()
+    {
+        // Delete over a multi-selection is one keystroke. One step per mark would mean
+        // pressing Ctrl+Z once per mark to get the group back.
+        var document = new AnnotationDocument();
+        var first = NewLine();
+        var second = NewCensor();
+        var bystander = NewLine();
+        document.AddRange([first, second, bystander]);
+
+        Assert.IsTrue(document.RemoveRange([first.Id, second.Id]));
+        Assert.AreEqual(1, document.Annotations.Count);
+        Assert.AreEqual(bystander.Id, document.Annotations[0].Id);
+
+        document.Undo();
+
+        Assert.AreEqual(3, document.Annotations.Count);
+    }
+
+    [TestMethod]
+    public void RemoveRange_SaysNoWhenNoneOfThemIsHereSoNoStepIsSpent()
+    {
+        var document = new AnnotationDocument();
+        document.Add(NewLine());
+
+        Assert.IsFalse(document.RemoveRange([Guid.NewGuid()]));
+        Assert.IsFalse(document.RemoveRange([]));
+        Assert.AreEqual(1, document.UndoDepth);
+    }
+
+    [TestMethod]
     public void RemoveGroup_RemovesEveryMemberAsOneStep()
     {
         var document = new AnnotationDocument();

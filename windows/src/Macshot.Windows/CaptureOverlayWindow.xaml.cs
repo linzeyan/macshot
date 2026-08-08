@@ -134,6 +134,13 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private readonly Func<long, Task<CapturedFrame?>> _captureWindow;
     private readonly AnnotationEditor _editor = new(new AnnotationDocument());
+
+    /// <summary>
+    /// The clock behind the pencil's hold-to-select. Built in the constructor rather than
+    /// here, because it needs this window's dispatcher.
+    /// </summary>
+    private readonly PressHold _hold;
+
     private readonly Dictionary<SelectionHandle, Rectangle> _grips = [];
 
     /// <summary>
@@ -383,6 +390,9 @@ public sealed partial class CaptureOverlayWindow : Window
         // Every string in the XAML is already the English text macshot keys by,
         // so the page is translated in place rather than written twice.
         this.Localize();
+
+        // After the markup has run: the canvas it redraws is a field the markup creates.
+        _hold = new PressHold(DispatcherQueue, _editor, RenderAnnotations);
     }
 
     /// <summary>
@@ -691,7 +701,15 @@ public sealed partial class CaptureOverlayWindow : Window
             }
 
             var at = ToFrame(e);
-            var grabbed = _editor.PointerPressed(at, ToModifiers(e), PenInput.Of(e));
+            var modifiers = ToModifiers(e);
+            var grabbed = _editor.PointerPressed(at, modifiers, PenInput.Of(e));
+
+            // Only where the press drew rather than grabbing: a freehand tool has no click
+            // left over to mean "pick this up", so holding still is what does it instead.
+            if (!grabbed)
+            {
+                _hold.Watch(at, modifiers);
+            }
 
             // Sprite tools are placed with a click rather than dragged out — but only
             // where the click did not land on a mark already drawn, which the editor has
@@ -787,7 +805,12 @@ public sealed partial class CaptureOverlayWindow : Window
         {
             if (e.Pointer.IsInContact)
             {
-                _editor.PointerMoved(ToFrame(e), ToModifiers(e), PenInput.Of(e));
+                var at = ToFrame(e);
+
+                // Before the editor is told, so a press that has become a stroke stops
+                // being a candidate for the hold before the next sample lands.
+                _hold.Moved(at);
+                _editor.PointerMoved(at, ToModifiers(e), PenInput.Of(e));
                 RenderAnnotations();
             }
 
@@ -949,6 +972,7 @@ public sealed partial class CaptureOverlayWindow : Window
     private void SelectionCanvas_PointerReleased(object sender, PointerRoutedEventArgs e)
     {
         SelectionCanvas.ReleasePointerCaptures();
+        _hold.Ended();
 
         // Whatever this release ends, the line saying where an edge landed has said it.
         // Left up, it would sit across the capture as something the user has to work out
@@ -3718,14 +3742,18 @@ public sealed partial class CaptureOverlayWindow : Window
     /// off for the drag (see <see cref="Boundaries"/>), and held while a mark is being
     /// drawn it draws through whatever is under the pointer instead of grabbing it. The
     /// two never overlap — one is the selection phase and the other the annotation phase.
+    /// Ctrl is macOS's Control: it adds to the selection, and sweeps a marquee over empty
+    /// space.
     /// </summary>
     /// <remarks>
     /// Alt is read from the keyboard rather than from the pointer event, the way
     /// <see cref="Boundaries"/> already reads it: Windows treats Alt as a menu key and
-    /// does not reliably carry it in a pointer event's modifiers.
+    /// does not reliably carry it in a pointer event's modifiers. Shift and Ctrl are
+    /// ordinary modifiers and arrive on the event.
     /// </remarks>
     private static EditorModifiers ToModifiers(PointerRoutedEventArgs e) =>
         (e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift) ? EditorModifiers.Constrain : EditorModifiers.None)
+        | (e.KeyModifiers.HasFlag(VirtualKeyModifiers.Control) ? EditorModifiers.Extend : EditorModifiers.None)
         | (IsDown(VirtualKey.Menu) ? EditorModifiers.DrawThrough : EditorModifiers.None);
 
     private static bool IsDown(VirtualKey key) =>

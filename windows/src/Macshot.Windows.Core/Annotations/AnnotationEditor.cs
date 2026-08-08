@@ -22,6 +22,18 @@ public enum EditorModifiers
     /// (<c>OverlayView.swift:8211-8215</c>).
     /// </remarks>
     DrawThrough = 2,
+
+    /// <summary>
+    /// Ctrl: put the mark under the pointer into the selection, take it back out when it
+    /// is already there, or — over empty space — drag a lasso over everything to select.
+    /// </summary>
+    /// <remarks>
+    /// Ctrl and not Shift, which every drawing tool already spends on constraining an
+    /// angle: a modifier cannot mean "square this rectangle off" and "add this to the
+    /// selection" in the same gesture. macOS reads <c>.control</c> for the same reason
+    /// (<c>OverlayView.swift:8239-8246</c>), whatever its field is still named.
+    /// </remarks>
+    Extend = 4,
 }
 
 /// <summary>
@@ -51,13 +63,46 @@ public sealed class AnnotationEditor
     /// </summary>
     private const double MinRecordedPressure = 0.05;
 
+    /// <summary>
+    /// How far a marquee has to be dragged before it selects anything.
+    /// </summary>
+    /// <remarks>
+    /// A Ctrl+click that missed everything sweeps a rectangle of nearly nothing, and
+    /// letting that through would make it a way to lose the whole selection by accident.
+    /// macshot's own two pixels (<c>OverlayView.swift:6427</c>).
+    /// </remarks>
+    private const double MinimumLasso = 2;
+
     private readonly AnnotationDocument _document;
+
+    /// <summary>Every mark selected right now, in the order they joined the selection.</summary>
+    private readonly List<Annotation> _selected = [];
+
+    /// <summary>
+    /// The originals of the marks travelling with <see cref="_dragTarget"/>, so each one's
+    /// new position is measured from where it started rather than from where it now is.
+    /// </summary>
+    private readonly List<Annotation> _movingWith = [];
+
+    /// <summary>Their in-flight copies, keyed by the annotation each stands in for.</summary>
+    private readonly Dictionary<Guid, Annotation> _movedWith = [];
+
     private AnnotationTool _tool = AnnotationTool.Arrow;
     private CapturePoint _origin;
     private List<CapturePoint>? _freeformSamples;
     private List<double>? _freeformPressures;
     private Annotation? _dragTarget;
     private AnnotationHandleKind? _handle;
+
+    /// <summary>
+    /// The mark a Ctrl+press found already selected, waiting to be taken out at the
+    /// release.
+    /// </summary>
+    private Annotation? _pendingDeselect;
+
+    private bool _lassoing;
+    private CapturePoint _lassoFrom;
+    private CapturePoint _lassoTo;
     private bool _isPressed;
     private double _scale = 1;
 
@@ -79,9 +124,11 @@ public sealed class AnnotationEditor
             }
 
             // Switching tools abandons anything in flight rather than finishing it
-            // with the wrong tool's semantics.
+            // with the wrong tool's semantics. The selection is left standing: macshot's
+            // handleToolbarAction changes the tool and nothing else
+            // (OverlayView.swift:7887-7898), and clearing it here meant reaching for a
+            // different tool silently disarmed Delete on the mark the user had picked.
             Cancel();
-            Selected = null;
             _tool = value;
         }
     }
@@ -186,25 +233,91 @@ public sealed class AnnotationEditor
     /// </remarks>
     public Annotation? AutoSpan { get; private set; }
 
-    public Annotation? Selected { get; private set; }
+    /// <summary>Every mark selected right now — macshot's <c>selectedAnnotations</c>.</summary>
+    public IReadOnlyList<Annotation> SelectedAnnotations => _selected;
 
     /// <summary>
-    /// The selected annotation as it stands right now: its in-flight copy while a handle
-    /// or a move is being dragged, so the chrome drawn around it tracks the drag instead
-    /// of staying where the shape used to be.
+    /// The one selected mark, or null when nothing is selected and when several are —
+    /// macshot's <c>selectedAnnotation</c> (<c>OverlayView.swift:345-355</c>).
     /// </summary>
-    public Annotation? SelectionShown => _dragTarget is not null && Draft is not null ? Draft : Selected;
+    /// <remarks>
+    /// Null for a group rather than the first of it, because everything that reads this
+    /// asks about a single subject: which handles to draw, which mark a handle drag
+    /// reshapes, which mark the options row is editing. Answering with one member would
+    /// hang that mark's handles off a selection the user is treating as a whole.
+    /// </remarks>
+    public Annotation? Selected => _selected.Count == 1 ? _selected[0] : null;
+
+    /// <summary>
+    /// The single selected annotation as it stands right now: its in-flight copy while a
+    /// handle or a move is being dragged, so the chrome drawn around it tracks the drag
+    /// instead of staying where the shape used to be.
+    /// </summary>
+    public Annotation? SelectionShown => Selected is { } only ? AsShown(only) : null;
+
+    /// <summary>
+    /// Every selected mark as it stands right now, which is what the canvas outlines.
+    /// </summary>
+    public IEnumerable<Annotation> SelectedAsShown => _selected.Select(AsShown);
+
+    /// <summary>
+    /// What the whole selection covers, or null unless several marks are selected: where
+    /// the one delete button a group is given hangs from.
+    /// </summary>
+    /// <remarks>
+    /// Only for several. A single selection has handles and, on this port as on macOS's
+    /// own, no delete button of its own — the keyboard is that affordance. A group has no
+    /// handles drawn at all, so without this there would be nothing on screen saying it
+    /// can be removed (<c>OverlayView.swift:1850-1859</c>, <c>:4863</c>).
+    /// </remarks>
+    public CaptureRegion? MultiSelectionBounds
+    {
+        get
+        {
+            if (_selected.Count < 2)
+            {
+                return null;
+            }
+
+            CaptureRegion? bounds = null;
+            foreach (var shown in SelectedAsShown)
+            {
+                bounds = bounds is { } far ? far.Union(shown.BoundingRect) : shown.BoundingRect;
+            }
+
+            return bounds;
+        }
+    }
+
+    /// <summary>
+    /// The marquee a Ctrl+drag is sweeping, or null when none is or when it has swept
+    /// nothing worth drawing yet.
+    /// </summary>
+    public CaptureRegion? Lasso
+    {
+        get
+        {
+            if (!_lassoing)
+            {
+                return null;
+            }
+
+            var swept = CaptureRegion.FromPoints(_lassoFrom.X, _lassoFrom.Y, _lassoTo.X, _lassoTo.Y);
+            return swept.IsEmpty ? null : swept;
+        }
+    }
 
     /// <summary>
     /// The handles the canvas should draw, for whatever tool is in hand.
     /// </summary>
     /// <remarks>
-    /// Not only for the pointer tool. <see cref="BeginSelection"/> tries the selected
+    /// Not only for the pointer tool. <see cref="PointerPressed"/> tries the selected
     /// mark's handles before anything else whatever tool is armed, so offering them only
     /// under the pointer left every other tool with handles that worked and could not be
     /// seen — a press near a corner reshaping a mark the user thought they were drawing
     /// beside. macOS draws them the same way, from the selection rather than from the tool
-    /// (<c>OverlayView.swift:1852-1856</c>).
+    /// (<c>OverlayView.swift:1852-1856</c>), and from a selection of one: a group is moved
+    /// and deleted whole, so handles on each member would reshape one of them alone.
     /// </remarks>
     public IReadOnlyList<AnnotationHandle> Handles =>
         SelectionShown is { } shown ? AnnotationHandles.For(shown, _scale) : [];
@@ -221,13 +334,7 @@ public sealed class AnnotationEditor
         {
             foreach (var annotation in _document.Annotations)
             {
-                if (_dragTarget is not null && annotation.Id == _dragTarget.Id && Draft is not null)
-                {
-                    yield return Draft;
-                    continue;
-                }
-
-                yield return annotation;
+                yield return AsShown(annotation);
             }
 
             if (_dragTarget is null && Draft is not null)
@@ -242,6 +349,26 @@ public sealed class AnnotationEditor
                 yield return AutoSpan;
             }
         }
+    }
+
+    /// <summary>
+    /// <paramref name="annotation"/> as it looks at this instant: the in-flight copy while
+    /// a drag has hold of it, and the committed one otherwise.
+    /// </summary>
+    /// <remarks>
+    /// Both the marks and the chrome round them go through here, which is what keeps a
+    /// selection outline on the shape rather than at the place the shape used to be. The
+    /// mark the press took hold of carries the snap and lives in <see cref="Draft"/>;
+    /// everything else moving with it is in <see cref="_movedWith"/>.
+    /// </remarks>
+    private Annotation AsShown(Annotation annotation)
+    {
+        if (_dragTarget is not null && _dragTarget.Id == annotation.Id && Draft is not null)
+        {
+            return Draft;
+        }
+
+        return _movedWith.TryGetValue(annotation.Id, out var moved) ? moved : annotation;
     }
 
     /// <summary>
@@ -314,7 +441,19 @@ public sealed class AnnotationEditor
         _isPressed = true;
         _origin = point;
 
-        if (GrabsExistingMarks(_tool, modifiers) && BeginSelection(point))
+        // Before anything else, and for every tool but the sampler: the handles belong to
+        // the mark that is selected rather than to the tool in hand, so a press on one has
+        // to reshape it whatever is armed — including the two freehand tools, which never
+        // take hold by clicking at all. macOS makes the same check in the same place, with
+        // the same two exceptions (OverlayView.swift:8232-8237).
+        if (_tool != AnnotationTool.ColorSampler
+            && !DrawsThrough(_tool, modifiers)
+            && GrabSelectedHandle(point))
+        {
+            return true;
+        }
+
+        if (GrabsExistingMarks(modifiers) && BeginSelection(point, modifiers))
         {
             return true;
         }
@@ -322,7 +461,7 @@ public sealed class AnnotationEditor
         // Anything that starts a new mark clears the selection: the chrome around a
         // mark that is no longer the subject of the gesture is a lie about what Delete
         // would remove.
-        Selected = null;
+        _selected.Clear();
 
         // A sprite tool draws nothing here. Its mark is rasterized by the UI and handed
         // back, so the press only had to answer whether it grabbed something.
@@ -378,7 +517,20 @@ public sealed class AnnotationEditor
         EditorModifiers modifiers = EditorModifiers.None,
         double pressure = 0)
     {
-        if (!_isPressed || Draft is null)
+        if (!_isPressed)
+        {
+            return;
+        }
+
+        // The one gesture with no draft: a marquee draws nothing and moves nothing, so it
+        // has to be answered before the guard that assumes a mark is in flight.
+        if (_lassoing)
+        {
+            _lassoTo = point;
+            return;
+        }
+
+        if (Draft is null)
         {
             return;
         }
@@ -392,9 +544,25 @@ public sealed class AnnotationEditor
                 return;
             }
 
-            var moved = _dragTarget.Translate(point.X - _origin.X, point.Y - _origin.Y);
-            Snap = SnapFor(moved.BoundingRect, modifiers, _dragTarget.Id);
+            var deltaX = point.X - _origin.X;
+            var deltaY = point.Y - _origin.Y;
+            var moved = _dragTarget.Translate(deltaX, deltaY);
+
+            // A group does not line up with anything. Its members are already arranged
+            // against each other, and nudging the whole of it to put one of them on a
+            // guide would take every other one off the place the user had put it. macshot
+            // snaps a single selection and moves a group raw (OverlayView.swift:6253-6267).
+            Snap = _movingWith.Count == 0
+                ? SnapFor(moved.BoundingRect, modifiers, _dragTarget.Id)
+                : SnapResult.None;
+
             Draft = Snap == SnapResult.None ? moved : moved.Translate(Snap.Dx, Snap.Dy);
+
+            foreach (var companion in _movingWith)
+            {
+                _movedWith[companion.Id] = companion.Translate(deltaX, deltaY);
+            }
+
             return;
         }
 
@@ -479,14 +647,34 @@ public sealed class AnnotationEditor
         PointerMoved(point, modifiers, pressure);
         _isPressed = false;
 
+        if (_lassoing)
+        {
+            TakeLassoed();
+            return null;
+        }
+
         var draft = Draft;
         var dragTarget = _dragTarget;
+        var pending = _pendingDeselect;
+        var edits = draft is not null && dragTarget is not null ? Edits(draft, dragTarget) : [];
+
         Snap = SnapResult.None;
         Draft = null;
         _dragTarget = null;
         _handle = null;
         _freeformSamples = null;
         _freeformPressures = null;
+        _pendingDeselect = null;
+        _movingWith.Clear();
+        _movedWith.Clear();
+
+        // A Ctrl+press on a mark already selected takes it back out only if the press
+        // turned out to be a click. The same press with a drag on it is how a group is
+        // moved from one of its own members (OverlayView.swift:6436-6445).
+        if (pending is not null && edits.Count == 0)
+        {
+            Deselect(pending);
+        }
 
         if (draft is null)
         {
@@ -495,12 +683,16 @@ public sealed class AnnotationEditor
 
         if (dragTarget is not null)
         {
-            // The whole drag is one undo step. Committing every intermediate
-            // position would make Ctrl+Z replay the mouse path.
-            if (AnnotationHandles.Differ(draft, dragTarget))
+            if (edits.Count > 0)
             {
-                _document.Replace(draft);
-                Selected = draft;
+                // The whole drag is one undo step, however many marks it moved.
+                // Committing every intermediate position would make Ctrl+Z replay the
+                // mouse path, and one step per mark would make it replay the selection.
+                _document.ReplaceRange(edits);
+                foreach (var edit in edits)
+                {
+                    Reselect(edit);
+                }
             }
 
             // Reshaping a mark that is already there is not committing a new one, so
@@ -601,20 +793,94 @@ public sealed class AnnotationEditor
         _handle = null;
         _freeformSamples = null;
         _freeformPressures = null;
+        _movingWith.Clear();
+        _movedWith.Clear();
+        _pendingDeselect = null;
+        _lassoing = false;
         _isPressed = false;
         return true;
     }
 
+    /// <summary>
+    /// Removes every selected mark, as one undo step.
+    /// </summary>
+    /// <remarks>
+    /// One step because one keystroke did it: taking six marks off with Delete and then
+    /// having to press Ctrl+Z six times to get them back is not undoing what the user did.
+    /// macshot removes them in one pass and clears the selection after
+    /// (<c>OverlayView.swift:9055-9066</c>).
+    /// </remarks>
     public bool DeleteSelected()
     {
-        if (Selected is null)
+        if (_selected.Count == 0)
         {
             return false;
         }
 
-        var removed = _document.Remove(Selected.Id);
-        Selected = null;
+        var removed = _document.RemoveRange(_selected.Select(annotation => annotation.Id));
+        _selected.Clear();
         return removed;
+    }
+
+    /// <summary>
+    /// How long a freehand press has to be held still before it takes hold of what is
+    /// under it instead of drawing — macshot's 0.3 s (<c>OverlayView.swift:8319</c>).
+    /// </summary>
+    /// <remarks>
+    /// Here rather than in the two hosts that run the timer, so the overlay and the editor
+    /// cannot drift apart on how long a hold is.
+    /// </remarks>
+    public static readonly TimeSpan HoldToSelect = TimeSpan.FromMilliseconds(300);
+
+    /// <summary>
+    /// Whether a press with the tool in hand selects by being held still rather than by
+    /// clicking, which is what the host arms its timer on.
+    /// </summary>
+    /// <remarks>
+    /// Only the two tools whose press always draws, and only where no modifier has already
+    /// given the press another meaning: with Ctrl the press selects outright, and with
+    /// draw-through it is being told to ignore what is underneath entirely
+    /// (<c>OverlayView.swift:8313</c>).
+    /// </remarks>
+    public bool SelectsByHolding(EditorModifiers modifiers = EditorModifiers.None) =>
+        DrawsOnPress(_tool)
+        && !modifiers.HasFlag(EditorModifiers.Extend)
+        && !DrawsThrough(_tool, modifiers);
+
+    /// <summary>
+    /// Answers a press that has been held still: takes hold of the mark under it, and
+    /// abandons the stroke that had started. False when there was nothing under it, which
+    /// leaves the stroke to carry on.
+    /// </summary>
+    /// <remarks>
+    /// The host owns the clock — a timer needs a dispatcher, and Core has none — but not
+    /// the decision. What the hold selects, and the fact that the ink laid down so far is
+    /// thrown away rather than committed, are the same rules a click goes through, and
+    /// splitting them across the two hosts would be two copies of them.
+    /// </remarks>
+    /// <param name="point">
+    /// Where the press landed, not where the pointer has drifted to inside the few pixels
+    /// a hold allows: the drag that follows is measured from here, and measuring it from
+    /// the drift would start the mark's travel with a jump.
+    /// </param>
+    public bool LongPressed(CapturePoint point, EditorModifiers modifiers = EditorModifiers.None)
+    {
+        if (!_isPressed || _document.HitTest(point) is not { IsMovable: true } hit)
+        {
+            return false;
+        }
+
+        // The stroke this press had started is abandoned rather than committed. The user
+        // held still, which is the gesture for picking something up, and a dot left behind
+        // every time would put an undo step between them and what they meant to do.
+        Draft = null;
+        _freeformSamples = null;
+        _freeformPressures = null;
+        _origin = point;
+
+        Take(hit, modifiers);
+        BeginMove(hit);
+        return true;
     }
 
     public bool Undo()
@@ -634,73 +900,251 @@ public sealed class AnnotationEditor
     }
 
     /// <summary>
-    /// Takes hold of the mark under the pointer, or of a handle on the one already
-    /// selected. False when there was nothing there to take.
+    /// Takes hold of a handle on the mark already selected. False when the press was not
+    /// on one.
     /// </summary>
-    private bool BeginSelection(CapturePoint point)
+    /// <remarks>
+    /// Tried before the marks themselves, so a handle can be grabbed even where a later
+    /// mark covers it — otherwise reshaping the rectangle under a stamp would be
+    /// impossible without moving the stamp first. Only a lone selection has handles, which
+    /// is why this asks <see cref="Selected"/> rather than walking the whole selection.
+    /// </remarks>
+    private bool GrabSelectedHandle(CapturePoint point)
     {
-        // The selected annotation's handles are tried before anything else, so a handle
-        // can be grabbed even where a later mark covers it — otherwise reshaping the
-        // rectangle under a stamp would be impossible without moving the stamp first.
-        if (Selected is { } selected && AnnotationHandles.At(selected, point, _scale) is { } handle)
+        if (Selected is not { } selected || AnnotationHandles.At(selected, point, _scale) is not { } handle)
         {
-            _handle = handle.Kind;
-            _dragTarget = selected;
-            Draft = selected;
-            return true;
+            return false;
         }
 
+        _handle = handle.Kind;
+        _dragTarget = selected;
+        Draft = selected;
+        return true;
+    }
+
+    /// <summary>
+    /// Takes hold of the mark under the pointer, or begins a marquee over the empty space
+    /// the press landed on. False when the press is free to draw.
+    /// </summary>
+    private bool BeginSelection(CapturePoint point, EditorModifiers modifiers)
+    {
         var hit = _document.HitTest(point);
         if (hit is null)
         {
+            // Ctrl over empty space sweeps a selection rather than missing one
+            // (OverlayView.swift:8301-8308). Nothing is drawn or moved by the drag that
+            // follows, so it is the one gesture that leaves Draft empty.
+            if (modifiers.HasFlag(EditorModifiers.Extend))
+            {
+                _lassoing = true;
+                _lassoFrom = point;
+                _lassoTo = point;
+                return true;
+            }
+
             // Only the pointer tool clears the selection on a miss. For every other
             // tool the press is about to draw, and clearing there would be doing it
             // twice with different rules.
             if (_tool == AnnotationTool.Select)
             {
-                Selected = null;
+                _selected.Clear();
             }
 
             return false;
         }
 
-        Selected = hit;
+        Take(hit, modifiers);
         if (!hit.IsMovable)
         {
             // Selected, so it can be deleted or restyled, but there is nothing to drag.
             return true;
         }
 
-        _dragTarget = hit;
-        Draft = hit;
+        BeginMove(hit);
         return true;
     }
 
     /// <summary>
-    /// Whether this tool takes hold of what is already on the canvas. False for the
-    /// freehand tools, which are used to draw over marks often enough that grabbing
-    /// would be wrong more often than right, and false for any tool while
-    /// <see cref="EditorModifiers.DrawThrough"/> is held.
+    /// Puts <paramref name="hit"/> into the selection the way the modifiers ask for.
     /// </summary>
     /// <remarks>
-    /// The pointer tool keeps grabbing whatever is held: interacting with marks is the
-    /// whole of what it does, so a modifier that turned that off would leave it with
-    /// nothing. macOS excludes it from draw-through for the same reason.
+    /// A press on a mark that is already selected leaves the whole selection standing,
+    /// which is what lets a group be dragged from any one of its members
+    /// (<c>OverlayView.swift:8254-8268</c>).
     /// </remarks>
-    private static bool GrabsExistingMarks(AnnotationTool tool, EditorModifiers modifiers) =>
-        tool is not (AnnotationTool.Pencil or AnnotationTool.Marker or AnnotationTool.ColorSampler)
-        && (tool == AnnotationTool.Select || !modifiers.HasFlag(EditorModifiers.DrawThrough));
-
-    /// <summary>Keeps a selection from pointing at an annotation undo has removed.</summary>
-    private void DropStaleSelection()
+    private void Take(Annotation hit, EditorModifiers modifiers)
     {
-        if (Selected is null)
+        _pendingDeselect = null;
+
+        if (modifiers.HasFlag(EditorModifiers.Extend))
+        {
+            if (IsSelected(hit))
+            {
+                // Not removed here. A Ctrl+press on one of a group is as likely to be the
+                // start of dragging the group as it is a click undoing that member's
+                // selection, and only the release says which.
+                _pendingDeselect = hit;
+            }
+            else
+            {
+                _selected.Add(hit);
+            }
+
+            return;
+        }
+
+        if (!IsSelected(hit))
+        {
+            _selected.Clear();
+            _selected.Add(hit);
+        }
+    }
+
+    /// <summary>
+    /// Starts a move on <paramref name="held"/>, enlisting the rest of the selection so a
+    /// drag on any member takes the whole group with it.
+    /// </summary>
+    private void BeginMove(Annotation held)
+    {
+        _dragTarget = held;
+        Draft = held;
+
+        foreach (var annotation in _selected)
+        {
+            if (annotation.Id != held.Id && annotation.IsMovable)
+            {
+                _movingWith.Add(annotation);
+            }
+        }
+    }
+
+    /// <summary>
+    /// Ends a marquee, selecting everything it swept.
+    /// </summary>
+    /// <remarks>
+    /// A sweep that caught nothing leaves the selection alone rather than emptying it, as
+    /// macshot's does (<c>OverlayView.swift:6424-6434</c>): the gesture that clears a
+    /// selection is a plain click on empty space, and having the modified one clear it too
+    /// would make a mis-aimed Ctrl+drag cost the user their group.
+    /// </remarks>
+    private void TakeLassoed()
+    {
+        var swept = CaptureRegion.FromPoints(_lassoFrom.X, _lassoFrom.Y, _lassoTo.X, _lassoTo.Y);
+        _lassoing = false;
+
+        if (swept.Width <= MinimumLasso || swept.Height <= MinimumLasso)
         {
             return;
         }
 
-        var id = Selected.Id;
-        Selected = _document.Annotations.FirstOrDefault(annotation => annotation.Id == id);
+        var caught = _document.Annotations
+            .Where(annotation => annotation.IsMovable && !annotation.BoundingRect.Intersect(swept).IsEmpty)
+            .ToList();
+
+        if (caught.Count == 0)
+        {
+            return;
+        }
+
+        _selected.Clear();
+        _selected.AddRange(caught);
+    }
+
+    /// <summary>
+    /// The marks this drag actually changed: the one it had hold of, and everything that
+    /// travelled with it. Empty for a press that never moved, which is what tells a click
+    /// on a mark from a drag of it.
+    /// </summary>
+    private List<Annotation> Edits(Annotation draft, Annotation dragTarget)
+    {
+        var edits = new List<Annotation>(_movingWith.Count + 1);
+
+        if (AnnotationHandles.Differ(draft, dragTarget))
+        {
+            edits.Add(draft);
+        }
+
+        foreach (var companion in _movingWith)
+        {
+            if (_movedWith.TryGetValue(companion.Id, out var moved)
+                && AnnotationHandles.Differ(moved, companion))
+            {
+                edits.Add(moved);
+            }
+        }
+
+        return edits;
+    }
+
+    /// <summary>
+    /// Whether this press draws over the marks under the pointer instead of taking hold of
+    /// them. The pointer tool is exempt: interacting with marks is the whole of what it
+    /// does, so a modifier that turned that off would leave it with nothing, and macOS
+    /// exempts it for the same reason (<c>OverlayView.swift:8211-8215</c>).
+    /// </summary>
+    private static bool DrawsThrough(AnnotationTool tool, EditorModifiers modifiers) =>
+        tool != AnnotationTool.Select && modifiers.HasFlag(EditorModifiers.DrawThrough);
+
+    /// <summary>
+    /// The two tools whose every press draws — macshot's <c>isPencilOrMarker</c>. A tap
+    /// leaves a deliberate dot and a drag leaves a stroke, so there is no click left over
+    /// to mean "take hold of this"; holding still does it instead
+    /// (<see cref="SelectsByHolding"/>).
+    /// </summary>
+    private static bool DrawsOnPress(AnnotationTool tool) =>
+        tool is AnnotationTool.Pencil or AnnotationTool.Marker;
+
+    /// <summary>
+    /// Whether a press with the tool in hand takes hold of what is already on the canvas.
+    /// </summary>
+    /// <remarks>
+    /// False for the freehand tools, which are used to draw over marks often enough that
+    /// grabbing would be wrong more often than right, and false for any tool drawing
+    /// through. The two ways back in are macOS's (<c>OverlayView.swift:8247-8253</c>):
+    /// Ctrl says the press is about the selection rather than about ink, and a group
+    /// already selected can be dragged from any member without a modifier at all —
+    /// otherwise moving one would mean putting the pencil down first.
+    /// </remarks>
+    private bool GrabsExistingMarks(EditorModifiers modifiers) =>
+        _tool != AnnotationTool.ColorSampler
+        && !DrawsThrough(_tool, modifiers)
+        && (!DrawsOnPress(_tool)
+            || modifiers.HasFlag(EditorModifiers.Extend)
+            || _selected.Count > 1);
+
+    private bool IsSelected(Annotation annotation) =>
+        _selected.Exists(selected => selected.Id == annotation.Id);
+
+    private void Deselect(Annotation annotation)
+    {
+        _selected.RemoveAll(selected => selected.Id == annotation.Id);
+    }
+
+    /// <summary>Swaps the selected copy of a mark a drag has just edited for the edit.</summary>
+    private void Reselect(Annotation annotation)
+    {
+        var index = _selected.FindIndex(selected => selected.Id == annotation.Id);
+        if (index >= 0)
+        {
+            _selected[index] = annotation;
+        }
+    }
+
+    /// <summary>Keeps a selection from pointing at annotations undo has removed.</summary>
+    private void DropStaleSelection()
+    {
+        if (_selected.Count == 0)
+        {
+            return;
+        }
+
+        var surviving = _selected
+            .Select(selected => _document.Annotations.FirstOrDefault(existing => existing.Id == selected.Id))
+            .OfType<Annotation>()
+            .ToList();
+
+        _selected.Clear();
+        _selected.AddRange(surviving);
     }
 
     /// <summary>
