@@ -20,6 +20,12 @@
              editing them. -->
         <Canvas x:Name="SelectionLayer" IsHitTestVisible="False" />
 
+        <!-- The only part of the chrome that is a control: the one button a group of
+             selected marks is deleted with. A layer of its own because the one above is
+             not hit testable at all, and a Canvas with no background hit tests only its
+             children — so a press anywhere else still reaches the host below. -->
+        <Canvas x:Name="SelectionControls" />
+
         <!-- The text tool's entry box lives here. Unlike the layers above it this one
              is hit testable, but a Canvas with no background only hit tests its
              children, so a click anywhere else still reaches the host below. -->

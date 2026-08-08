@@ -621,15 +621,16 @@ public sealed class AnnotationEditorTests
     }
 
     [TestMethod]
-    public void PressWithAddAnchor_BendsTheMarkUnderThePointerRatherThanStartingAGesture()
+    public void CtrlPressOnTheSelectedMark_BendsItRatherThanStartingAGesture()
     {
         // The modifier is a command, not a drag. Left to start a gesture as well, the same
         // press would draw a second mark on top of the one it just bent.
         var editor = NewEditor(AnnotationTool.Line);
         Drag(editor, new CapturePoint(0, 0), new CapturePoint(100, 0));
+        Select(editor, new CapturePoint(50, 0));
 
-        var grabbed = editor.PointerPressed(new CapturePoint(50, 0), EditorModifiers.AddAnchor);
-        editor.PointerReleased(new CapturePoint(50, 0), EditorModifiers.AddAnchor);
+        var grabbed = editor.PointerPressed(new CapturePoint(50, 0), EditorModifiers.Extend);
+        editor.PointerReleased(new CapturePoint(50, 0), EditorModifiers.Extend);
 
         Assert.IsTrue(grabbed, "the press must read as taking hold of a mark, so nothing is placed under it");
         Assert.IsNull(editor.Draft);
@@ -638,15 +639,37 @@ public sealed class AnnotationEditorTests
     }
 
     [TestMethod]
-    public void PressWithAddAnchor_SelectsTheMarkItBentSoTheNewGripCanBeDragged()
+    public void CtrlPressOnAnUnselectedMark_AddsItToTheSelectionRatherThanBendingIt()
     {
-        // The anchor is worth nothing until it can be moved, and only the selected mark's
-        // handles are offered. macshot selects the mark it anchors for the same reason.
+        // The one key means both things, and this is the line between them: macOS bends
+        // only the mark that is already selected (OverlayView.swift:5491-5497) and reserves
+        // every other Ctrl+press for the selection. Bending whatever was under the pointer
+        // would make a line the one kind of mark that cannot be multi-selected.
+        var editor = NewEditor(AnnotationTool.Line);
+        Drag(editor, new CapturePoint(0, 0), new CapturePoint(100, 0));
+        Drag(editor, new CapturePoint(0, 60), new CapturePoint(100, 60));
+        Select(editor, new CapturePoint(50, 0));
+
+        editor.PointerPressed(new CapturePoint(50, 60), EditorModifiers.Extend);
+        editor.PointerReleased(new CapturePoint(50, 60), EditorModifiers.Extend);
+
+        Assert.AreEqual(2, editor.SelectedAnnotations.Count);
+        Assert.IsFalse(
+            editor.Document.Annotations.Any(annotation => annotation.HasWaypoints),
+            "neither line may have been bent");
+    }
+
+    [TestMethod]
+    public void BendingAMark_OffersAGripForTheAnchorItAdded()
+    {
+        // The anchor is worth nothing until it can be moved, and only a selected mark's
+        // handles are offered.
         var editor = NewEditor(AnnotationTool.Arrow);
         Drag(editor, new CapturePoint(0, 0), new CapturePoint(100, 0));
+        Select(editor, new CapturePoint(40, 0));
 
-        editor.PointerPressed(new CapturePoint(40, 0), EditorModifiers.AddAnchor);
-        editor.PointerReleased(new CapturePoint(40, 0), EditorModifiers.AddAnchor);
+        editor.PointerPressed(new CapturePoint(40, 0), EditorModifiers.Extend);
+        editor.PointerReleased(new CapturePoint(40, 0), EditorModifiers.Extend);
 
         Assert.AreEqual(
             1,
@@ -654,31 +677,19 @@ public sealed class AnnotationEditorTests
     }
 
     [TestMethod]
-    public void PressWithAddAnchor_IsOneUndoStep()
+    public void BendingAMark_IsOneUndoStep()
     {
         // Ctrl+Z has to take the anchor back off. Amended in place it would be
         // unreachable, and the user's only way back would be deleting the whole mark.
         var editor = NewEditor(AnnotationTool.Line);
         Drag(editor, new CapturePoint(0, 0), new CapturePoint(100, 0));
+        Select(editor, new CapturePoint(50, 0));
 
-        editor.PointerPressed(new CapturePoint(50, 0), EditorModifiers.AddAnchor);
-        editor.PointerReleased(new CapturePoint(50, 0), EditorModifiers.AddAnchor);
+        editor.PointerPressed(new CapturePoint(50, 0), EditorModifiers.Extend);
+        editor.PointerReleased(new CapturePoint(50, 0), EditorModifiers.Extend);
         editor.Undo();
 
         Assert.IsFalse(editor.Document.Annotations[0].HasWaypoints);
-    }
-
-    [TestMethod]
-    public void PressWithAddAnchor_LeavesAToolWithNowhereToPutOneToDrawNormally()
-    {
-        // Held over empty canvas, or over a shape that takes no anchor, the modifier must
-        // fall through to the ordinary press — otherwise Ctrl would silently disarm the
-        // whole toolbar.
-        var editor = NewEditor(AnnotationTool.Rectangle);
-        Drag(editor, new CapturePoint(0, 0), new CapturePoint(50, 50), EditorModifiers.AddAnchor);
-
-        Assert.AreEqual(1, editor.Document.Annotations.Count);
-        Assert.AreEqual(0, editor.Document.Annotations[0].Waypoints.Count);
     }
 
     [TestMethod]
@@ -689,8 +700,9 @@ public sealed class AnnotationEditorTests
         // immovable.
         var editor = NewEditor(AnnotationTool.Line);
         Drag(editor, new CapturePoint(0, 0), new CapturePoint(100, 0));
-        editor.PointerPressed(new CapturePoint(50, 0), EditorModifiers.AddAnchor);
-        editor.PointerReleased(new CapturePoint(50, 0), EditorModifiers.AddAnchor);
+        Select(editor, new CapturePoint(50, 0));
+        editor.PointerPressed(new CapturePoint(50, 0), EditorModifiers.Extend);
+        editor.PointerReleased(new CapturePoint(50, 0), EditorModifiers.Extend);
 
         var grip = editor.Handles.Single(handle => handle.Kind == AnnotationHandleKind.Waypoint).Position;
         Drag(editor, grip, new CapturePoint(50, 40));
@@ -698,11 +710,330 @@ public sealed class AnnotationEditorTests
         Assert.AreEqual(new CapturePoint(50, 40), editor.Document.Annotations[0].Waypoints[0]);
     }
 
-    /// <summary>Clicks a mark with the select tool, which is what arms its handles.</summary>
-    private static void Select(AnnotationEditor editor, CapturePoint point)
+    [TestMethod]
+    public void SwitchingTools_KeepsTheSelectionSoDeleteStillRemovesTheMark()
     {
-        editor.PointerPressed(point);
-        editor.PointerReleased(point);
+        // macshot's handleToolbarAction changes the tool and nothing else
+        // (OverlayView.swift:7887-7898). Clearing here meant picking up a different tool
+        // silently disarmed Delete, Backspace and every restyle on the mark the user had
+        // just chosen — with the chrome still drawn around it saying otherwise.
+        var editor = NewEditor(AnnotationTool.Rectangle);
+        Drag(editor, new CapturePoint(10, 10), new CapturePoint(60, 40));
+
+        editor.Tool = AnnotationTool.Select;
+        Select(editor, new CapturePoint(10, 10));
+        editor.Tool = AnnotationTool.Pencil;
+
+        Assert.IsNotNull(editor.Selected);
+        Assert.IsTrue(editor.DeleteSelected());
+        Assert.AreEqual(0, editor.Document.Annotations.Count);
+    }
+
+    [TestMethod]
+    public void SelectedHandles_AnswerToThePencilThoughItNeverSelectsByClicking()
+    {
+        // The handles are drawn from the selection rather than from the tool, so once a
+        // selection survives into the pencil they are on screen. A handle that is drawn
+        // and cannot be grabbed is worse than one that is not drawn at all: the press
+        // lands on it and lays down ink instead.
+        var editor = NewEditor(AnnotationTool.Rectangle);
+        Drag(editor, new CapturePoint(10, 10), new CapturePoint(60, 40));
+
+        editor.Tool = AnnotationTool.Select;
+        Select(editor, new CapturePoint(10, 10));
+        editor.Tool = AnnotationTool.Pencil;
+
+        Assert.AreNotEqual(0, editor.Handles.Count);
+        Drag(editor, new CapturePoint(60, 40), new CapturePoint(90, 70));
+
+        Assert.AreEqual(1, editor.Document.Annotations.Count, "the press must reshape, not draw");
+        Assert.AreEqual(90, editor.Document.Annotations[0].BoundingRect.Right, 1e-9);
+    }
+
+    [TestMethod]
+    public void SelectedHandles_AreLeftAloneWhileDrawThroughIsHeld()
+    {
+        // Draw-through is how a mark is deliberately laid over another one, and a
+        // selection's handles float outside its bounds — so without this exemption the
+        // one escape from grabbing would still be blocked wherever a handle happened to
+        // be. macOS gates the same check on the same flag (OverlayView.swift:8232-8237).
+        var editor = NewEditor(AnnotationTool.Rectangle);
+        Drag(editor, new CapturePoint(10, 10), new CapturePoint(60, 40));
+
+        editor.Tool = AnnotationTool.Select;
+        Select(editor, new CapturePoint(10, 10));
+
+        editor.Tool = AnnotationTool.Censor;
+        Drag(
+            editor,
+            new CapturePoint(60, 40),
+            new CapturePoint(120, 100),
+            EditorModifiers.DrawThrough);
+
+        Assert.AreEqual(2, editor.Document.Annotations.Count);
+        Assert.AreEqual(60, editor.Document.Annotations[0].BoundingRect.Right, 1e-9);
+    }
+
+    [TestMethod]
+    public void CtrlClick_AddsTheMarkToTheSelectionInsteadOfReplacingIt()
+    {
+        var editor = TwoMarks();
+
+        editor.Tool = AnnotationTool.Select;
+        Select(editor, new CapturePoint(10, 10));
+        Select(editor, new CapturePoint(210, 10), EditorModifiers.Extend);
+
+        Assert.AreEqual(2, editor.SelectedAnnotations.Count);
+
+        // And nothing offers to reshape one of a group: the drag moves all of them, so a
+        // corner handle would be a promise the gesture does not keep.
+        Assert.IsNull(editor.Selected);
+        Assert.AreEqual(0, editor.Handles.Count);
+    }
+
+    [TestMethod]
+    public void CtrlClickOnASelectedMark_TakesItBackOutAtTheRelease()
+    {
+        var editor = TwoMarks();
+
+        editor.Tool = AnnotationTool.Select;
+        Select(editor, new CapturePoint(10, 10));
+        Select(editor, new CapturePoint(210, 10), EditorModifiers.Extend);
+        Select(editor, new CapturePoint(210, 10), EditorModifiers.Extend);
+
+        Assert.AreEqual(1, editor.SelectedAnnotations.Count);
+        Assert.AreEqual(editor.Document.Annotations[0].Id, editor.SelectedAnnotations[0].Id);
+    }
+
+    [TestMethod]
+    public void CtrlDragFromASelectedMark_MovesTheGroupRatherThanDeselectingIt()
+    {
+        // The deselect waits for the release for exactly this: the press that would undo
+        // one member's selection is also the press that starts dragging the group, and
+        // removing it up front would drop that member out from under the drag.
+        var editor = TwoMarks();
+
+        editor.Tool = AnnotationTool.Select;
+        Select(editor, new CapturePoint(10, 10));
+        Select(editor, new CapturePoint(210, 10), EditorModifiers.Extend);
+
+        Drag(editor, new CapturePoint(210, 10), new CapturePoint(230, 30), EditorModifiers.Extend);
+
+        Assert.AreEqual(2, editor.SelectedAnnotations.Count, "the drag must not have deselected it");
+        Assert.AreEqual(30, editor.Document.Annotations[0].Start.X, 1e-9);
+        Assert.AreEqual(230, editor.Document.Annotations[1].Start.X, 1e-9);
+    }
+
+    [TestMethod]
+    public void DraggingOneOfAGroup_MovesAllOfThemAsOneUndoStep()
+    {
+        // One gesture, one step. Undoing a group move one mark at a time would walk the
+        // selection back through arrangements nobody ever made.
+        var editor = TwoMarks();
+
+        editor.Tool = AnnotationTool.Select;
+        Select(editor, new CapturePoint(10, 10));
+        Select(editor, new CapturePoint(210, 10), EditorModifiers.Extend);
+
+        Drag(editor, new CapturePoint(10, 10), new CapturePoint(40, 10));
+
+        Assert.AreEqual(40, editor.Document.Annotations[0].Start.X, 1e-9);
+        Assert.AreEqual(240, editor.Document.Annotations[1].Start.X, 1e-9);
+
+        editor.Undo();
+
+        Assert.AreEqual(10, editor.Document.Annotations[0].Start.X, 1e-9);
+        Assert.AreEqual(210, editor.Document.Annotations[1].Start.X, 1e-9);
+    }
+
+    [TestMethod]
+    public void DraggingAGroup_ShowsEveryMemberWhereItIsGoingRatherThanWhereItWas()
+    {
+        // The whole selection has to travel on screen during the drag: a group where only
+        // the mark under the pointer moves reads as the drag having lost the rest of it.
+        var editor = TwoMarks();
+
+        editor.Tool = AnnotationTool.Select;
+        Select(editor, new CapturePoint(10, 10));
+        Select(editor, new CapturePoint(210, 10), EditorModifiers.Extend);
+
+        editor.PointerPressed(new CapturePoint(10, 10));
+        editor.PointerMoved(new CapturePoint(40, 10));
+
+        var shown = editor.SelectedAsShown.ToList();
+        Assert.AreEqual(40, shown[0].Start.X, 1e-9);
+        Assert.AreEqual(240, shown[1].Start.X, 1e-9);
+        CollectionAssert.AreEquivalent(
+            shown.Select(mark => mark.Start.X).ToArray(),
+            editor.VisibleAnnotations.Select(mark => mark.Start.X).ToArray(),
+            "the marks and the chrome round them must be drawn at the same places");
+    }
+
+    [TestMethod]
+    public void MultiSelectionBounds_CoverEveryMemberSoItsDeleteButtonHangsFromTheGroup()
+    {
+        // With more than one mark selected nothing is drawn but the outlines, so this is
+        // the only thing on screen saying the group can be removed — macOS hangs one
+        // consolidated button off the same union (OverlayView.swift:4863-4894).
+        var editor = TwoMarks();
+
+        editor.Tool = AnnotationTool.Select;
+        Select(editor, new CapturePoint(10, 10));
+
+        Assert.IsNull(editor.MultiSelectionBounds, "one mark has handles, and no button of its own");
+
+        Select(editor, new CapturePoint(210, 10), EditorModifiers.Extend);
+
+        var bounds = editor.MultiSelectionBounds;
+        Assert.IsNotNull(bounds);
+        Assert.AreEqual(10, bounds.Value.X, 1e-9);
+        Assert.AreEqual(260, bounds.Value.Right, 1e-9);
+    }
+
+    [TestMethod]
+    public void DeleteSelected_RemovesEveryMarkOfAGroupAsOneUndoStep()
+    {
+        var editor = TwoMarks();
+
+        editor.Tool = AnnotationTool.Select;
+        Select(editor, new CapturePoint(10, 10));
+        Select(editor, new CapturePoint(210, 10), EditorModifiers.Extend);
+
+        Assert.IsTrue(editor.DeleteSelected());
+        Assert.AreEqual(0, editor.Document.Annotations.Count);
+        Assert.AreEqual(0, editor.SelectedAnnotations.Count);
+
+        editor.Undo();
+
+        Assert.AreEqual(2, editor.Document.Annotations.Count, "one keystroke must cost one undo");
+    }
+
+    [TestMethod]
+    public void CtrlDragOnEmptySpace_SelectsEverythingTheMarqueeSwept()
+    {
+        var editor = TwoMarks();
+
+        editor.Tool = AnnotationTool.Rectangle;
+        editor.PointerPressed(new CapturePoint(5, 150), EditorModifiers.Extend);
+        editor.PointerMoved(new CapturePoint(300, 5), EditorModifiers.Extend);
+
+        // Drawn while the drag is live, or there is nothing on screen saying what the
+        // release is about to take.
+        Assert.IsNotNull(editor.Lasso);
+        Assert.AreEqual(2, editor.Document.Annotations.Count, "the marquee must not have drawn a rectangle");
+
+        editor.PointerReleased(new CapturePoint(300, 5), EditorModifiers.Extend);
+
+        Assert.AreEqual(2, editor.SelectedAnnotations.Count);
+        Assert.IsNull(editor.Lasso);
+        Assert.AreEqual(2, editor.Document.Annotations.Count);
+    }
+
+    [TestMethod]
+    public void AMarqueeThatCaughtNothing_LeavesTheSelectionStanding()
+    {
+        // Clearing here would make a Ctrl+drag that missed cost the user the group they
+        // had just built up, which is the one thing the modifier is for. macshot keeps it
+        // too (OverlayView.swift:6427-6432).
+        var editor = TwoMarks();
+
+        editor.Tool = AnnotationTool.Select;
+        Select(editor, new CapturePoint(10, 10));
+        Select(editor, new CapturePoint(210, 10), EditorModifiers.Extend);
+
+        Drag(editor, new CapturePoint(500, 500), new CapturePoint(600, 600), EditorModifiers.Extend);
+
+        Assert.AreEqual(2, editor.SelectedAnnotations.Count);
+    }
+
+    [TestMethod]
+    public void HoldingAPencilStillOverAMark_TakesHoldOfItAndDropsTheStroke()
+    {
+        // A tap and a drag both draw with the pencil — a single dot is a deliberate mark
+        // — so there is no click left to mean "pick this up". Holding does it instead
+        // (OverlayView.swift:8309-8347), and the ink laid down before the hold expired is
+        // thrown away rather than committed beside the mark now being dragged.
+        var editor = TwoMarks();
+        editor.Tool = AnnotationTool.Pencil;
+
+        editor.PointerPressed(new CapturePoint(30, 30));
+        Assert.IsTrue(editor.SelectsByHolding());
+        Assert.IsTrue(editor.LongPressed(new CapturePoint(30, 30)));
+
+        editor.PointerMoved(new CapturePoint(60, 30));
+        editor.PointerReleased(new CapturePoint(60, 30));
+
+        Assert.AreEqual(2, editor.Document.Annotations.Count, "no stroke may be left behind");
+        Assert.AreEqual(40, editor.Document.Annotations[0].Start.X, 1e-9);
+    }
+
+    [TestMethod]
+    public void HoldingAPencilStillOverNothing_LeavesTheStrokeToCarryOn()
+    {
+        var editor = NewEditor(AnnotationTool.Pencil);
+
+        editor.PointerPressed(new CapturePoint(400, 400));
+        Assert.IsFalse(editor.LongPressed(new CapturePoint(400, 400)));
+
+        editor.PointerMoved(new CapturePoint(430, 400));
+        editor.PointerReleased(new CapturePoint(430, 400));
+
+        Assert.AreEqual(1, editor.Document.Annotations.Count);
+        Assert.AreEqual(AnnotationTool.Pencil, editor.Document.Annotations[0].Tool);
+    }
+
+    [TestMethod]
+    public void APencilPressWithAModifierOnIt_IsNotOneToHold()
+    {
+        // Both modifiers have already told the press what it means: Ctrl that it is about
+        // the selection, draw-through that what is underneath is to be ignored. Arming
+        // the timer would put a third meaning on the same gesture.
+        var editor = NewEditor(AnnotationTool.Pencil);
+
+        Assert.IsFalse(editor.SelectsByHolding(EditorModifiers.Extend));
+        Assert.IsFalse(editor.SelectsByHolding(EditorModifiers.DrawThrough));
+
+        editor.Tool = AnnotationTool.Rectangle;
+        Assert.IsFalse(editor.SelectsByHolding(), "a tool that selects on the click has nothing to wait for");
+    }
+
+    [TestMethod]
+    public void APencilWithAGroupSelected_DragsItWithoutAModifier()
+    {
+        // Otherwise the only way to move a group the user has just built is to put the
+        // pencil down and pick the pointer up first. macOS makes the same exception
+        // (OverlayView.swift:8247, 8253).
+        var editor = TwoMarks();
+
+        editor.Tool = AnnotationTool.Select;
+        Select(editor, new CapturePoint(10, 10));
+        Select(editor, new CapturePoint(210, 10), EditorModifiers.Extend);
+
+        editor.Tool = AnnotationTool.Pencil;
+        Drag(editor, new CapturePoint(30, 30), new CapturePoint(60, 30));
+
+        Assert.AreEqual(2, editor.Document.Annotations.Count, "the press must move, not draw");
+        Assert.AreEqual(40, editor.Document.Annotations[0].Start.X, 1e-9);
+        Assert.AreEqual(240, editor.Document.Annotations[1].Start.X, 1e-9);
+    }
+
+    /// <summary>Two censors far enough apart to be pressed and swept independently.</summary>
+    private static AnnotationEditor TwoMarks()
+    {
+        var editor = NewEditor(AnnotationTool.Censor);
+        Drag(editor, new CapturePoint(10, 10), new CapturePoint(60, 60));
+        Drag(editor, new CapturePoint(210, 10), new CapturePoint(260, 60));
+        return editor;
+    }
+
+    /// <summary>Clicks a mark, which is what arms its handles.</summary>
+    private static void Select(
+        AnnotationEditor editor,
+        CapturePoint point,
+        EditorModifiers modifiers = EditorModifiers.None)
+    {
+        editor.PointerPressed(point, modifiers);
+        editor.PointerReleased(point, modifiers);
     }
 
     private static AnnotationEditor NewEditor(AnnotationTool tool)

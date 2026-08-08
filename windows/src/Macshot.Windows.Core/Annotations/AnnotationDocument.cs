@@ -85,6 +85,29 @@ public sealed class AnnotationDocument
         return true;
     }
 
+    /// <summary>
+    /// Removes several annotations by id, as one undo step. False when none of them was
+    /// here.
+    /// </summary>
+    /// <remarks>
+    /// The counterpart of <see cref="AddRange"/>, for the one keystroke that can remove
+    /// several marks at once: Delete over a multi-selection. One step per mark would make
+    /// undoing it a sequence of keystrokes that puts the group back one member at a time.
+    /// </remarks>
+    public bool RemoveRange(IEnumerable<Guid> ids)
+    {
+        ArgumentNullException.ThrowIfNull(ids);
+
+        var doomed = ids.ToHashSet();
+        if (doomed.Count == 0 || !_annotations.Exists(annotation => doomed.Contains(annotation.Id)))
+        {
+            return false;
+        }
+
+        Commit(() => _annotations.RemoveAll(annotation => doomed.Contains(annotation.Id)));
+        return true;
+    }
+
     /// <summary>Removes every annotation sharing <paramref name="groupId"/> as one undo step.</summary>
     public bool RemoveGroup(Guid groupId)
     {
@@ -109,6 +132,58 @@ public sealed class AnnotationDocument
         }
 
         Commit(() => _annotations[index] = annotation);
+        return true;
+    }
+
+    /// <summary>
+    /// Swaps in edited copies of several annotations as one undo step. False unless every
+    /// one of them is here to be replaced.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// For the one gesture that edits several marks at once: dragging a multi-selection.
+    /// One <see cref="Replace(Annotation)"/> per mark would push one undo step per mark,
+    /// and Ctrl+Z would then walk the group back to where it started one member at a time.
+    /// </para>
+    /// <para>
+    /// All or nothing, because a partial move is a state the user never asked for and
+    /// could not have produced by hand. If one of them has gone, the caller is working
+    /// from a selection the document has moved on from.
+    /// </para>
+    /// </remarks>
+    public bool ReplaceRange(IEnumerable<Annotation> annotations)
+    {
+        ArgumentNullException.ThrowIfNull(annotations);
+
+        var batch = annotations.ToArray();
+        if (batch.Length == 0)
+        {
+            return false;
+        }
+
+        if (Array.Exists(batch, annotation => annotation is null))
+        {
+            throw new ArgumentException("The batch contains a null annotation.", nameof(annotations));
+        }
+
+        var indexes = new int[batch.Length];
+        for (var index = 0; index < batch.Length; index++)
+        {
+            indexes[index] = _annotations.FindIndex(existing => existing.Id == batch[index].Id);
+            if (indexes[index] < 0)
+            {
+                return false;
+            }
+        }
+
+        Commit(() =>
+        {
+            for (var index = 0; index < batch.Length; index++)
+            {
+                _annotations[indexes[index]] = batch[index];
+            }
+        });
+
         return true;
     }
 

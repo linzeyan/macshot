@@ -5,6 +5,7 @@ using Macshot.Windows.Core.Recognition;
 using Macshot.Windows.Rendering;
 using Macshot.Windows.Services;
 using Microsoft.UI.Input;
+using Microsoft.UI.Text;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
@@ -49,12 +50,36 @@ public sealed partial class AnnotationCanvasView : UserControl
     /// </summary>
     private const double HandleSize = 9;
 
+    /// <summary>
+    /// How tall the delete button a group of marks is given is drawn, and — halved — how
+    /// round its ends are. macshot's own 28 (<c>OverlayView.swift:4889</c>).
+    /// </summary>
+    private const double PillHeight = 28;
+
+    /// <summary>How far the button clears the marks it belongs to. macshot's 8.</summary>
+    private const double PillGap = 8;
+
     private readonly Brush _chromeStroke = new SolidColorBrush(Color.FromArgb(255, 76, 194, 255));
     private readonly Brush _handleFill = new SolidColorBrush(Color.FromArgb(255, 255, 255, 255));
 
     // The chrome colour at macshot's 0.6, so an alignment guide reads as the editor
     // talking rather than as something drawn on the screenshot.
     private readonly Brush _guideStroke = new SolidColorBrush(Color.FromArgb(153, 76, 194, 255));
+
+    // systemBlue at the tenth and the six tenths macshot fills and strokes the marquee
+    // with. Deliberately not the chrome blue above: the two are on screen together while
+    // a sweep is live, and one says what is selected while the other says what letting go
+    // would select.
+    private readonly Brush _lassoFill = new SolidColorBrush(Color.FromArgb(26, 0, 122, 255));
+    private readonly Brush _lassoStroke = new SolidColorBrush(Color.FromArgb(153, 0, 122, 255));
+
+    // macshot's pill: near-black at 0.94, a hairline of white at 0.08, and a bin in the
+    // red it tints the trash symbol with. Fixed rather than system-adaptive, because this
+    // is chrome over a screenshot and has to read the same whatever the desktop is set to.
+    private readonly Brush _pillFill = new SolidColorBrush(Color.FromArgb(240, 31, 31, 31));
+    private readonly Brush _pillBorder = new SolidColorBrush(Color.FromArgb(20, 255, 255, 255));
+    private readonly Brush _pillIcon = new SolidColorBrush(Color.FromArgb(255, 255, 102, 102));
+    private readonly Brush _pillText = new SolidColorBrush(Color.FromArgb(255, 255, 255, 255));
 
     private AnnotationEditor? _editor;
     private IFramePlacement _placement = new ImageFramePlacement();
@@ -301,24 +326,72 @@ public sealed partial class AnnotationCanvasView : UserControl
     }
 
     /// <summary>
-    /// Redraws the outline and handles around the selected mark.
+    /// Redraws the outlines, handles and buttons around the selected marks, and the
+    /// marquee if one is being swept.
     /// </summary>
     /// <remarks>
-    /// Rebuilt from scratch on every render rather than kept and moved. A selection is one
-    /// small shape and at most five handles, and the alternative is a cache that has to
-    /// know when a rotation, a reshape or an undo invalidated it — which is every render
-    /// this is called from anyway.
+    /// Rebuilt from scratch on every render rather than kept and moved. A selection is a
+    /// few small shapes and at most five handles, and the alternative is a cache that has
+    /// to know when a rotation, a reshape or an undo invalidated it — which is every
+    /// render this is called from anyway.
     /// </remarks>
     private void DrawSelectionChrome()
     {
         SelectionLayer.Children.Clear();
+        SelectionControls.Children.Clear();
 
-        if (_editor?.SelectionShown is not { } shown)
+        if (_editor is not { } editor)
         {
             return;
         }
 
-        var outline = AnnotationHandles.Outline(shown).Select(_placement.ToLayout).ToArray();
+        foreach (var selected in editor.SelectedAsShown)
+        {
+            AddOutline(selected);
+        }
+
+        // Handles only where there is a single subject. A group is moved and deleted
+        // whole, so a set of corners on each member would offer to reshape one of them
+        // alone — which is why macOS draws the full controls only at a count of one
+        // (OverlayView.swift:1853-1856).
+        if (editor.SelectionShown is { } shown)
+        {
+            // The dashed chain through the anchors, which macshot draws for the reason it
+            // draws the arms out to a bend grip (OverlayView.swift:4314-4322): the mark
+            // itself is a smooth curve that passes near the anchors rather than turning the
+            // corners they describe, so without the chain there is nothing saying which
+            // grip belongs to which part of it. Before the handles, so they are drawn over
+            // it.
+            if (shown.HasWaypoints)
+            {
+                var chain = shown.AnchorPath;
+                for (var span = 1; span < chain.Count; span++)
+                {
+                    AddArm(_placement.ToLayout(chain[span - 1]), _placement.ToLayout(chain[span]));
+                }
+            }
+
+            var outline = AnnotationHandles.Outline(shown).Select(_placement.ToLayout).ToArray();
+            foreach (var handle in editor.Handles)
+            {
+                AddHandle(handle, outline, shown);
+            }
+        }
+
+        if (editor.MultiSelectionBounds is { } group)
+        {
+            AddGroupDelete(group, editor.SelectedAnnotations.Count);
+        }
+
+        if (editor.Lasso is { } lasso)
+        {
+            AddLasso(lasso);
+        }
+    }
+
+    /// <summary>The dashed rectangle drawn round one selected mark.</summary>
+    private void AddOutline(Annotation selected)
+    {
         var border = new Polygon
         {
             Stroke = _chromeStroke,
@@ -332,30 +405,135 @@ public sealed partial class AnnotationCanvasView : UserControl
 
         // Added to the collection the shape already owns rather than assigning a new one,
         // because the XAML collection types are not all constructible from code.
-        foreach (var corner in outline)
+        foreach (var corner in AnnotationHandles.Outline(selected))
         {
-            border.Points.Add(corner);
+            border.Points.Add(_placement.ToLayout(corner));
         }
 
         SelectionLayer.Children.Add(border);
+    }
 
-        // The dashed chain through the anchors, which macshot draws for the reason it
-        // draws the arms out to a bend grip (OverlayView.swift:4314-4322): the mark itself
-        // is a smooth curve that passes near the anchors rather than turning the corners
-        // they describe, so without the chain there is nothing saying which grip belongs to
-        // which part of it. Before the handles, so they are drawn over it.
-        if (shown.HasWaypoints)
-        {
-            var chain = shown.AnchorPath;
-            for (var span = 1; span < chain.Count; span++)
-            {
-                AddArm(_placement.ToLayout(chain[span - 1]), _placement.ToLayout(chain[span]));
-            }
-        }
+    /// <summary>
+    /// The marquee a Ctrl+drag is sweeping over the canvas.
+    /// </summary>
+    /// <remarks>
+    /// macshot's own colours and dash: systemBlue at a tenth inside, at six tenths on a
+    /// 4/3 dashed border (<c>OverlayView.swift:1869-1879</c>). Not the chrome blue the
+    /// selection outlines use, because the two are on screen together while the sweep is
+    /// live and they are saying different things — one is what is selected, the other is
+    /// what letting go would select.
+    /// </remarks>
+    private void AddLasso(CaptureRegion lasso)
+    {
+        var origin = _placement.ToLayout(new CapturePoint(lasso.X, lasso.Y));
+        var opposite = _placement.ToLayout(new CapturePoint(lasso.Right, lasso.Bottom));
 
-        foreach (var handle in _editor.Handles)
+        var marquee = new Rectangle
         {
-            AddHandle(handle, outline, shown);
+            Width = Math.Max(0, opposite.X - origin.X),
+            Height = Math.Max(0, opposite.Y - origin.Y),
+            Fill = _lassoFill,
+            Stroke = _lassoStroke,
+            StrokeThickness = 1,
+            StrokeDashArray = new DoubleCollection { 4, 3 },
+            IsHitTestVisible = false,
+        };
+
+        Canvas.SetLeft(marquee, origin.X);
+        Canvas.SetTop(marquee, origin.Y);
+        SelectionLayer.Children.Add(marquee);
+    }
+
+    /// <summary>
+    /// The one delete button a group of selected marks gets, hung under everything it
+    /// covers.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A real control rather than a drawn pill with a rectangle hit test, which is what
+    /// macshot has to do on a canvas that owns every pixel of its window
+    /// (<c>OverlayView.swift:4863</c>). The picture is the same one: a dark rounded pill
+    /// carrying a red bin and the count, under the middle of the group's bounds.
+    /// </para>
+    /// <para>
+    /// Built after the page-wide localization pass has run, so it asks for its own
+    /// translation. The key is macshot's own "Delete", which its forty languages already
+    /// carry.
+    /// </para>
+    /// </remarks>
+    private void AddGroupDelete(CaptureRegion bounds, int count)
+    {
+        var label = $"{Localization.L("Delete")} {count}";
+        var caption = new TextBlock
+        {
+            Text = label,
+            FontSize = 13,
+
+            // On the control, because no theme resource carries a weight. macshot draws
+            // this label at medium.
+            FontWeight = AppFonts.Heavier(label, FontWeights.Medium),
+            Foreground = _pillText,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        var row = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 5,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        row.Children.Add(new FontIcon
+        {
+            // Segoe Fluent Icons' bin, the same character the history window's
+            // own delete already uses.
+            Glyph = "\uE74D",
+            FontSize = 13,
+            FontFamily = new FontFamily("Segoe Fluent Icons"),
+            Foreground = _pillIcon,
+            VerticalAlignment = VerticalAlignment.Center,
+        });
+        row.Children.Add(caption);
+
+        var pill = new Border
+        {
+            Height = PillHeight,
+            CornerRadius = new CornerRadius(PillHeight / 2),
+            Padding = new Thickness(12, 0, 12, 0),
+            Background = _pillFill,
+            BorderBrush = _pillBorder,
+            BorderThickness = new Thickness(1),
+            Child = row,
+        };
+
+        pill.PointerPressed += GroupDelete_PointerPressed;
+
+        var centre = _placement.ToLayout(new CapturePoint(bounds.X + (bounds.Width / 2), bounds.Bottom));
+
+        // Below the marks rather than above them, which is where macshot hangs it: the
+        // toolbar is above the capture, and a button in the same place would be behind it
+        // whenever the selection reached the top of the region.
+        Canvas.SetTop(pill, centre.Y + PillGap);
+        SelectionControls.Children.Add(pill);
+
+        // How wide the pill is depends on the count and on the language it is written in,
+        // so where its left edge goes is not known until it has been measured. Measured
+        // after it is in the tree, and corrected on the layout pass that follows: a
+        // measurement taken off the tree has no font context to take it in.
+        pill.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        Canvas.SetLeft(pill, centre.X - (pill.DesiredSize.Width / 2));
+        pill.SizeChanged += (_, args) => Canvas.SetLeft(pill, centre.X - (args.NewSize.Width / 2));
+    }
+
+    private void GroupDelete_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        // Handled, or the press would carry on to the host underneath and start a mark
+        // where the button used to be.
+        e.Handled = true;
+
+        if (_editor?.DeleteSelected() == true)
+        {
+            Render();
         }
     }
 

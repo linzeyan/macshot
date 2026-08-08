@@ -66,6 +66,13 @@ public sealed partial class EditorWindow : Window
 
     private readonly SettingsStore _settings;
     private readonly AnnotationEditor _editor = new(new AnnotationDocument());
+
+    /// <summary>
+    /// The clock behind the pencil's hold-to-select. Built in the constructor rather than
+    /// here, because it needs this window's dispatcher.
+    /// </summary>
+    private readonly PressHold _hold;
+
     private readonly IFramePlacement _placement = new ImageFramePlacement();
 
     /// <summary>
@@ -165,6 +172,9 @@ public sealed partial class EditorWindow : Window
         // Every string in the XAML is already the English text macshot keys by,
         // so the page is translated in place rather than written twice.
         this.Localize();
+
+        // After the markup has run: the canvas it redraws is a field the markup creates.
+        _hold = new PressHold(DispatcherQueue, _editor, AnnotationCanvas.Render);
         AppThemes.Apply(this, settings.Current.Theme);
         this.GetAppWindow().UseAppIcon();
     }
@@ -669,7 +679,15 @@ public sealed partial class EditorWindow : Window
         }
 
         var at = ToFrame(e);
-        var grabbed = _editor.PointerPressed(at, ToModifiers(e), PenInput.Of(e));
+        var modifiers = ToModifiers(e);
+        var grabbed = _editor.PointerPressed(at, modifiers, PenInput.Of(e));
+
+        // Only where the press drew rather than grabbing: a freehand tool has no click
+        // left over to mean "pick this up", so holding still is what does it instead.
+        if (!grabbed)
+        {
+            _hold.Watch(at, modifiers);
+        }
 
         // The press comes first, the placement second: a sprite tool places its mark only
         // where the click did not land on one already drawn. See the same order in
@@ -705,7 +723,12 @@ public sealed partial class EditorWindow : Window
 
         if (e.Pointer.IsInContact)
         {
-            _editor.PointerMoved(ToFrame(e), ToModifiers(e), PenInput.Of(e));
+            var at = ToFrame(e);
+
+            // Before the editor is told, so a press that has become a stroke stops being a
+            // candidate for the hold before the next sample lands.
+            _hold.Moved(at);
+            _editor.PointerMoved(at, ToModifiers(e), PenInput.Of(e));
             AnnotationCanvas.Render();
         }
     }
@@ -713,6 +736,7 @@ public sealed partial class EditorWindow : Window
     private void InputCanvas_PointerReleased(object sender, PointerRoutedEventArgs e)
     {
         InputCanvas.ReleasePointerCaptures();
+        _hold.Ended();
 
         if (_cropping)
         {
@@ -1644,8 +1668,9 @@ public sealed partial class EditorWindow : Window
 
     /// <summary>
     /// Alt is macOS's Option here as it is over the capture: held, a tool draws over the
-    /// marks under the pointer instead of grabbing them. Ctrl is macOS's Control: a press
-    /// on a line, arrow or ruler bends it through another anchor.
+    /// marks under the pointer instead of grabbing them. Ctrl is macOS's Control: on the
+    /// selected line, arrow or ruler it bends the mark through another anchor, on any other
+    /// mark it adds to the selection, and over empty space it sweeps a marquee.
     /// </summary>
     /// <remarks>
     /// Alt from the keyboard rather than from the pointer event: Windows treats it as a
@@ -1656,7 +1681,7 @@ public sealed partial class EditorWindow : Window
     /// </remarks>
     private static EditorModifiers ToModifiers(PointerRoutedEventArgs e) =>
         (e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift) ? EditorModifiers.Constrain : EditorModifiers.None)
-        | (e.KeyModifiers.HasFlag(VirtualKeyModifiers.Control) ? EditorModifiers.AddAnchor : EditorModifiers.None)
+        | (e.KeyModifiers.HasFlag(VirtualKeyModifiers.Control) ? EditorModifiers.Extend : EditorModifiers.None)
         | (IsDown(VirtualKey.Menu) ? EditorModifiers.DrawThrough : EditorModifiers.None);
 
     private static bool IsDown(VirtualKey key) =>
