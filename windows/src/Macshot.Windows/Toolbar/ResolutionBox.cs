@@ -275,7 +275,10 @@ internal sealed partial class ResolutionBox : UserControl
     {
         var flyout = new Flyout
         {
-            Placement = FlyoutPlacementMode.Bottom,
+            // Above the box. Both buttons that open this panel go through one function on
+            // macshot, and it asks for the anchor's top edge (`OverlayView.swift:2492`,
+            // `:2657`), so the two cannot open on different sides of their anchors.
+            Placement = FlyoutPlacementMode.Top,
             Content = _presetsView,
 
             // The panel brings its own padding and its own dark background; the default

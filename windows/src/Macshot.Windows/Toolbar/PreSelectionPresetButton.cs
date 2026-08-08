@@ -63,7 +63,10 @@ internal sealed partial class PreSelectionPresetButton : UserControl
 
         _flyout = new Flyout
         {
-            Placement = FlyoutPlacementMode.Bottom,
+            // Above the button, which is where macshot puts it: `preferredEdge: .maxY` on a
+            // view whose `isFlipped` is false is the top edge (`OverlayView.swift:2657`,
+            // `:1015`). Both frameworks flip it to the other side when there is no room.
+            Placement = FlyoutPlacementMode.Top,
             Content = _presetsView,
 
             // The panel paints its own dark slab; the default presenter would put a light
