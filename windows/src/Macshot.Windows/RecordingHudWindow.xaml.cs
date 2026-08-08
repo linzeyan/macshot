@@ -37,7 +37,10 @@ public sealed partial class RecordingHudWindow : Window
 
     private const double HeightDips = 32;
 
-    /// <summary>What it grows to for the three seconds that name the file.</summary>
+    /// <summary>
+    /// The narrowest it grows to for the three seconds that name the file. A name longer
+    /// than this widens it further — the file name is the whole reason that state exists.
+    /// </summary>
     private const double SavedWidthDips = 340;
 
     /// <summary>
@@ -71,6 +74,19 @@ public sealed partial class RecordingHudWindow : Window
 
     private readonly DispatcherQueueTimer _ticker;
 
+    /// <summary>
+    /// What takes the panel away once it has named the file.
+    /// </summary>
+    /// <remarks>
+    /// A field, and not the local it was: a DispatcherQueueTimer nothing holds is
+    /// collected before it can tick, so the panel that said where the recording went
+    /// stayed on the screen for the rest of the session. The ticker beside it was already
+    /// a field for the same reason, which is what makes the running state work.
+    /// </remarks>
+    private readonly DispatcherQueueTimer _linger;
+
+    private bool _closed;
+
     private double _scale = 1;
     private DateTimeOffset _started;
 
@@ -92,6 +108,20 @@ public sealed partial class RecordingHudWindow : Window
         _ticker = DispatcherQueue.CreateTimer();
         _ticker.Interval = TimeSpan.FromSeconds(1);
         _ticker.Tick += (_, _) => ElapsedText.Text = Format(Elapsed);
+
+        _linger = DispatcherQueue.CreateTimer();
+        _linger.Interval = SavedLinger;
+        _linger.IsRepeating = false;
+        _linger.Tick += (_, _) => Dismiss();
+
+        // Closed from anywhere else — a recording that failed, the app going down — must
+        // leave no timer pointing at a window that no longer exists.
+        Closed += (_, _) =>
+        {
+            _closed = true;
+            _ticker.Stop();
+            _linger.Stop();
+        };
     }
 
     /// <summary>Raised when the user asks for the recording to stop.</summary>
@@ -119,7 +149,18 @@ public sealed partial class RecordingHudWindow : Window
         _scale = display.Scale;
 
         var appWindow = this.GetAppWindow();
-        appWindow.MakeChromeless().IsAlwaysOnTop = true;
+        var presenter = appWindow.MakeChromeless();
+        presenter.IsAlwaysOnTop = true;
+
+        // A 164 × 32 pill has nothing to resize, and a resizable window carries a sizing
+        // frame whether or not anything draws it. That frame is the difference between
+        // the window rect MoveAndResize sets and the client rect the content is given,
+        // and this is the one panel in the app with no slack anywhere to absorb it: the
+        // row is drawn at 4 from the top of a 32-tall pill, so every point the frame
+        // takes is a point of the row against the bottom edge. It also stopped the
+        // outermost points of the pill dragging it, since the frame answered first.
+        presenter.IsResizable = false;
+
         this.RoundCorners(HairlineColour);
 
         var handle = WindowNative.GetWindowHandle(this);
@@ -135,6 +176,7 @@ public sealed partial class RecordingHudWindow : Window
         SetWindowLongPtr(handle, ExtendedStyle, new IntPtr(style | NoActivate | ToolWindow));
 
         appWindow.MoveAndResize(Place(region, display, WidthDips));
+        FitClient(WidthDips);
 
         _started = DateTimeOffset.UtcNow;
         _ticker.Start();
@@ -163,21 +205,50 @@ public sealed partial class RecordingHudWindow : Window
         RunningLayer.Visibility = Visibility.Collapsed;
         SavedLayer.Visibility = Visibility.Visible;
 
+        // What the sentence actually takes rather than what it was assumed to take: a
+        // long name, or a translation longer than "Saved", runs past 340 and the name is
+        // the one thing this state is for. global::, because inside namespace
+        // Macshot.Windows the name "Windows" binds to this assembly's own namespace.
+        SavedLayer.Measure(new global::Windows.Foundation.Size(
+            double.PositiveInfinity,
+            double.PositiveInfinity));
+        var widthDips = Math.Max(SavedWidthDips, Math.Ceiling(SavedLayer.DesiredSize.Width));
+
         var appWindow = this.GetAppWindow();
         var at = appWindow.Position;
-        appWindow.MoveAndResize(new RectInt32(
-            // Leftwards: the panel is right-aligned to what was recorded, and growing
-            // rightwards would walk it off the screen edge it was clamped to.
-            at.X - (int)((SavedWidthDips - WidthDips) * _scale),
-            at.Y,
-            (int)(SavedWidthDips * _scale),
-            (int)(HeightDips * _scale)));
 
-        var linger = DispatcherQueue.CreateTimer();
-        linger.Interval = SavedLinger;
-        linger.IsRepeating = false;
-        linger.Tick += (_, _) => Close();
-        linger.Start();
+        // Leftwards: the panel is right-aligned to what was recorded, and growing
+        // rightwards would walk it off the screen edge it was clamped to.
+        appWindow.Move(new PointInt32(at.X - (int)Math.Ceiling((widthDips - WidthDips) * _scale), at.Y));
+        FitClient(widthDips);
+
+        _linger.Start();
+    }
+
+    /// <summary>Takes the panel away, once, whichever timer asked.</summary>
+    private void Dismiss()
+    {
+        if (!_closed)
+        {
+            Close();
+        }
+    }
+
+    /// <summary>
+    /// Gives the content exactly the pixels it is drawn for.
+    /// </summary>
+    /// <remarks>
+    /// AppWindow.MoveAndResize sets the window rect, and a window rect is not a client
+    /// rect — whatever frame the presenter leaves round a chromeless window comes out of
+    /// the half that draws. Everywhere else in this app that goes unnoticed, because
+    /// every other panel is given more room than its content asks for; this one is
+    /// macshot's pill at exactly the size of the row inside it.
+    /// </remarks>
+    private void FitClient(double widthDips)
+    {
+        this.GetAppWindow().ResizeClient(new SizeInt32(
+            (int)Math.Ceiling(widthDips * _scale),
+            (int)Math.Ceiling(HeightDips * _scale)));
     }
 
     private static RectInt32 Place(CaptureRegion region, CaptureMonitor display, double widthDips)
