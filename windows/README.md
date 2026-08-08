@@ -68,7 +68,8 @@ pixels under the pointer, and a label breaks its line on `Shift+Enter`.
 
 For anything more than a few marks, press **Editor** for a resizable window with
 zoom, cropping, flipping and gradient backgrounds. A past capture reopens there
-too, from the thumbnail, the Recent captures menu, or the History panel.
+too, from the thumbnail or the History panel. The Recent captures menu copies
+one back to the clipboard instead.
 
 By default a finished capture goes to the clipboard, is saved to
 `Pictures\Macshot`, and appears as a floating thumbnail with copy, save, pin, and

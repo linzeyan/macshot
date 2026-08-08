@@ -1010,7 +1010,7 @@ public sealed class CaptureController : IDisposable
             Post(ClearHistoryAsync);
             break;
         case >= CommandRecentFirst:
-            OpenRecent(command - CommandRecentFirst);
+            CopyRecent(command - CommandRecentFirst);
             break;
         case CommandQuit:
             _dispatcher.TryEnqueue(() =>
@@ -1415,16 +1415,30 @@ public sealed class CaptureController : IDisposable
     }
 
     /// <summary>
-    /// Reopens a past capture in the editor, so it can be marked up further rather than
-    /// only looked at.
+    /// Puts a past capture back on the clipboard, and up in the floating panel, exactly
+    /// as a capture just taken arrives.
     /// </summary>
     /// <remarks>
-    /// It falls back to the shell when the file will not decode — pruned between the menu
-    /// being built and the click arriving, or written by something else into macshot's
-    /// folder. Whatever can open it is a better answer than a message box about a
-    /// screenshot the user only wanted to see.
+    /// <para>
+    /// Copying rather than reopening, which is what macshot's submenu does
+    /// (<c>AppDelegate.swift:3197</c>). The submenu is the shortcut for "I need that one
+    /// again": a whole editor window to dismiss is a poor answer for a picture that was
+    /// only ever going to be pasted, and reopening is still one click away on the panel
+    /// this puts up, in the History panel, and through the <c>macshot:</c> scheme.
+    /// </para>
+    /// <para>
+    /// The panel is given this entry's own file, so its Edit writes back over the entry
+    /// that was copied instead of leaving the history holding the capture twice.
+    /// </para>
+    /// <para>
+    /// A failure is logged and nothing else: the entry was drawn in the menu a moment
+    /// ago, so the file has gone away underneath it — pruned between the menu being built
+    /// and the click arriving, or never decodable in the first place. The shell fallback
+    /// that used to stand here answered "show me this one", and there is no reading of
+    /// "copy this one" that an image viewer satisfies.
+    /// </para>
     /// </remarks>
-    private void OpenRecent(int index)
+    private void CopyRecent(int index)
     {
         if (index < 0 || index >= _recent.Count)
         {
@@ -1436,12 +1450,20 @@ public sealed class CaptureController : IDisposable
         {
             try
             {
-                await ReopenAsync(entry);
+                var settings = _settings.Current;
+                var frame = await ImageLoader.LoadAsync(entry.Path);
+
+                await ImageDelivery.CopyToClipboardAsync(frame);
+                CaptureSound.Play(settings.PlayCaptureSound);
+
+                if (settings.ShowThumbnail)
+                {
+                    await ShowThumbnailAsync(frame, entry.Path);
+                }
             }
             catch (Exception exception)
             {
-                DiagnosticLog.Write($"Could not reopen '{entry.Path}': {exception.Message}");
-                OpenWithShell(entry.Path);
+                DiagnosticLog.Write($"Could not copy '{entry.Path}': {exception.Message}");
             }
         });
     }
