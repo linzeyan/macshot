@@ -270,20 +270,53 @@ public sealed class AnnotationEditorTests
     }
 
     [TestMethod]
-    public void Handles_AreOfferedOnlyWhileTheSelectToolIsActive()
+    public void Handles_AreOfferedForWhateverToolIsInHand()
     {
-        // They are chrome the user cannot grab with a drawing tool armed, and chrome that
-        // cannot be used is chrome in the way of the mark being drawn.
+        // A press near a handle reshapes the selected mark whatever tool is armed, so
+        // offering the handles only under the pointer tool left every other tool with
+        // chrome that worked and could not be seen.
         var editor = NewEditor(AnnotationTool.Rectangle);
         Drag(editor, new CapturePoint(10, 10), new CapturePoint(60, 40));
 
-        editor.Tool = AnnotationTool.Select;
-        Drag(editor, new CapturePoint(10, 10), new CapturePoint(10, 10));
+        // Grabbed with the drawing tool still in hand, which is how a mark comes to be
+        // selected under anything but the pointer.
+        Select(editor, new CapturePoint(10, 10));
+
         Assert.AreNotEqual(0, editor.Handles.Count);
+    }
 
-        editor.Tool = AnnotationTool.Arrow;
+    [TestMethod]
+    public void PressOnAMarkWithASpriteTool_GrabsItSoTheHostPlacesNothing()
+    {
+        // The answer is what the host places a label or a badge on: without it, a text,
+        // a number and a stamp could never be picked up again, because the press that
+        // would pick one up would drop another on top of it instead.
+        var editor = NewEditor(AnnotationTool.Rectangle);
+        Drag(editor, new CapturePoint(10, 10), new CapturePoint(60, 40));
 
-        Assert.AreEqual(0, editor.Handles.Count);
+        editor.Tool = AnnotationTool.Stamp;
+
+        Assert.IsTrue(editor.PointerPressed(new CapturePoint(10, 10)));
+        Assert.IsNotNull(editor.Selected);
+    }
+
+    [TestMethod]
+    public void PressOnAShapeWithTheTextTool_GrabsIt()
+    {
+        // macOS selects whatever movable mark is under the pointer with the text tool in
+        // hand (OverlayView.swift:8248-8252) and reserves Option for placing a label on
+        // top of one, which is the escape this used to be missing.
+        var editor = NewEditor(AnnotationTool.Rectangle);
+        Drag(editor, new CapturePoint(10, 10), new CapturePoint(60, 40));
+
+        editor.Tool = AnnotationTool.Text;
+
+        Assert.IsTrue(editor.PointerPressed(new CapturePoint(10, 10)));
+
+        editor.PointerReleased(new CapturePoint(10, 10));
+        Assert.IsFalse(editor.PointerPressed(
+            new CapturePoint(10, 10),
+            EditorModifiers.DrawThrough));
     }
 
     [TestMethod]
@@ -531,6 +564,60 @@ public sealed class AnnotationEditorTests
         Drag(editor, new CapturePoint(10, 90), new CapturePoint(500, 90));
 
         Assert.AreEqual(500, editor.Document.Annotations[1].End.X, 1e-9);
+    }
+
+    [TestMethod]
+    public void PressOnAMark_GrabsItRatherThanStartingANewOne()
+    {
+        // The behaviour draw-through exists to escape, pinned here so that the escape
+        // cannot be read as the normal case: a press inside a mark is a grab, which is
+        // what lets any tool move what is already drawn without switching to the pointer.
+        var editor = NewEditor(AnnotationTool.Rectangle);
+        Drag(editor, new CapturePoint(10, 10), new CapturePoint(60, 60));
+
+        editor.Tool = AnnotationTool.Censor;
+
+        Assert.IsTrue(editor.PointerPressed(new CapturePoint(10, 35)));
+        Assert.AreSame(editor.Document.Annotations[0], editor.Selected);
+    }
+
+    [TestMethod]
+    public void DrawThrough_LetsACensorBeDrawnOverAMarkInsteadOfDraggingIt()
+    {
+        // A censor's whole job is to cover what is under it, macshot's own marks included.
+        // Without this the gesture is swallowed by the shape it was aimed at: the shape
+        // slides across the capture and no censor is drawn at all.
+        var editor = NewEditor(AnnotationTool.Rectangle);
+        Drag(editor, new CapturePoint(10, 10), new CapturePoint(60, 60));
+        var shape = editor.Document.Annotations[0];
+
+        editor.Tool = AnnotationTool.Censor;
+        Drag(
+            editor,
+            new CapturePoint(10, 35),
+            new CapturePoint(80, 90),
+            EditorModifiers.DrawThrough);
+
+        Assert.AreEqual(2, editor.Document.Annotations.Count);
+        Assert.AreEqual(AnnotationTool.Censor, editor.Document.Annotations[1].Tool);
+
+        // And the shape it was drawn over stayed where it was.
+        Assert.AreEqual(shape.Start.X, editor.Document.Annotations[0].Start.X, 1e-9);
+        Assert.AreEqual(shape.Start.Y, editor.Document.Annotations[0].Start.Y, 1e-9);
+    }
+
+    [TestMethod]
+    public void DrawThrough_LeavesThePointerToolAbleToGrab()
+    {
+        // Interacting with marks is all the pointer tool does, so a modifier that turned
+        // that off would leave it with nothing to do. macOS exempts it for the same reason.
+        var editor = NewEditor(AnnotationTool.Rectangle);
+        Drag(editor, new CapturePoint(10, 10), new CapturePoint(60, 60));
+
+        editor.Tool = AnnotationTool.Select;
+        editor.PointerPressed(new CapturePoint(10, 35), EditorModifiers.DrawThrough);
+
+        Assert.AreSame(editor.Document.Annotations[0], editor.Selected);
     }
 
     /// <summary>Clicks a mark with the select tool, which is what arms its handles.</summary>

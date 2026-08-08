@@ -9,6 +9,19 @@ public enum EditorModifiers
 
     /// <summary>Shift: snap lines to 45 degrees and force shapes square.</summary>
     Constrain = 1,
+
+    /// <summary>
+    /// Alt — macOS's Option: ignore the marks under the pointer so the tool draws over
+    /// them instead of grabbing them.
+    /// </summary>
+    /// <remarks>
+    /// Without it there is no way to start a mark on top of one already drawn, because a
+    /// press inside an existing mark is a grab. That is fine for an arrow placed beside a
+    /// shape and useless for a censor, whose whole job is to cover what is underneath —
+    /// including macshot's own marks. macOS's <c>drawThrough</c>
+    /// (<c>OverlayView.swift:8211-8215</c>).
+    /// </remarks>
+    DrawThrough = 2,
 }
 
 /// <summary>
@@ -183,11 +196,18 @@ public sealed class AnnotationEditor
     public Annotation? SelectionShown => _dragTarget is not null && Draft is not null ? Draft : Selected;
 
     /// <summary>
-    /// The handles the canvas should draw. Empty unless the select tool is active, because
-    /// they are only grabbable then and chrome that cannot be used is chrome in the way.
+    /// The handles the canvas should draw, for whatever tool is in hand.
     /// </summary>
+    /// <remarks>
+    /// Not only for the pointer tool. <see cref="BeginSelection"/> tries the selected
+    /// mark's handles before anything else whatever tool is armed, so offering them only
+    /// under the pointer left every other tool with handles that worked and could not be
+    /// seen — a press near a corner reshaping a mark the user thought they were drawing
+    /// beside. macOS draws them the same way, from the selection rather than from the tool
+    /// (<c>OverlayView.swift:1852-1856</c>).
+    /// </remarks>
     public IReadOnlyList<AnnotationHandle> Handles =>
-        _tool == AnnotationTool.Select && SelectionShown is { } shown ? AnnotationHandles.For(shown, _scale) : [];
+        SelectionShown is { } shown ? AnnotationHandles.For(shown, _scale) : [];
 
     public bool IsDragging => _isPressed && Draft is not null;
 
@@ -274,11 +294,11 @@ public sealed class AnnotationEditor
     /// </summary>
     /// <remarks>
     /// A click on an existing mark grabs it whatever tool is in hand, so there is no
-    /// pointer tool to switch to first — the same rule macOS uses. The exceptions are
-    /// the tools where grabbing would take the gesture away from what it is for: a
-    /// freehand stroke drawn over an earlier mark is a stroke, not a grab, and the
-    /// text tool only grabs text, because a label placed beside a rectangle is far more
-    /// common than a wish to move the rectangle.
+    /// pointer tool to switch to first — the same rule macOS uses
+    /// (<c>OverlayView.swift:8254-8298</c>). The exceptions are the tools where grabbing
+    /// would take the gesture away from what it is for: a freehand stroke drawn over an
+    /// earlier mark is a stroke, not a grab. Drawing a mark deliberately on top of another
+    /// is what <see cref="EditorModifiers.DrawThrough"/> is for.
     /// </remarks>
     /// <param name="pressure">
     /// How hard the pen is pressed, from 0 to 1, or 0 for a device that does not report
@@ -294,7 +314,7 @@ public sealed class AnnotationEditor
         _isPressed = true;
         _origin = point;
 
-        if (GrabsExistingMarks(_tool) && BeginSelection(point))
+        if (GrabsExistingMarks(_tool, modifiers) && BeginSelection(point))
         {
             return true;
         }
@@ -631,7 +651,7 @@ public sealed class AnnotationEditor
         }
 
         var hit = _document.HitTest(point);
-        if (hit is null || !Grabs(_tool, hit))
+        if (hit is null)
         {
             // Only the pointer tool clears the selection on a miss. For every other
             // tool the press is about to draw, and clearing there would be doing it
@@ -659,17 +679,17 @@ public sealed class AnnotationEditor
     /// <summary>
     /// Whether this tool takes hold of what is already on the canvas. False for the
     /// freehand tools, which are used to draw over marks often enough that grabbing
-    /// would be wrong more often than right.
+    /// would be wrong more often than right, and false for any tool while
+    /// <see cref="EditorModifiers.DrawThrough"/> is held.
     /// </summary>
-    private static bool GrabsExistingMarks(AnnotationTool tool) =>
-        tool is not (AnnotationTool.Pencil or AnnotationTool.Marker or AnnotationTool.ColorSampler);
-
-    /// <summary>
-    /// Whether this tool grabs that particular mark. The text tool only grabs text: a
-    /// label is usually placed beside a shape, not instead of moving it.
-    /// </summary>
-    private static bool Grabs(AnnotationTool tool, Annotation hit) =>
-        tool != AnnotationTool.Text || hit.Tool == AnnotationTool.Text;
+    /// <remarks>
+    /// The pointer tool keeps grabbing whatever is held: interacting with marks is the
+    /// whole of what it does, so a modifier that turned that off would leave it with
+    /// nothing. macOS excludes it from draw-through for the same reason.
+    /// </remarks>
+    private static bool GrabsExistingMarks(AnnotationTool tool, EditorModifiers modifiers) =>
+        tool is not (AnnotationTool.Pencil or AnnotationTool.Marker or AnnotationTool.ColorSampler)
+        && (tool == AnnotationTool.Select || !modifiers.HasFlag(EditorModifiers.DrawThrough));
 
     /// <summary>Keeps a selection from pointing at an annotation undo has removed.</summary>
     private void DropStaleSelection()

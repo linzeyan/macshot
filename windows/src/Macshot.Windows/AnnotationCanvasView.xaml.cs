@@ -466,8 +466,9 @@ public sealed partial class AnnotationCanvasView : UserControl
     /// </summary>
     /// <remarks>
     /// Sprite tools take their size from the rasterized pixels, so there is nothing left
-    /// for a drag to decide. The host must not tell the editor about such a press, which
-    /// is what keeps its move and release handlers no-ops.
+    /// for a drag to decide. The editor is still told about the press first — it may take
+    /// hold of a mark already there — and answers with nothing to drag, which is what
+    /// keeps its move and release handlers no-ops for a placement.
     /// </remarks>
     public static bool IsPlacedByClick(AnnotationTool tool) => Annotation.RequiresSprite(tool);
 

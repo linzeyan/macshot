@@ -668,13 +668,18 @@ public sealed partial class EditorWindow : Window
             return;
         }
 
-        if (AnnotationCanvasView.IsPlacedByClick(_editor.Tool))
+        var at = ToFrame(e);
+        var grabbed = _editor.PointerPressed(at, ToModifiers(e), PenInput.Of(e));
+
+        // The press comes first, the placement second: a sprite tool places its mark only
+        // where the click did not land on one already drawn. See the same order in
+        // CaptureOverlayWindow, and macOS's startAnnotation.
+        if (!grabbed && AnnotationCanvasView.IsPlacedByClick(_editor.Tool))
         {
-            AnnotationCanvas.PlaceSprite(ToFrame(e));
+            AnnotationCanvas.PlaceSprite(at);
             return;
         }
 
-        _editor.PointerPressed(ToFrame(e), ToModifiers(e), PenInput.Of(e));
         AnnotationCanvas.Render();
     }
 
@@ -754,16 +759,18 @@ public sealed partial class EditorWindow : Window
             return;
         }
 
-        if (_editor.Tool != AnnotationTool.Select)
-        {
-            InputCanvas.UseCursor(InputSystemCursorShape.Cross);
-            return;
-        }
-
+        // Before the tool is asked: the selected mark's handles are grabbable whatever is
+        // in hand, so a crosshair over one would say "draw" where the press reshapes.
         if (_editor.SelectionShown is { } shown
             && AnnotationHandles.At(shown, point, _editor.Scale) is { } handle)
         {
             InputCanvas.UseCursor(CursorHints.For(handle.Kind));
+            return;
+        }
+
+        if (_editor.Tool != AnnotationTool.Select)
+        {
+            InputCanvas.UseCursor(InputSystemCursorShape.Cross);
             return;
         }
 
@@ -1635,8 +1642,17 @@ public sealed partial class EditorWindow : Window
     private CapturePoint ToFrame(PointerRoutedEventArgs e) =>
         _placement.ToFrame(e.GetCurrentPoint(InputCanvas).Position);
 
+    /// <summary>
+    /// Alt is macOS's Option here as it is over the capture: held, a tool draws over the
+    /// marks under the pointer instead of grabbing them.
+    /// </summary>
+    /// <remarks>
+    /// Alt from the keyboard rather than from the pointer event: Windows treats it as a
+    /// menu key and does not reliably carry it in a pointer event's modifiers.
+    /// </remarks>
     private static EditorModifiers ToModifiers(PointerRoutedEventArgs e) =>
-        e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift) ? EditorModifiers.Constrain : EditorModifiers.None;
+        (e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift) ? EditorModifiers.Constrain : EditorModifiers.None)
+        | (IsDown(VirtualKey.Menu) ? EditorModifiers.DrawThrough : EditorModifiers.None);
 
     private static bool IsDown(VirtualKey key) =>
         InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(CoreVirtualKeyStates.Down);

@@ -514,14 +514,22 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         var frame = _monitorFrame;
+
+        // Frame space, not virtual: the index is asked about edges in the coordinates a
+        // pointer arrives in, and CapturedFrame carries a virtual origin that is negative
+        // on any layout with a display left of or above the primary. Handing that over
+        // put every lookup off by the virtual origin, which clamped it to the edge of the
+        // capture and left the whole feature silently dead on those layouts.
+        var origin = _layout.VirtualToFrame(new CapturePoint(frame.VirtualX, frame.VirtualY));
+
         _ = Task.Run(() =>
         {
             var index = BoundarySnapIndex.Build(
                 frame.BgraPixels,
                 frame.Width,
                 frame.Height,
-                frame.VirtualX,
-                frame.VirtualY);
+                (int)origin.X,
+                (int)origin.Y);
 
             // Assigned from the worker: a reference store is atomic, every read of it is
             // one load on the UI thread, and marshalling back would queue work behind the
@@ -682,16 +690,20 @@ public sealed partial class CaptureOverlayWindow : Window
                 return;
             }
 
-            // Sprite tools are placed with a click rather than dragged out, and the
-            // editor is deliberately not told about the press, which is what keeps its
-            // move and release handlers no-ops.
-            if (AnnotationCanvasView.IsPlacedByClick(_editor.Tool))
+            var at = ToFrame(e);
+            var grabbed = _editor.PointerPressed(at, ToModifiers(e), PenInput.Of(e));
+
+            // Sprite tools are placed with a click rather than dragged out — but only
+            // where the click did not land on a mark already drawn, which the editor has
+            // just taken hold of instead. Placing a label or a badge on top of it would
+            // leave every text, number and stamp unmovable without switching tools first,
+            // where macOS grabs whatever is under the pointer whatever tool is in hand.
+            if (!grabbed && AnnotationCanvasView.IsPlacedByClick(_editor.Tool))
             {
-                AnnotationCanvas.PlaceSprite(ToFrame(e));
+                AnnotationCanvas.PlaceSprite(at);
                 return;
             }
 
-            _editor.PointerPressed(ToFrame(e), ToModifiers(e), PenInput.Of(e));
             RenderAnnotations();
             return;
         }
@@ -860,15 +872,18 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private InputSystemCursorShape AnnotationCursor(CapturePoint point)
     {
-        if (_editor.Tool != AnnotationTool.Select)
-        {
-            return InputSystemCursorShape.Cross;
-        }
-
+        // The selected mark's handles answer to every tool, so the cursor has to as well:
+        // a crosshair over a handle that is about to reshape something rather than draw
+        // is the interface lying about what the press will do.
         if (_editor.SelectionShown is { } shown
             && AnnotationHandles.At(shown, point, _editor.Scale) is { } handle)
         {
             return CursorHints.For(handle.Kind);
+        }
+
+        if (_editor.Tool != AnnotationTool.Select)
+        {
+            return InputSystemCursorShape.Cross;
         }
 
         return _editor.Document.HitTest(point) is null
@@ -3584,6 +3599,14 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
 
+        // Where the desktop capture's first pixel sits in frame space, which is the space
+        // the pointer and the region are both measured in. CapturedFrame's own origin is
+        // virtual and goes negative the moment a display sits left of or above the
+        // primary, so using it here scanned the wrong column and reported the run at the
+        // wrong place. See BuildBoundaryIndex, which had the same confusion.
+        var origin = _layout.VirtualToFrame(
+            new CapturePoint(_desktopFrame.VirtualX, _desktopFrame.VirtualY));
+
         // The desktop's own pixels rather than the preview's: the preview is the region
         // only, and the run being measured commonly reaches past the edge of it — which is
         // the reading the user wants when they are measuring a margin they are about to
@@ -3592,8 +3615,8 @@ public sealed partial class CaptureOverlayWindow : Window
             _desktopFrame.BgraPixels,
             _desktopFrame.Width,
             _desktopFrame.Height,
-            (int)Math.Round(pointer.X) - _desktopFrame.VirtualX,
-            (int)Math.Round(pointer.Y) - _desktopFrame.VirtualY,
+            (int)Math.Round(pointer.X - origin.X),
+            (int)Math.Round(pointer.Y - origin.Y),
             vertical);
 
         if (run is not { } span)
@@ -3608,9 +3631,9 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
 
-        var origin = vertical ? _desktopFrame.VirtualY : _desktopFrame.VirtualX;
-        double from = origin + span.Start;
-        double to = origin + span.End;
+        var along = vertical ? origin.Y : origin.X;
+        double from = along + span.Start;
+        double to = along + span.End;
 
         // The scan reads the whole desktop, so the switch beside it has to be honoured
         // here rather than by the editor's own clamp — and only when the pointer is inside
@@ -3690,8 +3713,20 @@ public sealed partial class CaptureOverlayWindow : Window
         return new CapturePoint(position.X, position.Y);
     }
 
+    /// <summary>
+    /// Alt is macOS's Option: held while the region is being chosen it turns boundary snap
+    /// off for the drag (see <see cref="Boundaries"/>), and held while a mark is being
+    /// drawn it draws through whatever is under the pointer instead of grabbing it. The
+    /// two never overlap — one is the selection phase and the other the annotation phase.
+    /// </summary>
+    /// <remarks>
+    /// Alt is read from the keyboard rather than from the pointer event, the way
+    /// <see cref="Boundaries"/> already reads it: Windows treats Alt as a menu key and
+    /// does not reliably carry it in a pointer event's modifiers.
+    /// </remarks>
     private static EditorModifiers ToModifiers(PointerRoutedEventArgs e) =>
-        e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift) ? EditorModifiers.Constrain : EditorModifiers.None;
+        (e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift) ? EditorModifiers.Constrain : EditorModifiers.None)
+        | (IsDown(VirtualKey.Menu) ? EditorModifiers.DrawThrough : EditorModifiers.None);
 
     private static bool IsDown(VirtualKey key) =>
         InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(CoreVirtualKeyStates.Down);
@@ -3757,8 +3792,8 @@ public sealed partial class CaptureOverlayWindow : Window
     /// <summary>Draws the marquee, which stays in layout units because it is chrome.</summary>
     /// <summary>
     /// Draws the rubber band between the press and the pointer, and answers the region it
-    /// covers in frame space — with the corner under the pointer pulled onto any line in
-    /// the picture it is near.
+    /// covers in frame space — held to any shape that was asked for, and otherwise with
+    /// the corner under the pointer pulled onto any line in the picture it is near.
     /// </summary>
     /// <remarks>
     /// Returns what it drew rather than being told: the snap happens in the capture's own
@@ -3767,10 +3802,23 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </remarks>
     private CaptureRegion DrawMarquee(Point start, Point end)
     {
-        var snap = BoundarySnapping.Corner(
-            _layout.PointerToFrame(_monitor, start.X, start.Y),
+        var anchor = _layout.PointerToFrame(_monitor, start.X, start.Y);
+        var square = IsDown(VirtualKey.Shift);
+        var moving = MarqueeShaping.Corner(
+            anchor,
             _layout.PointerToFrame(_monitor, end.X, end.Y),
-            Boundaries,
+            _lockedAspect,
+            square);
+
+        // A drag that has been given a shape is not then nudged off it: the snap would
+        // take back exactly the ratio or the square that was asked for, by a pixel or two,
+        // with nothing on screen to say why. macOS gates it the same way
+        // (OverlayView.swift:6699-6700).
+        var held = square || _lockedAspect > 0;
+        var snap = BoundarySnapping.Corner(
+            anchor,
+            moving,
+            held ? null : Boundaries,
             BoundaryRadius);
 
         ShowBoundaryGuides(snap);
