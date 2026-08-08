@@ -2224,7 +2224,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         // The letter is the whole label, and B says nothing to anyone who has not met a
         // word processor. macshot leans on the same convention and can afford to: it is
         // the one control on the row with no room for a word.
-        ToolTipService.SetToolTip(toggle, AppFonts.Tip(name));
+        ToolTipService.SetToolTip(toggle, AppFonts.Tip(L(name)));
         return toggle;
     }
 
@@ -2302,9 +2302,9 @@ public sealed partial class AnnotationToolbarView : UserControl
     {
         RepaintChrome();
 
-        ToolTipService.SetToolTip(_shapeFill, AppFonts.Tip("How the shape is filled"));
+        ToolTipService.SetToolTip(_shapeFill, AppFonts.Tip(L("How the shape is filled")));
         ShowShapeFillSegments(oval: false);
-        ToolTipService.SetToolTip(_arrowStyle, AppFonts.Tip("Arrow ends"));
+        ToolTipService.SetToolTip(_arrowStyle, AppFonts.Tip(L("Arrow ends")));
 
         // Drawn rather than named: macshot's segments carry a picture of the mark you are
         // about to make, which is both quicker to read than "Dashed" and one click rather
@@ -2322,7 +2322,7 @@ public sealed partial class AnnotationToolbarView : UserControl
             new StyleSegment(StylePreviews.Line(LineStyle.Solid), null, StylePreviews.LineSegmentWidth),
             new StyleSegment(StylePreviews.Line(LineStyle.Dashed), null, StylePreviews.LineSegmentWidth),
         ]);
-        ToolTipService.SetToolTip(_spotlightBorder, AppFonts.Tip("How the edge of the spotlight is drawn"));
+        ToolTipService.SetToolTip(_spotlightBorder, AppFonts.Tip(L("How the edge of the spotlight is drawn")));
 
         // Here and nowhere else, because it is a choice made while drawing — which is
         // where macshot puts it, next to the pencil. Worded, as macshot's is: the
@@ -2331,7 +2331,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         // The words are the enum's names on purpose. None, Smooth and Refined are strings
         // macshot ships, so naming the segments after the enum is what gets them
         // translated; a name invented here would read English in every language.
-        ToolTipService.SetToolTip(_smoothing, AppFonts.Tip("Freehand smoothing"));
+        ToolTipService.SetToolTip(_smoothing, AppFonts.Tip(L("Freehand smoothing")));
         _smoothing.SetSegments([.. Enum.GetValues<PencilSmoothing>().Select(mode =>
             new StyleSegment(null, L(mode.ToString()), 0))]);
 
@@ -2349,11 +2349,11 @@ public sealed partial class AnnotationToolbarView : UserControl
         // effects band (EffectsBandView.swift:374-376), which names the same effects in a
         // place macshot does translate. Checked twice now; the second time is why this
         // paragraph exists.
-        ToolTipService.SetToolTip(_censorMode, AppFonts.Tip("How the region is covered"));
+        ToolTipService.SetToolTip(_censorMode, AppFonts.Tip(L("How the region is covered")));
         _censorMode.SetSegments([.. Enum.GetValues<CensorMode>().Select(mode =>
             new StyleSegment(null, mode.ToString(), 0))]);
 
-        ToolTipService.SetToolTip(_censorScope, AppFonts.Tip("What inside the region is covered"));
+        ToolTipService.SetToolTip(_censorScope, AppFonts.Tip(L("What inside the region is covered")));
         _censorScope.SetSegments(
         [
             new StyleSegment(null, L("All"), 0),
@@ -2378,7 +2378,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         // The glyphs themselves rather than the names of the formats: "1 I A a" is read
         // at a glance and needs no translating, where "Roman" and "Lowercase letters"
         // would need both a wider row and a round trip through the strings file.
-        ToolTipService.SetToolTip(_numberFormat, AppFonts.Tip("What the badges count in"));
+        ToolTipService.SetToolTip(_numberFormat, AppFonts.Tip(L("What the badges count in")));
         _numberFormat.SetSegments(
         [
             new StyleSegment(null, "1", 0),
@@ -2390,7 +2390,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         // Both readings of the same span. Which one a number means has to be said, so the
         // ruler says it — and the choice is here rather than in the settings window
         // because it is made while looking at what is being measured.
-        ToolTipService.SetToolTip(_measureUnit, AppFonts.Tip("What the ruler reports"));
+        ToolTipService.SetToolTip(_measureUnit, AppFonts.Tip(L("What the ruler reports")));
         _measureUnit.SetSegments(
         [
             new StyleSegment(null, "px", 0),
@@ -2400,12 +2400,12 @@ public sealed partial class AnnotationToolbarView : UserControl
         // Tenths, where every other slider on this row steps in whole units: the useful
         // range is 1.1 to 6, and whole steps would offer five of them.
         _loupeZoom.StepFrequency = 0.1;
-        ToolTipService.SetToolTip(_loupeZoom, AppFonts.Tip("How much the loupe enlarges"));
+        ToolTipService.SetToolTip(_loupeZoom, AppFonts.Tip(L("How much the loupe enlarges")));
 
         // Hundredths, because the box after it reads in whole percent and a coarser step
         // would skip numbers the user can see written there.
         _spotlightDim.StepFrequency = 0.01;
-        ToolTipService.SetToolTip(_spotlightDim, AppFonts.Tip("How far down the spotlight takes the rest"));
+        ToolTipService.SetToolTip(_spotlightDim, AppFonts.Tip(L("How far down the spotlight takes the rest")));
 
         // A fixed face rather than whatever is chosen, which is macshot's smiling-face
         // button (ToolOptionsRowView.swift:1200-1202). Showing the current emoji made this
@@ -2435,7 +2435,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         // The label's own four controls. macshot puts them on this row and nowhere else,
         // which is right: a face and a fill are chosen while looking at the label, not in
         // a settings window opened afterwards.
-        ToolTipService.SetToolTip(_font, AppFonts.Tip("Typeface"));
+        ToolTipService.SetToolTip(_font, AppFonts.Tip(L("Typeface")));
         _font.Flyout = new Flyout { Content = _fontChoices };
         _fontChoices.SelectionChanged += FontChoice_Changed;
 
@@ -2447,7 +2447,7 @@ public sealed partial class AnnotationToolbarView : UserControl
 
         // The picture of the alignment rather than its name, for the reason the dash picker
         // draws a dash: four ragged rules are read at a glance and need no translating.
-        ToolTipService.SetToolTip(_textAlignment, AppFonts.Tip("Which edge the label's lines hang from"));
+        ToolTipService.SetToolTip(_textAlignment, AppFonts.Tip(L("Which edge the label's lines hang from")));
         _textAlignment.SetSegments([.. Enum.GetValues<LabelAlignment>().Select(alignment =>
             new StyleSegment(StylePreviews.Align(alignment), null, StylePreviews.AlignSegmentWidth))]);
         _textAlignment.SelectionChanged += (_, _) => ApplyStyle();
@@ -2455,8 +2455,8 @@ public sealed partial class AnnotationToolbarView : UserControl
         // Tabular figures, so 8 and 88 occupy the same width and the + does not shuffle
         // sideways as the size is walked past ten and a hundred.
         Typography.SetNumeralAlignment(_fontSizeValue, FontNumeralAlignment.Tabular);
-        ToolTipService.SetToolTip(_fontSmaller, AppFonts.Tip("Smaller"));
-        ToolTipService.SetToolTip(_fontLarger, AppFonts.Tip("Larger"));
+        ToolTipService.SetToolTip(_fontSmaller, AppFonts.Tip(L("Smaller")));
+        ToolTipService.SetToolTip(_fontLarger, AppFonts.Tip(L("Larger")));
         _fontSmaller.Click += (_, _) => StepFontSize(-1);
         _fontLarger.Click += (_, _) => StepFontSize(1);
 
@@ -2562,15 +2562,15 @@ public sealed partial class AnnotationToolbarView : UserControl
         ]);
 
         ToolTipService.SetToolTip(
-            _frameMode, AppFonts.Tip("Draw the capture as a window, or on its own"));
+            _frameMode, AppFonts.Tip(L("Draw the capture as a window, or on its own")));
 
         _frameMode.SelectionChanged += (_, index) => FrameModeChosen(
             index == 0 ? BeautifyMode.Window : BeautifyMode.Rounded);
 
-        ToolTipService.SetToolTip(_framePadding, AppFonts.Tip("How much background shows around the capture"));
-        ToolTipService.SetToolTip(_frameRadius, AppFonts.Tip("How far the capture's corners are rounded off"));
-        ToolTipService.SetToolTip(_frameShadow, AppFonts.Tip("How far the capture's shadow spreads"));
-        ToolTipService.SetToolTip(_frameBlur, AppFonts.Tip("How far the background picture is softened"));
+        ToolTipService.SetToolTip(_framePadding, AppFonts.Tip(L("How much background shows around the capture")));
+        ToolTipService.SetToolTip(_frameRadius, AppFonts.Tip(L("How far the capture's corners are rounded off")));
+        ToolTipService.SetToolTip(_frameShadow, AppFonts.Tip(L("How far the capture's shadow spreads")));
+        ToolTipService.SetToolTip(_frameBlur, AppFonts.Tip(L("How far the background picture is softened")));
         ToolTipService.SetToolTip(_frameStyle, AppFonts.Tip(L("Gradient Style")));
 
         _framePadding.ValueChanged += (_, _) => FrameOptionMoved();
