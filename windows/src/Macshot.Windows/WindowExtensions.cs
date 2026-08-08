@@ -2,6 +2,7 @@ using System.Runtime.InteropServices;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Windows.Graphics;
 using WinRT.Interop;
 
 namespace Macshot.Windows;
@@ -32,6 +33,39 @@ internal static class WindowExtensions
         presenter.SetBorderAndTitleBar(false, false);
         appWindow.SetPresenter(presenter);
         return presenter;
+    }
+
+    /// <summary>
+    /// Puts the window's <em>client</em> rect exactly on <paramref name="pixels"/>, in
+    /// physical screen pixels.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="AppWindow.MoveAndResize"/> places the window rect, and a chromeless
+    /// window still carries a sizing frame — 3 pixels a side at 175% — so the content
+    /// lands inset by it. For the capture overlay that inset is not cosmetic: the
+    /// pointer's origin is the client's origin, so every pixel the frame takes is a
+    /// pixel of error between what the user framed and what is delivered, and the strip
+    /// it leaves along each screen edge is neither dimmed nor selectable.
+    ///
+    /// The offset is measured rather than assumed to be half the difference: only the
+    /// left and right of a frame are guaranteed to match, and a window that turns out to
+    /// have any caption at all would place a display's worth of pixels vertically wrong.
+    /// </remarks>
+    public static void PlaceClient(this AppWindow appWindow, RectInt32 pixels)
+    {
+        appWindow.MoveAndResize(pixels);
+        appWindow.ResizeClient(new SizeInt32(pixels.Width, pixels.Height));
+
+        var handle = Win32Interop.GetWindowFromWindowId(appWindow.Id);
+        var clientOrigin = default(ScreenPoint);
+        if (!ClientToScreen(handle, ref clientOrigin))
+        {
+            return;
+        }
+
+        appWindow.Move(new PointInt32(
+            appWindow.Position.X + (pixels.X - clientOrigin.X),
+            appWindow.Position.Y + (pixels.Y - clientOrigin.Y)));
     }
 
     /// <summary>
@@ -110,6 +144,18 @@ internal static class WindowExtensions
 
     /// <summary>DWMWA_BORDER_COLOR, Windows 11 and later.</summary>
     private const int BorderColour = 34;
+
+    /// <summary>Win32 POINT, for <see cref="ClientToScreen"/>.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct ScreenPoint
+    {
+        public int X;
+        public int Y;
+    }
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool ClientToScreen(IntPtr window, ref ScreenPoint point);
 
     [DllImport("dwmapi.dll")]
     private static extern int DwmSetWindowAttribute(IntPtr window, int attribute, ref int value, int size);

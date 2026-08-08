@@ -471,10 +471,12 @@ public sealed partial class CaptureOverlayWindow : Window
         presenter.IsAlwaysOnTop = true;
         presenter.IsResizable = false;
 
-        // AppWindow positions in physical pixels, so the display's virtual-space
-        // bounds go in unchanged. Converting to layout units here would misplace
-        // the overlay on every display that is not at 100%.
-        appWindow.MoveAndResize(new RectInt32(
+        // The client rect, not the window rect: the pointer's origin is the client's
+        // origin, so a frame left round the window is a translation of every capture.
+        // AppWindow positions in physical pixels, so the display's virtual-space bounds
+        // go in unchanged — converting to layout units here would misplace the overlay
+        // on every display that is not at 100%.
+        appWindow.PlaceClient(new RectInt32(
             (int)_monitor.Bounds.X,
             (int)_monitor.Bounds.Y,
             (int)_monitor.Bounds.Width,
