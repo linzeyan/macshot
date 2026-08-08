@@ -339,6 +339,20 @@ public sealed partial class AnnotationCanvasView : UserControl
 
         SelectionLayer.Children.Add(border);
 
+        // The dashed chain through the anchors, which macshot draws for the reason it
+        // draws the arms out to a bend grip (OverlayView.swift:4314-4322): the mark itself
+        // is a smooth curve that passes near the anchors rather than turning the corners
+        // they describe, so without the chain there is nothing saying which grip belongs to
+        // which part of it. Before the handles, so they are drawn over it.
+        if (shown.HasWaypoints)
+        {
+            var chain = shown.AnchorPath;
+            for (var span = 1; span < chain.Count; span++)
+            {
+                AddArm(_placement.ToLayout(chain[span - 1]), _placement.ToLayout(chain[span]));
+            }
+        }
+
         foreach (var handle in _editor.Handles)
         {
             AddHandle(handle, outline, shown);
@@ -440,14 +454,20 @@ public sealed partial class AnnotationCanvasView : UserControl
             });
         }
 
-        var round = handle.Kind is AnnotationHandleKind.Rotate or AnnotationHandleKind.Bend;
+        var round = handle.Kind is AnnotationHandleKind.Rotate
+            or AnnotationHandleKind.Bend
+            or AnnotationHandleKind.Waypoint;
         var shape = new Rectangle
         {
             Width = HandleSize,
             Height = HandleSize,
 
-            // Round for the two handles that change something other than a position, so
-            // the shape of the grab point says what letting go will do.
+            // Round for the handles that shape the mark rather than move a corner of it, so
+            // the shape of the grab point says what letting go will do. The anchors are
+            // among them: a bent line's ends and its anchors sit on the same curve, and a
+            // square end against round anchors is what says which two are the ends. macshot
+            // draws them apart the same way, endpoints filled in the accent colour and
+            // anchors filled in white (OverlayView.swift:4343-4365).
             RadiusX = round ? HandleSize / 2 : 1,
             RadiusY = round ? HandleSize / 2 : 1,
             Fill = _handleFill,

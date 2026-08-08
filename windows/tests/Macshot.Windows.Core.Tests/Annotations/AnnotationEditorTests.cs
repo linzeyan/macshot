@@ -620,6 +620,84 @@ public sealed class AnnotationEditorTests
         Assert.AreSame(editor.Document.Annotations[0], editor.Selected);
     }
 
+    [TestMethod]
+    public void PressWithAddAnchor_BendsTheMarkUnderThePointerRatherThanStartingAGesture()
+    {
+        // The modifier is a command, not a drag. Left to start a gesture as well, the same
+        // press would draw a second mark on top of the one it just bent.
+        var editor = NewEditor(AnnotationTool.Line);
+        Drag(editor, new CapturePoint(0, 0), new CapturePoint(100, 0));
+
+        var grabbed = editor.PointerPressed(new CapturePoint(50, 0), EditorModifiers.AddAnchor);
+        editor.PointerReleased(new CapturePoint(50, 0), EditorModifiers.AddAnchor);
+
+        Assert.IsTrue(grabbed, "the press must read as taking hold of a mark, so nothing is placed under it");
+        Assert.IsNull(editor.Draft);
+        Assert.AreEqual(1, editor.Document.Annotations.Count);
+        Assert.AreEqual(1, editor.Document.Annotations[0].Waypoints.Count);
+    }
+
+    [TestMethod]
+    public void PressWithAddAnchor_SelectsTheMarkItBentSoTheNewGripCanBeDragged()
+    {
+        // The anchor is worth nothing until it can be moved, and only the selected mark's
+        // handles are offered. macshot selects the mark it anchors for the same reason.
+        var editor = NewEditor(AnnotationTool.Arrow);
+        Drag(editor, new CapturePoint(0, 0), new CapturePoint(100, 0));
+
+        editor.PointerPressed(new CapturePoint(40, 0), EditorModifiers.AddAnchor);
+        editor.PointerReleased(new CapturePoint(40, 0), EditorModifiers.AddAnchor);
+
+        Assert.AreEqual(
+            1,
+            editor.Handles.Count(handle => handle.Kind == AnnotationHandleKind.Waypoint));
+    }
+
+    [TestMethod]
+    public void PressWithAddAnchor_IsOneUndoStep()
+    {
+        // Ctrl+Z has to take the anchor back off. Amended in place it would be
+        // unreachable, and the user's only way back would be deleting the whole mark.
+        var editor = NewEditor(AnnotationTool.Line);
+        Drag(editor, new CapturePoint(0, 0), new CapturePoint(100, 0));
+
+        editor.PointerPressed(new CapturePoint(50, 0), EditorModifiers.AddAnchor);
+        editor.PointerReleased(new CapturePoint(50, 0), EditorModifiers.AddAnchor);
+        editor.Undo();
+
+        Assert.IsFalse(editor.Document.Annotations[0].HasWaypoints);
+    }
+
+    [TestMethod]
+    public void PressWithAddAnchor_LeavesAToolWithNowhereToPutOneToDrawNormally()
+    {
+        // Held over empty canvas, or over a shape that takes no anchor, the modifier must
+        // fall through to the ordinary press — otherwise Ctrl would silently disarm the
+        // whole toolbar.
+        var editor = NewEditor(AnnotationTool.Rectangle);
+        Drag(editor, new CapturePoint(0, 0), new CapturePoint(50, 50), EditorModifiers.AddAnchor);
+
+        Assert.AreEqual(1, editor.Document.Annotations.Count);
+        Assert.AreEqual(0, editor.Document.Annotations[0].Waypoints.Count);
+    }
+
+    [TestMethod]
+    public void DraggingAnAnchorGrip_ReshapesTheMarkAndCommitsOnce()
+    {
+        // The whole path from press to release: the grip has to be found by index, dragged,
+        // and the result kept. Any of the three missing leaves the anchor visible and
+        // immovable.
+        var editor = NewEditor(AnnotationTool.Line);
+        Drag(editor, new CapturePoint(0, 0), new CapturePoint(100, 0));
+        editor.PointerPressed(new CapturePoint(50, 0), EditorModifiers.AddAnchor);
+        editor.PointerReleased(new CapturePoint(50, 0), EditorModifiers.AddAnchor);
+
+        var grip = editor.Handles.Single(handle => handle.Kind == AnnotationHandleKind.Waypoint).Position;
+        Drag(editor, grip, new CapturePoint(50, 40));
+
+        Assert.AreEqual(new CapturePoint(50, 40), editor.Document.Annotations[0].Waypoints[0]);
+    }
+
     /// <summary>Clicks a mark with the select tool, which is what arms its handles.</summary>
     private static void Select(AnnotationEditor editor, CapturePoint point)
     {

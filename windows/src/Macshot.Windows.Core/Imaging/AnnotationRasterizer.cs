@@ -311,20 +311,22 @@ public static class AnnotationRasterizer
     /// </summary>
     private static CapturePoint MeasureReadingOrigin(Annotation annotation, AnnotationSprite sprite)
     {
-        var mid = new CapturePoint(
-            (annotation.Start.X + annotation.End.X) / 2,
-            (annotation.Start.Y + annotation.End.Y) / 2);
-
-        var span = annotation.Span;
-        if (span <= 0)
+        var path = MeasurePath(annotation);
+        var length = PathLength(path);
+        if (length <= 0)
         {
-            return new CapturePoint(mid.X - (sprite.Width / 2.0), mid.Y - (sprite.Height / 2.0));
+            return new CapturePoint(path[0].X - (sprite.Width / 2.0), path[0].Y - (sprite.Height / 2.0));
         }
 
-        // Unit vector at right angles to the span, flipped so it never points down: a
+        // Halfway along the line as drawn, not halfway between the ends: on a ruler bent
+        // through anchors the two are nowhere near each other, and the reading has to sit
+        // beside the line it describes.
+        var mid = PointAlong(path, length / 2, out var heading);
+
+        // Unit vector at right angles to the line there, flipped so it never points down: a
         // reading under the line would be read as belonging to whatever is below it.
-        var acrossX = -(annotation.End.Y - annotation.Start.Y) / span;
-        var acrossY = (annotation.End.X - annotation.Start.X) / span;
+        var acrossX = -heading.Y;
+        var acrossY = heading.X;
         if (acrossY > 0 || (acrossY == 0 && acrossX < 0))
         {
             acrossX = -acrossX;
@@ -692,17 +694,33 @@ public static class AnnotationRasterizer
     }
 
     /// <summary>
-    /// The path from one end of a line to the other: straight, or bowed out to the
-    /// side when the annotation carries a bend.
+    /// The path from one end of a line to the other: straight, bowed out to the side when
+    /// the annotation carries a bend, or run through its anchors when it has been given
+    /// them.
     /// </summary>
     /// <remarks>
-    /// A cubic with one control point given twice, which is exactly how macOS bows a line
-    /// — <c>curve(to:controlPoint1:cp,controlPoint2:cp)</c>, <c>Annotation.swift:891</c>.
+    /// <para>
+    /// The one place a linear mark's centreline is built, which is why the head, the tail
+    /// bar, the banner taper and the sketchy wobble all follow the anchors without knowing
+    /// anything about them: each is derived from the path this returns.
+    /// </para>
+    /// <para>
+    /// Anchors are tried before the bend, and the two never both apply — adding an anchor
+    /// clears the bend (<see cref="Annotation.WithAnchorAt"/>), as macOS clears its
+    /// <c>controlPoint</c>. A bend is a cubic with one control point given twice, which is
+    /// exactly how macOS bows a line
+    /// (<c>curve(to:controlPoint1:cp,controlPoint2:cp)</c>, <c>Annotation.swift:891</c>).
     /// Not the quadratic this drew before: the two reach different distances towards the
     /// same control, so a quadratic bowed by three quarters of what macshot's does.
+    /// </para>
     /// </remarks>
     private static CapturePoint[] BuildShaftPath(Annotation annotation)
     {
+        if (annotation.HasWaypoints)
+        {
+            return SmoothPath.Through(annotation.AnchorPath);
+        }
+
         if (annotation.Bend == 0 && annotation.BendAlong == 0)
         {
             return [annotation.Start, annotation.End];
@@ -768,38 +786,64 @@ public static class AnnotationRasterizer
     }
 
     /// <summary>
-    /// A ruler: the span itself, with a bar square across each end so the exact pixel
+    /// The line a ruler measures along: straight between its ends, or through its anchors
+    /// once it has been given them.
+    /// </summary>
+    /// <remarks>
+    /// The bend is deliberately not honoured here, unlike <see cref="BuildShaftPath"/>: a
+    /// ruler is offered no bend grip, so a non-zero one could only come from a hand-edited
+    /// file, and drawing a bow the reading does not include would put a wrong number on
+    /// the picture. This is also where the port goes past macOS — its <c>drawMeasure</c>
+    /// (<c>Annotation.swift:1843</c>) draws start to end whatever the anchors say, while
+    /// its hit test follows the curve, so a bent ruler there is grabbable along a path
+    /// nothing drew. See <see cref="Annotation.Span"/>.
+    /// </remarks>
+    private static CapturePoint[] MeasurePath(Annotation annotation) => annotation.HasWaypoints
+        ? SmoothPath.Through(annotation.AnchorPath)
+        : [annotation.Start, annotation.End];
+
+    /// <summary>
+    /// A ruler: the line itself, with a bar square across each end so the exact pixel
     /// being measured from is unambiguous.
     /// </summary>
     private static IReadOnlyList<CapturePoint[]> BuildMeasurePaths(Annotation annotation)
     {
-        var deltaX = annotation.End.X - annotation.Start.X;
-        var deltaY = annotation.End.Y - annotation.Start.Y;
-        var length = Math.Sqrt((deltaX * deltaX) + (deltaY * deltaY));
-        if (length <= 0)
+        var path = MeasurePath(annotation);
+
+        // Square to the line where it leaves each end rather than to the chord between
+        // them: on a ruler bent through anchors those are different directions, and a bar
+        // square to the wrong one no longer marks the pixel it is measuring from. The
+        // whole mark's direction stands in where the flattened curve doubles a sample, so
+        // one degenerate piece cannot cost a bar the ruler plainly has a direction for.
+        var chord = AcrossFrom(annotation.Start, annotation.End);
+        if ((AcrossFrom(path[0], path[1]) ?? chord) is not { } atStart
+            || (AcrossFrom(path[^2], path[^1]) ?? chord) is not { } atEnd)
         {
-            return [[annotation.Start, annotation.End]];
+            return [path];
         }
 
-        // Unit vector across the span, which is the direction the end bars run in.
-        var acrossX = -deltaY / length;
-        var acrossY = deltaX / length;
         var reach = Math.Max(annotation.Style.StrokeWidth * MeasureCapLength, 6);
-
-        return
-        [
-            [annotation.Start, annotation.End],
-            Bar(annotation.Start, acrossX, acrossY, reach),
-            Bar(annotation.End, acrossX, acrossY, reach),
-        ];
+        return [path, Bar(path[0], atStart, reach), Bar(path[^1], atEnd, reach)];
     }
 
-    private static CapturePoint[] Bar(CapturePoint at, double acrossX, double acrossY, double reach)
+    /// <summary>
+    /// The unit vector at right angles to <paramref name="from"/> → <paramref name="to"/>,
+    /// or nothing at all when the two coincide and there is no direction to be square to.
+    /// </summary>
+    private static CapturePoint? AcrossFrom(CapturePoint from, CapturePoint to)
+    {
+        var deltaX = to.X - from.X;
+        var deltaY = to.Y - from.Y;
+        var length = Math.Sqrt((deltaX * deltaX) + (deltaY * deltaY));
+        return length <= 0 ? null : new CapturePoint(-deltaY / length, deltaX / length);
+    }
+
+    private static CapturePoint[] Bar(CapturePoint at, CapturePoint across, double reach)
     {
         return
         [
-            new CapturePoint(at.X - (acrossX * reach), at.Y - (acrossY * reach)),
-            new CapturePoint(at.X + (acrossX * reach), at.Y + (acrossY * reach)),
+            new CapturePoint(at.X - (across.X * reach), at.Y - (across.Y * reach)),
+            new CapturePoint(at.X + (across.X * reach), at.Y + (across.Y * reach)),
         ];
     }
 

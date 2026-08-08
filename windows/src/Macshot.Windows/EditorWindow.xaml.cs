@@ -1644,14 +1644,19 @@ public sealed partial class EditorWindow : Window
 
     /// <summary>
     /// Alt is macOS's Option here as it is over the capture: held, a tool draws over the
-    /// marks under the pointer instead of grabbing them.
+    /// marks under the pointer instead of grabbing them. Ctrl is macOS's Control: a press
+    /// on a line, arrow or ruler bends it through another anchor.
     /// </summary>
     /// <remarks>
     /// Alt from the keyboard rather than from the pointer event: Windows treats it as a
-    /// menu key and does not reliably carry it in a pointer event's modifiers.
+    /// menu key and does not reliably carry it in a pointer event's modifiers. Shift and
+    /// Ctrl are not menu keys and do arrive on the event, so they are read from it.
+    /// <c>CaptureOverlayWindow.ToModifiers</c> is the same mapping over the same editor and
+    /// has to stay in step with this one.
     /// </remarks>
     private static EditorModifiers ToModifiers(PointerRoutedEventArgs e) =>
         (e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift) ? EditorModifiers.Constrain : EditorModifiers.None)
+        | (e.KeyModifiers.HasFlag(VirtualKeyModifiers.Control) ? EditorModifiers.AddAnchor : EditorModifiers.None)
         | (IsDown(VirtualKey.Menu) ? EditorModifiers.DrawThrough : EditorModifiers.None);
 
     private static bool IsDown(VirtualKey key) =>

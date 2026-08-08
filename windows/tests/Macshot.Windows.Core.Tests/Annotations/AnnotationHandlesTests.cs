@@ -455,8 +455,120 @@ public sealed class AnnotationHandlesTests
             AnnotationHandles.At(rectangle, nearTheCorner, 2)?.Kind);
     }
 
+    [TestMethod]
+    public void BentMark_OffersAGripPerAnchorAndNoLongerOffersItsBend()
+    {
+        // Anchors and a bend describe the same shape, and once a mark has anchors only the
+        // anchors are drawn. A bend grip left on offer would follow the pointer and change
+        // nothing on screen, which reads as a broken handle rather than as an unused one.
+        var arrow = Bent(AnnotationTool.Arrow, new CapturePoint(30, 20), new CapturePoint(60, -10));
+
+        var handles = AnnotationHandles.For(arrow);
+
+        CollectionAssert.AreEquivalent(
+            new[]
+            {
+                AnnotationHandleKind.Start,
+                AnnotationHandleKind.End,
+                AnnotationHandleKind.Waypoint,
+                AnnotationHandleKind.Waypoint,
+            },
+            handles.Select(handle => handle.Kind).ToArray());
+
+        CollectionAssert.AreEqual(
+            new[] { new CapturePoint(30, 20), new CapturePoint(60, -10) },
+            handles.Where(handle => handle.Kind == AnnotationHandleKind.Waypoint)
+                .OrderBy(handle => handle.Index)
+                .Select(handle => handle.Position)
+                .ToArray());
+    }
+
+    [TestMethod]
+    public void DraggingAnAnchor_MovesThatOneAndLeavesTheOthersWhereTheyAre()
+    {
+        // The grips are told apart only by index, so a drag that ignored it would move
+        // whichever anchor happened to come first however carefully the user aimed.
+        var arrow = Bent(AnnotationTool.Arrow, new CapturePoint(30, 20), new CapturePoint(60, -10));
+
+        var dragged = AnnotationHandles.Drag(
+            arrow,
+            AnnotationHandleKind.Waypoint,
+            new CapturePoint(35, 90),
+            EditorModifiers.None,
+            1);
+
+        CollectionAssert.AreEqual(
+            new[] { new CapturePoint(30, 20), new CapturePoint(35, 90) },
+            dragged.Waypoints.ToArray());
+    }
+
+    [TestMethod]
+    public void DraggingAnAnchorThatIsNotThere_LeavesTheMarkAlone()
+    {
+        // A drag can outlive the shape it started on — undo while the button is down. The
+        // index would be out of range, and losing the mark over it would be worse than the
+        // drag doing nothing.
+        var arrow = Bent(AnnotationTool.Arrow, new CapturePoint(30, 20));
+
+        var dragged = AnnotationHandles.Drag(
+            arrow,
+            AnnotationHandleKind.Waypoint,
+            new CapturePoint(35, 90),
+            EditorModifiers.None,
+            4);
+
+        Assert.AreEqual(arrow, dragged);
+    }
+
+    [TestMethod]
+    public void DraggingARulersAnchor_DropsTheReadingItNoLongerMatches()
+    {
+        // A ruler's length runs through its anchors, so moving one changes the number the
+        // sprite already claims — the same reason moving an end drops it.
+        var ruler = Bent(AnnotationTool.Measure, new CapturePoint(50, 10))
+            with { Sprite = new AnnotationSprite(2, 2, new byte[2 * 2 * 4]) };
+
+        var dragged = AnnotationHandles.Drag(
+            ruler,
+            AnnotationHandleKind.Waypoint,
+            new CapturePoint(50, 60),
+            EditorModifiers.None,
+            0);
+
+        Assert.IsNull(dragged.Sprite);
+    }
+
+    [TestMethod]
+    public void Differ_SeesAnAnchorMoveAsAnEdit()
+    {
+        // This is what decides whether a released drag is committed and becomes an undo
+        // step. Blind to the anchors, a whole reshape would be silently thrown away on
+        // mouse-up.
+        var arrow = Bent(AnnotationTool.Arrow, new CapturePoint(30, 20));
+        var moved = arrow with { Waypoints = new[] { new CapturePoint(30, 21) } };
+
+        Assert.IsTrue(AnnotationHandles.Differ(arrow, moved));
+        Assert.IsFalse(AnnotationHandles.Differ(arrow, arrow with { Waypoints = new[] { new CapturePoint(30, 20) } }));
+    }
+
+    [TestMethod]
+    public void SelectionOutline_ReachesTheAnchorsAMarkIsBentThrough()
+    {
+        // The outline is drawn from the bounding rectangle, so a mark bent well clear of
+        // its ends would otherwise be framed by a box that misses most of it.
+        var line = Bent(AnnotationTool.Line, new CapturePoint(50, 80));
+
+        var outline = AnnotationHandles.Outline(line);
+
+        Assert.AreEqual(80, outline.Max(corner => corner.Y), 1e-9);
+    }
+
     private static Annotation Shape(AnnotationTool tool, double startX, double startY, double endX, double endY) =>
         Annotation.Create(tool, new CapturePoint(startX, startY), new CapturePoint(endX, endY));
+
+    /// <summary>A mark from (10,10) to (110,10) bent through the given anchors.</summary>
+    private static Annotation Bent(AnnotationTool tool, params CapturePoint[] anchors) =>
+        Shape(tool, 10, 10, 110, 10) with { Waypoints = anchors };
 
     private static CapturePoint HandleAt(Annotation annotation, AnnotationHandleKind kind) =>
         AnnotationHandles.For(annotation).Single(handle => handle.Kind == kind).Position;

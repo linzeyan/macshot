@@ -207,4 +207,147 @@ public sealed class AnnotationTests
 
         Assert.AreEqual(1, AnnotationStyle.GlyphStrokeWidth(AnnotationStyle.MinFontSize));
     }
+
+    [TestMethod]
+    public void AnchorPath_PutsTheEndsRoundTheAnchorsInOrder()
+    {
+        // The chain is derived rather than stored, which is what stops Start and the first
+        // anchor from drifting apart. macOS stores the whole chain and keeps its two ends
+        // agreeing with it by hand in five places; this is the reason the port does not.
+        var arrow = Bent(AnnotationTool.Arrow, new CapturePoint(50, 40), new CapturePoint(70, 10));
+
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                new CapturePoint(0, 0),
+                new CapturePoint(50, 40),
+                new CapturePoint(70, 10),
+                new CapturePoint(100, 0),
+            },
+            arrow.AnchorPath.ToArray());
+    }
+
+    [TestMethod]
+    public void AnchorPath_IsTheTwoEndsWhenNothingHasBeenAnchored()
+    {
+        // Every caller reads the chain rather than branching on whether there is one, so
+        // an unbent mark has to answer with a chain of two.
+        var line = Annotation.Create(AnnotationTool.Line, new CapturePoint(1, 2), new CapturePoint(3, 4));
+
+        CollectionAssert.AreEqual(
+            new[] { new CapturePoint(1, 2), new CapturePoint(3, 4) },
+            line.AnchorPath.ToArray());
+        Assert.IsFalse(line.HasWaypoints);
+    }
+
+    [TestMethod]
+    public void Span_ReportsTheLengthDrawnRatherThanTheDistanceBetweenTheEnds()
+    {
+        // A ruler bent up and over reports what the rule covers, not the chord it happens
+        // to share its ends with. This is the number written on the capture, so a stale
+        // straight-line answer would be a measurement that is simply wrong.
+        var ruler = Bent(AnnotationTool.Measure, new CapturePoint(50, 60));
+
+        Assert.IsTrue(ruler.Span > 120, $"a rule bent 60 pixels off a 100 pixel chord read {ruler.Span}");
+    }
+
+    [TestMethod]
+    public void HitTest_FollowsTheCurveRatherThanTheChordOnceAnchorsAreAdded()
+    {
+        // Both halves matter. Grabbing along the chord would answer to clicks on empty
+        // canvas, and not grabbing along the curve would leave the mark on screen with no
+        // way to select, restyle or delete it.
+        var arrow = Bent(AnnotationTool.Arrow, new CapturePoint(50, 60));
+
+        Assert.IsTrue(arrow.HitTest(new CapturePoint(50, 60)), "the anchor itself must grab");
+        Assert.IsFalse(arrow.HitTest(new CapturePoint(50, 0)), "the chord must no longer grab");
+    }
+
+    [TestMethod]
+    public void BoundingRect_ReachesTheAnchorsAndNotJustTheEnds()
+    {
+        // The selection outline and the handle frame are both drawn from these bounds. Left
+        // at the ends, the chrome would sit beside the mark it belongs to.
+        var line = Bent(AnnotationTool.Line, new CapturePoint(50, 80));
+
+        Assert.AreEqual(new CaptureRegion(0, 0, 100, 80), line.BoundingRect);
+    }
+
+    [TestMethod]
+    public void Translate_CarriesTheAnchorsWithTheMark()
+    {
+        // Dragging a bent arrow has to move the whole shape. Anchors left behind would
+        // stretch it into something the user never drew, with each drag distorting it more.
+        var moved = Bent(AnnotationTool.Line, new CapturePoint(50, 40)).Translate(10, -5);
+
+        CollectionAssert.AreEqual(new[] { new CapturePoint(60, 35) }, moved.Waypoints.ToArray());
+        Assert.AreEqual(new CapturePoint(10, -5), moved.Start);
+    }
+
+    [TestMethod]
+    public void WithAnchorAt_InsertsIntoTheSpanItWasAimedAtRatherThanAppending()
+    {
+        // Appended, every anchor after the first would land at the far end and the mark
+        // would fold back over itself — which is why macshot searches for the nearest span.
+        var arrow = Bent(AnnotationTool.Arrow, new CapturePoint(80, 40))
+            .WithAnchorAt(new CapturePoint(20, 5));
+
+        Assert.AreEqual(2, arrow.Waypoints.Count);
+        Assert.IsTrue(arrow.Waypoints[0].X < arrow.Waypoints[1].X, "the new anchor belongs before the old one");
+    }
+
+    [TestMethod]
+    public void WithAnchorAt_KeepsTheNewAnchorClearOfTheOnesEitherSideOfIt()
+    {
+        // An anchor landing on top of its neighbour gives the spline a span of no length,
+        // which draws as a kink instead of the curve that was asked for. macshot holds it a
+        // twentieth clear of both ends for the same reason.
+        var line = Annotation.Create(AnnotationTool.Line, new CapturePoint(0, 0), new CapturePoint(100, 0))
+            .WithAnchorAt(new CapturePoint(-40, 0));
+
+        Assert.AreEqual(5, line.Waypoints[0].X, 1e-9);
+    }
+
+    [TestMethod]
+    public void WithAnchorAt_ClearsTheBendTheAnchorsHaveJustReplaced()
+    {
+        // Two ways of bowing the same mark, and only the anchors are drawn. A bend left set
+        // would sit under a grip the toolbar no longer offers, and reopening the capture
+        // would restore a curve nobody could see or edit.
+        var line = Annotation.Create(AnnotationTool.Line, new CapturePoint(0, 0), new CapturePoint(100, 0))
+            with { Bend = 0.3, BendAlong = 0.1 };
+
+        var bent = line.WithAnchorAt(new CapturePoint(50, 20));
+
+        Assert.AreEqual(0, bent.Bend);
+        Assert.AreEqual(0, bent.BendAlong);
+    }
+
+    [TestMethod]
+    public void WithAnchorAt_DropsARulersReadingBecauseTheLengthHasChanged()
+    {
+        // The sprite is a number about a distance this call has just made longer. Kept, the
+        // rule would go on insisting it is as long as it was before it was bent.
+        var ruler = Annotation.Create(AnnotationTool.Measure, new CapturePoint(0, 0), new CapturePoint(100, 0))
+            with { Sprite = new AnnotationSprite(2, 2, new byte[2 * 2 * 4]) };
+
+        Assert.IsNull(ruler.WithAnchorAt(new CapturePoint(50, 30)).Sprite);
+    }
+
+    [TestMethod]
+    public void WithAnchorAt_LeavesAloneTheToolsThatHaveNowhereToPutAnAnchor()
+    {
+        // A shape is its bounding rectangle and a stroke is already a path: an anchor on
+        // either would be state nothing draws, nothing grabs and nothing can take back off.
+        var rectangle = Annotation.Create(
+            AnnotationTool.Rectangle,
+            new CapturePoint(0, 0),
+            new CapturePoint(100, 50));
+
+        Assert.AreEqual(0, rectangle.WithAnchorAt(new CapturePoint(50, 0)).Waypoints.Count);
+    }
+
+    /// <summary>A mark from (0,0) to (100,0) bent through the given anchors.</summary>
+    private static Annotation Bent(AnnotationTool tool, params CapturePoint[] anchors) =>
+        Annotation.Create(tool, new CapturePoint(0, 0), new CapturePoint(100, 0)) with { Waypoints = anchors };
 }
