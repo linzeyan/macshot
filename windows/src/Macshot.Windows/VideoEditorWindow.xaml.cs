@@ -1848,7 +1848,19 @@ public sealed partial class VideoEditorWindow : Window
         catch (Exception error) when (error is IOException or UnauthorizedAccessException
             or ArgumentException or NotSupportedException or InvalidOperationException or COMException)
         {
-            StatusText.Text = L("Export failed") + ": " + error.Message;
+            // The type when there is no message, because several of the WinRT calls an
+            // export makes throw a COMException carrying nothing but an HRESULT — and
+            // "Export failed:" with an empty half is a report nobody can act on. Logged
+            // as well as shown: the status line is one line and is gone with the window.
+            var reason = string.IsNullOrWhiteSpace(error.Message)
+                ? $"{error.GetType().Name} 0x{error.HResult:X8}"
+                : error.Message;
+
+            // The whole exception to the log, one line of it to the window: an HRESULT is
+            // what a report of this has to carry, and the call it came out of is what
+            // makes it findable.
+            DiagnosticLog.Write($"Export failed: {error}");
+            StatusText.Text = L("Export failed") + ": " + reason;
             return false;
         }
         finally
@@ -2054,6 +2066,20 @@ public sealed partial class VideoEditorWindow : Window
     private async Task RenderAsync(MediaComposition composition, StorageFile destination)
     {
         var profile = MediaEncodingProfile.CreateMp4(VideoEncodingQuality.Auto);
+
+        // The audio half of an Auto profile is left unresolved, and asked to encode a
+        // track it throws MF_E_ATTRIBUTENOTFOUND — which is every recording made with
+        // sound, by any route out of this window. A recording with none gets no audio
+        // stream at all rather than a silent one, which is what ScreenRecorder wrote it
+        // without. Null-forgiving because the projection does not admit that dropping the
+        // stream is allowed, which it is.
+        profile.Audio = _sourceHasAudio
+            ? AudioEncodingProperties.CreateAac(
+                (uint)AudioPlan.SampleRate,
+                (uint)AudioPlan.Channels,
+                AudioPlan.Bitrate)
+            : null!;
+
         var (width, height) = SizeForExport();
 
         if (width > 0 && height > 0)

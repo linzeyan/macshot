@@ -543,6 +543,16 @@ internal static class VideoEffectsCompositor
         }
 
         var profile = MediaEncodingProfile.CreateMp4(VideoEncodingQuality.Auto);
+
+        // Said outright, as ScreenRecorder says it. The audio half of an Auto profile is
+        // left unresolved, and this is the one pass that has a track to encode: handed one
+        // it asked for an attribute nobody had set and threw MF_E_ATTRIBUTENOTFOUND, so
+        // every export of a recording with sound failed and left a file of zero bytes.
+        profile.Audio = AudioEncodingProperties.CreateAac(
+            (uint)AudioPlan.SampleRate,
+            (uint)AudioPlan.Channels,
+            AudioPlan.Bitrate);
+
         profile.Video.Width = (uint)outputWidth;
         profile.Video.Height = (uint)outputHeight;
         profile.Video.Bitrate = (uint)Math.Max(1, bitrate);
