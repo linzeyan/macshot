@@ -144,6 +144,14 @@
             </Border>
         </Canvas>
 
+        <!-- The button that shapes the next drag, which sits in the strip the pill above
+             reserves along its bottom edge. Its own layer rather than a third child of the
+             pill because the pill must not take a click: it stands over the middle of the
+             display, and a press there has to start a drag. A Canvas with no background is
+             hit testable only where its children are, so only the button's own 34 × 28 is
+             taken. Put in from code, like the size box below it. -->
+        <Canvas x:Name="PreSelectionLayer" />
+
         <!-- The width × height box, which is put here in code so it can stay internal to
              the assembly like the rest of the toolbar's parts. -->
         <Canvas x:Name="SizeBoxLayer" />
