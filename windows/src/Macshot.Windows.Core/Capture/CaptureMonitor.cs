@@ -55,9 +55,19 @@ public sealed record CaptureMonitor(string DeviceName, CaptureRegion Bounds, dou
     public bool Contains(CapturePoint virtualPoint) => Bounds.Contains(virtualPoint.X, virtualPoint.Y);
 
     /// <summary>Maps a pointer position inside a window covering this display to virtual-screen pixels.</summary>
+    /// <remarks>
+    /// Landed on a whole pixel, because that is what the answer means: the caller is
+    /// asking which pixel the pointer is over, and there is no half of one. WinUI reports
+    /// the position in layout units, so at any scale that is not a whole number the
+    /// multiplication comes back a hair off — 300 physical pixels at 175% arrives as
+    /// 299.99999999999994. Left as it was, that dust reached the delivered image: a
+    /// region the size box called 1000 × 500 was cropped outwards to 1002 × 501, because
+    /// the crop rounds a fractional rectangle away from its middle to avoid losing a
+    /// column the user chose.
+    /// </remarks>
     public CapturePoint PointerToVirtual(double dipX, double dipY)
     {
-        return new CapturePoint(Bounds.X + dipX * Scale, Bounds.Y + dipY * Scale);
+        return new CapturePoint(Whole(Bounds.X + dipX * Scale), Whole(Bounds.Y + dipY * Scale));
     }
 
     /// <summary>Maps virtual-screen pixels back to a pointer position, for placing overlay chrome.</summary>
@@ -84,12 +94,10 @@ public sealed record CaptureMonitor(string DeviceName, CaptureRegion Bounds, dou
             : new CaptureRegion(clipped.X - Bounds.X, clipped.Y - Bounds.Y, clipped.Width, clipped.Height);
     }
 
-    public CaptureRegion PointerToVirtual(CaptureRegion dipRegion)
-    {
-        return new CaptureRegion(
-            Bounds.X + dipRegion.X * Scale,
-            Bounds.Y + dipRegion.Y * Scale,
-            dipRegion.Width * Scale,
-            dipRegion.Height * Scale);
-    }
+    /// <summary>
+    /// The pixel a coordinate falls on, halves going the same way whichever side of the
+    /// primary display the coordinate is — which <c>Math.Round</c> would not do, since
+    /// away-from-zero sends a half up on the right of the desktop and down on the left.
+    /// </summary>
+    private static double Whole(double coordinate) => Math.Floor(coordinate + 0.5);
 }

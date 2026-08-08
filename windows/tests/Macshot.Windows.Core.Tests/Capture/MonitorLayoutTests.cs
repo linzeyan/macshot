@@ -19,6 +19,46 @@ public sealed class MonitorLayoutTests
         Assert.AreEqual(new CapturePoint(2120, 200), layout.PointerToFrame(highDpi, 100, 100));
     }
 
+    /// <summary>
+    /// The region the user chose has to be the region that is delivered. WinUI reports
+    /// the pointer in layout units, so at 175% the two edges of a 1000-pixel drag arrive
+    /// as 299.99999999999994 and 1300.0000000000002 — and a crop, which must not lose a
+    /// column the user included, rounds those outwards into 1002 pixels. A capture two
+    /// pixels wider than the size box promised is the bug this closes.
+    /// </summary>
+    [TestMethod]
+    public void PointerToFrame_LandsOnTheWholePixelAFractionalScaleOnlyAlmostReaches()
+    {
+        var monitor = new CaptureMonitor("175", new CaptureRegion(0, 0, 2038, 1588), 1.75);
+        var layout = new MonitorLayout([monitor]);
+
+        var left = layout.PointerToFrame(monitor, 300 / 1.75, 600 / 1.75);
+        var right = layout.PointerToFrame(monitor, 1300 / 1.75, 1100 / 1.75);
+
+        Assert.AreEqual(new CapturePoint(300, 600), left);
+        Assert.AreEqual(new CapturePoint(1300, 1100), right);
+        Assert.AreEqual(1000, right.X - left.X);
+        Assert.AreEqual(500, right.Y - left.Y);
+    }
+
+    /// <summary>
+    /// Halves have to go the same way on both sides of the primary display. Rounding
+    /// away from zero would send them up on the right of the desktop and down on the
+    /// left, so the same gesture would choose a different pixel depending on which
+    /// monitor it was made on.
+    /// </summary>
+    [TestMethod]
+    public void PointerToFrame_SendsAHalfPixelTheSameWayOnEitherSideOfThePrimary()
+    {
+        var left = new CaptureMonitor("left", new CaptureRegion(-1000, 0, 1000, 1000), 1.5);
+        var primary = new CaptureMonitor("primary", new CaptureRegion(0, 0, 1000, 1000), 1.5, IsPrimary: true);
+        var layout = new MonitorLayout([left, primary]);
+
+        // 100.333… layout units is 150.5 pixels: a true midpoint on both displays.
+        Assert.AreEqual(151, layout.PointerToFrame(left, 150.5 / 1.5, 0).X - 0);
+        Assert.AreEqual(1151, layout.PointerToFrame(primary, 150.5 / 1.5, 0).X);
+    }
+
     [TestMethod]
     public void FrameToPointer_ReturnsAnnotationsToTheDisplayTheyWereDrawnOn()
     {

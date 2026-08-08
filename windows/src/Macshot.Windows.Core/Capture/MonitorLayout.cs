@@ -90,12 +90,6 @@ public sealed class MonitorLayout
         return VirtualToFrame(monitor.PointerToVirtual(dipX, dipY));
     }
 
-    public CaptureRegion PointerToFrame(CaptureMonitor monitor, CaptureRegion dipRegion)
-    {
-        ArgumentNullException.ThrowIfNull(monitor);
-        return VirtualToFrame(monitor.PointerToVirtual(dipRegion));
-    }
-
     public CapturePoint FrameToVirtual(CapturePoint framePoint) =>
         new(framePoint.X + VirtualBounds.X, framePoint.Y + VirtualBounds.Y);
 
