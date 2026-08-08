@@ -13,7 +13,24 @@ namespace Macshot.Windows.Services;
 /// Whether it carries a tick. macshot's capture-delay submenu marks the delay in force,
 /// which is the only thing that says what a bare number of seconds is currently set to.
 /// </param>
-public readonly record struct TrayMenuEntry(int Id, string Text, bool Checked = false);
+/// <param name="Picture">
+/// An image file to draw beside it, or null for none. The recent captures show themselves
+/// here, which is what makes that submenu answerable without reading it. A path rather
+/// than a bitmap so the menu owns what it draws: it is the only thing that knows when the
+/// menu has closed and the handle can go back.
+/// </param>
+public readonly record struct TrayMenuEntry(int Id, string Text, bool Checked = false, string? Picture = null)
+{
+    /// <summary>
+    /// A rule between two groups of entries.
+    /// </summary>
+    /// <remarks>
+    /// Empty text rather than a separate kind, because Win32 already models it that way:
+    /// <c>MF_SEPARATOR</c> ignores the string and the id it is given. It is a record of
+    /// its own so no caller has to know that.
+    /// </remarks>
+    public static TrayMenuEntry Separator => new(0, string.Empty);
+}
 
 /// <summary>
 /// The notification-area icon and its context menu, which is macshot's primary
@@ -357,6 +374,12 @@ public sealed class TrayIconService : IDisposable
             return;
         }
 
+        // The pictures a submenu drew itself with, kept until the menu is gone. Released
+        // after DestroyMenu rather than before: the shell reads the bitmap while the menu
+        // is still up, and freeing one early is a right-click that draws from a dead
+        // handle.
+        var pictures = new List<IntPtr>();
+
         try
         {
             for (var position = 0; position < _menuItems.Count; position++)
@@ -376,7 +399,7 @@ public sealed class TrayIconService : IDisposable
                     AppendMenu(
                         menu,
                         MenuPopup,
-                        new UIntPtr((ulong)BuildSubmenu(items(), entry.EmptyText!).ToInt64()),
+                        new UIntPtr((ulong)BuildSubmenu(items(), entry.EmptyText!, pictures).ToInt64()),
                         Literal(entry.Text));
                 }
                 else
@@ -429,6 +452,11 @@ public sealed class TrayIconService : IDisposable
         finally
         {
             DestroyMenu(menu);
+
+            foreach (var picture in pictures)
+            {
+                MenuThumbnails.Release(picture);
+            }
         }
     }
 
@@ -529,7 +557,16 @@ public sealed class TrayIconService : IDisposable
     /// none — an empty submenu opens as a blank rectangle, which reads as a defect
     /// rather than as "nothing here yet".
     /// </summary>
-    private static IntPtr BuildSubmenu(IReadOnlyList<TrayMenuEntry> entries, string emptyText)
+    /// <param name="pictures">
+    /// Collects the bitmaps made here, which the caller gives back once the menu has
+    /// closed. A menu does not own what is set on it, and a submenu's pictures are the
+    /// captures the history held at the moment it was opened — so unlike
+    /// <see cref="MenuIcons"/>'s glyphs there is nothing to keep them for.
+    /// </param>
+    private static IntPtr BuildSubmenu(
+        IReadOnlyList<TrayMenuEntry> entries,
+        string emptyText,
+        ICollection<IntPtr> pictures)
     {
         var submenu = CreatePopupMenu();
         if (submenu == IntPtr.Zero)
@@ -543,13 +580,46 @@ public sealed class TrayIconService : IDisposable
             return submenu;
         }
 
-        foreach (var entry in entries)
+        for (var position = 0; position < entries.Count; position++)
         {
+            var entry = entries[position];
+
+            if (entry.Text.Length == 0)
+            {
+                AppendMenu(submenu, MenuSeparator, UIntPtr.Zero, null);
+                continue;
+            }
+
             AppendMenu(
                 submenu,
                 entry.Checked ? MenuString | MenuChecked : MenuString,
                 new UIntPtr((uint)entry.Id),
                 Literal(entry.Text));
+
+            if (entry.Picture is not { } picture)
+            {
+                continue;
+            }
+
+            var bitmap = MenuThumbnails.TryLoad(picture);
+            if (bitmap == IntPtr.Zero)
+            {
+                continue;
+            }
+
+            pictures.Add(bitmap);
+
+            // By position rather than by id, because two entries can share an id: the
+            // separator above is appended with zero, and so is every entry of an empty
+            // submenu.
+            var info = new MenuItemInfo
+            {
+                Size = (uint)Marshal.SizeOf<MenuItemInfo>(),
+                Mask = MenuMaskBitmap,
+                ItemBitmap = bitmap,
+            };
+
+            SetMenuItemInfo(submenu, (uint)position, byPosition: true, ref info);
         }
 
         return submenu;

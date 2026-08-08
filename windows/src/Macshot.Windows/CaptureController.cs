@@ -47,6 +47,7 @@ public sealed class CaptureController : IDisposable
     private const int CommandPinFromClipboard = 15;
     private const int CommandOpenVideo = 16;
     private const int CommandCheckForUpdates = 17;
+    private const int CommandClearHistory = 18;
 
     /// <summary>
     /// The picture on each menu line, as a Segoe Fluent Icons character.
@@ -614,9 +615,9 @@ public sealed class CaptureController : IDisposable
             settings.PinFromClipboardBinding,
             PinFromClipboardAsync);
 
-        // No menu entry of its own: macshot clears the history from the history panel,
-        // and a notification-area menu that can wipe it in one click is a menu with a
-        // trap in it. The shortcut exists because macshot offers one, unbound.
+        // Nothing to rename: the menu entry for this is built with the recent captures it
+        // sits under, not held in a fixed slot, so it carries no shortcut to keep in step.
+        // Both routes go through the same confirmation — see ClearHistoryAsync.
         Bind(
             HotkeyClearHistory,
             command: 0,
@@ -1005,6 +1006,9 @@ public sealed class CaptureController : IDisposable
         case CommandCheckForUpdates:
             Post(() => CheckForUpdatesAsync(asked: true));
             break;
+        case CommandClearHistory:
+            Post(ClearHistoryAsync);
+            break;
         case >= CommandRecentFirst:
             OpenRecent(command - CommandRecentFirst);
             break;
@@ -1392,7 +1396,22 @@ public sealed class CaptureController : IDisposable
     private IReadOnlyList<TrayMenuEntry> RecentMenuEntries()
     {
         _recent = ScreenshotHistory.Recent(RecentMenuCount, _settings.Current);
-        return [.. _recent.Select((entry, index) => new TrayMenuEntry(CommandRecentFirst + index, entry.Label))];
+
+        // Nothing but the empty line when there is nothing to clear, which is macshot's
+        // own answer (AppDelegate.swift:3173): a submenu offering to wipe an empty
+        // history is a control with nothing to act on.
+        if (_recent.Count == 0)
+        {
+            return [];
+        }
+
+        return
+        [
+            .. _recent.Select((entry, index) =>
+                new TrayMenuEntry(CommandRecentFirst + index, entry.Label, Picture: entry.Path)),
+            TrayMenuEntry.Separator,
+            new TrayMenuEntry(CommandClearHistory, L("Clear History")),
+        ];
     }
 
     /// <summary>
@@ -1607,12 +1626,30 @@ public sealed class CaptureController : IDisposable
     /// Throws the history away, and puts an open panel back with what is left.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// Asked first, in the same words the panel's own trash button asks in. macshot puts
+    /// this behind an alert wherever it is reached from
+    /// (<c>AppDelegate.swift:confirmClearHistory</c>), and it is the one command here
+    /// that destroys something the user cannot get back — a shortcut pressed by accident
+    /// used to take the whole archive with it.
+    /// </para>
+    /// <para>
     /// The panel reads the folder when it opens rather than watching it, so one left
     /// standing would go on offering captures whose files have just been deleted.
     /// Closing and reopening it is the whole of the refresh it needs.
+    /// </para>
     /// </remarks>
     private Task ClearHistoryAsync()
     {
+        var asked = Message.Ask(
+            _messageWindow.Handle,
+            $"{L("Clear History?")}\n\n{L("This will permanently delete all screenshots from history.")}");
+
+        if (!asked)
+        {
+            return Task.CompletedTask;
+        }
+
         ScreenshotHistory.Clear();
 
         if (_history is { } panel)
