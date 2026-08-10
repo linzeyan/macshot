@@ -88,14 +88,19 @@ public static class ImageDelivery
         // writes the whole file into one buffer of its own and gives it back. Branching
         // here rather than inside EncodeIntoAsync keeps that method the WIC path it reads
         // as, and the clipboard — its only other caller — is always PNG.
+        //
+        // Onto the pool, because both are synchronous to the last byte and every caller
+        // reaches this from a button: AVIF is around 1.4s for a full screen on a modest
+        // machine, and run here it would be 1.4s of a window that does not redraw. WIC
+        // below is already asynchronous and needs no such help.
         if (format is CaptureImageFormat.Webp)
         {
-            return WebpEncoder.Encode(frame, quality);
+            return await Task.Run(() => WebpEncoder.Encode(frame, quality));
         }
 
         if (format is CaptureImageFormat.Avif)
         {
-            return AvifEncoder.Encode(frame, quality);
+            return await Task.Run(() => AvifEncoder.Encode(frame, quality));
         }
 
         using var stream = new InMemoryRandomAccessStream();

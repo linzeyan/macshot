@@ -1219,7 +1219,21 @@ public sealed class CaptureController : IDisposable
             // Through the prompt rather than straight to the folder, because "Ask where
             // to save" has to reach the capture that is saved without anyone pressing
             // Save — which is most of them.
-            await SavePrompt.SaveAsync(_messageWindow.Handle, frame, settings, windowTitle);
+            //
+            // Awaited only when there is a dialog to put in front of somebody. The plain
+            // save is started and left to finish, because macshot hands the encode to a
+            // background queue and plays the sound and raises the thumbnail without
+            // waiting for it (ImageSaveService.swift:139) — and an AVIF is over a second
+            // of encoding that would otherwise sit between the capture and any sign that
+            // it happened.
+            if (settings.SaveAction is SaveAction.AskWhereToSave)
+            {
+                await SavePrompt.SaveAsync(_messageWindow.Handle, frame, settings, windowTitle);
+            }
+            else
+            {
+                Post(() => ImageDelivery.SaveAsync(frame, settings, windowTitle));
+            }
         }
 
         // Once for the capture rather than once per destination: saving and copying the
