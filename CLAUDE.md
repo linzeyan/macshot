@@ -84,10 +84,14 @@ was skipped, say so — "done" is wrong if anything was silently left out.
 | --- | --- |
 | `Macshot.Windows.Core` and its tests | Anywhere — plain `net10.0` |
 | `Macshot.Windows` (WinUI 3) | Windows only |
+| `native/macshot-avif` (Rust) | Anywhere — `cargo test` runs on this Mac |
 
 ```bash
 # On this Mac — Core only.
 dotnet test windows/tests/Macshot.Windows.Core.Tests/Macshot.Windows.Core.Tests.csproj
+
+# …and the AVIF encoder, which is plain Rust and needs no Windows either.
+cargo test --release --manifest-path windows/native/macshot-avif/Cargo.toml
 ```
 
 ```powershell
@@ -141,6 +145,9 @@ windows/
 │   ├── vm-shot.sh                  # Photograph the VM's desktop, from here
 │   ├── sync-upstream-strings.sh    # Refresh the Mac app's translations from main
 │   └── extract_meshes.py
+│
+├── native/
+│   └── macshot-avif/               # Rust cdylib: the AVIF encoder, built during publish
 │
 ├── src/Macshot.Windows.Core/       # net10.0, no Windows references, unit-tested
 │   ├── Annotations/                # Model, tools, toolbar layout, stamps, shortcuts
@@ -377,13 +384,16 @@ start the macOS pipeline on `main`, and vice versa.
   so no release has carried an installer yet. With `windows.startupTask` and
   `windows.protocol`, that is what stands between it and being the way macshot is
   installed. See Releasing.
-- Save formats stop at PNG, JPEG, HEIC and WebP; macOS also offers AVIF. WIC writes
-  neither WebP nor AVIF — its support for both is a decoder — so WebP is written by
-  libwebp instead, carried per architecture from `Imazen.WebP.NativeRuntime.win-*` and
-  called through `Services/WebpEncoder.cs`. AVIF would mean bundling an AV1 encoder,
-  which is a different order of dependency. Both optional codecs are probed before they
-  are offered: HEIC against WIC's registered encoders, WebP against whether libwebp
-  loaded. Where the probe says yes and the encode still fails, it falls back to JPEG and
+- Save formats match macOS: PNG, JPEG, HEIC, WebP and AVIF. WIC writes neither WebP nor
+  AVIF — its support for both is a decoder — so each has its own encoder beside the app.
+  WebP is libwebp, carried per architecture from `Imazen.WebP.NativeRuntime.win-*` and
+  called through `Services/WebpEncoder.cs`. AVIF is `windows/native/macshot-avif`, a Rust
+  cdylib over `ravif`, called through `Services/AvifEncoder.cs`; there is no NuGet package
+  carrying an AV1 encoder, so this one is built from source and **a Rust toolchain is a
+  build dependency of the WinUI project**. All three optional codecs are probed before
+  they are offered: HEIC against WIC's registered encoders, WebP against whether libwebp
+  loaded, AVIF against whether the cdylib loaded and answers the ABI version this tree
+  expects. Where the probe says yes and the encode still fails, it falls back to JPEG and
   renames the file — which is also what a WebP taller than 16383 pixels does.
 - `docs/` is a symlink to a private directory outside the repository — the architecture
   notes and the manual verification procedure live there and resolve on Ricky's machine

@@ -1,0 +1,29 @@
+[package]
+name = "macshot-avif"
+version = "1.0.0"
+edition = "2024"
+publish = false
+
+[lib]
+# cdylib is what Services/AvifEncoder.cs loads; rlib is what `cargo test` needs to
+# reach the encoder without going through the C ABI.
+crate-type = ["cdylib", "rlib"]
+name = "macshot_avif"
+
+[dependencies]
+# No default features, deliberately. `asm` pulls rav1e's hand-written assembly, which
+# wants nasm on x86 and a C compiler for the aarch64 .S files — two build-host
+# dependencies for a library that has to cross-compile to win-arm64 from whatever CI
+# happens to be running. Pure Rust builds anywhere `rustup target add` works, and the
+# speed preset below is what pays for the difference.
+ravif = { version = "0.13.0", default-features = false, features = ["threading"] }
+
+# No custom [profile.release], deliberately, because the obvious one is not worth it.
+# Measured on the win-x64 DLL: `lto` plus `codegen-units = 1` takes it from 3.70 MB to
+# 3.48 MB — six percent — and the build from 18s to 43s, which is the wrong trade in a
+# tree whose edit-compile loop is the thing that makes it workable. `strip` changes
+# nothing at all on MSVC, where the symbols live in the .pdb rather than in the DLL.
+#
+# So AVIF costs about 3.7 MB per architecture against libwebp's 360 KB. That is what an
+# AV1 encoder weighs, and it is worth knowing before it is mistaken for something that
+# went wrong.

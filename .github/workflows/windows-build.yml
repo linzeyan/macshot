@@ -44,6 +44,14 @@ jobs:
       - uses: actions/setup-dotnet@v5
         with:
           dotnet-version: 10.0.x
+
+      # The AVIF encoder is a Rust cdylib built from windows/native/macshot-avif as part
+      # of the project, so the toolchain is a build dependency. Installed rather than
+      # assumed, for the same reason it is in build-release.yml.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
       - run: dotnet build windows/Macshot.Windows.sln --configuration Release --warnaserror
       - run: dotnet test windows/Macshot.Windows.sln --configuration Release --no-build
 

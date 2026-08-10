@@ -19,6 +19,7 @@ public sealed class CaptureImageFormatTests
         Assert.AreEqual(".jpg", CaptureImageFormat.Jpeg.FileExtension());
         Assert.AreEqual(".heic", CaptureImageFormat.Heic.FileExtension());
         Assert.AreEqual(".webp", CaptureImageFormat.Webp.FileExtension());
+        Assert.AreEqual(".avif", CaptureImageFormat.Avif.FileExtension());
 
         var extensions = Enum.GetValues<CaptureImageFormat>()
             .Select(format => format.FileExtension())
@@ -39,24 +40,27 @@ public sealed class CaptureImageFormatTests
         Assert.IsTrue(CaptureImageFormat.Jpeg.IsLossy());
         Assert.IsTrue(CaptureImageFormat.Heic.IsLossy());
 
-        // WebP has a lossless mode and macshot never asks for it, so the slider reaches
-        // this format too. Marked lossless it would be a second PNG with a worse name.
+        // WebP and AVIF both have a lossless mode and macshot asks for neither, so the
+        // slider reaches them too. Marked lossless either would be a second PNG with a
+        // worse name.
         Assert.IsTrue(CaptureImageFormat.Webp.IsLossy());
+        Assert.IsTrue(CaptureImageFormat.Avif.IsLossy());
     }
 
     /// <summary>
     /// PNG and JPEG are WIC itself and cannot be missing from a machine running this app.
-    /// The other two can: HEIC's codec is an optional Windows component, and WebP's is a
-    /// native library that ships beside the app and still has to load. Getting this wrong
-    /// in either direction is a bug the user sees — marked wrongly false, the option is
-    /// offered where it cannot be written; wrongly true, a format that always works is
-    /// hidden behind a probe that might say no.
+    /// The other three can: HEIC's codec is an optional Windows component, and WebP's and
+    /// AVIF's are native libraries that ship beside the app and still have to load.
+    /// Getting this wrong in either direction is a bug the user sees — marked wrongly
+    /// false, the option is offered where it cannot be written; wrongly true, a format
+    /// that always works is hidden behind a probe that might say no.
     /// </summary>
     [TestMethod]
     public void RequiresOptionalCodec_MarksTheFormatsThatMustBeProbedForFirst()
     {
         Assert.IsTrue(CaptureImageFormat.Heic.RequiresOptionalCodec());
         Assert.IsTrue(CaptureImageFormat.Webp.RequiresOptionalCodec());
+        Assert.IsTrue(CaptureImageFormat.Avif.RequiresOptionalCodec());
         Assert.IsFalse(CaptureImageFormat.Png.RequiresOptionalCodec());
         Assert.IsFalse(CaptureImageFormat.Jpeg.RequiresOptionalCodec());
     }
@@ -79,6 +83,7 @@ public sealed class CaptureImageFormatTests
 
         Assert.AreEqual(CaptureImageFormat.Jpeg, CaptureImageFormat.Heic.Fallback());
         Assert.AreEqual(CaptureImageFormat.Jpeg, CaptureImageFormat.Webp.Fallback());
+        Assert.AreEqual(CaptureImageFormat.Jpeg, CaptureImageFormat.Avif.Fallback());
     }
 
     /// <summary>
@@ -110,9 +115,9 @@ public sealed class CaptureImageFormatTests
 
     /// <summary>
     /// These reach the user in the preferences list and in the save dialog's file type
-    /// entries. macOS names them PNG, JPEG, HEIC and WebP; "Png" in a menu would be this
-    /// port leaking its own identifiers into the interface, and "WEBP" would be the same
-    /// mistake pointed the other way.
+    /// entries. macOS names them PNG, JPEG, HEIC, WebP and AVIF; "Png" in a menu would be
+    /// this port leaking its own identifiers into the interface, and "WEBP" would be the
+    /// same mistake pointed the other way.
     /// </summary>
     [TestMethod]
     public void DisplayName_UsesTheMacAppsNamesRatherThanTheEnums()
@@ -121,6 +126,7 @@ public sealed class CaptureImageFormatTests
         Assert.AreEqual("JPEG", CaptureImageFormat.Jpeg.DisplayName());
         Assert.AreEqual("HEIC", CaptureImageFormat.Heic.DisplayName());
         Assert.AreEqual("WebP", CaptureImageFormat.Webp.DisplayName());
+        Assert.AreEqual("AVIF", CaptureImageFormat.Avif.DisplayName());
     }
 
     /// <summary>

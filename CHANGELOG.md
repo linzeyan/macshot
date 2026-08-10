@@ -3,6 +3,16 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [Unreleased]
+
+### Added
+
+- **AVIF** as a save format, which closes the last gap against the macOS app's format
+  list. Windows writes no AVIF of its own — the Store's AV1 extension is a decoder — so
+  it is encoded by `windows/native/macshot-avif`, a Rust library over `ravif` that is
+  built from source as part of the app. Like HEIC and WebP it is probed for before it is
+  offered, and falls back to JPEG if the encoder is missing or refuses a picture.
+
 ## [1.0.0-beta.1] - 2026-08-03
 
 The first Windows release: a port of macshot to C# and WinUI 3, following the macOS app

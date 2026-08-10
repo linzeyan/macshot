@@ -41,6 +41,15 @@ jobs:
         with:
           dotnet-version: 10.0.x
 
+      # AVIF is written by windows/native/macshot-avif, a Rust cdylib the project builds
+      # during publish, so a Rust toolchain is as much a build dependency here as the .NET
+      # SDK is. Installed explicitly rather than relying on the runner image having one:
+      # the image does ship Rust today, and a leg that silently stopped producing AVIF
+      # because that changed would pass every check in this file.
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: ${{ matrix.arch == 'arm64' && 'aarch64-pc-windows-msvc' || 'x86_64-pc-windows-msvc' }}
+
       # The tag says what the build calls itself. Everything downstream reads this: the
       # file names, the release title, and — through -p:Version — the About page and the
       # update check, which compares the running version against the published tags and

@@ -29,9 +29,14 @@
 #   icacls C:\ProgramData\ssh\administrators_authorized_keys /inheritance:r `
 #     /grant "Administrators:F" /grant "SYSTEM:F"
 #
-#   # 3. Toolchain
+#   # 3. Toolchain. Rust too: the AVIF encoder is a cdylib the project builds during
+#   #    compilation, so without it the WinUI project does not build at all. The guest is
+#   #    arm64, and this script builds win-x64 by default, so it needs that target added
+#   #    on top of its own.
 #   winget install --id Microsoft.DotNet.SDK.10 -e
 #   winget install --id Git.Git -e
+#   winget install --id Rustlang.Rustup -e
+#   rustup target add x86_64-pc-windows-msvc
 #
 #   # 4. The clone. Any branch; this script overwrites the tree on every run.
 #   git clone -b windows https://github.com/linzeyan/macshot.git C:\src\macshot

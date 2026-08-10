@@ -44,7 +44,8 @@ internal static class ImageEncoders
 
     /// <summary>
     /// The WIC encoder behind a format. Not every format has one — WebP is written by
-    /// <see cref="WebpEncoder"/> and never reaches here.
+    /// <see cref="WebpEncoder"/> and AVIF by <see cref="AvifEncoder"/>, and neither
+    /// reaches here.
     /// </summary>
     public static Guid EncoderIdOf(CaptureImageFormat format) => format switch
     {
@@ -61,10 +62,12 @@ internal static class ImageEncoders
         CaptureImageFormat format,
         IReadOnlyList<BitmapCodecInformation>? registered) => format switch
     {
-        // Not WIC's to answer for. The encoder is libwebp, carried beside the app, so the
-        // question is whether that library loaded rather than what Windows registered —
-        // and it stays answerable even when the enumeration above failed.
+        // Not WIC's to answer for. Both encoders are carried beside the app — libwebp and
+        // macshot_avif — so the question is whether that library loaded rather than what
+        // Windows registered, and it stays answerable even when the enumeration above
+        // failed.
         CaptureImageFormat.Webp => WebpEncoder.IsAvailable,
+        CaptureImageFormat.Avif => AvifEncoder.IsAvailable,
         _ => !format.RequiresOptionalCodec()
             || (registered is not null && registered.Any(codec => codec.CodecId == EncoderIdOf(format))),
     };

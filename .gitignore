@@ -5,6 +5,10 @@ obj/
 *.user
 .vs/
 
+# Rust. Scoped to the native crates rather than a bare target/, which would also
+# swallow any directory of that name under src/.
+windows/native/*/target/
+
 # Editors and OS
 .DS_Store
 *.swp

@@ -84,13 +84,18 @@ public static class ImageDelivery
         CaptureImageFormat format,
         int quality)
     {
-        // WebP has no WIC encoder to hand a stream to: libwebp writes the whole file into
-        // one buffer of its own and gives it back. Branching here rather than inside
-        // EncodeIntoAsync keeps that method the WIC path it reads as, and the clipboard —
-        // its only other caller — is always PNG.
+        // Neither of these has a WIC encoder to hand a stream to: each native library
+        // writes the whole file into one buffer of its own and gives it back. Branching
+        // here rather than inside EncodeIntoAsync keeps that method the WIC path it reads
+        // as, and the clipboard — its only other caller — is always PNG.
         if (format is CaptureImageFormat.Webp)
         {
             return WebpEncoder.Encode(frame, quality);
+        }
+
+        if (format is CaptureImageFormat.Avif)
+        {
+            return AvifEncoder.Encode(frame, quality);
         }
 
         using var stream = new InMemoryRandomAccessStream();

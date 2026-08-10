@@ -137,6 +137,57 @@
     <PackageReference Include="Imazen.WebP.NativeRuntime.win-arm64" Version="1.6.1" />
   </ItemGroup>
 
+  <!--
+    AVIF, the same story as libwebp one level further out: nothing on Windows writes it,
+    and there is no NuGet package carrying an AV1 encoder the way Imazen carries libwebp.
+    So it is built from source here - windows/native/macshot-avif, a Rust cdylib over the
+    ravif crate - and Services/AvifEncoder.cs calls it through three DllImports.
+
+    This makes a Rust toolchain a build dependency of the Windows half. That is a real
+    cost and it is paid deliberately: the alternative is checking a pair of built DLLs
+    into the repository, which nobody could reproduce or audit, for a binary that decodes
+    every screenshot the app saves.
+
+    One architecture per build, unlike libwebp above, because there is nothing to restore
+    - the crate is compiled for whichever RID is being built, and cargo needs the exact
+    triple rather than the RID.
+  -->
+  <PropertyGroup>
+    <AvifCrateDirectory>$(MSBuildProjectDirectory)\..\..\native\macshot-avif</AvifCrateDirectory>
+    <AvifRustTarget Condition="'$(RuntimeIdentifier)' == 'win-x64'">x86_64-pc-windows-msvc</AvifRustTarget>
+    <AvifRustTarget Condition="'$(RuntimeIdentifier)' == 'win-arm64'">aarch64-pc-windows-msvc</AvifRustTarget>
+    <AvifLibrary>$(AvifCrateDirectory)\target\$(AvifRustTarget)\release\macshot_avif.dll</AvifLibrary>
+  </PropertyGroup>
+
+  <!--
+    Split in two so that the compile can be skipped while the copy still happens: a target
+    with Inputs and Outputs that MSBuild finds up to date does not run its ItemGroup
+    either, and the DLL would stop being copied on every build after the first.
+  -->
+  <Target Name="BuildNativeAvif"
+          Inputs="$(AvifCrateDirectory)\Cargo.toml;$(AvifCrateDirectory)\Cargo.lock;$(AvifCrateDirectory)\src\lib.rs"
+          Outputs="$(AvifLibrary)">
+    <Error Condition="'$(AvifRustTarget)' == ''"
+           Text="No Rust target is known for RuntimeIdentifier '$(RuntimeIdentifier)'. Add one beside the two in AvifRustTarget." />
+    <!--
+      A no-op cargo build is a fraction of a second, which is what keeps this off the
+      15-second edit-compile loop the Windows VM exists to provide.
+    -->
+    <Exec Command="cargo build --release --target $(AvifRustTarget)"
+          WorkingDirectory="$(AvifCrateDirectory)" />
+  </Target>
+
+  <Target Name="IncludeNativeAvif"
+          BeforeTargets="AssignTargetPaths"
+          DependsOnTargets="BuildNativeAvif">
+    <ItemGroup>
+      <Content Include="$(AvifLibrary)">
+        <Link>macshot_avif.dll</Link>
+        <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      </Content>
+    </ItemGroup>
+  </Target>
+
   <ItemGroup>
     <ProjectReference Include="..\Macshot.Windows.Core\Macshot.Windows.Core.csproj" />
   </ItemGroup>
