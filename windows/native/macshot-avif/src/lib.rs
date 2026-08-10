@@ -17,7 +17,7 @@
 
 use std::panic::catch_unwind;
 
-use ravif::{Encoder, Img, RGB8, RGBA8};
+use ravif::{BitDepth, Encoder, Img, RGB8, RGBA8};
 
 /// The shape of the contract this library implements, checked once when it loads.
 ///
@@ -36,15 +36,21 @@ pub const STATUS_PANIC: i32 = -5;
 
 /// How much work rav1e does looking for a smaller file.
 ///
-/// rav1e's range is 0 (exhaustive) to 10 (fastest) and its own default is 5, but the
-/// curve is not monotonic in any useful sense. Measured on Apple Silicon against a
-/// synthetic 4K screenshot at quality 90 with no `asm` feature — the absolute times move
-/// with the machine, the ratios are the point: speed 4 took 1.50s for 55 KB, speed 8
-/// took 0.72s for 56 KB, and speed 10 took 0.17s for 116 KB. So 8 is the whole of the
-/// bargain — everything below it buys under 2% in size for twice the wait, and 10 hands
-/// the size back twofold to save half a second. macshot is encoding a screenshot
-/// somebody is waiting on, not packaging a video overnight.
-const SPEED: u8 = 8;
+/// rav1e's range is 0 (exhaustive) to 10 (fastest) and its own default is 5. The number
+/// that matters is 5, not the speed itself: `SpeedTweaks::from_my_preset` gives speeds
+/// 5..=8 a partition range starting at 8px and only 1..=4 the 4px blocks, and 4px blocks
+/// are what a screenshot's text edges are made of. So the curve has a cliff between 5
+/// and 4 that a photograph would never show.
+///
+/// Measured at quality 85 on real screenshots rather than a synthetic one, which is what
+/// hid this before: on the Windows VM, a 2038x1588 desktop went 104.5 KB at speed 8 to
+/// 85.3 KB at speed 4, for 0.53s against 1.44s. Speed 3 took another 0.24s to save a
+/// further 0.7%, so 4 is the knee and not a step on the way down.
+///
+/// The wait is real, and it is why `ImageDelivery.EncodeToBytesAsync` runs this off the
+/// UI thread — a second and a half of frozen window would be the wrong trade, a second
+/// and a half of background work for a fifth off every file is not.
+const SPEED: u8 = 4;
 
 /// Encoded bytes handed back to the caller, still owned by Rust's allocator.
 ///
@@ -187,7 +193,17 @@ pub fn encode_bgra(
     // only place that can be prevented — the value arrives from a settings file a user is
     // invited to edit by hand.
     let quality = quality.clamp(1, 100) as f32;
-    let encoder = Encoder::new().with_quality(quality).with_speed(SPEED);
+
+    // Eight bits, against ravif's default of ten. The source is an 8-bit screen capture
+    // and every viewer takes it back to 8 bits to put it on a screen, so the extra depth
+    // is spent on a round trip that cannot come back clean: measured against the lossless
+    // original, the 10-bit file decoded to 8 bits was off by 0.8 of a level per pixel
+    // where the 8-bit one was off by 0.06, which is 48 dB against 53 dB for a file of the
+    // same size. macOS writes 8-bit too (`ImageEncoder.swift:179` through ImageIO).
+    let encoder = Encoder::new()
+        .with_quality(quality)
+        .with_speed(SPEED)
+        .with_bit_depth(BitDepth::Eight);
 
     // Alpha only where the caller said it means something. The cut-out Remove Background
     // produces is the exception among captures, and its alpha is straight rather than
