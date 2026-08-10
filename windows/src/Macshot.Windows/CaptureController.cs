@@ -1124,14 +1124,42 @@ public sealed class CaptureController : IDisposable
         {
             case CaptureOutcome.Copy:
                 await ImageDelivery.CopyToClipboardAsync(frame);
+                CaptureSound.Play(settings.PlayCaptureSound);
                 break;
 
             case CaptureOutcome.Save:
-                await SavePrompt.SaveAsync(
-                    _messageWindow.Handle,
-                    frame,
-                    settings,
-                    completion.WindowTitle);
+                // The sound means the file landed, which is why macshot plays it from the
+                // save's completion rather than on the way past
+                // (`OverlayWindowController.swift:985`) — and why the save that is left to
+                // finish in the background carries it instead of the block below.
+                //
+                // "Ask where to save" is awaited: a dialog belongs in front of somebody,
+                // not behind the panel that says the capture was already dealt with.
+                if (settings.SaveAction is SaveAction.AskWhereToSave)
+                {
+                    // Null is a dismissed dialog, and nothing was written to make a sound
+                    // about — macshot's Save As is silent on cancel for the same reason
+                    // (`OverlayWindowController.swift:1010`).
+                    var path = await SavePrompt.SaveAsync(
+                        _messageWindow.Handle,
+                        frame,
+                        settings,
+                        completion.WindowTitle);
+
+                    if (path is not null)
+                    {
+                        CaptureSound.Play(settings.PlayCaptureSound);
+                    }
+                }
+                else
+                {
+                    Post(async () =>
+                    {
+                        await ImageDelivery.SaveAsync(frame, settings, completion.WindowTitle);
+                        CaptureSound.Play(settings.PlayCaptureSound);
+                    });
+                }
+
                 break;
 
 #if !OFFLINE
@@ -1149,13 +1177,9 @@ public sealed class CaptureController : IDisposable
 
         var archived = await ArchiveAsync(frame, settings, completion.Editable, origin);
 
-        // Only for the two that put the capture somewhere. Pinning and uploading each
-        // leave a window on screen saying so, and a sound on top of that is noise.
-        if (completion.Outcome is CaptureOutcome.Copy or CaptureOutcome.Save)
-        {
-            CaptureSound.Play(settings.PlayCaptureSound);
-        }
-
+        // Pinning and uploading play nothing: each leaves a window on screen saying what
+        // became of the capture, and a sound on top of that is noise. Copy and Save play
+        // their own above, where each of them knows whether it actually happened.
         if (completion.Outcome is CaptureOutcome.Pin)
         {
             await PinAsync(frame);
@@ -1165,7 +1189,14 @@ public sealed class CaptureController : IDisposable
         // is left to say the edit landed, and it carries the entry so its own Edit reopens
         // the capture that was just committed rather than the one before the marks.
         // macshot puts one up here too (DetachedEditorWindowController.swift:357-360).
-        if (completion.Outcome is CaptureOutcome.Commit && settings.ShowThumbnail)
+        //
+        // Copy and Save raise one for the same reason and from the same place: on macshot
+        // both buttons end at `overlayDidConfirm`, which adds the history entry and then
+        // shows the floating thumbnail (`AppDelegate.swift:2290-2303`). Without this the
+        // toolbar's two commonest buttons were the only deliveries that left nothing on
+        // screen.
+        if (settings.ShowThumbnail
+            && completion.Outcome is CaptureOutcome.Commit or CaptureOutcome.Copy or CaptureOutcome.Save)
         {
             await ShowThumbnailAsync(frame, archived);
         }
