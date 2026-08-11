@@ -46,6 +46,7 @@ windows/tools/vm-build.sh                 # does it compile? ~15s, warnings as e
 windows/tools/vm-build.sh --test          # …and do the tests pass on Windows
 windows/tools/vm-build.sh --offline       # …does the variant compile on its own
 windows/tools/vm-shot.sh --keys '^+x'     # what does it look like? → a PNG to read
+windows/tools/vm-shot.sh --scroll 900,700,-10   # …the half of a page below the fold
 ```
 
 Use them. Before this existed, every layout, weight and alignment bug cost a full round
@@ -119,6 +120,11 @@ Two things about the guest are load-bearing and cost a round trip each to learn:
 
 And when running anything with `/switches` over ssh, prefix `MSYS_NO_PATHCONV=1` — git's
 bash rewrites `/create` into `C:/Program Files/Git/create` otherwise.
+
+**`--offline` deletes the normal build's `Macshot.Windows.exe`.** Both variants write into
+the same `bin` directory, and MSBuild removes the previous assembly name's outputs when the
+name changes. `vm-shot.sh --start` then silently starts nothing. Run a plain `vm-build.sh`
+before photographing anything.
 
 ### Reading CI failures without log access
 
