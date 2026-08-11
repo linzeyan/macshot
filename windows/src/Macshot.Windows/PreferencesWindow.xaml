@@ -599,9 +599,14 @@
                         </StackPanel>
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Filename:" Style="{StaticResource RowLabel}" />
+                            <!-- Monospaced, as macshot's is
+                                 (SettingsWindowController.swift:776): what goes in here is
+                                 a pattern with braces in it, and it is read letter by
+                                 letter when it does not do what was meant. -->
                             <TextBox
                                 x:Name="TemplateBox"
                                 FontSize="13"
+                                FontFamily="Cascadia Mono, Consolas"
                                 Width="240"
                                 TextChanged="Template_TextChanged"
                                 LostFocus="Setting_LostFocus" />
@@ -644,6 +649,12 @@
                                     </Flyout>
                                 </Button.Flyout>
                             </Button>
+                            <!-- macshot's, beside the same box
+                                 (SettingsWindowController.swift:886). A template is the one
+                                 setting that can be typed into a state where nothing saves
+                                 under a name anybody recognises, and the way back is a word
+                                 nobody remembers. -->
+                            <Button Content="Reset" FontSize="13" Click="ResetTemplate_Click" />
                         </StackPanel>
                         <!-- What the template resolves to right now. A template is the one
                              setting whose effect is invisible until a file has already been
@@ -880,6 +891,7 @@
                             <TextBox
                                 x:Name="RecordingTemplateBox"
                                 FontSize="13"
+                                FontFamily="Cascadia Mono, Consolas"
                                 Width="240"
                                 TextChanged="RecordingTemplate_TextChanged"
                                 LostFocus="Setting_LostFocus" />
@@ -920,6 +932,9 @@
                                     </Flyout>
                                 </Button.Flyout>
                             </Button>
+                            <!-- The recording template's own, as macshot gives it one
+                                 (SettingsWindowController.swift:1585). -->
+                            <Button Content="Reset" FontSize="13" Click="ResetRecordingTemplate_Click" />
                         </StackPanel>
                         <TextBlock x:Name="RecordingTemplatePreview" Style="{StaticResource Caption}" />
                     </StackPanel>

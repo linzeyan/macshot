@@ -177,6 +177,14 @@ public sealed partial class PreferencesWindow : Window
         BuildShortcutRows();
         BuildUrlSchemeCommands();
         BuildFilenameTokens();
+
+        // After the page-wide pass, and deliberately: a template is a pattern, not a
+        // sentence, and one that came back translated would name files in tokens macshot
+        // does not answer. macshot shows the same two as placeholders
+        // (SettingsWindowController.swift:775, :1572), which is what makes an emptied box
+        // say what it will fall back to.
+        TemplateBox.PlaceholderText = FilenameTemplate.Default;
+        RecordingTemplateBox.PlaceholderText = FilenameTemplate.DefaultRecording;
         Load(_settings.Current);
         PlaceOnScreen();
 
@@ -1864,6 +1872,27 @@ public sealed partial class PreferencesWindow : Window
     private void ResetDirectory_Click(object sender, RoutedEventArgs e)
     {
         DirectoryBox.Text = string.Empty;
+        Apply();
+    }
+
+    /// <summary>
+    /// Puts the default template back, in words rather than by emptying the box.
+    /// </summary>
+    /// <remarks>
+    /// An empty template resolves to the default anyway, but it says so nowhere: the box
+    /// would be blank and the preview would show a name the user cannot see the pattern
+    /// for. macshot writes the pattern in (<c>SettingsWindowController.swift:2895</c>),
+    /// which also leaves it there to be edited from.
+    /// </remarks>
+    private void ResetTemplate_Click(object sender, RoutedEventArgs e)
+    {
+        TemplateBox.Text = FilenameTemplate.Default;
+        Apply();
+    }
+
+    private void ResetRecordingTemplate_Click(object sender, RoutedEventArgs e)
+    {
+        RecordingTemplateBox.Text = FilenameTemplate.DefaultRecording;
         Apply();
     }
 
