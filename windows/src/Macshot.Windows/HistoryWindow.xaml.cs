@@ -1,4 +1,5 @@
 using System.Globalization;
+using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Output;
 using Macshot.Windows.Services;
 using Macshot.Windows.Toolbar;
@@ -384,10 +385,58 @@ public sealed partial class HistoryWindow : Window
         Add(L("Save As..."), () => _ = SaveAsAsync(entry));
         Add(L("Open in Editor"), () => Ask(entry, HistoryAction.Open));
         Add(L("Pin to Screen"), () => Ask(entry, HistoryAction.Pin));
+
+        // macshot's four, in macshot's order (FloatingThumbnailController.swift:12). They
+        // are here rather than in the editor because what they answer is "this capture
+        // came out sideways", which is noticed while looking at the panel — and the editor
+        // is for marks rather than for the picture underneath them.
+        menu.Items.Add(new MenuFlyoutSeparator());
+        Add(L("Rotate Left"), () => _ = TurnAsync(entry, ImageTurn.Left));
+        Add(L("Rotate Right"), () => _ = TurnAsync(entry, ImageTurn.Right));
+        Add(L("Flip Horizontal"), () => _ = TurnAsync(entry, ImageTurn.FlipHorizontal));
+        Add(L("Flip Vertical"), () => _ = TurnAsync(entry, ImageTurn.FlipVertical));
+
         menu.Items.Add(new MenuFlyoutSeparator());
         Add(L("Delete"), () => Forget(entry));
 
         return menu;
+    }
+
+    /// <summary>
+    /// Turns or mirrors one capture where it sits, and redraws the panel over it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Written back over the entry rather than archived as a second one, because turning a
+    /// capture the right way up is correcting it and not taking another. The panel stays
+    /// open for the same reason Delete leaves it open: a picture that came out sideways is
+    /// usually put right in two presses rather than one, and a panel that closed after the
+    /// first would have to be reopened for the second.
+    /// </para>
+    /// <para>
+    /// The editable companions go with it. Every mark on the capture was placed in the
+    /// coordinates the pixels used to have, so carrying them across unmoved would reopen
+    /// the capture with its arrows pointing at the wrong things. macshot drops them here
+    /// too — <c>transformEntry</c> calls <c>updateEntry</c> with no annotations
+    /// (<c>HistoryOverlayController.swift:281</c>).
+    /// </para>
+    /// </remarks>
+    private async Task TurnAsync(HistoryEntry entry, ImageTurn turn)
+    {
+        if (await ReadAsync(entry) is not { } frame)
+        {
+            return;
+        }
+
+        var (width, height, pixels) = FrameTransforms.Apply(turn, frame.Width, frame.Height, frame.BgraPixels);
+        var turned = new CapturedFrame(frame.VirtualX, frame.VirtualY, width, height, pixels, frame.HasAlpha);
+
+        if (await ScreenshotHistory.RewriteAsync(entry.Path, turned, _settings.Current) is null)
+        {
+            return;
+        }
+
+        await ReloadAsync();
     }
 
     /// <summary>

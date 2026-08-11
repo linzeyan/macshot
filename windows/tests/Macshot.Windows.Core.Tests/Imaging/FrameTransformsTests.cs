@@ -63,6 +63,62 @@ public sealed class FrameTransformsTests
     }
 
     [TestMethod]
+    public void RotateRight_PutsTheTopEdgeDownTheRightHandSide()
+    {
+        // What a quarter turn clockwise means, said in pixels rather than in words: the
+        // source's first row becomes the destination's last column, top to bottom.
+        var (width, height, pixels) = FrameTransforms.RotateRight(4, 3, Numbered(4, 3));
+
+        Assert.AreEqual(3, width, "the turned frame is as wide as the source was tall");
+        Assert.AreEqual(4, height);
+        Assert.AreEqual((0, 0), At(pixels, width, 2, 0), "the top-left corner lands top-right");
+        Assert.AreEqual((3, 0), At(pixels, width, 2, 3), "and the top-right corner bottom-right");
+        Assert.AreEqual((0, 2), At(pixels, width, 0, 0), "the bottom-left corner lands top-left");
+    }
+
+    [TestMethod]
+    public void RotateLeft_PutsTheTopEdgeUpTheLeftHandSide()
+    {
+        var (width, height, pixels) = FrameTransforms.RotateLeft(4, 3, Numbered(4, 3));
+
+        Assert.AreEqual(3, width);
+        Assert.AreEqual(4, height);
+        Assert.AreEqual((0, 0), At(pixels, width, 0, 3), "the top-left corner lands bottom-left");
+        Assert.AreEqual((3, 0), At(pixels, width, 0, 0), "and the top-right corner top-left");
+    }
+
+    [TestMethod]
+    public void RotateRight_FourTimesIsTheFrameItStartedAs()
+    {
+        // The property that makes the menu item safe to press: nothing is lost or
+        // resampled, so a wrong turn is undone by three more.
+        var original = Numbered(6, 5);
+
+        var (width, height, pixels) = FrameTransforms.RotateRight(6, 5, original);
+        for (var turn = 0; turn < 3; turn++)
+        {
+            (width, height, pixels) = FrameTransforms.RotateRight(width, height, pixels);
+        }
+
+        Assert.AreEqual(6, width);
+        Assert.AreEqual(5, height);
+        CollectionAssert.AreEqual(original, pixels);
+    }
+
+    [TestMethod]
+    public void RotateLeft_UndoesRotateRight()
+    {
+        var original = Numbered(7, 4);
+
+        var (width, height, pixels) = FrameTransforms.RotateRight(7, 4, original);
+        (width, height, pixels) = FrameTransforms.RotateLeft(width, height, pixels);
+
+        Assert.AreEqual(7, width);
+        Assert.AreEqual(4, height);
+        CollectionAssert.AreEqual(original, pixels);
+    }
+
+    [TestMethod]
     public void Crop_TakesTheRegionAsked()
     {
         var (width, height, pixels) = FrameTransforms.Crop(8, 8, Numbered(8, 8), new CaptureRegion(2, 3, 4, 2));

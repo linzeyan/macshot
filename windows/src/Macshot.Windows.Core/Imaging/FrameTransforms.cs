@@ -3,6 +3,29 @@ using Macshot.Windows.Core.Capture;
 namespace Macshot.Windows.Core.Imaging;
 
 /// <summary>
+/// The four ways a capture can be turned about without changing a pixel's colour.
+/// </summary>
+/// <remarks>
+/// macshot's <c>ImageContextTransform</c>, in its order
+/// (<c>FloatingThumbnailController.swift:12</c>). One list rather than four call sites,
+/// because every surface that offers them offers all four.
+/// </remarks>
+public enum ImageTurn
+{
+    /// <summary>A quarter turn anticlockwise.</summary>
+    Left,
+
+    /// <summary>A quarter turn clockwise.</summary>
+    Right,
+
+    /// <summary>Mirrored left to right.</summary>
+    FlipHorizontal,
+
+    /// <summary>Mirrored top to bottom.</summary>
+    FlipVertical,
+}
+
+/// <summary>
 /// Whole-frame rearrangements of a BGRA, top-down buffer: flipping and cropping.
 /// </summary>
 /// <remarks>
@@ -47,6 +70,51 @@ public static class FrameTransforms
 
         return output;
     }
+
+    /// <summary>
+    /// One of the four turns, with the size it leaves behind — which is the source's, the
+    /// other way round, for the two quarter turns.
+    /// </summary>
+    /// <remarks>
+    /// The switch is here rather than at each menu, so that a surface offering these has
+    /// only to name one and the answer to "what size is it now" comes back with the
+    /// pixels instead of being worked out again beside them.
+    /// </remarks>
+    public static (int Width, int Height, byte[] Pixels) Apply(
+        ImageTurn turn,
+        int width,
+        int height,
+        ReadOnlySpan<byte> bgraPixels) => turn switch
+        {
+            ImageTurn.Left => RotateLeft(width, height, bgraPixels),
+            ImageTurn.Right => RotateRight(width, height, bgraPixels),
+            ImageTurn.FlipHorizontal => (width, height, FlipHorizontal(width, height, bgraPixels)),
+            ImageTurn.FlipVertical => (width, height, FlipVertical(width, height, bgraPixels)),
+            _ => throw new ArgumentOutOfRangeException(nameof(turn)),
+        };
+
+    /// <summary>
+    /// Turns the frame a quarter turn clockwise. The result is as wide as the source was
+    /// tall.
+    /// </summary>
+    /// <remarks>
+    /// For a capture taken of something that was not upright — a photograph dropped into
+    /// the panel, a phone screen mirrored sideways. macshot offers it from the same menu
+    /// as the two flips (<c>FloatingThumbnailController.swift:12</c>), and like them it
+    /// moves pixels rather than drawing on them.
+    /// </remarks>
+    public static (int Width, int Height, byte[] Pixels) RotateRight(
+        int width,
+        int height,
+        ReadOnlySpan<byte> bgraPixels) =>
+        Rotate(width, height, bgraPixels, clockwise: true);
+
+    /// <summary>Turns the frame a quarter turn anticlockwise.</summary>
+    public static (int Width, int Height, byte[] Pixels) RotateLeft(
+        int width,
+        int height,
+        ReadOnlySpan<byte> bgraPixels) =>
+        Rotate(width, height, bgraPixels, clockwise: false);
 
     /// <summary>
     /// One frame with another laid under it, left-aligned, on a canvas as wide as the
@@ -167,6 +235,38 @@ public static class FrameTransforms
         return horizontal
             ? new CapturePoint(width - point.X, point.Y)
             : new CapturePoint(point.X, height - point.Y);
+    }
+
+    /// <summary>
+    /// The two quarter turns, which differ only in where the source's first row lands:
+    /// down the destination's right edge going clockwise, up its left edge going the
+    /// other way.
+    /// </summary>
+    private static (int Width, int Height, byte[] Pixels) Rotate(
+        int width,
+        int height,
+        ReadOnlySpan<byte> bgraPixels,
+        bool clockwise)
+    {
+        Validate(width, height, bgraPixels);
+
+        var output = new byte[bgraPixels.Length];
+        var turnedStride = height * 4;
+
+        for (var row = 0; row < height; row++)
+        {
+            for (var column = 0; column < width; column++)
+            {
+                var turnedColumn = clockwise ? height - 1 - row : row;
+                var turnedRow = clockwise ? column : width - 1 - column;
+
+                bgraPixels
+                    .Slice((row * width + column) * 4, 4)
+                    .CopyTo(output.AsSpan(turnedRow * turnedStride + turnedColumn * 4, 4));
+            }
+        }
+
+        return (height, width, output);
     }
 
     private static void Validate(int width, int height, ReadOnlySpan<byte> bgraPixels)
