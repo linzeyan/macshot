@@ -50,6 +50,24 @@ public enum EditorModifiers
     /// </para>
     /// </remarks>
     Extend = 4,
+
+    /// <summary>
+    /// Space held mid-drag: move what is being drawn or resized instead of sizing it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The design-tool convention, and macshot's <c>spaceRepositioning</c>
+    /// (<c>OverlayView.swift:8968</c>). The first corner of a drag lands where the pointer
+    /// happened to be, which is rarely where the shape belongs, and letting go to start
+    /// again throws away the size that was already right.
+    /// </para>
+    /// <para>
+    /// Not for the freehand tools: a pencil stroke has no corner that was placed wrongly,
+    /// only ink, and shifting the whole trail mid-stroke would break it where the key went
+    /// down. macOS excludes them by name for the same reason (<c>:8964</c>).
+    /// </para>
+    /// </remarks>
+    Reposition = 8,
 }
 
 /// <summary>
@@ -112,6 +130,19 @@ public sealed class AnnotationEditor
     // The whole handle rather than its kind, because an anchor grip is told apart from the
     // ones beside it only by its index — the kind alone would drag whichever came first.
     private AnnotationHandle? _handle;
+
+    // Where the pointer was the last time Space was found held, so a reposition moves what
+    // the pointer moved since rather than jumping the mark to the pointer. Null whenever
+    // the key is not down, which is what makes letting go and pressing again pick up from
+    // the new place instead of the old one.
+    private CapturePoint? _repositionAt;
+
+    // How far a grip drag has been repositioned, kept beside the mark rather than applied
+    // to it: _dragTarget is also what the release diffs the draft against to decide whether
+    // the gesture changed anything, and a target moved to where the draft is reads as no
+    // change at all — the mark would snap back the moment the button came up.
+    private double _repositionDx;
+    private double _repositionDy;
 
     /// <summary>
     /// The mark a Ctrl+press found already selected, waiting to be taken out at the
@@ -344,6 +375,21 @@ public sealed class AnnotationEditor
     public bool IsDragging => _isPressed && Draft is not null;
 
     /// <summary>
+    /// Whether a drag is in flight that Space would move rather than resize.
+    /// </summary>
+    /// <remarks>
+    /// Asked by the window before it lets Space through to the shortcut it is bound to.
+    /// macOS gives the gesture first claim and only dispatches the shortcut on an idle
+    /// press (<c>OverlayView.swift:8946-8985</c>) — without that order Space is Move
+    /// Selection by default, and the reposition can never happen at all.
+    /// </remarks>
+    public bool CanReposition =>
+        Draft is not null
+        && _freeformSamples is null
+        && _tool is not AnnotationTool.Loupe
+        && (_dragTarget is null || _handle is not null);
+
+    /// <summary>
     /// What the canvas should render: the committed annotations, with the one being
     /// dragged swapped for its in-flight copy, plus any annotation being drawn.
     /// </summary>
@@ -460,6 +506,12 @@ public sealed class AnnotationEditor
         _isPressed = true;
         _origin = point;
 
+        // A drag that begins with Space already down measures from this press, not from
+        // wherever the last one left the pointer.
+        _repositionAt = null;
+        _repositionDx = 0;
+        _repositionDy = 0;
+
         // Ahead of everything else, including the handles: Ctrl on the selected curve is
         // one more anchor for it, and macOS asks that before anything the selection or the
         // tool would otherwise do with the press (OverlayView.swift:5491-5503). Adding an
@@ -567,11 +619,21 @@ public sealed class AnnotationEditor
             return;
         }
 
+        Reposition(point, modifiers);
+
         if (_dragTarget is not null)
         {
             if (_handle is { } handle)
             {
-                Draft = AnnotationHandles.Drag(_dragTarget, handle.Kind, point, modifiers, handle.Index);
+                // From the mark where Space has left it, which for a drag that never held
+                // the key is where it has always been.
+                Draft = AnnotationHandles.Drag(
+                    _dragTarget.Translate(_repositionDx, _repositionDy),
+                    handle.Kind,
+                    point,
+                    modifiers,
+                    handle.Index);
+
                 Snap = SnapResult.None;
                 return;
             }
@@ -620,6 +682,46 @@ public sealed class AnnotationEditor
         var end = RuledInside(Constrain(_tool, _origin, point, modifiers), modifiers);
         Snap = SnapFor(new CaptureRegion(end.X, end.Y, 0, 0), modifiers, null);
         Draft = Draft with { End = new CapturePoint(end.X + Snap.Dx, end.Y + Snap.Dy) };
+    }
+
+    /// <summary>
+    /// Moves what the drag is working on by whatever the pointer has travelled while Space
+    /// was held, leaving the branch below to work out the same size in the new place.
+    /// </summary>
+    /// <remarks>
+    /// The anchor is moved rather than the result, which is the whole trick: every branch
+    /// below measures from an anchor to the pointer, and the pointer has already moved by
+    /// the same amount, so shifting the anchor changes the position and nothing else. It is
+    /// what <c>CaptureOverlayWindow</c> does to the corner a marquee is dragged from.
+    /// </remarks>
+    private void Reposition(CapturePoint point, EditorModifiers modifiers)
+    {
+        // A mark being dragged whole is already following the pointer, and freehand ink and
+        // the loupe have no misplaced corner to rescue, so for those Space is nothing.
+        if (!modifiers.HasFlag(EditorModifiers.Reposition) || !CanReposition)
+        {
+            _repositionAt = null;
+            return;
+        }
+
+        if (_repositionAt is { } previous)
+        {
+            var shiftX = point.X - previous.X;
+            var shiftY = point.Y - previous.Y;
+
+            if (_dragTarget is not null)
+            {
+                _repositionDx += shiftX;
+                _repositionDy += shiftY;
+            }
+            else
+            {
+                _origin = new CapturePoint(_origin.X + shiftX, _origin.Y + shiftY);
+                Draft = Draft?.Translate(shiftX, shiftY);
+            }
+        }
+
+        _repositionAt = point;
     }
 
     /// <summary>

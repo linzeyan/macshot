@@ -16,6 +16,7 @@
 #   windows/tools/vm-shot.sh --right-click 1712,1546 --click 1734,1439  # …then take an item
 #   windows/tools/vm-shot.sh --click 1056,1250 --click 1066,1190  # open a flyout, use it
 #   windows/tools/vm-shot.sh --drag 100,100,500,400  # drag a region, then photograph
+#   windows/tools/vm-shot.sh --drag 100,100,500,400 --hold space  # …holding it mid-drag
 #   windows/tools/vm-shot.sh --start 'C:\\x.exe'  # launch it, then photograph
 #   windows/tools/vm-shot.sh --wait 3 out.png    # wait longer; write somewhere specific
 #
@@ -50,6 +51,7 @@ keys=""
 click=""
 right_click=""
 drag=""
+hold=""
 start=""
 wait_for=1
 destination=""
@@ -73,6 +75,12 @@ while [ $# -gt 0 ]; do
         ;;
     --drag)
         drag="$2"
+        shift 2
+        ;;
+    --hold)
+        # Held down for the middle of the drag, not for all of it — see the helper. The
+        # gestures that need it are the ones macshot only offers part-way through a drag.
+        hold="$2"
         shift 2
         ;;
     --start)
@@ -130,6 +138,7 @@ $Click = if ($arguments.Count -ge 3) { $arguments[2] } else { "" }
 $Start = if ($arguments.Count -ge 4) { $arguments[3] } else { "" }
 $Drag = if ($arguments.Count -ge 5) { $arguments[4] } else { "" }
 $RightClick = if ($arguments.Count -ge 6) { $arguments[5] } else { "" }
+$Hold = if ($arguments.Count -ge 7) { $arguments[6] } else { "" }
 
 if ($Start) {
     Start-Process -FilePath $Start
@@ -141,7 +150,20 @@ if ($Start) {
 Add-Type -Namespace VmShot -Name Pointer -MemberDefinition @"
 [DllImport("user32.dll")] public static extern bool SetCursorPos(int x, int y);
 [DllImport("user32.dll")] public static extern void mouse_event(uint flags, uint x, uint y, uint data, int extra);
+[DllImport("user32.dll")] public static extern void keybd_event(byte key, byte scan, uint flags, int extra);
 "@
+
+# SendKeys cannot express a key that stays down across pointer input — it presses and
+# releases within its own call — so a modifier that has to be held while dragging needs
+# the raw event. Space is the one macshot asks for: held part-way through a drag it moves
+# what is being drawn instead of resizing it.
+$holdKey = switch ($Hold) {
+    "space" { 0x20 }
+    "shift" { 0x10 }
+    "ctrl"  { 0x11 }
+    "alt"   { 0x12 }
+    default { 0 }
+}
 
 if ($RightClick) {
     # The other button, because several things have no other way in: the notification
@@ -194,11 +216,20 @@ if ($Drag) {
     Start-Sleep -Milliseconds 200
 
     foreach ($step in 1..20) {
+        # Down for the middle third, not the whole gesture. Space repositions from the
+        # moment it goes down, so holding it from the first move would move a shape that
+        # has no size yet and draw nothing — the picture would show the feature failing
+        # when it was the test that was wrong.
+        if ($holdKey -and $step -eq 7)  { [VmShot.Pointer]::keybd_event([byte]$holdKey, 0, 0, 0) }
+        if ($holdKey -and $step -eq 14) { [VmShot.Pointer]::keybd_event([byte]$holdKey, 0, 2, 0) }
+
         [VmShot.Pointer]::SetCursorPos(
             $fromX + [int](($toX - $fromX) * $step / 20),
             $fromY + [int](($toY - $fromY) * $step / 20)) | Out-Null
         Start-Sleep -Milliseconds 40
     }
+
+    if ($holdKey) { [VmShot.Pointer]::keybd_event([byte]$holdKey, 0, 2, 0) }
 
     Start-Sleep -Milliseconds 200
     [VmShot.Pointer]::mouse_event(0x0004, 0, 0, 0, 0)
@@ -246,7 +277,7 @@ ssh "$VM" "MSYS_NO_PATHCONV=1 schtasks /create /tn $TASK \
 # The task takes no arguments, so what to press is left where the helper reads it. A
 # scheduled task's command line is fixed at registration; this is not.
 ssh "$VM" \
-    "printf '%s\n%s\n%s\n%s\n%s\n%s\n' '$keys' '$wait_for' '$click' '$start' '$drag' '$right_click' > '$home/vm-shot.args'" \
+    "printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n' '$keys' '$wait_for' '$click' '$start' '$drag' '$right_click' '$hold' > '$home/vm-shot.args'" \
     2>/dev/null || true
 
 ssh "$VM" "rm -f '$remote_image'; MSYS_NO_PATHCONV=1 schtasks /run /tn $TASK" >/dev/null

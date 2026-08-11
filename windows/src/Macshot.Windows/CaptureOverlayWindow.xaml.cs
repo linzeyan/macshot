@@ -301,6 +301,12 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private CaptureRegion _resizeFrom;
 
+    /// <summary>
+    /// Where the pointer was on the last sample of a grip drag, so Space can move the
+    /// region by what the pointer travelled since. Null while no grip is being dragged.
+    /// </summary>
+    private CapturePoint? _resizeAt;
+
     /// <summary>The window under the pointer, in frame space, while none is chosen yet.</summary>
     private CaptureWindow? _hoveredWindow;
 
@@ -806,6 +812,24 @@ public sealed partial class CaptureOverlayWindow : Window
         {
             if (e.Pointer.IsInContact)
             {
+                var at = ToFrame(e);
+
+                // Space moves the region instead of the edge, the same as it does while the
+                // rectangle is first dragged out. The corner the resize measures from moves
+                // by what the pointer moved, and the pointer moved by the same amount, so
+                // the size the grip asks for is the one it already had.
+                if (IsDown(VirtualKey.Space) && _resizeAt is { } previous)
+                {
+                    _resizeFrom = SelectionHandles.ClampTo(
+                        new CaptureRegion(
+                            _resizeFrom.X + (at.X - previous.X),
+                            _resizeFrom.Y + (at.Y - previous.Y),
+                            _resizeFrom.Width,
+                            _resizeFrom.Height),
+                        MonitorBounds);
+                }
+
+                _resizeAt = at;
                 ShowPendingRegion(ResizedTo(e));
             }
             else
@@ -1387,6 +1411,10 @@ public sealed partial class CaptureOverlayWindow : Window
 
         _resizing = SelectionHandles.HitTest(region, point, _monitor.Scale);
         _resizeFrom = region;
+
+        // A drag that begins with Space already down measures from this grab, not from
+        // wherever the last one left the pointer.
+        _resizeAt = null;
         return _resizing != SelectionHandle.None;
     }
 
@@ -1877,6 +1905,17 @@ public sealed partial class CaptureOverlayWindow : Window
                 e.Handled = true;
                 _editor.Redo();
                 RenderAnnotations();
+                return;
+
+            // Space is bound to Move Selection out of the box, and that binding would win
+            // every time: the key arrives while the drag is still in flight, so the
+            // reposition it is supposed to perform could never happen. macOS orders the two
+            // the same way — the gesture owns Space for the length of a drag and only an
+            // idle press is dispatched as a shortcut (OverlayView.swift:8946-8985).
+            case VirtualKey.Space when _resizing != SelectionHandle.None
+                || _selectionStart is not null
+                || (IsAnnotating && _editor.CanReposition):
+                e.Handled = true;
                 return;
 
             // Ahead of the single-key tool shortcuts below, which is where a bare 1 would
@@ -3879,7 +3918,8 @@ public sealed partial class CaptureOverlayWindow : Window
     private static EditorModifiers ToModifiers(PointerRoutedEventArgs e) =>
         (e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift) ? EditorModifiers.Constrain : EditorModifiers.None)
         | (e.KeyModifiers.HasFlag(VirtualKeyModifiers.Control) ? EditorModifiers.Extend : EditorModifiers.None)
-        | (IsDown(VirtualKey.Menu) ? EditorModifiers.DrawThrough : EditorModifiers.None);
+        | (IsDown(VirtualKey.Menu) ? EditorModifiers.DrawThrough : EditorModifiers.None)
+        | (IsDown(VirtualKey.Space) ? EditorModifiers.Reposition : EditorModifiers.None);
 
     private static bool IsDown(VirtualKey key) =>
         InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(CoreVirtualKeyStates.Down);

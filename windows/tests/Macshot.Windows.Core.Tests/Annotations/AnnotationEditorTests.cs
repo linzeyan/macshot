@@ -1027,6 +1027,99 @@ public sealed class AnnotationEditorTests
     }
 
     /// <summary>Clicks a mark, which is what arms its handles.</summary>
+    [TestMethod]
+    public void Reposition_MovesTheShapeBeingDrawnAndLeavesItsSizeAlone()
+    {
+        // The size a drag has reached is the part that was right; where its first corner
+        // landed is the part that was not. Space is what saves the first without losing the
+        // second, and a reposition that resized anything would defeat the whole gesture.
+        var editor = NewEditor(AnnotationTool.Rectangle);
+
+        editor.PointerPressed(new CapturePoint(10, 10));
+        editor.PointerMoved(new CapturePoint(50, 40));
+
+        // The first sample with the key down only says where the pointer was: there is
+        // nothing yet to measure the move against.
+        editor.PointerMoved(new CapturePoint(50, 40), EditorModifiers.Reposition);
+        editor.PointerMoved(new CapturePoint(70, 60), EditorModifiers.Reposition);
+
+        var draft = editor.Draft;
+        Assert.IsNotNull(draft);
+        Assert.AreEqual(new CapturePoint(30, 30), draft.Start);
+        Assert.AreEqual(new CapturePoint(70, 60), draft.End);
+        Assert.AreEqual(40, draft.BoundingRect.Width, 1e-9);
+        Assert.AreEqual(30, draft.BoundingRect.Height, 1e-9);
+    }
+
+    [TestMethod]
+    public void Reposition_MovesAMarkBeingResizedRatherThanResizingIt()
+    {
+        // The same key over a grip. Without this, the only way to put a mark that was
+        // reshaped into the wrong place back is to let go and drag it again, which is the
+        // reshape thrown away.
+        var editor = NewEditor(AnnotationTool.Rectangle);
+        Drag(editor, new CapturePoint(0, 0), new CapturePoint(40, 30));
+
+        editor.Tool = AnnotationTool.Select;
+        Select(editor, new CapturePoint(0, 0));
+
+        var grip = editor.Handles
+            .Single(handle => handle.Kind == AnnotationHandleKind.BottomRight)
+            .Position;
+
+        editor.PointerPressed(grip);
+        editor.PointerMoved(grip, EditorModifiers.Reposition);
+        editor.PointerMoved(new CapturePoint(grip.X + 10, grip.Y + 15), EditorModifiers.Reposition);
+        editor.PointerReleased(
+            new CapturePoint(grip.X + 10, grip.Y + 15),
+            EditorModifiers.Reposition);
+
+        var moved = editor.Document.Annotations[0].BoundingRect;
+        Assert.AreEqual(40, moved.Width, 1e-9, "a reposition may not resize the mark");
+        Assert.AreEqual(30, moved.Height, 1e-9, "a reposition may not resize the mark");
+        Assert.AreEqual(10, moved.X, 1e-9);
+        Assert.AreEqual(15, moved.Y, 1e-9);
+    }
+
+    [TestMethod]
+    public void Reposition_LeavesFreehandInkAlone()
+    {
+        // A pencil stroke has no misplaced corner to rescue, only ink, and shifting the
+        // trail halfway along would break it where the key went down. macOS excludes the
+        // freehand tools by name (OverlayView.swift:8964).
+        var editor = NewEditor(AnnotationTool.Pencil);
+
+        editor.PointerPressed(new CapturePoint(10, 10));
+        editor.PointerMoved(new CapturePoint(20, 20));
+        editor.PointerMoved(new CapturePoint(20, 20), EditorModifiers.Reposition);
+        editor.PointerMoved(new CapturePoint(40, 40), EditorModifiers.Reposition);
+
+        var draft = editor.Draft;
+        Assert.IsNotNull(draft);
+        Assert.AreEqual(
+            new CapturePoint(10, 10),
+            draft.Points[0],
+            "the stroke must still start where the pointer went down");
+    }
+
+    [TestMethod]
+    public void CanReposition_IsOnlyTrueMidDragSoSpaceStaysAShortcutOtherwise()
+    {
+        // Space is bound to Move Selection out of the box, and the window asks this before
+        // it lets the key through to that binding. Answering yes when no drag is in flight
+        // would swallow the shortcut for good; answering no mid-drag would let the shortcut
+        // fire and the reposition could never happen (OverlayView.swift:8946-8985).
+        var editor = NewEditor(AnnotationTool.Rectangle);
+        Assert.IsFalse(editor.CanReposition, "an idle editor has nothing to reposition");
+
+        editor.PointerPressed(new CapturePoint(10, 10));
+        editor.PointerMoved(new CapturePoint(50, 40));
+        Assert.IsTrue(editor.CanReposition, "a shape being dragged out is what Space moves");
+
+        editor.PointerReleased(new CapturePoint(50, 40));
+        Assert.IsFalse(editor.CanReposition, "the drag is over, so Space is the shortcut again");
+    }
+
     private static void Select(
         AnnotationEditor editor,
         CapturePoint point,

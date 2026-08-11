@@ -141,6 +141,16 @@ public sealed partial class EditorWindow : Window
     /// <summary>What one step of the zoom menu multiplies by, as macshot's does.</summary>
     private const double ZoomStep = 1.25;
 
+    /// <summary>
+    /// The =/+ and -/_ keys of the main row, which <see cref="VirtualKey"/> has no names
+    /// for: the enum stops at the numbers and the numpad, and the OEM range is where a
+    /// keyboard's punctuation lives. 187 and 189 are the two macshot binds zoom to.
+    /// </summary>
+    private const VirtualKey PlusKey = (VirtualKey)187;
+
+    /// <inheritdoc cref="PlusKey"/>
+    private const VirtualKey MinusKey = (VirtualKey)189;
+
     /// <summary>macshot's top bar: 22-tall buttons in a 32-tall bar, 4 apart.</summary>
     private const double BarButtonHeight = 22;
 
@@ -880,9 +890,38 @@ public sealed partial class EditorWindow : Window
                 _ = SaveAsync();
                 return;
 
+            // macshot's Cmd+0, Cmd+1, Cmd+= and Cmd+- (`OverlayView.swift:9114-9145`).
+            // The menu on the zoom button was the only way to reach any of them here,
+            // which is one press in every other image editor.
+            case VirtualKey.Number0 or VirtualKey.NumberPad0 when control:
+                e.Handled = true;
+                ZoomTo(1);
+                return;
+
+            case VirtualKey.Number1 or VirtualKey.NumberPad1 when control:
+                e.Handled = true;
+                ZoomToFit();
+                return;
+
+            case VirtualKey.Add or PlusKey when control:
+                e.Handled = true;
+                ZoomBy(ZoomStep);
+                return;
+
+            case VirtualKey.Subtract or MinusKey when control:
+                e.Handled = true;
+                ZoomBy(1 / ZoomStep);
+                return;
+
             case VirtualKey.C when control:
                 e.Handled = true;
                 _ = CopyAsync();
+                return;
+
+            // The overlay's rule, for the same reason: whatever Space is bound to would
+            // otherwise fire mid-drag and the reposition it exists for could never run.
+            case VirtualKey.Space when _editor.CanReposition:
+                e.Handled = true;
                 return;
 
             default:
@@ -1682,7 +1721,8 @@ public sealed partial class EditorWindow : Window
     private static EditorModifiers ToModifiers(PointerRoutedEventArgs e) =>
         (e.KeyModifiers.HasFlag(VirtualKeyModifiers.Shift) ? EditorModifiers.Constrain : EditorModifiers.None)
         | (e.KeyModifiers.HasFlag(VirtualKeyModifiers.Control) ? EditorModifiers.Extend : EditorModifiers.None)
-        | (IsDown(VirtualKey.Menu) ? EditorModifiers.DrawThrough : EditorModifiers.None);
+        | (IsDown(VirtualKey.Menu) ? EditorModifiers.DrawThrough : EditorModifiers.None)
+        | (IsDown(VirtualKey.Space) ? EditorModifiers.Reposition : EditorModifiers.None);
 
     private static bool IsDown(VirtualKey key) =>
         InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(CoreVirtualKeyStates.Down);
