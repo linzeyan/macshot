@@ -75,11 +75,8 @@ internal sealed partial class PreSelectionPresetButton : UserControl
         };
 
         // Filled as it opens rather than once, so the tick lands on whatever is being held
-        // at that moment. The size columns are ticked against the preset's own numbers,
-        // which are nought unless it names a size — there is no region here whose size the
-        // rows could be compared with.
-        _flyout.Opening += (_, _) => _presetsView.Show(
-            _preset.Ratio, _preset.Width, _preset.Height, KeepRatio, points: false);
+        // at that moment.
+        _flyout.Opening += (_, _) => _presetsView.Show(_preset, KeepRatio, points: false);
 
         _presetsView.PresetPicked += (_, preset) =>
         {

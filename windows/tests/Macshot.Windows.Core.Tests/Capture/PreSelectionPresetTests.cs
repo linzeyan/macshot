@@ -52,6 +52,44 @@ public sealed class PreSelectionPresetTests
     }
 
     [TestMethod]
+    public void Selects_TicksOneRowAcrossBothColumnsSoAHeldSizeIsNotReadAsFreeform()
+    {
+        // The two columns are one choice. Ticking Freeform beside 800 × 600 told the user
+        // nothing was held at the moment every press would place an 800 × 600 box — which
+        // is exactly how the fixed marquee came to look like a broken drag.
+        var held = PreSelectionPreset.OfSize(800, 600);
+        var freeform = ResolutionPresets.Ratios[0];
+        var size = ResolutionPresets.Sizes.First(preset => preset.Width == 800);
+
+        Assert.IsTrue(held.Selects(size));
+        Assert.IsFalse(held.Selects(freeform));
+        Assert.AreEqual(1, ResolutionPresets.Ratios.Concat(ResolutionPresets.Sizes).Count(held.Selects));
+    }
+
+    [TestMethod]
+    public void Selects_MatchesAShapeThroughTheRoundingTwoDivisionsLeaveBehind()
+    {
+        // An aspect is a division: 1920 / 1080 and 16 / 9 are the same shape and not the
+        // same double. Compared exactly, a ratio picked from the menu would fail to tick
+        // the row it was picked from.
+        var held = PreSelectionPreset.OfRatio(1920d / 1080d);
+
+        Assert.IsTrue(held.Selects(ResolutionPresets.Ratios.First(preset => preset.Label == "16 : 9")));
+    }
+
+    [TestMethod]
+    public void Selects_PutsTheTickOnFreeformWhenNothingIsHeld()
+    {
+        // A list with no tick at all reads as a list that has not loaded, and freeform is
+        // the ordinary state rather than an unset one.
+        Assert.IsTrue(PreSelectionPreset.Freeform.Selects(ResolutionPresets.Ratios[0]));
+        Assert.AreEqual(
+            1,
+            ResolutionPresets.Ratios.Concat(ResolutionPresets.Sizes)
+                .Count(PreSelectionPreset.Freeform.Selects));
+    }
+
+    [TestMethod]
     public void Ratio_IsNotOfferedForAnExactSizeSoTheDragIsNotAlsoConstrained()
     {
         // A size is placed, not dragged. Reporting a ratio as well would hand the marquee

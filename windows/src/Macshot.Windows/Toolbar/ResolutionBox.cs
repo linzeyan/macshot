@@ -146,8 +146,16 @@ internal sealed partial class ResolutionBox : UserControl
     /// <summary>Raised when the unit is changed. True for points, false for pixels.</summary>
     public event EventHandler<bool>? UnitPicked;
 
-    /// <summary>The shape being held, so the panel can tick the row that holds it.</summary>
-    public double? LockedAspect { get; set; }
+    /// <summary>
+    /// What the overlay has stored for the next drag, which is the row the panel ticks.
+    /// </summary>
+    /// <remarks>
+    /// The stored preset rather than the region's own measurements: a selection that happens
+    /// to be 1920 × 1080 has not chosen 1920 × 1080, and ticking it would offer the user a
+    /// row that does nothing when taken. macshot ticks this menu from the same value
+    /// (<c>OverlayView.swift:2625</c>).
+    /// </remarks>
+    public PreSelectionPreset ActivePreSelection { get; set; }
 
     /// <summary>Whether a picked shape is to outlive this capture.</summary>
     public bool KeepRatio { get; set; }
@@ -288,12 +296,7 @@ internal sealed partial class ResolutionBox : UserControl
 
         // Filled as it opens rather than once: the tick goes on whatever shape is being
         // held right now, and the two footer controls show what is stored right now.
-        flyout.Opening += (_, _) => _presetsView.Show(
-            LockedAspect,
-            _shownWidth,
-            _shownHeight,
-            KeepRatio,
-            ShowPoints);
+        flyout.Opening += (_, _) => _presetsView.Show(ActivePreSelection, KeepRatio, ShowPoints);
 
         _presetsView.PresetPicked += (_, preset) =>
         {

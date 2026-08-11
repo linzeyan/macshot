@@ -136,12 +136,12 @@ internal sealed partial class ResolutionPresetsView : UserControl
     /// <summary>
     /// Fills both columns and the footer from the state of the capture underneath.
     /// </summary>
-    /// <param name="lockedAspect">
-    /// The shape being held, which is what carries the tick. Null is Freeform, and Freeform
-    /// is a row rather than the absence of one — a list where nothing is ticked reads as a
-    /// list that has not loaded.
+    /// <param name="active">
+    /// The shape or size being held, which is what carries the tick — one row across both
+    /// columns. Freeform is a row rather than the absence of one: a list where nothing is
+    /// ticked reads as a list that has not loaded.
     /// </param>
-    public void Show(double? lockedAspect, double width, double height, bool keepRatio, bool points)
+    public void Show(PreSelectionPreset active, bool keepRatio, bool points)
     {
         _ratios.Children.Clear();
         _sizes.Children.Clear();
@@ -149,14 +149,13 @@ internal sealed partial class ResolutionPresetsView : UserControl
         _ratios.Children.Add(Header(L("Aspect ratio")));
         foreach (var preset in ResolutionPresets.Ratios)
         {
-            _ratios.Children.Add(Row(preset, Holds(preset.Aspect, lockedAspect)));
+            _ratios.Children.Add(Row(preset, active.Selects(preset)));
         }
 
         _sizes.Children.Add(Header(L("Resolution")));
         foreach (var preset in ResolutionPresets.Sizes)
         {
-            var already = Math.Abs(preset.Width - width) < 0.5 && Math.Abs(preset.Height - height) < 0.5;
-            _sizes.Children.Add(Row(preset, already));
+            _sizes.Children.Add(Row(preset, active.Selects(preset)));
         }
 
         _keepRatio.IsOn = keepRatio;
@@ -171,18 +170,6 @@ internal sealed partial class ResolutionPresetsView : UserControl
         _unitsRow.Height = new GridLength(ShowsUnits ? FooterRow : 0);
         _footer.Height = (FooterPad * 2) + (ShowsUnits ? FooterRow * 2 : FooterRow);
     }
-
-    /// <summary>Whether a preset's shape is the one being held, to within a rounding.</summary>
-    /// <remarks>
-    /// Compared with a tolerance because an aspect is a division: 1920 / 1080 and 16 / 9
-    /// are the same shape and not the same double.
-    /// </remarks>
-    private static bool Holds(double? preset, double? locked) => (preset, locked) switch
-    {
-        (null, null) => true,
-        (double a, double b) => Math.Abs(a - b) < 0.001,
-        _ => false,
-    };
 
     private static ColumnDefinition Fixed(double width = ColumnWidth) =>
         new() { Width = new GridLength(width) };
@@ -234,9 +221,12 @@ internal sealed partial class ResolutionPresetsView : UserControl
             Foreground = ToolbarPalette.AccentBrush,
         }, 0, 0);
 
+        // Localized here rather than by the page-wide pass, which has long finished by the
+        // time a flyout fills itself. Only Freeform is a word — the ratios and the sizes are
+        // numbers and come back unchanged — and it was the one row left in English.
         Add(line, new TextBlock
         {
-            Text = preset.Label,
+            Text = L(preset.Label),
             FontSize = RowFontSize,
             VerticalAlignment = VerticalAlignment.Center,
         }, 0, 1);

@@ -2100,7 +2100,7 @@ public sealed partial class CaptureOverlayWindow : Window
         // (OverlayView.swift:9946, :6662-6669).
         _preSelection = _settings.Current.ActivePreSelection;
         _lockedAspect = _preSelection.Ratio;
-        _sizeBox.LockedAspect = _lockedAspect;
+        _sizeBox.ActivePreSelection = _preSelection;
 
         _sizeBox.UnitPicked += (_, points) =>
         {
@@ -2177,7 +2177,6 @@ public sealed partial class CaptureOverlayWindow : Window
             : PreSelectionPreset.OfRatio(preset.Aspect ?? 0));
 
         _lockedAspect = _preSelection.Ratio;
-        _sizeBox.LockedAspect = _lockedAspect;
 
         // The pill is unchanged, but the button on it now says something else — and it is
         // placed and repainted from here.
@@ -2191,6 +2190,9 @@ public sealed partial class CaptureOverlayWindow : Window
     {
         _preSelection = preset;
         _preSelectionButton.Update(preset);
+
+        // Both panels are the same menu asked at two moments, so both tick the same row.
+        _sizeBox.ActivePreSelection = preset;
 
         try
         {
@@ -2291,7 +2293,6 @@ public sealed partial class CaptureOverlayWindow : Window
     private void HoldAspect(double? aspect)
     {
         _lockedAspect = aspect;
-        _sizeBox.LockedAspect = aspect;
 
         if (_sizeBox.KeepRatio)
         {

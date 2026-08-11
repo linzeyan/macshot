@@ -54,6 +54,27 @@ public readonly record struct PreSelectionPreset(double? Aspect = null, int Widt
     public double? Ratio => !IsExact && Aspect is { } aspect && aspect > 0 ? aspect : null;
 
     /// <summary>
+    /// Whether a row of the presets menu is the one being held, and so carries the tick.
+    /// </summary>
+    /// <remarks>
+    /// Both of the menu's columns are answered from here, because between them exactly one
+    /// row is the shape in hand. Ticking each column against something of its own — the
+    /// ratio column against the lock, the size column against what the region measures — put
+    /// a tick on Freeform beside a tick on 800 × 600, which reads as nothing being held at
+    /// the very moment the next drag will come out 800 × 600 whatever the pointer does.
+    /// macshot answers both columns from the one preset for that reason
+    /// (<c>OverlayView.swift:2713-2724</c>).
+    /// </remarks>
+    public bool Selects(ResolutionPreset row) => row.IsExact
+        ? IsExact && Width == row.Width && Height == row.Height
+
+        // A row with no ratio and no size is the Freeform row, which is held whenever
+        // nothing else is.
+        : row.Aspect is { } aspect
+            ? Ratio is { } held && Math.Abs(held - aspect) < 0.001
+            : !IsExact && Ratio is null;
+
+    /// <summary>
     /// What the button says it is holding, or null when it is holding nothing.
     /// </summary>
     /// <remarks>
