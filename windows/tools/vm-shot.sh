@@ -15,6 +15,7 @@
 #   windows/tools/vm-shot.sh --right-click 1823,1519  # …with the other button
 #   windows/tools/vm-shot.sh --right-click 1712,1546 --click 1734,1439  # …then take an item
 #   windows/tools/vm-shot.sh --click 1056,1250 --click 1066,1190  # open a flyout, use it
+#   windows/tools/vm-shot.sh --scroll 900,700,-6 # wheel down over a page, then photograph
 #   windows/tools/vm-shot.sh --drag 100,100,500,400  # drag a region, then photograph
 #   windows/tools/vm-shot.sh --drag 100,100,500,400 --hold space  # …holding it mid-drag
 #   windows/tools/vm-shot.sh --start 'C:\\x.exe'  # launch it, then photograph
@@ -52,6 +53,7 @@ click=""
 right_click=""
 drag=""
 hold=""
+scroll=""
 start=""
 wait_for=1
 destination=""
@@ -75,6 +77,14 @@ while [ $# -gt 0 ]; do
         ;;
     --drag)
         drag="$2"
+        shift 2
+        ;;
+    --scroll)
+        # x,y,notches — negative goes down the page. Settings pages are taller than the
+        # guest's screen, and the row to be judged is often below the fold: without this
+        # the only way down was to tab through the controls, which changes what is
+        # focused and can toggle what it lands on.
+        scroll="$2"
         shift 2
         ;;
     --hold)
@@ -139,6 +149,7 @@ $Start = if ($arguments.Count -ge 4) { $arguments[3] } else { "" }
 $Drag = if ($arguments.Count -ge 5) { $arguments[4] } else { "" }
 $RightClick = if ($arguments.Count -ge 6) { $arguments[5] } else { "" }
 $Hold = if ($arguments.Count -ge 7) { $arguments[6] } else { "" }
+$Scroll = if ($arguments.Count -ge 8) { $arguments[7] } else { "" }
 
 if ($Start) {
     Start-Process -FilePath $Start
@@ -202,6 +213,30 @@ if ($Click) {
         [VmShot.Pointer]::mouse_event(0x0004, 0, 0, 0, 0)
         Start-Sleep -Milliseconds 400
     }
+}
+
+if ($Scroll) {
+    # The pointer is put over the page first: the wheel goes to whatever is under it, not
+    # to whatever has focus, which is what makes this safe to use on a settings page —
+    # nothing is clicked and nothing is focused, so no setting can be changed by looking
+    # at one.
+    $at = $Scroll.Split(",")
+    [VmShot.Pointer]::SetCursorPos([int]$at[0], [int]$at[1]) | Out-Null
+    Start-Sleep -Milliseconds 120
+
+    # One notch at a time, because a ScrollViewer animates towards where it was sent and
+    # one large delta lands somewhere between the two — 120 is what a wheel actually
+    # reports per detent. Down the page is -120 spelled as the unsigned word Win32 takes:
+    # casting -120 to uint32 is an error in PowerShell, and the message would arrive as a
+    # page that simply did not move.
+    $notches = [int]$at[2]
+    $delta = if ($notches -lt 0) { [uint32]4294967176 } else { [uint32]120 }
+    foreach ($notch in 1..[Math]::Abs($notches)) {
+        [VmShot.Pointer]::mouse_event(0x0800, 0, 0, $delta, 0)
+        Start-Sleep -Milliseconds 60
+    }
+
+    Start-Sleep -Milliseconds 300
 }
 
 if ($Drag) {
@@ -277,7 +312,7 @@ ssh "$VM" "MSYS_NO_PATHCONV=1 schtasks /create /tn $TASK \
 # The task takes no arguments, so what to press is left where the helper reads it. A
 # scheduled task's command line is fixed at registration; this is not.
 ssh "$VM" \
-    "printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n' '$keys' '$wait_for' '$click' '$start' '$drag' '$right_click' '$hold' > '$home/vm-shot.args'" \
+    "printf '%s\n%s\n%s\n%s\n%s\n%s\n%s\n%s\n' '$keys' '$wait_for' '$click' '$start' '$drag' '$right_click' '$hold' '$scroll' > '$home/vm-shot.args'" \
     2>/dev/null || true
 
 ssh "$VM" "rm -f '$remote_image'; MSYS_NO_PATHCONV=1 schtasks /run /tn $TASK" >/dev/null
