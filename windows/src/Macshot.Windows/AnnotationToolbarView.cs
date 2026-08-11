@@ -802,6 +802,11 @@ public sealed partial class AnnotationToolbarView : UserControl
             // changes rather than one after it.
             RefreshStrips();
             EffectsChanged?.Invoke(this, options);
+
+            // Kept the way the frame's sliders are, and for macshot's reason: the Adjust
+            // state lives beside the app rather than inside the capture, so a look chosen
+            // once is what the next capture starts in.
+            Remember(current => current.WithImageEffects(options));
         };
         _size.ValueChanged += (_, _) =>
         {
@@ -1510,6 +1515,19 @@ public sealed partial class AnnotationToolbarView : UserControl
 
         ShowFrameOptions();
         FrameStyleChosen?.Invoke(this, BeautifyOptions.CustomBackgroundStyle);
+    }
+
+    /// <summary>
+    /// Puts the Adjust popover into the state the host has already applied, without it
+    /// answering back.
+    /// </summary>
+    public void LoadEffects(ImageEffectsOptions options)
+    {
+        _effectsPicker.Load(options);
+
+        // The Adjust button is lit by whatever the popover holds, so the strip has to be
+        // told: a look carried over from the last capture is in use and must read as it.
+        RefreshStrips();
     }
 
     private void ShowEffectsPicker()

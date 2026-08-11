@@ -178,28 +178,42 @@ internal sealed class EffectsPickerView : StackPanel
 
         set
         {
-            ArgumentNullException.ThrowIfNull(value);
-
-            var resolved = value.Normalized();
-
-            // One report at the end rather than five as each control is filled in: the
-            // host would otherwise redraw the capture four times for a state nobody
-            // asked for.
-            _loading = true;
-            try
-            {
-                Show(resolved.Preset);
-                _brightness.Value = resolved.Brightness;
-                _contrast.Value = resolved.Contrast;
-                _saturation.Value = resolved.Saturation;
-                _sharpness.Value = resolved.Sharpness;
-            }
-            finally
-            {
-                _loading = false;
-            }
-
+            Fill(value);
             Report();
+        }
+    }
+
+    /// <summary>
+    /// Fills the popover in without telling anyone — for the state carried over from the
+    /// last capture.
+    /// </summary>
+    /// <remarks>
+    /// The host applied that itself before the first frame was drawn, so a report here
+    /// would only have it redraw the capture into what it already shows.
+    /// </remarks>
+    public void Load(ImageEffectsOptions options) => Fill(options);
+
+    private void Fill(ImageEffectsOptions value)
+    {
+        ArgumentNullException.ThrowIfNull(value);
+
+        var resolved = value.Normalized();
+
+        // One report at the end rather than five as each control is filled in: the
+        // host would otherwise redraw the capture four times for a state nobody
+        // asked for.
+        _loading = true;
+        try
+        {
+            Show(resolved.Preset);
+            _brightness.Value = resolved.Brightness;
+            _contrast.Value = resolved.Contrast;
+            _saturation.Value = resolved.Saturation;
+            _sharpness.Value = resolved.Sharpness;
+        }
+        finally
+        {
+            _loading = false;
         }
     }
 

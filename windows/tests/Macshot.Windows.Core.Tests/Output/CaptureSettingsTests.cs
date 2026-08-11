@@ -1,5 +1,6 @@
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
+using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Output;
 using Macshot.Windows.Core.Recognition;
 
@@ -506,6 +507,57 @@ public sealed class CaptureSettingsTests
         Assert.AreEqual(
             16d / 9,
             (CaptureSettings.Default with { KeepAspectRatioValue = 16d / 9 }).Normalized().KeepAspectRatioValue);
+    }
+
+    /// <summary>
+    /// The Adjust popover is where a whole capture's look is decided, and macshot keeps
+    /// that decision beside the app rather than in the capture — a look chosen once is
+    /// what the next capture starts in. Kept here so the round trip through the file
+    /// cannot quietly drop one of the five.
+    /// </summary>
+    [TestMethod]
+    public void ImageEffectsSurviveTheSettingsFile()
+    {
+        var chosen = new ImageEffectsOptions(ImageEffectPreset.Noir, 0.2, 1.4, 0.6, 1.1);
+
+        var carried = CaptureSettings.Default.WithImageEffects(chosen).Normalized().ToImageEffectsOptions();
+
+        Assert.AreEqual(chosen, carried);
+    }
+
+    /// <summary>
+    /// Nothing downstream may assume the file is sane, and this is the one setting whose
+    /// out-of-range value reaches every pixel: a contrast of forty is a capture of two
+    /// colours, and the user would have no way of telling that the file was the cause.
+    /// </summary>
+    [TestMethod]
+    public void Normalized_PullsAHandEditedAdjustmentBackIntoTheSlidersRange()
+    {
+        var settings = (CaptureSettings.Default with
+        {
+            EffectsPreset = (ImageEffectPreset)99,
+            EffectsBrightness = 40,
+            EffectsContrast = 40,
+            EffectsSaturation = -3,
+            EffectsSharpness = 9,
+        }).Normalized();
+
+        Assert.AreEqual(ImageEffectPreset.None, settings.EffectsPreset, "a look this build has not got");
+        Assert.AreEqual(0.5, settings.EffectsBrightness);
+        Assert.AreEqual(2, settings.EffectsContrast);
+        Assert.AreEqual(0, settings.EffectsSaturation);
+        Assert.AreEqual(2, settings.EffectsSharpness);
+    }
+
+    /// <summary>
+    /// A settings file written before this was remembered has none of the five keys, and
+    /// what those users get is the state the popover opens in — no look and every slider
+    /// centred. Anything else would tint the first capture after an upgrade.
+    /// </summary>
+    [TestMethod]
+    public void AFileWithNoAdjustmentAsksForNothing()
+    {
+        Assert.IsTrue(CaptureSettings.Default.ToImageEffectsOptions().IsIdentity);
     }
 
     [TestMethod]

@@ -1222,6 +1222,14 @@ public sealed partial class CaptureOverlayWindow : Window
         PlaceGrips(region);
         UpdateDim(ToLayout(region));
 
+        // Carried over from the last capture, which is where macshot keeps it too — its
+        // five sit in UserDefaults rather than in the capture (OverlayView.swift:511-527).
+        // Before the preview below, so the look is in the first frame drawn instead of
+        // arriving as a flash a moment after it. The editor deliberately does not do this:
+        // re-tinting a capture that was saved untinted is an edit nobody asked for.
+        _effects = _settings.Current.ToImageEffectsOptions();
+        AnnotationToolbar.LoadEffects(_effects);
+
         // The preview covers the selection with the pixels that will be delivered,
         // which also hides the selection tint inside it: from here on, what is inside
         // the marquee is the finished image rather than a tinted approximation of it.

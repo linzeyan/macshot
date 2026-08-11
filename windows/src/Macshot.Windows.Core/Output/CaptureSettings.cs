@@ -1230,6 +1230,56 @@ public sealed record CaptureSettings
         backdrop).Normalized();
 
     /// <summary>
+    /// What the Adjust popover was last left asking for.
+    /// </summary>
+    /// <remarks>
+    /// Kept for the same reason the frame's sliders are, and because macshot keeps it:
+    /// its five live in <c>UserDefaults</c> (<c>OverlayView.swift:511-527</c>) rather
+    /// than in the capture, so a look chosen once is what the next capture starts in.
+    /// Flat properties rather than a nested object, which is how every other remembered
+    /// group in this file is written and what keeps a hand-edited file readable.
+    /// </remarks>
+    public ImageEffectPreset EffectsPreset { get; init; }
+
+    public double EffectsBrightness { get; init; } = ImageEffectsOptions.Default.Brightness;
+
+    public double EffectsContrast { get; init; } = ImageEffectsOptions.Default.Contrast;
+
+    public double EffectsSaturation { get; init; } = ImageEffectsOptions.Default.Saturation;
+
+    public double EffectsSharpness { get; init; } = ImageEffectsOptions.Default.Sharpness;
+
+    /// <summary>
+    /// The five as the popover and the rasterizer want them, already clamped.
+    /// </summary>
+    /// <remarks>
+    /// A preset the file names and this build does not have falls back to None rather
+    /// than throwing: a settings file written by a later version has to open here, and
+    /// an unknown look is one the user can pick again.
+    /// </remarks>
+    public ImageEffectsOptions ToImageEffectsOptions() => new ImageEffectsOptions(
+        Enum.IsDefined(EffectsPreset) ? EffectsPreset : ImageEffectPreset.None,
+        EffectsBrightness,
+        EffectsContrast,
+        EffectsSaturation,
+        EffectsSharpness).Normalized();
+
+    /// <summary>Writes what the popover now asks for back into the settings.</summary>
+    public CaptureSettings WithImageEffects(ImageEffectsOptions effects)
+    {
+        ArgumentNullException.ThrowIfNull(effects);
+
+        return this with
+        {
+            EffectsPreset = effects.Preset,
+            EffectsBrightness = effects.Brightness,
+            EffectsContrast = effects.Contrast,
+            EffectsSaturation = effects.Saturation,
+            EffectsSharpness = effects.Sharpness,
+        };
+    }
+
+    /// <summary>
     /// Where the Upload button sends a capture. macshot's <c>uploadProvider</c>.
     /// </summary>
     /// <remarks>
@@ -1493,6 +1543,10 @@ public sealed record CaptureSettings
             return text is not null && claimed.Add(text) ? text : string.Empty;
         }
 
+        // Repaired by the popover's own ranges rather than by numbers repeated here: a
+        // hand-edited file asking for a contrast of forty is a capture nobody could read.
+        var effects = ToImageEffectsOptions();
+
         return this with
         {
             Format = Enum.IsDefined(Format) ? Format : CaptureImageFormat.Png,
@@ -1729,6 +1783,11 @@ public sealed record CaptureSettings
             BeautifyShadowRadius = Clamp(
                 BeautifyShadowRadius, BeautifyOptions.Default.ShadowRadius, 0, BeautifyOptions.MaximumShadowRadius),
             BeautifyMode = Enum.IsDefined(BeautifyMode) ? BeautifyMode : BeautifyOptions.Default.Mode,
+            EffectsPreset = effects.Preset,
+            EffectsBrightness = effects.Brightness,
+            EffectsContrast = effects.Contrast,
+            EffectsSaturation = effects.Saturation,
+            EffectsSharpness = effects.Sharpness,
         };
     }
 
