@@ -60,6 +60,13 @@
                 <MenuFlyoutItem Text="Flip Horizontal" Click="FlipHorizontal_Click" />
                 <MenuFlyoutItem Text="Flip Vertical" Click="FlipVertical_Click" />
                 <MenuFlyoutSeparator />
+                <!-- macshot's pair, in its place on the menu
+                     (FloatingThumbnailController.swift:410-411). Both act on a copy in the
+                     temporary directory: the panel is up before anything has been saved,
+                     and with history off this capture is nowhere on disk at all. -->
+                <MenuFlyoutItem Text="Open With" Click="OpenWith_Click" />
+                <MenuFlyoutItem Text="Share" Click="Share_Click" />
+                <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="Delete" Click="Delete_Click" />
                 <MenuFlyoutItem Text="Close" Click="Close_Click" />
                 <MenuFlyoutItem Text="Close All" Click="CloseAll_Click" />

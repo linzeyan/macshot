@@ -6,7 +6,6 @@ using WinRT;
 using WinRT.Interop;
 
 using Windows.ApplicationModel.DataTransfer;
-using Windows.Storage;
 using Windows.Storage.Streams;
 
 namespace Macshot.Windows.Services;
@@ -64,7 +63,7 @@ internal static class ShareSheet
         ArgumentNullException.ThrowIfNull(frame);
         ArgumentNullException.ThrowIfNull(settings);
 
-        var file = await WriteTemporaryCopyAsync(frame, settings);
+        var file = await TemporaryCapture.WriteAsync(frame, settings);
 
         var handle = WindowNative.GetWindowHandle(window);
         var interop = DataTransferManager.As<IDataTransferManagerInterop>();
@@ -90,32 +89,6 @@ internal static class ShareSheet
         }
 
         interop.ShowShareUIForWindow(handle);
-    }
-
-    /// <summary>
-    /// Writes the capture where another program can read it, always as a PNG: a share
-    /// target is a paste target rather than an archive, so it should never be handed the
-    /// lossy copy.
-    /// </summary>
-    private static async Task<StorageFile> WriteTemporaryCopyAsync(CapturedFrame frame, CaptureSettings settings)
-    {
-        var directory = Path.Combine(Path.GetTempPath(), "macshot");
-        Directory.CreateDirectory(directory);
-
-        // The user's own naming, because the name travels with the image: an attachment
-        // called "tmp4F2A.png" is one the recipient cannot place.
-        var name = FilenameTemplate.ResolveUnique(
-            settings.FilenameTemplate,
-            DateTimeOffset.Now,
-            CaptureImageFormat.Png.FileExtension(),
-            candidate => File.Exists(Path.Combine(directory, candidate)));
-
-        var path = Path.Combine(directory, name);
-        await File.WriteAllBytesAsync(
-            path,
-            (await ImageDelivery.EncodeAsync(frame, CaptureImageFormat.Png, CaptureSettings.MaxQuality)).Bytes);
-
-        return await StorageFile.GetFileFromPathAsync(path);
     }
 
     /// <summary>

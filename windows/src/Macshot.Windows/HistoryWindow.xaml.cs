@@ -402,6 +402,13 @@ public sealed partial class HistoryWindow : Window
         Add(L("Flip Horizontal"), () => _ = TurnAsync(entry, ImageTurn.FlipHorizontal));
         Add(L("Flip Vertical"), () => _ = TurnAsync(entry, ImageTurn.FlipVertical));
 
+        // The two ways out of macshot and into something else
+        // (HistoryOverlayController.swift:342-348). On the card's own file rather than on
+        // a copy: this capture is already on disk, and macshot hands over the same one.
+        menu.Items.Add(new MenuFlyoutSeparator());
+        Add(L("Open With"), () => _ = HandOffAsync(entry, open: true));
+        Add(L("Share"), () => _ = HandOffAsync(entry, open: false));
+
         menu.Items.Add(new MenuFlyoutSeparator());
         Add(L("Delete"), () => Forget(entry));
 
@@ -534,6 +541,44 @@ public sealed partial class HistoryWindow : Window
         }
 
         Close();
+    }
+
+    /// <summary>
+    /// Hands one archived capture to another program, either to open or to share.
+    /// </summary>
+    /// <remarks>
+    /// Both put system UI over the panel, and losing focus is how the panel dismisses —
+    /// so it is held open across them, as it is across the save dialog. The share pane
+    /// belongs to this window, so closing the panel would take the pane with it; it is
+    /// released when a target has been chosen rather than when the call returns.
+    /// </remarks>
+    private async Task HandOffAsync(HistoryEntry entry, bool open)
+    {
+        _holdOpen = true;
+
+        try
+        {
+            if (open)
+            {
+                await OpenWith.ShowAsync(await StorageFile.GetFileFromPathAsync(entry.Path));
+                _holdOpen = false;
+                return;
+            }
+
+            if (await ReadAsync(entry) is { } frame)
+            {
+                await ShareSheet.ShowAsync(this, frame, _settings.Current, shared: () => _holdOpen = false);
+            }
+            else
+            {
+                _holdOpen = false;
+            }
+        }
+        catch (Exception exception)
+        {
+            _holdOpen = false;
+            DiagnosticLog.Write($"Could not hand '{entry.Path}' to another program: {exception.Message}");
+        }
     }
 
     /// <summary>

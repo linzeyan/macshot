@@ -343,6 +343,32 @@ public sealed partial class ThumbnailWindow : Window
         }
     });
 
+    private void OpenWith_Click(object sender, RoutedEventArgs e) => _ = HandOffAsync(open: true);
+
+    private void Share_Click(object sender, RoutedEventArgs e) => _ = HandOffAsync(open: false);
+
+    /// <summary>
+    /// Hands the capture to another program, either to open or to share.
+    /// </summary>
+    /// <remarks>
+    /// Through a copy in the temporary directory rather than through the archived file,
+    /// which is macshot's <c>makeCurrentImageFileURL</c>: the panel is up before anything
+    /// has been saved, and with history off this capture is nowhere on disk. It also
+    /// means a program that writes back over what it opened cannot touch the archive.
+    /// </remarks>
+    private Task HandOffAsync(bool open) => RunAsync("Could not hand the capture over", async () =>
+    {
+        if (open)
+        {
+            await OpenWith.ShowAsync(await TemporaryCapture.WriteAsync(_frame, _settings.Current));
+            return;
+        }
+
+        // The pane belongs to this window, so the panel must not go away underneath it —
+        // which is why the dismissal timer stays stopped rather than being restarted.
+        await ShareSheet.ShowAsync(this, _frame, _settings.Current);
+    });
+
     private void CloseAll_Click(object sender, RoutedEventArgs e) =>
         CloseAllRequested?.Invoke(this, EventArgs.Empty);
 
