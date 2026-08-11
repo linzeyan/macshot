@@ -605,6 +605,45 @@
                                 Width="240"
                                 TextChanged="Template_TextChanged"
                                 LostFocus="Setting_LostFocus" />
+                            <!-- macshot puts this ⓘ beside both filename boxes
+                                 (SettingsWindowController.swift:889, :1588) and shows the
+                                 same seven tokens from either. Clicked rather than
+                                 hovered, as the URL-scheme one above is: a token is
+                                 there to be read off and typed, and a panel that
+                                 disappears when the pointer leaves it cannot be. -->
+                            <Button
+                                x:Name="FilenameTokenButton"
+                                Padding="6,2,6,2"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                VerticalAlignment="Center"
+                                ToolTipService.ToolTip="Show available filename tokens">
+                                <FontIcon
+                                    Glyph="&#xE946;"
+                                    FontSize="14"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <Button.Flyout>
+                                    <Flyout>
+                                        <StackPanel Spacing="4" MaxWidth="420">
+                                            <TextBlock
+                                                Text="Filename Template Tokens"
+                                                FontSize="13"
+                                                FontWeight="SemiBold" />
+                                            <TextBlock
+                                                Text="The file extension is appended automatically. Slashes and colons in {window} become dashes."
+                                                FontSize="11"
+                                                TextWrapping="Wrap"
+                                                Margin="0,0,0,8"
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                            <Grid
+                                                x:Name="FilenameTokenRows"
+                                                ColumnDefinitions="Auto,*"
+                                                RowSpacing="4"
+                                                ColumnSpacing="16" />
+                                        </StackPanel>
+                                    </Flyout>
+                                </Button.Flyout>
+                            </Button>
                         </StackPanel>
                         <!-- What the template resolves to right now. A template is the one
                              setting whose effect is invisible until a file has already been
@@ -844,6 +883,43 @@
                                 Width="240"
                                 TextChanged="RecordingTemplate_TextChanged"
                                 LostFocus="Setting_LostFocus" />
+                            <!-- The same seven, because a recording's name is written in
+                                 the same tokens. Its own button and its own flyout: a
+                                 flyout belongs to one control, so what the two rows share
+                                 is the builder rather than the panel. -->
+                            <Button
+                                x:Name="RecordingFilenameTokenButton"
+                                Padding="6,2,6,2"
+                                Background="Transparent"
+                                BorderThickness="0"
+                                VerticalAlignment="Center"
+                                ToolTipService.ToolTip="Show available filename tokens">
+                                <FontIcon
+                                    Glyph="&#xE946;"
+                                    FontSize="14"
+                                    Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                <Button.Flyout>
+                                    <Flyout>
+                                        <StackPanel Spacing="4" MaxWidth="420">
+                                            <TextBlock
+                                                Text="Filename Template Tokens"
+                                                FontSize="13"
+                                                FontWeight="SemiBold" />
+                                            <TextBlock
+                                                Text="The file extension is appended automatically. Slashes and colons in {window} become dashes."
+                                                FontSize="11"
+                                                TextWrapping="Wrap"
+                                                Margin="0,0,0,8"
+                                                Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
+                                            <Grid
+                                                x:Name="RecordingFilenameTokenRows"
+                                                ColumnDefinitions="Auto,*"
+                                                RowSpacing="4"
+                                                ColumnSpacing="16" />
+                                        </StackPanel>
+                                    </Flyout>
+                                </Button.Flyout>
+                            </Button>
                         </StackPanel>
                         <TextBlock x:Name="RecordingTemplatePreview" Style="{StaticResource Caption}" />
                     </StackPanel>

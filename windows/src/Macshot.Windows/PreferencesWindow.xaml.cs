@@ -176,6 +176,7 @@ public sealed partial class PreferencesWindow : Window
         BuildGlobalShortcutRows();
         BuildShortcutRows();
         BuildUrlSchemeCommands();
+        BuildFilenameTokens();
         Load(_settings.Current);
         PlaceOnScreen();
 
@@ -252,6 +253,48 @@ public sealed partial class PreferencesWindow : Window
             Grid.SetRow(description, row);
             Grid.SetColumn(description, 1);
             UrlSchemeCommandRows.Children.Add(description);
+        }
+    }
+
+    /// <summary>
+    /// Fills the ⓘ beside each of the two filename boxes with the tokens a template is
+    /// written in.
+    /// </summary>
+    /// <remarks>
+    /// One list for both, because both boxes are resolved by the same formatter — and
+    /// taken from it rather than written here, so the four samples show what this build
+    /// actually produces. Resolved against the clock rather than macshot's hard-coded
+    /// day, which is also why they cannot drift the way macshot's have.
+    /// </remarks>
+    private void BuildFilenameTokens()
+    {
+        var tokenStyle = (Style)((Grid)Content).Resources["CommandText"];
+        var meaningStyle = (Style)((Grid)Content).Resources["CommandDescription"];
+        var tokens = FilenameTemplate.Describe(DateTimeOffset.Now);
+
+        Fill(FilenameTokenRows);
+        Fill(RecordingFilenameTokenRows);
+
+        void Fill(Grid host)
+        {
+            foreach (var token in tokens)
+            {
+                var row = host.RowDefinitions.Count;
+                host.RowDefinitions.Add(new RowDefinition { Height = GridLength.Auto });
+
+                // The token is not translated — it is what has to be typed.
+                var text = new TextBlock { Text = token.Text, Style = tokenStyle };
+                Grid.SetRow(text, row);
+                host.Children.Add(text);
+
+                // Through L, which leaves a resolved sample as it is and translates the
+                // three that are macshot's own sentences. The page-wide pass has already
+                // run by the time these rows exist.
+                var meaning = new TextBlock { Text = L(token.Meaning), Style = meaningStyle };
+                Grid.SetRow(meaning, row);
+                Grid.SetColumn(meaning, 1);
+                host.Children.Add(meaning);
+            }
         }
     }
 

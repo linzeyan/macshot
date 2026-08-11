@@ -201,4 +201,39 @@ public sealed class FilenameTemplateTests
 
         Assert.AreEqual(200, name.Length);
     }
+
+    /// <summary>
+    /// The help list is what someone copies a token out of, so a token it names and the
+    /// template does not answer would be worse than no list at all: the reader would
+    /// blame the template.
+    /// </summary>
+    [TestMethod]
+    public void Describe_NamesOnlyTokensATemplateAnswers()
+    {
+        foreach (var token in FilenameTemplate.Describe(Timestamp))
+        {
+            Assert.AreNotEqual(
+                token.Text,
+                FilenameTemplate.Resolve(token.Text, Timestamp),
+                $"{token.Text} was left in the name verbatim, which is what an unknown token does");
+        }
+    }
+
+    /// <summary>
+    /// The four samples are shown as what the token produces, not as decoration. macshot
+    /// writes its own out by hand and they have already drifted — its {unix} stands for a
+    /// different day than its {date}.
+    /// </summary>
+    [TestMethod]
+    public void Describe_ShowsTheSampleTheTokenActuallyResolvesTo()
+    {
+        var tokens = FilenameTemplate.Describe(Timestamp);
+
+        Assert.AreEqual("2026-07-27", tokens[0].Meaning);
+        Assert.AreEqual("22-45-03", tokens[1].Meaning);
+        Assert.AreEqual("2026-07-27_22-45-03", tokens[2].Meaning);
+        Assert.AreEqual(
+            Timestamp.ToUnixTimeSeconds().ToString(System.Globalization.CultureInfo.InvariantCulture),
+            tokens[3].Meaning);
+    }
 }

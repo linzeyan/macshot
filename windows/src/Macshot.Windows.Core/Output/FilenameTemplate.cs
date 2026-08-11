@@ -32,6 +32,17 @@ namespace Macshot.Windows.Core.Output;
 /// <param name="Index">Which of a run of captures this is, counting from 1.</param>
 public readonly record struct FilenameContext(string? WindowTitle = null, int? Index = null);
 
+/// <summary>
+/// One row of the list behind the ⓘ beside the filename box.
+/// </summary>
+/// <param name="Text">The token as it has to be typed, braces and all. Never translated.</param>
+/// <param name="Meaning">
+/// What the token resolves to, for the four a sample can show, and macshot's own sentence
+/// for the three it cannot. The sentence is a translation key and a resolved sample matches
+/// none, so the caller can put both through the lookup without telling them apart.
+/// </param>
+public readonly record struct FilenameToken(string Text, string Meaning);
+
 public static class FilenameTemplate
 {
     /// <summary>
@@ -97,6 +108,32 @@ public static class FilenameTemplate
 
         return candidate;
     }
+
+    /// <summary>
+    /// Every token worth writing into a template, in macshot's order
+    /// (<c>SettingsWindowController.swift:3170</c>).
+    /// </summary>
+    /// <remarks>
+    /// The four samples are resolved through <see cref="Expand"/> rather than written out,
+    /// so this cannot come to promise a shape <see cref="Substitute"/> does not produce —
+    /// macshot's are literals, and its <c>{unix}</c> sample already stands for a different
+    /// day than its <c>{date}</c> one. This port's bare date parts (<c>{yyyy}</c> and the
+    /// rest) are deliberately absent: they exist so a template written before the named
+    /// tokens keeps working, not to be written afresh.
+    /// </remarks>
+    public static IReadOnlyList<FilenameToken> Describe(DateTimeOffset timestamp) =>
+    [
+        Sample("date", timestamp),
+        Sample("time", timestamp),
+        Sample("timestamp", timestamp),
+        Sample("unix", timestamp),
+        new("{window}", "Screenshots only — captured window title (blank otherwise)"),
+        new("{index}", "Counter for multi-screen captures"),
+        new("{random}", "8-character random string (e.g. k3j7x9q2)"),
+    ];
+
+    private static FilenameToken Sample(string token, DateTimeOffset timestamp) =>
+        new($"{{{token}}}", Expand($"{{{token}}}", timestamp, default));
 
     private static string Expand(string template, DateTimeOffset timestamp, FilenameContext context)
     {
