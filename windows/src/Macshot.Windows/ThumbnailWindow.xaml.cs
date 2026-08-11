@@ -1,5 +1,6 @@
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
+using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Services;
 using Macshot.Windows.Toolbar;
 using Microsoft.UI.Windowing;
@@ -32,7 +33,13 @@ public sealed partial class ThumbnailWindow : Window
     /// </summary>
     private const int HairlineColour = 0x00999999;
 
-    private readonly CapturedFrame _frame;
+    /// <summary>
+    /// The capture this panel stands for. Not readonly, because the four turns on the
+    /// menu replace it: every action here reads this field, so turning the pixels once
+    /// is what makes Copy, Save and OCR all work on what the panel is showing rather than
+    /// on what it was showing before.
+    /// </summary>
+    private CapturedFrame _frame;
     private readonly SettingsStore _settings;
 
     /// <summary>Where the pointer was when a flick began, or null when none is in flight.</summary>
@@ -291,6 +298,50 @@ public sealed partial class ThumbnailWindow : Window
     private void Edit_Click(object sender, RoutedEventArgs e) => Edit();
 
     private void Close_Click(object sender, RoutedEventArgs e) => Close();
+
+    private void RotateLeft_Click(object sender, RoutedEventArgs e) => _ = TurnAsync(ImageTurn.Left);
+
+    private void RotateRight_Click(object sender, RoutedEventArgs e) => _ = TurnAsync(ImageTurn.Right);
+
+    private void FlipHorizontal_Click(object sender, RoutedEventArgs e) =>
+        _ = TurnAsync(ImageTurn.FlipHorizontal);
+
+    private void FlipVertical_Click(object sender, RoutedEventArgs e) =>
+        _ = TurnAsync(ImageTurn.FlipVertical);
+
+    /// <summary>
+    /// Turns or mirrors the capture the panel is holding, and writes the archived copy
+    /// back with it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Both, because the panel is a view of the archived capture rather than a separate
+    /// thing: turning only the one on screen would leave Save and the history panel
+    /// disagreeing about which way up it is, and the panel goes away in seconds.
+    /// </para>
+    /// <para>
+    /// The picture is at its capture size and the panel is 240 wide, so the aspect ratio
+    /// changes under a quarter turn and the image is cropped to fill differently. That is
+    /// the same UniformToFill it was drawn with in the first place; the panel does not
+    /// resize, as macshot's does not.
+    /// </para>
+    /// </remarks>
+    private Task TurnAsync(ImageTurn turn) => RunAsync("Could not turn the capture", async () =>
+    {
+        var (width, height, pixels) = FrameTransforms.Apply(turn, _frame.Width, _frame.Height, _frame.BgraPixels);
+        _frame = new CapturedFrame(_frame.VirtualX, _frame.VirtualY, width, height, pixels, _frame.HasAlpha);
+
+        var source = new SoftwareBitmapSource();
+        await source.SetBitmapAsync(_frame.ToDisplayBitmap());
+        ThumbnailImage.Source = source;
+
+        // The marks go with it, as they do from the history panel: they were placed in
+        // the coordinates the pixels used to have.
+        if (HistoryPath is { } path)
+        {
+            await ScreenshotHistory.RewriteAsync(path, _frame, _settings.Current);
+        }
+    });
 
     private void CloseAll_Click(object sender, RoutedEventArgs e) =>
         CloseAllRequested?.Invoke(this, EventArgs.Empty);

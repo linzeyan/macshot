@@ -386,6 +386,12 @@ public sealed partial class HistoryWindow : Window
         Add(L("Open in Editor"), () => Ask(entry, HistoryAction.Open));
         Add(L("Pin to Screen"), () => Ask(entry, HistoryAction.Pin));
 
+        // The thumbnail has offered this since it was built and the card had not, though
+        // both stand for the same capture — and reading a screenshot taken an hour ago is
+        // exactly what the panel is opened for. macshot puts it on both
+        // (HistoryOverlayController.swift:334).
+        Add(L("Run OCR & QR"), () => _ = ReadTextAsync(entry));
+
         // macshot's four, in macshot's order (FloatingThumbnailController.swift:12). They
         // are here rather than in the editor because what they answer is "this capture
         // came out sideways", which is noticed while looking at the panel — and the editor
@@ -400,6 +406,38 @@ public sealed partial class HistoryWindow : Window
         Add(L("Delete"), () => Forget(entry));
 
         return menu;
+    }
+
+    /// <summary>
+    /// Reads the text and any QR codes out of one archived capture.
+    /// </summary>
+    /// <remarks>
+    /// The panel closes, as it does for everything that puts a window on screen: the
+    /// recognition window opens where the panel is, and a strip across the top of the
+    /// screen would be in front of it.
+    /// </remarks>
+    private async Task ReadTextAsync(HistoryEntry entry)
+    {
+        if (await ReadAsync(entry) is not { } frame)
+        {
+            return;
+        }
+
+        Close();
+
+        try
+        {
+            var lines = await TextRecognizer.RecognizeAsync(frame, 0, 0);
+            var codes = await TextRecognizer.ScanQrCodesAsync(frame);
+            new TextRecognitionWindow(TextRecognizer.ToText(lines), _settings, frame, codes).Activate();
+        }
+        catch (Exception exception)
+        {
+            // Recognition is the only thing here that can fail for a reason other than
+            // the file going away — no language pack, no engine — and the panel it would
+            // have been reported in has closed. The log is where that lands.
+            DiagnosticLog.Write($"Could not read the text in '{entry.Path}': {exception.Message}");
+        }
     }
 
     /// <summary>

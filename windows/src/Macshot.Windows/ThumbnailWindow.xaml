@@ -52,6 +52,14 @@
                 <MenuFlyoutItem Text="Open in Editor Window" Click="Edit_Click" />
                 <MenuFlyoutItem Text="OCR &amp; QR" Click="ReadText_Click" />
                 <MenuFlyoutSeparator />
+                <!-- macshot's four, in macshot's order. They act on the panel rather than
+                     opening anything, which is what makes them worth the four rows: a
+                     capture that came out sideways is put right where it is noticed. -->
+                <MenuFlyoutItem Text="Rotate Left" Click="RotateLeft_Click" />
+                <MenuFlyoutItem Text="Rotate Right" Click="RotateRight_Click" />
+                <MenuFlyoutItem Text="Flip Horizontal" Click="FlipHorizontal_Click" />
+                <MenuFlyoutItem Text="Flip Vertical" Click="FlipVertical_Click" />
+                <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="Delete" Click="Delete_Click" />
                 <MenuFlyoutItem Text="Close" Click="Close_Click" />
                 <MenuFlyoutItem Text="Close All" Click="CloseAll_Click" />
