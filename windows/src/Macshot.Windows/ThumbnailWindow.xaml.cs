@@ -65,8 +65,10 @@ public sealed partial class ThumbnailWindow : Window
 
 #if OFFLINE
         // Hidden rather than left empty: an unlit disc in a corner that does nothing
-        // reads as a button that failed, and this build has nothing to upload with.
+        // reads as a button that failed, and this build has nothing to upload with. The
+        // menu row goes with it, for the same reason.
         UploadDisc.Visibility = Visibility.Collapsed;
+        UploadItem.Visibility = Visibility.Collapsed;
 #else
         UploadDisc.Child = Glyph(ToolbarCommand.Upload);
 #endif
@@ -83,6 +85,19 @@ public sealed partial class ThumbnailWindow : Window
 
     /// <summary>Raised when the user wants the whole column gone, not just this one.</summary>
     public event EventHandler? CloseAllRequested;
+
+    /// <summary>Raised when the user wants every panel in the column written to a folder.</summary>
+    /// <remarks>
+    /// Answered by the owner rather than here, because it is about the column and only
+    /// the owner has one: this panel knows nothing of the others.
+    /// </remarks>
+    public event EventHandler? SaveAllRequested;
+
+    /// <summary>
+    /// The capture this panel stands for, as the four turns have left it — which is what
+    /// makes the owner's Save All write what is on show rather than what was taken.
+    /// </summary>
+    public CapturedFrame Capture => _frame;
 
 #if !OFFLINE
     /// <summary>Raised with the capture the user wants sent, from the fourth disc.</summary>
@@ -371,6 +386,24 @@ public sealed partial class ThumbnailWindow : Window
 
     private void CloseAll_Click(object sender, RoutedEventArgs e) =>
         CloseAllRequested?.Invoke(this, EventArgs.Empty);
+
+    private void SaveAll_Click(object sender, RoutedEventArgs e)
+    {
+        // The dismissal timer stays stopped: a folder picker is about to take the
+        // foreground, and the panel raising this must still be there when it comes back.
+        _dismissTimer.Stop();
+        SaveAllRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    private void Upload_Click(object sender, RoutedEventArgs e)
+    {
+#if !OFFLINE
+        UploadCapture();
+#endif
+
+        // In the offline build the row is collapsed and this does nothing. The handler
+        // stays so the markup, which is shared between the two, still binds.
+    }
 
     /// <summary>
     /// Takes the capture back out of the history and closes the panel — which for a

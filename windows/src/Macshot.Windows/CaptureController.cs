@@ -1345,6 +1345,7 @@ public sealed class CaptureController : IDisposable
         // capture twice, once with the marks and once without.
         thumbnail.EditRequested += (_, captured) => Post(() => ShowEditorAsync(captured, origin: archived));
         thumbnail.CloseAllRequested += (_, _) => CloseThumbnails();
+        thumbnail.SaveAllRequested += (_, _) => Post(() => SaveThumbnailsAsync(thumbnail));
         thumbnail.Closed += (_, _) =>
         {
             _thumbnails.Remove(thumbnail);
@@ -1367,6 +1368,53 @@ public sealed class CaptureController : IDisposable
         foreach (var panel in _thumbnails.ToArray())
         {
             panel.Close();
+        }
+    }
+
+    /// <summary>
+    /// Writes every panel in the column into one folder the user picks.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// macshot's <c>Save All to Folder…</c>. Answered here rather than in the panel that
+    /// raised it because it is about the column, and the column is this list — a panel
+    /// knows nothing of the others.
+    /// </para>
+    /// <para>
+    /// Each file is named and encoded exactly as an ordinary save would name and encode
+    /// it, so a capture filed this way is not a differently made file. The panels stay
+    /// open: someone who has just filed six captures may still want to copy one, and
+    /// closing them would be deciding that for them.
+    /// </para>
+    /// </remarks>
+    private async Task SaveThumbnailsAsync(ThumbnailWindow asked)
+    {
+        var picker = new FolderPicker { SuggestedStartLocation = PickerLocationId.PicturesLibrary };
+        picker.FileTypeFilter.Add("*");
+
+        // An unpackaged app has no implicit window for the picker to parent itself to,
+        // and the panel that raised this is the window the user is looking at.
+        InitializeWithWindow.Initialize(picker, WinRT.Interop.WindowNative.GetWindowHandle(asked));
+
+        if (await picker.PickSingleFolderAsync() is not { } folder)
+        {
+            return;
+        }
+
+        // Copied first: a panel dismissing itself mid-loop would take it out of the list
+        // this is walking.
+        foreach (var panel in _thumbnails.ToArray())
+        {
+            try
+            {
+                await ImageDelivery.SaveAsync(panel.Capture, _settings.Current, folder: folder.Path);
+            }
+            catch (Exception exception)
+            {
+                // One capture that could not be written must not stop the other five, and
+                // the panels are about to go away — the log is where this can be read.
+                DiagnosticLog.Write($"Could not save a capture into '{folder.Path}': {exception.Message}");
+            }
         }
     }
 
@@ -1574,6 +1622,14 @@ public sealed class CaptureController : IDisposable
                 await ReopenAsync(request.Entry);
                 return;
             }
+
+#if !OFFLINE
+            if (request.Action is HistoryAction.Upload)
+            {
+                await _uploads.UploadAsync(await ImageLoader.LoadAsync(request.Entry.Path));
+                return;
+            }
+#endif
 
             await PinAsync(await ImageLoader.LoadAsync(request.Entry.Path));
         }

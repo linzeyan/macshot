@@ -32,6 +32,13 @@ public enum HistoryAction
 {
     Open,
     Pin,
+
+    /// <summary>
+    /// Sends the capture. Present in the offline build's enum as well, where nothing
+    /// raises it: the menu row that would is compiled out, and a member the compiler
+    /// cannot see raised is not a warning where a field would be.
+    /// </summary>
+    Upload,
 }
 
 /// <summary>One capture, and what the user asked for it.</summary>
@@ -385,6 +392,12 @@ public sealed partial class HistoryWindow : Window
         Add(L("Save As..."), () => _ = SaveAsAsync(entry));
         Add(L("Open in Editor"), () => Ask(entry, HistoryAction.Open));
         Add(L("Pin to Screen"), () => Ask(entry, HistoryAction.Pin));
+#if !OFFLINE
+        // macshot puts it here, between pinning and the reading tools
+        // (HistoryOverlayController.swift:324). The offline build has nothing to upload
+        // with, so the row is absent rather than greyed.
+        Add(L("Upload"), () => Ask(entry, HistoryAction.Upload));
+#endif
 
         // The thumbnail has offered this since it was built and the card had not, though
         // both stand for the same capture — and reading a screenshot taken an hour ago is

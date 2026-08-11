@@ -113,15 +113,22 @@ public static class ImageDelivery
     /// the template needs. Null for a capture that was dragged out rather than aimed at
     /// a window, and then the token resolves to nothing.
     /// </param>
+    /// <param name="folder">
+    /// Somewhere other than the capture folder, for "Save All to Folder…" — which asks
+    /// where once and then writes several. Everything else about the file is unchanged:
+    /// the name comes from the same template and the format from the same setting, so a
+    /// capture put somewhere else is not a differently made file.
+    /// </param>
     public static async Task<string> SaveAsync(
         CapturedFrame frame,
         CaptureSettings settings,
-        string? windowTitle = null)
+        string? windowTitle = null,
+        string? folder = null)
     {
         ArgumentNullException.ThrowIfNull(frame);
         ArgumentNullException.ThrowIfNull(settings);
 
-        var directory = ResolveDirectory(settings);
+        var directory = folder ?? ResolveDirectory(settings);
         Directory.CreateDirectory(directory);
 
         // Encoded before it is named, because the name carries the extension and the

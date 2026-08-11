@@ -50,6 +50,11 @@
                 <MenuFlyoutSeparator />
                 <MenuFlyoutItem Text="Pin" Click="Pin_Click" />
                 <MenuFlyoutItem Text="Open in Editor Window" Click="Edit_Click" />
+                <!-- macshot has it on the menu as well as in the corner
+                     (FloatingThumbnailController.swift:398). The offline build takes the
+                     row away rather than greying it: a disabled item reads as
+                     temporarily unavailable, and here there is nothing to upload with. -->
+                <MenuFlyoutItem x:Name="UploadItem" Text="Upload" Click="Upload_Click" />
                 <MenuFlyoutItem Text="OCR &amp; QR" Click="ReadText_Click" />
                 <MenuFlyoutSeparator />
                 <!-- macshot's four, in macshot's order. They act on the panel rather than
@@ -70,6 +75,10 @@
                 <MenuFlyoutItem Text="Delete" Click="Delete_Click" />
                 <MenuFlyoutItem Text="Close" Click="Close_Click" />
                 <MenuFlyoutItem Text="Close All" Click="CloseAll_Click" />
+                <!-- Beside Close All because it is about the same column: six captures
+                     taken in a row are filed in one go rather than saved one panel at a
+                     time (FloatingThumbnailController.swift:421). -->
+                <MenuFlyoutItem Text="Save All to Folder…" Click="SaveAll_Click" />
             </MenuFlyout>
         </Grid.ContextFlyout>
 
