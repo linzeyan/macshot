@@ -2000,12 +2000,15 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// Points the one size slider at whichever number the tool in hand is sized by.
     /// </summary>
     /// <remarks>
-    /// The loupe is sized by <see cref="AnnotationStyle.LoupeSize"/>, the stamp by
-    /// <see cref="AnnotationStyle.StampSize"/>, and everything else by its stroke width —
-    /// which is the whole reason they are separate numbers: a loupe 120 across must not
-    /// leave the next arrow 120 pixels thick. Reloading rather than rescaling, so switching
-    /// tools and back returns each to what it was. The label is not here at all: macshot
-    /// does not offer it this slider, and its size is set by the row's own − and +.
+    /// Four numbers behind one slider — the loupe's, the stamp's, the highlighter's and
+    /// the badge's — with every other tool on a fifth shared between them, which is
+    /// macshot's own split (<c>OverlayView.swift:9718</c>). They are separate because the
+    /// sizes wanted are orders apart: a loupe 120 across must not leave the next arrow 120
+    /// pixels thick, and a highlighter set to the height of a line must not either.
+    /// <see cref="AnnotationStyle.SizeFor"/> is the one place that says which is which.
+    /// Reloading rather than rescaling, so switching tools and back returns each to what it
+    /// was. The label is not here at all: macshot does not offer it this slider, and its
+    /// size is set by the row's own − and +.
     /// </remarks>
     private void SyncSizeSlider(AnnotationTool tool)
     {
@@ -2047,7 +2050,7 @@ public sealed partial class AnnotationToolbarView : UserControl
                 _size.Width = StrokeSliderWidth;
                 _size.Minimum = MinStroke;
                 _size.Maximum = MaxStroke;
-                _size.Value = Math.Clamp(editor.Style.StrokeWidth, MinStroke, MaxStroke);
+                _size.Value = Math.Clamp(editor.Style.SizeFor(tool), MinStroke, MaxStroke);
             }
         }
         finally
@@ -2878,7 +2881,10 @@ public sealed partial class AnnotationToolbarView : UserControl
             // the slider still sat at the bottom of its range, and the assignment that
             // moved it raised nothing to correct the box with, because a value change
             // during a load is suppressed on purpose.
-            _size.Value = _loadedStyle.StrokeWidth;
+            // The width belonging to the tool in hand, not the shared one: the slider's
+            // range is already that tool's, so a loupe reloaded from a stroke width of 3
+            // would be clamped up to the loupe's floor of 40 and written back as that.
+            _size.Value = _loadedStyle.SizeFor(editor.Tool);
             _cornerRadius.Value = _loadedStyle.CornerRadius;
             _loupeZoom.Value = _loadedStyle.LoupeMagnification;
             _spotlightDim.Value = _loadedStyle.DimOpacity;
@@ -3016,19 +3022,20 @@ public sealed partial class AnnotationToolbarView : UserControl
         var color = _colorPicker.Color;
         var previous = editor.Style;
 
-        // The one slider is the loupe's width, the stamp's size, or a stroke width,
-        // depending on what is in hand — so the two numbers it is not writing are carried
-        // across untouched rather than being overwritten with a reading of the other one.
-        // The label is on the list as well even though it has a size control of its own:
-        // its slider is hidden rather than absent, and a hidden control must not be able
-        // to write anything.
+        // The one slider stands for whichever of the five widths the tool in hand owns, so
+        // the four it is not writing are carried across untouched rather than being
+        // overwritten with a reading of another one. The label is on the list as well even
+        // though it has a size control of its own: its slider is hidden rather than
+        // absent, and a hidden control must not be able to write anything.
         var typesetting = editor.Tool == AnnotationTool.Text;
         var magnifying = editor.Tool == AnnotationTool.Loupe;
         var stamping = editor.Tool == AnnotationTool.Stamp;
+        var marking = editor.Tool == AnnotationTool.Marker;
+        var numbering = editor.Tool == AnnotationTool.Number;
 
         editor.Style = new AnnotationStyle(
             new AnnotationColor(color.R, color.G, color.B, color.A),
-            typesetting || magnifying || stamping
+            typesetting || magnifying || stamping || marking || numbering
                 ? previous.StrokeWidth
                 : Math.Max(MinStroke, _size.Value),
             _lineStyle.SelectedIndex >= 0 ? (LineStyle)_lineStyle.SelectedIndex : LineStyle.Solid,
@@ -3075,6 +3082,12 @@ public sealed partial class AnnotationToolbarView : UserControl
             StampSize = stamping
                 ? Math.Clamp(_size.Value, AnnotationStyle.MinStampSize, AnnotationStyle.MaxStampSize)
                 : previous.StampSize,
+            MarkerStrokeWidth = marking
+                ? Math.Max(MinStroke, _size.Value)
+                : previous.MarkerStrokeWidth,
+            NumberStrokeWidth = numbering
+                ? Math.Max(MinStroke, _size.Value)
+                : previous.NumberStrokeWidth,
             DimOpacity = Math.Clamp(
                 _spotlightDim.Value,
                 AnnotationStyle.MinDimOpacity,

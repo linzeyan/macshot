@@ -845,7 +845,10 @@ public sealed partial class AnnotationCanvasView : UserControl
             return;
         }
 
-        var style = editor.Style;
+        // The badge's own remembered width, which is what sizes the circle — see
+        // AnnotationStyle.ForTool. Read from editor.Style, it would be drawn at whatever
+        // the last arrow was set to.
+        var style = editor.DrawingStyle;
 
         // The next number is read off the document rather than kept in a counter, so
         // undoing a badge frees its number instead of leaving a hole in the sequence.

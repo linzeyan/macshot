@@ -186,6 +186,17 @@ public sealed class AnnotationEditor
     public AnnotationStyle Style { get; set; } = AnnotationStyle.Default;
 
     /// <summary>
+    /// <see cref="Style"/> as the tool in hand draws it, with that tool's own remembered
+    /// width in the place the rasterizer reads.
+    /// </summary>
+    /// <remarks>
+    /// Every mark is created from this rather than from <see cref="Style"/> itself, so
+    /// that a highlighter set to a line's height does not leave the next arrow at that
+    /// width. See <see cref="AnnotationStyle.ForTool"/>.
+    /// </remarks>
+    public AnnotationStyle DrawingStyle => Style.ForTool(_tool);
+
+    /// <summary>
     /// Frame pixels to the layout unit on the surface being drawn on: one display's DPI
     /// scaling over an overlay, and one over an image laid out at its own pixel size.
     /// </summary>
@@ -558,7 +569,7 @@ public sealed class AnnotationEditor
         {
             _freeformSamples = [point];
             _freeformPressures = PenPressure && pressure > 0 ? [pressure] : null;
-            Draft = Annotation.CreateFreeform(_tool, _freeformSamples, Style, _freeformPressures);
+            Draft = Annotation.CreateFreeform(_tool, _freeformSamples, DrawingStyle, _freeformPressures);
             return false;
         }
 
@@ -587,7 +598,9 @@ public sealed class AnnotationEditor
             _tool,
             start,
             start,
-            _tool == AnnotationTool.Highlight ? Style with { LineStyle = SpotlightBorder } : Style);
+            _tool == AnnotationTool.Highlight
+                ? DrawingStyle with { LineStyle = SpotlightBorder }
+                : DrawingStyle);
         return false;
     }
 
@@ -664,7 +677,7 @@ public sealed class AnnotationEditor
         {
             _freeformSamples.Add(point);
             _freeformPressures?.Add(Math.Clamp(pressure, MinRecordedPressure, 1));
-            Draft = Annotation.CreateFreeform(_tool, _freeformSamples, Style, _freeformPressures);
+            Draft = Annotation.CreateFreeform(_tool, _freeformSamples, DrawingStyle, _freeformPressures);
             return;
         }
 
@@ -1356,7 +1369,7 @@ public sealed class AnnotationEditor
             _tool,
             new CapturePoint(centre.X - half, centre.Y - half),
             new CapturePoint(centre.X + half, centre.Y + half),
-            Style);
+            DrawingStyle);
     }
 
     /// <summary>

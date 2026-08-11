@@ -176,7 +176,20 @@ public sealed record AnnotationStyle(
     /// </summary>
     public const double MaxDimOpacity = 0.95;
 
-    public static AnnotationStyle Default { get; } = new(new AnnotationColor(76, 194, 255), 3);
+    /// <summary>
+    /// The width every stroke tool starts at — macshot's own 3
+    /// (<c>OverlayView.swift:284</c>).
+    /// </summary>
+    /// <remarks>
+    /// A constant rather than a read of <see cref="Default"/>, which is what the two
+    /// remembered widths below would otherwise want: they are initialized while
+    /// <see cref="Default"/> is still being constructed, so reading it there would give
+    /// them null.
+    /// </remarks>
+    public const double DefaultStrokeWidth = 3;
+
+    public static AnnotationStyle Default { get; } =
+        new(new AnnotationColor(76, 194, 255), DefaultStrokeWidth);
 
     /// <summary>
     /// How big a label's text is, in frame pixels, independent of the stroke width.
@@ -333,6 +346,67 @@ public sealed record AnnotationStyle(
     public double StampSize { get; init; } = DefaultStampSize;
 
     /// <summary>
+    /// The width the highlighter remembers, in frame pixels. macshot's
+    /// <c>markerStrokeWidth</c>.
+    /// </summary>
+    /// <remarks>
+    /// A highlighter is wanted at the height of a line of text and an arrow is wanted at
+    /// the width of a hairline, so one number for both means every trip through the
+    /// highlighter leaves the next arrow six times too thick. macshot keeps the two apart
+    /// (<c>OverlayView.swift:9726</c>) and so does this. The badge below is the same
+    /// argument.
+    /// </remarks>
+    public double MarkerStrokeWidth { get; init; } = DefaultStrokeWidth;
+
+    /// <summary>
+    /// The width the numbered badge remembers, in frame pixels. macshot's
+    /// <c>numberStrokeWidth</c>.
+    /// </summary>
+    public double NumberStrokeWidth { get; init; } = DefaultStrokeWidth;
+
+    /// <summary>
+    /// The number this tool's one size control is showing: whichever of the four widths
+    /// belongs to it.
+    /// </summary>
+    public double SizeFor(AnnotationTool tool) => tool switch
+    {
+        AnnotationTool.Loupe => LoupeSize,
+        AnnotationTool.Stamp => StampSize,
+        AnnotationTool.Marker => MarkerStrokeWidth,
+        AnnotationTool.Number => NumberStrokeWidth,
+        _ => StrokeWidth,
+    };
+
+    /// <summary>
+    /// The same style with this tool's own size set, leaving the other three where they
+    /// were.
+    /// </summary>
+    public AnnotationStyle WithSizeFor(AnnotationTool tool, double value) => tool switch
+    {
+        AnnotationTool.Loupe => this with { LoupeSize = value },
+        AnnotationTool.Stamp => this with { StampSize = value },
+        AnnotationTool.Marker => this with { MarkerStrokeWidth = value },
+        AnnotationTool.Number => this with { NumberStrokeWidth = value },
+        _ => this with { StrokeWidth = value },
+    };
+
+    /// <summary>
+    /// The style a mark of this tool is drawn with: its remembered width moved into
+    /// <see cref="StrokeWidth"/>, which is where the rasterizer looks.
+    /// </summary>
+    /// <remarks>
+    /// The loupe and the stamp are not on this list because they are already read from
+    /// their own members — putting a loupe's 120 into a stroke width would draw its ring
+    /// 120 pixels thick. Only the two that <em>are</em> stroke widths need moving, and a
+    /// placed mark still carries exactly one width, so nothing downstream has to ask which
+    /// tool made it.
+    /// </remarks>
+    public AnnotationStyle ForTool(AnnotationTool tool) =>
+        tool is AnnotationTool.Marker or AnnotationTool.Number
+            ? this with { StrokeWidth = SizeFor(tool) }
+            : this;
+
+    /// <summary>
     /// Where one press of the row's − or + lands, from wherever the size is now.
     /// </summary>
     /// <remarks>
@@ -362,6 +436,8 @@ public sealed record AnnotationStyle(
         ArgumentOutOfRangeException.ThrowIfLessThan(LoupeMagnification, 1);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(LoupeSize);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(StampSize);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(MarkerStrokeWidth);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(NumberStrokeWidth);
         if (Opacity is < 0 or > 1)
         {
             throw new ArgumentOutOfRangeException(nameof(Opacity));

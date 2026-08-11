@@ -597,6 +597,25 @@ public sealed record CaptureSettings
     /// </summary>
     public double StampSize { get; init; } = AnnotationStyle.DefaultStampSize;
 
+    /// <summary>
+    /// The width the highlighter is left at, in captured pixels. macshot's
+    /// <c>markerStrokeWidth</c>.
+    /// </summary>
+    /// <remarks>
+    /// Its own number, and remembered like the loupe's and the stamp's, because a
+    /// highlighter is wanted at the height of a line of text and every other stroke tool
+    /// is not. Sharing one width made a trip through the highlighter the last thing that
+    /// had happened to the next arrow.
+    /// </remarks>
+    public double MarkerStrokeWidth { get; init; } = AnnotationStyle.DefaultStrokeWidth;
+
+    /// <summary>
+    /// The width the numbered badge is left at, in captured pixels. macshot's
+    /// <c>numberStrokeWidth</c> — the badge is drawn from it, so this is what sizes the
+    /// circle.
+    /// </summary>
+    public double NumberStrokeWidth { get; init; } = AnnotationStyle.DefaultStrokeWidth;
+
     /// <summary>How far down a spotlight takes the capture outside it.</summary>
     public double DimOpacity { get; init; } = AnnotationStyle.DefaultDimOpacity;
 
@@ -1387,6 +1406,8 @@ public sealed record CaptureSettings
                 StampSize,
                 AnnotationStyle.MinStampSize,
                 AnnotationStyle.MaxStampSize),
+            MarkerStrokeWidth = Math.Clamp(MarkerStrokeWidth, MinStrokeWidth, MaxStrokeWidth),
+            NumberStrokeWidth = Math.Clamp(NumberStrokeWidth, MinStrokeWidth, MaxStrokeWidth),
             DimOpacity = Math.Clamp(
                 DimOpacity,
                 AnnotationStyle.MinDimOpacity,
@@ -1435,6 +1456,8 @@ public sealed record CaptureSettings
             LoupeMagnification = style.LoupeMagnification,
             LoupeSize = style.LoupeSize,
             StampSize = style.StampSize,
+            MarkerStrokeWidth = style.MarkerStrokeWidth,
+            NumberStrokeWidth = style.NumberStrokeWidth,
             DimOpacity = style.DimOpacity,
             AnnotationFontSize = style.FontSize,
             AnnotationFontFamily = style.FontFamily,
@@ -1576,6 +1599,18 @@ public sealed record CaptureSettings
                 double.IsFinite(StampSize) && StampSize >= AnnotationStyle.MinStampSize
                     ? Math.Min(StampSize, AnnotationStyle.MaxStampSize)
                     : AnnotationStyle.DefaultStampSize,
+
+            // And the two stroke widths that used to be one, read the same way: a file
+            // written before they were split says zero for both, and a highlighter that
+            // reopened at no width would put nothing on the capture.
+            MarkerStrokeWidth =
+                double.IsFinite(MarkerStrokeWidth) && MarkerStrokeWidth >= MinStrokeWidth
+                    ? Math.Min(MarkerStrokeWidth, MaxStrokeWidth)
+                    : AnnotationStyle.DefaultStrokeWidth,
+            NumberStrokeWidth =
+                double.IsFinite(NumberStrokeWidth) && NumberStrokeWidth >= MinStrokeWidth
+                    ? Math.Min(NumberStrokeWidth, MaxStrokeWidth)
+                    : AnnotationStyle.DefaultStrokeWidth,
 
             // Zero in every file written before the spotlight had a slider, and the same
             // reading as the loupe's: a spotlight that reopened at no dim would be a
