@@ -180,16 +180,26 @@ public sealed partial class AnnotationCanvasView : UserControl
     public CapturedFrame? ToFrame() => _preview?.ToFrame();
 
     /// <summary>
-    /// The same capture in the two pieces it was made from, for archiving it in a form
-    /// that can be edited again. Null before anything is being previewed.
+    /// The same capture in the pieces it was made from, for archiving it in a form that
+    /// can be edited again. Null before anything is being previewed.
     /// </summary>
     /// <remarks>
+    /// <para>
+    /// The unadjusted pixels come from the caller rather than from the preview: the
+    /// preview holds what is on screen, and what is on screen is the adjustment already
+    /// applied. Archiving that would leave <paramref name="state"/> describing something
+    /// the pixels have already had done to them, and reopening would do it twice.
+    /// </para>
+    /// <para>
     /// The whole document rather than <c>VisibleAnnotations</c>: what is hidden is
     /// hidden for the length of a drag, and a mark left out here would be lost from the
     /// archive rather than merely not drawn.
+    /// </para>
     /// </remarks>
-    public EditableCapture? ToEditable() =>
-        _preview?.ToEditable(_editor?.Document.Annotations ?? []);
+    public EditableCapture? ToEditable(CapturedFrame raw, CaptureEditState state) =>
+        _preview is { } preview
+            ? new EditableCapture(raw, preview.Archivable(_editor?.Document.Annotations ?? []), state)
+            : null;
 
     public void Render()
     {

@@ -1,3 +1,4 @@
+using System.Diagnostics.CodeAnalysis;
 using System.Globalization;
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Imaging;
@@ -16,13 +17,18 @@ namespace Macshot.Windows.Services;
 /// unannotated one.
 /// </param>
 /// <param name="NotesPath">The marks, as <see cref="AnnotationFile"/> writes them.</param>
+/// <param name="EditPath">
+/// The adjustment the capture was carrying, as <see cref="CaptureEditState"/> writes it.
+/// Null for an entry that was carrying none, which is most of them.
+/// </param>
 public sealed record HistoryEntry(
     string Path,
     DateTimeOffset TakenAt,
     int PixelWidth = 0,
     int PixelHeight = 0,
     string? RawPath = null,
-    string? NotesPath = null)
+    string? NotesPath = null,
+    string? EditPath = null)
 {
     /// <summary>
     /// What the tray menu calls it, which is what macshot calls it: the size and how long
@@ -58,13 +64,14 @@ public sealed record HistoryEntry(
 /// timestamp, is all the ordering needed.
 /// </para>
 /// <para>
-/// A capture with marks on it is archived three times over: the finished image, the
-/// pixels before any mark, and the marks themselves. That is what makes a capture
-/// reopened from here <em>editable</em> — the arrow can be moved or taken off, rather
-/// than only looked at, which is what someone reopens a capture to do. The two extra
-/// files share the entry's name and carry it on, so the listing is still the index: a
-/// name with anything between the timestamp and the extension is a companion of the
-/// entry it names rather than an entry of its own.
+/// A capture with marks on it is archived several times over: the finished image, the
+/// pixels before any mark <em>and before any adjustment</em>, the marks themselves, and
+/// the adjustment as numbers when there was one. That is what makes a capture reopened
+/// from here <em>editable</em> — the arrow can be moved or taken off and the brightness
+/// put back, rather than only looked at, which is what someone reopens a capture to do.
+/// The companions share the entry's name and carry it on, so the listing is still the
+/// index: a name with anything between the timestamp and the extension is a companion of
+/// the entry it names rather than an entry of its own.
 /// </para>
 /// <para>
 /// Every operation is best-effort. History is a convenience, and one that can fail a
@@ -87,6 +94,9 @@ public static class ScreenshotHistory
     /// <summary>The marks that were drawn on them.</summary>
     private const string NotesSuffix = ".notes.json";
 
+    /// <summary>The adjustment they were seen through, which is not one of the marks.</summary>
+    private const string EditSuffix = ".edit.json";
+
     public static string Directory { get; } = Path.Combine(
         Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
         "macshot",
@@ -105,10 +115,10 @@ public static class ScreenshotHistory
     /// thumbnail carries it so that its Delete can take the capture back out again.
     /// </returns>
     /// <param name="editable">
-    /// The pixels the marks were drawn on and the marks themselves, when the finished
-    /// image can be rebuilt from the two. Null when it cannot — a framed capture, say,
-    /// where the background is not one of the marks — and then only the finished image
-    /// is archived, which is what this did for every capture until now.
+    /// The pixels the marks were drawn on, the marks themselves, and the adjustment they
+    /// were seen through, when the finished image can be rebuilt from the three. Null when
+    /// it cannot — a framed capture, say, where the background is not one of the marks —
+    /// and then only the finished image is archived.
     /// </param>
     public static async Task<string?> RecordAsync(
         CapturedFrame frame,
@@ -135,20 +145,12 @@ public static class ScreenshotHistory
                 CaptureSettings.MaxQuality)).Bytes;
             await File.WriteAllBytesAsync(path, bytes);
 
-            // Only when there is something to separate. A capture nobody drew on is
-            // already its own unannotated copy, and archiving it twice would double what
-            // the history costs for the commonest capture there is.
-            if (editable is { Annotations.Count: > 0 })
+            // Only when there is something to separate. A capture nobody drew on and
+            // nobody adjusted is already its own unannotated copy, and archiving it twice
+            // would double what the history costs for the commonest capture there is.
+            if (Separable(editable))
             {
-                var raw = (await ImageDelivery.EncodeAsync(
-                    editable.Raw,
-                    CaptureImageFormat.Png,
-                    CaptureSettings.MaxQuality)).Bytes;
-
-                await File.WriteAllBytesAsync(Path.Combine(Directory, stem + RawSuffix), raw);
-                await File.WriteAllTextAsync(
-                    Path.Combine(Directory, stem + NotesSuffix),
-                    AnnotationFile.Write(editable.Annotations));
+                await WriteCompanionsAsync(Path.Combine(Directory, stem), editable);
             }
 
             Prune(settings);
@@ -214,23 +216,18 @@ public static class ScreenshotHistory
                 CaptureSettings.MaxQuality)).Bytes;
             await File.WriteAllBytesAsync(path, bytes);
 
-            // The companions follow the marks. An edit that took every mark off has to
-            // take the archived marks with them, or reopening it would put back the
-            // arrows the user just deleted.
-            if (editable is { Annotations.Count: > 0 })
+            // The companions follow the marks. An edit that took every mark off and put
+            // the adjustment back to nought has to take the archived pair with them, or
+            // reopening it would put back the arrows the user just deleted.
+            if (Separable(editable))
             {
-                var raw = (await ImageDelivery.EncodeAsync(
-                    editable.Raw,
-                    CaptureImageFormat.Png,
-                    CaptureSettings.MaxQuality)).Bytes;
-
-                await File.WriteAllBytesAsync(stem + RawSuffix, raw);
-                await File.WriteAllTextAsync(stem + NotesSuffix, AnnotationFile.Write(editable.Annotations));
+                await WriteCompanionsAsync(stem, editable);
             }
             else
             {
                 File.Delete(stem + RawSuffix);
                 File.Delete(stem + NotesSuffix);
+                File.Delete(stem + EditSuffix);
             }
 
             return path;
@@ -239,6 +236,46 @@ public static class ScreenshotHistory
         {
             DiagnosticLog.Write($"Could not update the capture in history: {exception.Message}");
             return null;
+        }
+    }
+
+    /// <summary>
+    /// Whether an entry gains anything from being archived in pieces.
+    /// </summary>
+    /// <remarks>
+    /// An adjustment counts as much as a mark does, which is macshot's rule
+    /// (<c>ScreenshotHistory.swift:111</c>): a capture sent two stops brighter and drawn on
+    /// by nobody is exactly the one whose brightness has to stay something the user can
+    /// take back off, and archiving only the finished image would make it the capture.
+    /// </remarks>
+    private static bool Separable([NotNullWhen(true)] EditableCapture? editable) =>
+        editable is not null && (editable.Annotations.Count > 0 || editable.State.HasPostProcessing);
+
+    /// <summary>
+    /// Writes the pieces an entry can be reopened from beside it.
+    /// </summary>
+    /// <remarks>
+    /// The state's file is written only when it says something, and deleted when it does
+    /// not: an entry re-committed with the adjustment put back to nought would otherwise
+    /// keep a sidecar from the edit before it and reopen bright again.
+    /// </remarks>
+    private static async Task WriteCompanionsAsync(string stem, EditableCapture editable)
+    {
+        var raw = (await ImageDelivery.EncodeAsync(
+            editable.Raw,
+            CaptureImageFormat.Png,
+            CaptureSettings.MaxQuality)).Bytes;
+
+        await File.WriteAllBytesAsync(stem + RawSuffix, raw);
+        await File.WriteAllTextAsync(stem + NotesSuffix, AnnotationFile.Write(editable.Annotations));
+
+        if (editable.State.HasPostProcessing)
+        {
+            await File.WriteAllTextAsync(stem + EditSuffix, CaptureEditState.Write(editable.State));
+        }
+        else
+        {
+            File.Delete(stem + EditSuffix);
         }
     }
 
@@ -361,8 +398,11 @@ public static class ScreenshotHistory
 
         // Both or neither. One without the other cannot reopen anything: the marks with
         // no clean pixels to put them back on would draw them twice.
+        var edit = stem + EditSuffix;
+
         return File.Exists(raw) && File.Exists(notes)
-            ? new HistoryEntry(path, TakenAt(path), width, height, raw, notes)
+            ? new HistoryEntry(
+                path, TakenAt(path), width, height, raw, notes, File.Exists(edit) ? edit : null)
             : new HistoryEntry(path, TakenAt(path), width, height);
     }
 
@@ -436,6 +476,7 @@ public static class ScreenshotHistory
         File.Delete(path);
         File.Delete(stem + RawSuffix);
         File.Delete(stem + NotesSuffix);
+        File.Delete(stem + EditSuffix);
     }
 
     /// <summary>

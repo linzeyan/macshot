@@ -170,14 +170,21 @@ public sealed partial class EditorWindow : Window
     /// archived beside it. They are the capture's own marks as objects again, so they can
     /// be moved, restyled and undone rather than only drawn over.
     /// </param>
+    /// <param name="state">
+    /// The adjustment the capture was archived carrying. It opens as the layer it was
+    /// rather than as pixels, which is what lets the user take it back off — the point of
+    /// keeping it as numbers at all.
+    /// </param>
     public EditorWindow(
         CapturedFrame frame,
         SettingsStore settings,
-        IReadOnlyList<Annotation>? annotations = null)
+        IReadOnlyList<Annotation>? annotations = null,
+        CaptureEditState? state = null)
     {
         _frame = frame ?? throw new ArgumentNullException(nameof(frame));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _opensWith = annotations;
+        _effects = (state ?? CaptureEditState.None).Effects;
         InitializeComponent();
         // Every string in the XAML is already the English text macshot keys by,
         // so the page is translated in place rather than written twice.
@@ -305,6 +312,11 @@ public sealed partial class EditorWindow : Window
         // background chosen here applies at once — the same as pressing the button.
         AnnotationToolbar.FrameStyleChosen += (_, index) => FrameImage(index);
         AnnotationToolbar.ShowToolbar(true);
+
+        // After the strip exists, so the Adjust button is lit for a capture that was
+        // archived carrying one — without it the popover would open at nought over an
+        // image the editor is already showing adjusted.
+        AnnotationToolbar.LoadEffects(_effects);
 
         // The strips sit at fixed corners of the window here rather than around a
         // selection, so what they are placed against is the window itself — and it is
@@ -1557,7 +1569,7 @@ public sealed partial class EditorWindow : Window
 
             Finished?.Invoke(
                 this,
-                new CaptureCompletion(finished, CaptureOutcome.Deliver, AnnotationCanvas.ToEditable()));
+                new CaptureCompletion(finished, CaptureOutcome.Deliver, Editable));
 
             // What was just delivered is what is written down, so the window is clean and
             // Done goes away. Without this the close would still ask about marks that are
@@ -1614,7 +1626,7 @@ public sealed partial class EditorWindow : Window
 
         Finished?.Invoke(
             this,
-            new CaptureCompletion(finished, CaptureOutcome.Commit, AnnotationCanvas.ToEditable()));
+            new CaptureCompletion(finished, CaptureOutcome.Commit, Editable));
 
         Rebaseline();
     }
@@ -1655,6 +1667,19 @@ public sealed partial class EditorWindow : Window
 
     /// <summary>Everything about this capture the user can have changed.</summary>
     private EditorState Edits => new(_editor.Document.UndoDepth, _imageUndo.Count, _effects);
+
+    /// <summary>
+    /// What this capture can be reopened from: the pixels as the image operations left
+    /// them, the marks, and the adjustment they are being seen through.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="_frame"/> rather than what is on the canvas, because the adjustment is a
+    /// layer here and the field is the image underneath it. Archiving the canvas would
+    /// bake the layer in and then store the numbers that made it beside it, so reopening
+    /// would apply it a second time.
+    /// </remarks>
+    private EditableCapture? Editable =>
+        AnnotationCanvas.ToEditable(_frame, new CaptureEditState(_effects));
 
     /// <summary>Records the capture as written down, and takes Done off the bar.</summary>
     private void Rebaseline()

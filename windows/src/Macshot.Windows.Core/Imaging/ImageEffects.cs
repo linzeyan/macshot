@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Macshot.Windows.Core.Annotations;
 
 namespace Macshot.Windows.Core.Imaging;
@@ -36,6 +37,12 @@ public sealed record ImageEffectsOptions(
     /// nobody opened this popover for, and copying a 4K frame to change nothing is a
     /// visible pause.
     /// </summary>
+    /// <remarks>
+    /// Not written out: <see cref="CaptureEditState"/> archives these options beside a
+    /// capture, and a derived answer in the file is one a hand-edited copy could
+    /// contradict.
+    /// </remarks>
+    [JsonIgnore]
     public bool IsIdentity =>
         Preset == ImageEffectPreset.None && Brightness == 0 && Contrast == 1 && Saturation == 1 && Sharpness == 0;
 

@@ -1592,7 +1592,15 @@ public sealed class CaptureController : IDisposable
             try
             {
                 var annotations = AnnotationFile.Read(await File.ReadAllTextAsync(notes));
-                await ShowEditorAsync(await ImageLoader.LoadAsync(raw), annotations, entry.Path);
+
+                // Absent for the great majority of entries, and absent is the answer for
+                // an unreadable one too — the capture is still worth opening without it.
+                var state = entry.EditPath is { } edit
+                    ? CaptureEditState.Read(await File.ReadAllTextAsync(edit))
+                    : CaptureEditState.None;
+
+                await ShowEditorAsync(
+                    await ImageLoader.LoadAsync(raw), annotations, entry.Path, state);
                 return;
             }
             catch (Exception exception)
@@ -2420,14 +2428,19 @@ public sealed class CaptureController : IDisposable
     /// back over that entry instead of adding a second one: reopening a capture to move an
     /// arrow is editing it, not taking another.
     /// </param>
+    /// <param name="state">
+    /// The adjustment the entry was archived carrying, so it opens as a layer that can be
+    /// taken off rather than as pixels that cannot.
+    /// </param>
     private async Task ShowEditorAsync(
         CapturedFrame frame,
         IReadOnlyList<Annotation>? annotations = null,
-        string? origin = null)
+        string? origin = null,
+        CaptureEditState? state = null)
     {
         _editor?.Close();
 
-        var editor = new EditorWindow(frame, _settings, annotations);
+        var editor = new EditorWindow(frame, _settings, annotations, state);
         editor.PinRequested += (_, pinned) => Post(() => PinAsync(pinned));
 #if !OFFLINE
         editor.UploadRequested += (_, taken) => Post(() => _uploads.UploadAsync(taken));

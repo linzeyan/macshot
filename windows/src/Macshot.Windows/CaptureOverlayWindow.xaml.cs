@@ -2463,17 +2463,36 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </remarks>
     private CapturedFrame PixelsFor(CaptureRegion region)
     {
-        var source = _capturedWindow ?? NativeScreenCaptureService.Crop(_desktopFrame, region);
+        var source = RawPixelsFor(region);
 
-        if (!_effects.IsIdentity)
+        if (_effects.IsIdentity)
         {
-            source = new CapturedFrame(
-                source.VirtualX,
-                source.VirtualY,
-                source.Width,
-                source.Height,
-                ImageEffects.Apply(source.Width, source.Height, source.BgraPixels, _effects));
+            return source;
         }
+
+        return new CapturedFrame(
+            source.VirtualX,
+            source.VirtualY,
+            source.Width,
+            source.Height,
+            ImageEffects.Apply(source.Width, source.Height, source.BgraPixels, _effects));
+    }
+
+    /// <summary>
+    /// The same pixels without the adjustment, which is what an entry is archived from.
+    /// </summary>
+    /// <remarks>
+    /// The turn is in here and the adjustment is not, because that is the difference
+    /// between them: macshot's invert replaces the screenshot it was applied to
+    /// (<c>OverlayView.swift:3752</c>) and there is nothing left to undo, while the
+    /// adjustment is a layer the delivered pixels are taken through and stays a set of
+    /// numbers. It is also why the turn happens first — an inverted capture then
+    /// brightened is what macOS delivers, and reversing the two would make the archived
+    /// pixels reproduce a different picture from the one that was approved.
+    /// </remarks>
+    private CapturedFrame RawPixelsFor(CaptureRegion region)
+    {
+        var source = _capturedWindow ?? NativeScreenCaptureService.Crop(_desktopFrame, region);
 
         if (!_inverted)
         {
@@ -2812,7 +2831,7 @@ public sealed partial class CaptureOverlayWindow : Window
     /// what the window it came from is called. Null when there is nothing to deliver.
     /// </summary>
     /// <remarks>
-    /// The editable pair is withheld from a framed capture. The background a frame puts
+    /// The editable set is withheld from a framed capture. The background a frame puts
     /// around the image is not one of the marks, so the pixels and the marks would
     /// reopen as the picture without it — a different picture from the one that was
     /// approved, and silently so. Archiving nothing for it is the honest answer until
@@ -2820,13 +2839,16 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </remarks>
     private CaptureCompletion? Completed(CaptureOutcome outcome)
     {
-        return Finished() is { } finished
-            ? new CaptureCompletion(
-                finished,
-                outcome,
-                _beautify ? null : AnnotationCanvas.ToEditable(),
-                _capturedWindowTitle)
-            : null;
+        if (Finished() is not { } finished)
+        {
+            return null;
+        }
+
+        var editable = _beautify || _selection is not { } region
+            ? null
+            : AnnotationCanvas.ToEditable(RawPixelsFor(region), new CaptureEditState(_effects));
+
+        return new CaptureCompletion(finished, outcome, editable, _capturedWindowTitle);
     }
 
     /// <summary>

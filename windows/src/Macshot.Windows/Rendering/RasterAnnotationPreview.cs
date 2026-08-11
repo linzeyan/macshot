@@ -89,8 +89,7 @@ public sealed class RasterAnnotationPreview
         (byte[])_pixels.Clone());
 
     /// <summary>
-    /// The same pixels before anything was drawn on them, with the marks alongside in
-    /// that image's own coordinates.
+    /// The marks in the archived image's own coordinates, ready to be put beside it.
     /// </summary>
     /// <remarks>
     /// The shift is the one <see cref="Render"/> does, for the same reason and from the
@@ -99,13 +98,11 @@ public sealed class RasterAnnotationPreview
     /// the two from drifting — a mark archived at desktop coordinates would reopen
     /// somewhere off the edge of the picture.
     /// </remarks>
-    public EditableCapture ToEditable(IEnumerable<Annotation> annotations)
+    public IReadOnlyList<Annotation> Archivable(IEnumerable<Annotation> annotations)
     {
         ArgumentNullException.ThrowIfNull(annotations);
 
-        return new EditableCapture(
-            _baseFrame,
-            [.. annotations.Select(annotation => annotation.Translate(-_region.X, -_region.Y))]);
+        return [.. annotations.Select(annotation => annotation.Translate(-_region.X, -_region.Y))];
     }
 
     /// <summary>
