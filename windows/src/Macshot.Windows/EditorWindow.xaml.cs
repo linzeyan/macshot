@@ -339,6 +339,34 @@ public sealed partial class EditorWindow : Window
     private BeautifyOptions FrameOptions => _beautify.ToOptions(_backdrop);
 
     /// <summary>
+    /// The size of what is on screen: the capture, and the frame around it when it has one.
+    /// </summary>
+    /// <remarks>
+    /// The same arithmetic <see cref="BeautifyRenderer.Backdrop"/> sizes itself by, rather
+    /// than <see cref="ImageHost"/>'s laid-out width — both callers can run before the first
+    /// layout pass has given the host one, and the <c>NaN</c> there opens a framed capture
+    /// at 1:1 in a window too small for it, which is what the frame used to be baked into
+    /// the capture to avoid.
+    /// </remarks>
+    private (int Width, int Height) PresentedSize
+    {
+        get
+        {
+            if (!_beautify.Enabled)
+            {
+                return (_frame.Width, _frame.Height);
+            }
+
+            var framed = BeautifyRenderer.FrameAround(
+                new CaptureRegion(0, 0, _frame.Width, _frame.Height),
+                FrameOptions,
+                _beautify.Scale);
+
+            return ((int)framed.Width, (int)framed.Height);
+        }
+    }
+
+    /// <summary>
     /// Puts the frame around the image, or takes it away, and leaves the drawing surface
     /// inset by however much of it there is.
     /// </summary>
@@ -703,6 +731,7 @@ public sealed partial class EditorWindow : Window
         Seat(_zoomButton, 0, ZoomHost);
 
         ShowSize();
+        ShowZoom();
 
         void Seat(Control button, double leading, Panel? host = null)
         {
@@ -766,7 +795,18 @@ public sealed partial class EditorWindow : Window
     /// <summary>Keeps the reading honest however the zoom was changed — menu or wheel.</summary>
     private void Scroller_ViewChanged(object sender, ScrollViewerViewChangedEventArgs e) => ShowZoom();
 
-    private void ShowZoom() => _zoomButton.Content = $"{Scroller.ZoomFactor * 100:0}% ▾";
+    /// <remarks>
+    /// Silent until the bar exists. The zoom a large capture opens at is chosen during the
+    /// first layout pass, which is before the toolbar this writes into has been built — and
+    /// the bar reads the zoom itself once it is up, so nothing is lost by saying nothing.
+    /// </remarks>
+    private void ShowZoom()
+    {
+        if (_zoomButton is { } button)
+        {
+            button.Content = $"{Scroller.ZoomFactor * 100:0}% ▾";
+        }
+    }
 
     private void ShowSize() => _sizeLabel.Text = $"{_frame.Width} × {_frame.Height}";
 
@@ -816,11 +856,16 @@ public sealed partial class EditorWindow : Window
         var maxWidth = (int)(monitor.WorkArea.Width * MaxWorkAreaShare);
         var maxHeight = (int)(monitor.WorkArea.Height * MaxWorkAreaShare);
 
+        // What is presented rather than what was captured: a frame is a layer around the
+        // capture now, so the two differ, and sizing to the pixels inside opened a framed
+        // capture showing a corner of its own background.
+        //
         // The image is in pixels and so is an AppWindow's size, so no scaling comes into
         // this. The extra height is the title bar and the toolbar, which the image would
         // otherwise open underneath.
-        var width = Math.Clamp(_frame.Width + 48, 640, Math.Max(640, maxWidth));
-        var height = Math.Clamp(_frame.Height + 160, 480, Math.Max(480, maxHeight));
+        var presented = PresentedSize;
+        var width = Math.Clamp(presented.Width + 48, 640, Math.Max(640, maxWidth));
+        var height = Math.Clamp(presented.Height + 160, 480, Math.Max(480, maxHeight));
 
         return new RectInt32(
             (int)(monitor.WorkArea.X + ((monitor.WorkArea.Width - width) / 2)),
@@ -849,7 +894,7 @@ public sealed partial class EditorWindow : Window
 
         _zoomFitted = true;
         var opening = CaptureFit.OpeningZoom(
-            ImageHost.Width,
+            PresentedSize.Width,
             Scroller.ViewportWidth,
             Scroller.MinZoomFactor,
             Scroller.MaxZoomFactor);
