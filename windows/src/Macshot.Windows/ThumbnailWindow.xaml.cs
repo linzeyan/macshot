@@ -3,6 +3,7 @@ using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Services;
 using Macshot.Windows.Toolbar;
+using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -193,6 +194,13 @@ public sealed partial class ThumbnailWindow : Window
 
     private static void Handle(PointerRoutedEventArgs e, Action action)
     {
+        // Left only: the right button is opening the panel's context menu, and saving or
+        // uploading as well would act on the capture behind a menu that has not been read.
+        if (e.GetCurrentPoint(null).Properties.PointerUpdateKind is not PointerUpdateKind.LeftButtonPressed)
+        {
+            return;
+        }
+
         // Handled, or the panel underneath sees the same press as the start of
         // something else.
         e.Handled = true;
@@ -205,6 +213,13 @@ public sealed partial class ThumbnailWindow : Window
     /// </summary>
     private void ThumbnailRoot_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        // Capturing the pointer on a right-click would take it away from the context menu
+        // the same press is opening.
+        if (!e.GetCurrentPoint(ThumbnailRoot).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
         _flickFrom = e.GetCurrentPoint(null).Position.X;
         _flickStart = this.GetAppWindow().Position.X;
         _ = ThumbnailRoot.CapturePointer(e.Pointer);

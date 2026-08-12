@@ -186,6 +186,15 @@ internal sealed partial class ToolbarButton : UserControl
 
     private void Surface_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
+        // The right button opens the menu and must not also work the button: RightTapped
+        // is a gesture built on top of these events rather than instead of them, so
+        // without this a right-click on the microphone opened its device menu and turned
+        // the microphone on underneath it — and a right-click on Save saved.
+        if (!e.GetCurrentPoint(this).Properties.IsLeftButtonPressed)
+        {
+            return;
+        }
+
         _isPressed = true;
         Repaint();
 

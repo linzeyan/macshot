@@ -3,6 +3,7 @@ using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Services;
 using Macshot.Windows.Toolbar;
+using Microsoft.UI.Input;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -199,24 +200,33 @@ public sealed partial class PinWindow : Window
     /// is no other way back to 1:1 once the wheel has been over it, and a pin that no
     /// longer matches the pixels it was cut from is hard to compare against them.
     /// </summary>
-    private void Zoom_PointerPressed(object sender, PointerRoutedEventArgs e)
-    {
-        // Handled, or the press underneath it starts dragging the window.
-        e.Handled = true;
-        Resize(PinPlacement.Restored(CurrentBounds(), _opening));
-    }
+    private void Zoom_PointerPressed(object sender, PointerRoutedEventArgs e) =>
+        Handle(e, () => Resize(PinPlacement.Restored(CurrentBounds(), _opening)));
 
-    private void Edit_PointerPressed(object sender, PointerRoutedEventArgs e)
+    private void Edit_PointerPressed(object sender, PointerRoutedEventArgs e) => Handle(e, () =>
     {
-        e.Handled = true;
         EditRequested?.Invoke(this, _frame);
         Close();
-    }
+    });
 
-    private void Close_PointerPressed(object sender, PointerRoutedEventArgs e)
+    private void Close_PointerPressed(object sender, PointerRoutedEventArgs e) => Handle(e, Close);
+
+    /// <summary>
+    /// Runs one of the pin's own buttons, and only for the left button.
+    /// </summary>
+    /// <remarks>
+    /// The right button is opening the pin's context menu, and closing the window from
+    /// underneath it would take the menu with it. Handled either way, or the press
+    /// underneath starts dragging the window.
+    /// </remarks>
+    private static void Handle(PointerRoutedEventArgs e, Action action)
     {
         e.Handled = true;
-        Close();
+
+        if (e.GetCurrentPoint(null).Properties.PointerUpdateKind is PointerUpdateKind.LeftButtonPressed)
+        {
+            action();
+        }
     }
 
     private CaptureRegion CurrentBounds()
