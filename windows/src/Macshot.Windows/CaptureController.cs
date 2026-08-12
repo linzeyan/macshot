@@ -178,6 +178,14 @@ public sealed class CaptureController : IDisposable
     private PreferencesWindow? _preferences;
 
     /// <summary>
+    /// The panel asking what to do with a finished recording's two sources of sound, while
+    /// it is up. Held for the length of the question: the recording is already on disk and
+    /// waiting on the answer, so quitting has to close the panel rather than leave the
+    /// recording where nothing will deliver it.
+    /// </summary>
+    private AudioMergeWindow? _audioMerge;
+
+    /// <summary>
     /// Held for the length of a countdown, and the only sign one is running: asking
     /// for a second delayed capture while this is set does nothing rather than
     /// stacking two counters on top of each other.
@@ -937,6 +945,7 @@ public sealed class CaptureController : IDisposable
         _editor?.Close();
         _history?.Close();
         _preferences?.Close();
+        _audioMerge?.Close();
         foreach (var pin in _pins.ToArray())
         {
             pin.Close();
@@ -2172,7 +2181,11 @@ public sealed class CaptureController : IDisposable
             // the only thing that says the recording exists.
             hud?.ShowSaved(Path.GetFileName(result.Path));
 
-            await DeliverRecordingAsync(result.Path);
+            // The question about the sound comes between the recording and wherever it is
+            // going, exactly as it does on macOS: the answer can rewrite the file, and an
+            // editor opened on the version about to be replaced would be editing a file
+            // that is no longer there.
+            await DeliverRecordingAsync(await BalancedRecordingAsync(result));
         }
         catch (Exception)
         {
@@ -2256,6 +2269,93 @@ public sealed class CaptureController : IDisposable
         {
             DiagnosticLog.Write($"Could not deliver the recording at '{path}': {exception.Message}");
         }
+    }
+
+    /// <summary>
+    /// Puts the merge panel between a recording and whatever happens to it next, and
+    /// answers where the recording is once the question has been dealt with.
+    /// </summary>
+    /// <remarks>
+    /// Only a recording that carries both sources gets the panel — with one there is
+    /// nothing to balance it against, which is the condition macshot uses
+    /// (<c>AppDelegate.swift:2597</c>). Both other paths return the recording untouched, so
+    /// nothing here can stand between the user and a recording they have just made.
+    /// </remarks>
+    private async Task<string> BalancedRecordingAsync(RecordingResult result)
+    {
+        if (result.AudioTracks is not { } tracks)
+        {
+            return result.Path;
+        }
+
+        try
+        {
+            var answer = await AskAboutAudioAsync();
+
+            if (!answer.Merge || !AudioMerge.Rewrites(answer.MicrophoneVolume, answer.SystemVolume))
+            {
+                // Keep Separate, or a merge at the volumes both sliders start on — which
+                // asks for exactly the mix the recording already holds, and merging costs
+                // a re-encode of the whole thing.
+                return result.Path;
+            }
+
+            DiagnosticLog.Verbose(
+                $"merging the recording's audio: microphone at {answer.MicrophoneVolume:0.00}, "
+                    + $"system at {answer.SystemVolume:0.00}");
+
+            return await AudioMerger.MergeAsync(result.Path, tracks, answer);
+        }
+        catch (Exception exception)
+        {
+            // The recording is on disk and plays; only the balancing failed. Delivering it
+            // as it was recorded beats putting a message box between the user and it.
+            DiagnosticLog.Write($"Could not merge the recording's audio: {exception.Message}");
+            return result.Path;
+        }
+        finally
+        {
+            // However it went. These are minutes of uncompressed audio, and they have no
+            // use once the question has been answered.
+            tracks.Discard();
+        }
+    }
+
+    /// <summary>Raises the panel and waits for whichever answer it is given.</summary>
+    private Task<AudioMergeAnswer> AskAboutAudioAsync()
+    {
+        // Asynchronously, so the answer is not delivered on the dispatcher inside the
+        // panel's own click handler: what continues from here re-encodes a video.
+        var answered = new TaskCompletionSource<AudioMergeAnswer>(
+            TaskCreationOptions.RunContinuationsAsynchronously);
+
+        // On the dispatcher, because a window is being made: a recording stops on
+        // whichever thread the encoder finished on.
+        var enqueued = _dispatcher.TryEnqueue(() =>
+        {
+            var panel = new AudioMergeWindow(_settings, answer => answered.TrySetResult(answer));
+
+            panel.Closed += (_, _) =>
+            {
+                if (ReferenceEquals(_audioMerge, panel))
+                {
+                    _audioMerge = null;
+                }
+            };
+
+            _audioMerge = panel;
+            panel.Ask();
+        });
+
+        if (!enqueued)
+        {
+            // No dispatcher to build a window on — macshot is quitting. The recording is
+            // delivered as it was recorded rather than waiting on a panel that will never
+            // open.
+            answered.TrySetResult(AudioMergeAnswer.KeepSeparate);
+        }
+
+        return answered.Task;
     }
 
     /// <summary>

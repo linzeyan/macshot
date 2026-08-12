@@ -84,6 +84,126 @@ public sealed class AudioMixingTests
 }
 
 [TestClass]
+public sealed class AudioMergeTests
+{
+    [TestMethod]
+    public void Blend_AtUnityIsTheMixTheRecordingAlreadyHolds()
+    {
+        // The panel's two answers have to agree with each other: a recording carries both
+        // sources summed at unity, so merging without moving a slider must produce the
+        // same sound. If this drifts, Merge Audio quietly changes recordings it was told
+        // to leave alone.
+        var into = new byte[4];
+
+        AudioMerge.Blend(Bytes(100, 30000), Bytes(200, 30000), into, 1.0, 1.0);
+
+        CollectionAssert.AreEqual(Bytes(300, short.MaxValue), into);
+    }
+
+    [TestMethod]
+    public void Blend_ClipsTheSumRatherThanEachSource()
+    {
+        // Scaling a source into place and clamping it there before the other is added
+        // would flatten a microphone turned up to 1.5 against the ceiling, so the loud
+        // passages of a merge would come out quieter than the same passages of the mix
+        // already in the file. 30000 x 1.5 is 45000 - past a sample - and the system
+        // audio underneath it brings the sum back inside.
+        var into = new byte[2];
+
+        AudioMerge.Blend(Bytes(30000), Bytes(-20000), into, 1.5, 1.0);
+
+        CollectionAssert.AreEqual(Bytes(25000), into);
+    }
+
+    [TestMethod]
+    public void Blend_TreatsAMissingTailAsSilenceRatherThanEndingTheMerge()
+    {
+        // The two sources are written by the same loop, a sample at a time, so they can
+        // only differ by the last one. Stopping at the shorter would lose the end of a
+        // recording to a rounding at its very end.
+        var into = new byte[4];
+
+        AudioMerge.Blend(Bytes(100, 400), Bytes(200), into, 1.0, 1.0);
+
+        CollectionAssert.AreEqual(Bytes(300, 400), into);
+    }
+
+    [TestMethod]
+    public void Rewrites_IsFalseAtUnityBecauseAMergeReEncodesTheWholeRecording()
+    {
+        // Windows has no muxer that puts a new audio track beside an encoded video one, so
+        // honouring the answer costs a full re-encode. Pressing Merge Audio with both
+        // sliders where they started must not spend minutes producing the file that is
+        // already on disk.
+        Assert.IsFalse(AudioMerge.Rewrites(1.0, 1.0));
+        Assert.IsFalse(AudioMerge.Rewrites(1.001, 0.999), "below what anyone can hear");
+
+        Assert.IsTrue(AudioMerge.Rewrites(1.0, 0.5));
+        Assert.IsTrue(AudioMerge.Rewrites(1.5, 1.0));
+    }
+
+    [TestMethod]
+    public void Clamp_HoldsAVolumeToWhatTheSlidersCanSay()
+    {
+        Assert.AreEqual(AudioMerge.MaximumVolume, AudioMerge.Clamp(4));
+        Assert.AreEqual(AudioMerge.MinimumVolume, AudioMerge.Clamp(-1));
+
+        // A slider that never reported a value leaves the recording as it was, rather than
+        // silencing a source because an unset value multiplied to nothing.
+        Assert.AreEqual(AudioMerge.DefaultVolume, AudioMerge.Clamp(double.NaN));
+    }
+
+    [TestMethod]
+    public void IsOffered_OnlyWhenBothSourcesWereRecorded()
+    {
+        // macshot asks only when the file it made holds two tracks. With one source there
+        // is nothing to balance against, and being asked anyway would be a question with
+        // no wrong answer standing between the user and their recording.
+        Assert.IsTrue(AudioMerge.IsOffered(systemAudio: true, microphone: true));
+        Assert.IsFalse(AudioMerge.IsOffered(systemAudio: true, microphone: false));
+        Assert.IsFalse(AudioMerge.IsOffered(systemAudio: false, microphone: true));
+        Assert.IsFalse(AudioMerge.IsOffered(systemAudio: false, microphone: false));
+    }
+
+    [TestMethod]
+    public void Order_ListsTheMicrophoneFirstAsMacshotsPanelDoes()
+    {
+        CollectionAssert.AreEqual(
+            new[] { AudioTrackKind.Microphone, AudioTrackKind.System },
+            AudioMerge.Order.ToArray());
+    }
+
+    [TestMethod]
+    public void Label_IsMacshotsOwnWordingBecauseThatIsTheTranslationKey()
+    {
+        // Keys are the English strings themselves and macshot's forty translations are
+        // vendored under Strings/upstream. A word changed here is a row that comes out in
+        // English in every one of them.
+        Assert.AreEqual("Microphone:", AudioMerge.Label(AudioTrackKind.Microphone));
+        Assert.AreEqual("System audio:", AudioMerge.Label(AudioTrackKind.System));
+    }
+
+    [TestMethod]
+    public void KeepSeparate_LeavesBothVolumesWhereTheyStarted()
+    {
+        // A panel dismissed by its close button must deliver the recording untouched, not
+        // silently merge it at whatever the sliders happened to be left at.
+        Assert.IsFalse(AudioMergeAnswer.KeepSeparate.Merge);
+        Assert.IsFalse(AudioMerge.Rewrites(
+            AudioMergeAnswer.KeepSeparate.MicrophoneVolume,
+            AudioMergeAnswer.KeepSeparate.SystemVolume));
+    }
+
+    /// <summary>The samples as a track holds them: little-endian pairs.</summary>
+    private static byte[] Bytes(params short[] samples)
+    {
+        var bytes = new byte[samples.Length * 2];
+        AudioMixing.WriteBytes(samples, bytes);
+        return bytes;
+    }
+}
+
+[TestClass]
 public sealed class AudioSampleBufferTests
 {
     [TestMethod]

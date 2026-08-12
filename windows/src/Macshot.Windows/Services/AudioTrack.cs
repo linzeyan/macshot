@@ -52,17 +52,37 @@ internal sealed class AudioTrack : IDisposable
     private readonly AudioSampleBuffer _systemSamples = new();
     private readonly AudioSampleBuffer _microphoneSamples = new();
 
+    /// <summary>
+    /// Each source kept apart as well as mixed, or null when there is only one of them.
+    /// </summary>
+    /// <remarks>
+    /// The merge panel's per-track volumes can only be honoured from these: the track this
+    /// class writes has both summed into it, and a sum cannot be taken apart again.
+    /// </remarks>
+    private readonly AudioSidecar? _sidecar;
+
     private readonly short[] _mixed = new short[AudioPlan.FramesPerSample * AudioPlan.Channels];
     private readonly short[] _source = new short[AudioPlan.FramesPerSample * AudioPlan.Channels];
 
     private long _index;
     private bool _disposed;
 
-    private AudioTrack(AudioEndpoint? system, AudioEndpoint? microphone)
+    private AudioTrack(AudioEndpoint? system, AudioEndpoint? microphone, AudioSidecar? sidecar)
     {
         _system = system;
         _microphone = microphone;
+        _sidecar = sidecar;
     }
+
+    /// <summary>
+    /// The recording's two sources as files of their own, once the track has been closed.
+    /// </summary>
+    /// <remarks>
+    /// Null for a recording with one source, and null when keeping them failed or ran past
+    /// what <see cref="AudioSidecar"/> will hold — in which case the question the panel
+    /// asks has no answer that could be honoured, and it is not asked.
+    /// </remarks>
+    public RecordedAudioTracks? SeparateTracks => _sidecar?.Files;
 
     /// <summary>
     /// Opens the sources asked for, or null when none were asked for or none could be
@@ -87,7 +107,13 @@ internal sealed class AudioTrack : IDisposable
             return null;
         }
 
-        return new AudioTrack(speakers, mic);
+        // Only when the merge panel would be offered at all: keeping the sources apart is
+        // for balancing one against the other, and one source has nothing to be balanced
+        // against.
+        return new AudioTrack(
+            speakers,
+            mic,
+            AudioMerge.IsOffered(speakers is not null, mic is not null) ? AudioSidecar.Open() : null);
     }
 
     public void Start()
@@ -139,6 +165,10 @@ internal sealed class AudioTrack : IDisposable
         _disposed = true;
         _system?.Dispose();
         _microphone?.Dispose();
+
+        // Last: this is what rewrites each file's header with the length it turned out to
+        // be, so the pair only becomes readable here.
+        _sidecar?.Dispose();
     }
 
     private void Drain()
@@ -165,6 +195,12 @@ internal sealed class AudioTrack : IDisposable
             // The microphone endpoint is asked for stereo like the other one, so it
             // arrives already in both channels and is simply added in.
             _microphoneSamples.Take(_source);
+
+            // Before the sum rather than after it: at this point _mixed still holds the
+            // system audio alone, and once the microphone has been added neither source
+            // can be recovered from it.
+            _sidecar?.Write(_source, _mixed);
+
             AudioMixing.MixInto(_mixed, _source);
         }
 
