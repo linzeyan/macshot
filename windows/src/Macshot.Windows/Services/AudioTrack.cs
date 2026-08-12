@@ -73,10 +73,14 @@ internal sealed class AudioTrack : IDisposable
     /// all, which is the right file for a machine with nothing to record from — an
     /// empty audio track would leave the encoder waiting for samples that never come.
     /// </remarks>
-    public static AudioTrack? Open(bool system, bool microphone)
+    /// <param name="microphoneId">
+    /// Which microphone, or empty for the one Windows would open — and also what a
+    /// microphone that has since been unplugged falls back to.
+    /// </param>
+    public static AudioTrack? Open(bool system, bool microphone, string? microphoneId)
     {
-        var speakers = system ? AudioEndpoint.Open(AudioSource.System) : null;
-        var mic = microphone ? AudioEndpoint.Open(AudioSource.Microphone) : null;
+        var speakers = system ? AudioEndpoint.Open(AudioSource.System, null) : null;
+        var mic = microphone ? AudioEndpoint.Open(AudioSource.Microphone, microphoneId) : null;
 
         if (speakers is null && mic is null)
         {

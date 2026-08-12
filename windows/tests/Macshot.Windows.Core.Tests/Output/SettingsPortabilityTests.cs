@@ -44,6 +44,27 @@ public sealed class SettingsPortabilityTests
         Assert.IsTrue(written.ContainsKey("trayIcon"));
     }
 
+    /// <summary>
+    /// A device id names one piece of hardware on one machine. Carried across it either
+    /// resolves to nothing — the silent fallback, which is merely useless — or to whatever
+    /// device happens to hold that id on the machine the file arrived at, which is how a
+    /// recording ends up listening to the wrong microphone.
+    /// </summary>
+    [TestMethod]
+    public void Export_LeavesBehindWhichMicrophoneAndCameraThisMachineHas()
+    {
+        var settings = CaptureSettings.Default with
+        {
+            MicrophoneDeviceId = "{0.0.1.00000000}.{f1b2c3d4-0000-0000-0000-000000000001}",
+            CameraDeviceId = @"\\?\USB#VID_046D&PID_0825&MI_00#6&1a2b3c4d&0&0000",
+        };
+
+        var written = Settings(SettingsPortability.Export(settings, "1.0", ExportedAt));
+
+        Assert.IsFalse(written.ContainsKey("microphoneDeviceId"));
+        Assert.IsFalse(written.ContainsKey("cameraDeviceId"));
+    }
+
     [TestMethod]
     public void Export_CarriesThePreferencesThatAreAboutTheUser()
     {

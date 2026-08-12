@@ -55,21 +55,26 @@ internal sealed class MicrophoneMeter : IDisposable
     public event EventHandler<double>? LevelChanged;
 
     /// <summary>
-    /// Opens the default microphone and starts reading it, or answers null when there is
-    /// nothing to read or no dispatcher to report on.
+    /// Opens a microphone and starts reading it, or answers null when there is nothing to
+    /// read or no dispatcher to report on.
     /// </summary>
+    /// <param name="deviceId">
+    /// The one chosen on the button's own menu, or empty for whichever one Windows would
+    /// open. The meter has to listen to the same device the recording will, or it would be
+    /// a reading of the wrong room.
+    /// </param>
     /// <remarks>
     /// Null rather than an object that never moves, so the caller has nothing to dispose
     /// and the button is simply left at nothing.
     /// </remarks>
-    public static MicrophoneMeter? Start()
+    public static MicrophoneMeter? Start(string? deviceId)
     {
         if (DispatcherQueue.GetForCurrentThread()?.CreateTimer() is not { } timer)
         {
             return null;
         }
 
-        if (AudioEndpoint.Open(AudioSource.Microphone) is not { } endpoint)
+        if (AudioEndpoint.Open(AudioSource.Microphone, deviceId) is not { } endpoint)
         {
             return null;
         }

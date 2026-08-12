@@ -32,7 +32,15 @@ public sealed record RecordingResult(string Path, TimeSpan Duration, int Frames,
 /// Both mix into one track rather than becoming two, for the reason
 /// <see cref="AudioPlan"/> gives at length.
 /// </remarks>
-public readonly record struct RecordingAudio(bool SystemAudio, bool Microphone)
+/// <param name="MicrophoneDeviceId">
+/// Which microphone, or null for the one Windows would open. Carried here rather than
+/// read from the settings where the endpoint is opened, so that what a recording listens
+/// to is settled at the moment it is asked for — the same moment the switches are.
+/// </param>
+public readonly record struct RecordingAudio(
+    bool SystemAudio,
+    bool Microphone,
+    string? MicrophoneDeviceId = null)
 {
     /// <summary>Whether anything at all was asked for.</summary>
     public bool IsSilent => !SystemAudio && !Microphone;
@@ -238,7 +246,9 @@ public sealed class ScreenRecorder : IDisposable
 
         // Null when nothing was asked for, and also when nothing could be opened — a
         // machine with no microphone records without one rather than not at all.
-        using var track = audio.IsSilent ? null : AudioTrack.Open(audio.SystemAudio, audio.Microphone);
+        using var track = audio.IsSilent
+            ? null
+            : AudioTrack.Open(audio.SystemAudio, audio.Microphone, audio.MicrophoneDeviceId);
 
         var source = BuildSource(sourceWidth, sourceHeight, track is not null);
         source.Starting += (_, args) =>

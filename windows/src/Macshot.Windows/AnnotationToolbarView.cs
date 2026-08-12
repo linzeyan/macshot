@@ -1361,14 +1361,23 @@ public sealed partial class AnnotationToolbarView : UserControl
 
     /// <summary>
     /// The menu behind a button that does something to the capture rather than draw on
-    /// it. Three have one: Save holds the way of saving that is not the default, Beautify
-    /// its backgrounds, Upload its confirmation. macshot's own arrangement — one press
-    /// for the usual answer, the menu for the other one.
+    /// it. Five have one: Save holds the way of saving that is not the default, Beautify
+    /// its backgrounds, Upload its confirmation, and the two recording switches that open
+    /// a device hold which device that is. macshot's own arrangement — one press for the
+    /// usual answer, the menu for the other one.
     /// </summary>
     private void ShowActionMenu(FrameworkElement anchor, ToolbarItem item)
     {
         switch (item.Command)
         {
+        case ToolbarCommand.MicAudio:
+            ShowMicrophoneMenu(anchor);
+            break;
+
+        case ToolbarCommand.Webcam:
+            ShowCameraMenu(anchor);
+            break;
+
         case ToolbarCommand.Save:
             var menu = new MenuFlyout();
             var saveAs = new MenuFlyoutItem { Text = L("Save As...") };
@@ -1402,6 +1411,130 @@ public sealed partial class AnnotationToolbarView : UserControl
         default:
             break;
         }
+    }
+
+    /// <summary>
+    /// Which microphone a recording listens to, on the switch that turns it on.
+    /// </summary>
+    /// <remarks>
+    /// macshot's mic menu (<c>OverlayView.swift:7617</c>), reached the same way: a
+    /// right-click on the button rather than a control of its own, because the choice is
+    /// made once and the switch is what people press. Picking a device also turns the
+    /// switch on, as macshot's does — nobody opens this menu to leave the microphone off.
+    /// </remarks>
+    private void ShowMicrophoneMenu(FrameworkElement anchor)
+    {
+        if (_settings is not { } settings)
+        {
+            return;
+        }
+
+        ShowDeviceMenu(
+            anchor,
+            AudioEndpoint.Microphones(),
+            AudioEndpoint.DefaultMicrophoneId(),
+            settings.Current.RecordMicAudio,
+            settings.Current.MicrophoneDeviceId,
+            () => SwitchRecordingDevice(
+                ToolbarCommand.MicAudio,
+                current => current with { RecordMicAudio = false }),
+            id => SwitchRecordingDevice(
+                ToolbarCommand.MicAudio,
+                current => current with { MicrophoneDeviceId = id, RecordMicAudio = true }));
+    }
+
+    /// <summary>
+    /// Which camera goes in the corner of a recording, on the switch that turns it on.
+    /// macshot's webcam menu (<c>OverlayView.swift:7833</c>).
+    /// </summary>
+    /// <remarks>
+    /// Async, and so raised a moment after the click, because listing the cameras means
+    /// asking the media stack: there is no synchronous way to enumerate them, and one that
+    /// blocked the toolbar's own thread would freeze the overlay behind it. The menu is
+    /// abandoned rather than shown if the overlay went away meanwhile — a flyout has to
+    /// hang off an element that is still on a screen.
+    /// </remarks>
+    private async void ShowCameraMenu(FrameworkElement anchor)
+    {
+        if (_settings is not { } settings)
+        {
+            return;
+        }
+
+        var available = await CameraDevices.ListAsync();
+        if (anchor.XamlRoot is null)
+        {
+            return;
+        }
+
+        ShowDeviceMenu(
+            anchor,
+            available,
+
+            // Whichever the machine lists first, which is the one WebcamWindow opens when
+            // nothing has been chosen. Windows names no default camera the way it names a
+            // default microphone.
+            available.FirstOrDefault()?.Id,
+            settings.Current.RecordWebcam,
+            settings.Current.CameraDeviceId,
+            () => SwitchRecordingDevice(
+                ToolbarCommand.Webcam,
+                current => current with { RecordWebcam = false }),
+            id => SwitchRecordingDevice(
+                ToolbarCommand.Webcam,
+                current => current with { CameraDeviceId = id, RecordWebcam = true }));
+    }
+
+    /// <summary>
+    /// The menu both device switches raise: None, a separator, then every device of that
+    /// kind with a tick on the one a recording started now would use.
+    /// </summary>
+    /// <remarks>
+    /// macshot's shape for both (<c>OverlayView.swift:7620</c>, <c>:7836</c>). None is
+    /// first and turns the switch off rather than naming a device; it does not forget which
+    /// device was chosen, because turning the microphone off is not the same as changing
+    /// your mind about which one it is.
+    /// </remarks>
+    private void ShowDeviceMenu(
+        FrameworkElement anchor,
+        IReadOnlyList<RecordingDevice> available,
+        string? systemDefaultId,
+        bool on,
+        string? rememberedId,
+        Action turnOff,
+        Action<string> choose)
+    {
+        var menu = new MenuFlyout();
+
+        // Built here rather than in XAML, so it goes through L itself: the page-wide pass
+        // ran long before this list was known.
+        var none = new ToggleMenuFlyoutItem { Text = L("None"), IsChecked = !on };
+        none.Click += (_, _) => turnOff();
+        menu.Items.Add(none);
+        menu.Items.Add(new MenuFlyoutSeparator());
+
+        foreach (var row in RecordingDevices.Menu(available, rememberedId, systemDefaultId, on))
+        {
+            // Not through L: a device's name is what the hardware calls itself, and no
+            // translation file has "Headset (WH-1000XM4)" in it.
+            var item = new ToggleMenuFlyoutItem { Text = row.Device.Name, IsChecked = row.IsChosen };
+            var id = row.Device.Id;
+            item.Click += (_, _) => choose(id);
+            menu.Items.Add(item);
+        }
+
+        menu.ShowAt(anchor);
+    }
+
+    /// <summary>
+    /// Writes what the device menu chose and tells the host, which is what opens or closes
+    /// the device to match — the meter and the camera bubble outlive a strip rebuild and
+    /// this control does not.
+    /// </summary>
+    private void SwitchRecordingDevice(ToolbarCommand command, Func<CaptureSettings, CaptureSettings> change)
+    {
+        Toggle(change);
+        CommandInvoked?.Invoke(this, command);
     }
 
     /// <summary>

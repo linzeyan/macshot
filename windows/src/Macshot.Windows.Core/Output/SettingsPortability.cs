@@ -81,6 +81,13 @@ public static class SettingsPortability
         "lastSelection",
         "lastSelectionDisplay",
 
+        // Which microphone and which camera a recording uses. An id names one piece of
+        // hardware on one machine, so carrying it would either resolve to nothing — the
+        // silent fallback, which is at least harmless — or, worse, to whatever device
+        // happened to be given that id on the machine it arrived at.
+        "microphoneDeviceId",
+        "cameraDeviceId",
+
         // The user's own notification-area icon. A path again, and one whose file is
         // theirs rather than macshot's — so it is the least likely of all of these to
         // exist on the machine the settings are being carried to.

@@ -329,6 +329,17 @@ public sealed partial class CaptureOverlayWindow : Window
     private MicrophoneMeter? _micMeter;
 
     /// <summary>
+    /// Which microphone that meter was opened on, and which camera the bubble was opened
+    /// on. Held so that choosing another one from a button's menu reopens the device
+    /// rather than leaving the one already running: both of these are switched on by a
+    /// setting the toolbar writes, and a running device says nothing about which setting
+    /// it came from.
+    /// </summary>
+    private string? _micMeterDevice;
+
+    private string? _webcamDevice;
+
+    /// <summary>
     /// Where the region was when the move button was pressed. Non-null for as long as the
     /// region is following the pointer.
     /// </summary>
@@ -2994,12 +3005,22 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
 
+        var device = _settings.Current.MicrophoneDeviceId;
+
+        // A different microphone chosen on the button's menu closes the one already open:
+        // the meter is a reading of the device that would be recorded, so leaving the old
+        // one running would answer for the wrong microphone.
         if (_micMeter is not null)
         {
-            return;
+            if (string.Equals(_micMeterDevice, device, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            HideMicMeter();
         }
 
-        if (MicrophoneMeter.Start() is not { } meter)
+        if (MicrophoneMeter.Start(device) is not { } meter)
         {
             DiagnosticLog.Write("No microphone would open for the level meter, so it stays at nothing.");
             return;
@@ -3007,6 +3028,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         meter.LevelChanged += (_, level) => AnnotationToolbar.ShowMicLevel(level);
         _micMeter = meter;
+        _micMeterDevice = device;
     }
 
     /// <summary>
@@ -3025,6 +3047,7 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         _micMeter = null;
+        _micMeterDevice = null;
         meter.Dispose();
     }
 
@@ -3046,9 +3069,17 @@ public sealed partial class CaptureOverlayWindow : Window
             return;
         }
 
+        // A different camera chosen on the button's menu takes the bubble down and opens
+        // the new one, rather than leaving the old camera showing under a menu that now
+        // ticks another.
         if (_webcam is not null)
         {
-            return;
+            if (string.Equals(_webcamDevice, _settings.Current.CameraDeviceId, StringComparison.Ordinal))
+            {
+                return;
+            }
+
+            HideWebcamPreview();
         }
 
         _ = OpenWebcamPreviewAsync(region);
@@ -3060,12 +3091,14 @@ public sealed partial class CaptureOverlayWindow : Window
         _webcam = bubble;
 
         var settings = _settings.Current;
+        _webcamDevice = settings.CameraDeviceId;
         var started = await bubble.ShowInAsync(
             _layout.FrameToVirtual(region),
             settings.WebcamCorner,
             settings.WebcamSize,
             settings.WebcamShape,
-            _monitor.Scale);
+            _monitor.Scale,
+            settings.CameraDeviceId);
 
         // Closed rather than left as a black circle over the region. The switch stays on:
         // it is a preference about recordings, and this is one machine's camera failing
@@ -3090,6 +3123,7 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         _webcam = null;
+        _webcamDevice = null;
         _ = bubble.StopAsync();
     }
 

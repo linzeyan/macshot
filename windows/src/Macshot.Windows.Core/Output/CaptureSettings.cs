@@ -232,6 +232,18 @@ public sealed record CaptureSettings
     /// </remarks>
     public bool RecordWebcam { get; init; }
 
+    /// <summary>
+    /// Which camera the bubble shows, or empty for whichever one the machine offers
+    /// first. macshot's <c>selectedCameraDeviceUID</c>.
+    /// </summary>
+    /// <remarks>
+    /// Empty rather than filled in with the current camera the first time one is used: a
+    /// remembered id is a decision, and a machine that has only ever had one camera has
+    /// not made one. Filling it in would pin a laptop to its built-in camera the day a
+    /// better one was plugged in.
+    /// </remarks>
+    public string CameraDeviceId { get; init; } = string.Empty;
+
     /// <summary>Which corner of the recorded region the camera sits in.</summary>
     public WebcamCorner WebcamCorner { get; init; } = WebcamCorner.BottomRight;
 
@@ -445,6 +457,17 @@ public sealed record CaptureSettings
     /// off by default for the same reason.
     /// </summary>
     public bool RecordMicAudio { get; init; }
+
+    /// <summary>
+    /// Which microphone a recording listens to, or empty for the one Windows would open.
+    /// macshot's <c>selectedMicDeviceUID</c>.
+    /// </summary>
+    /// <remarks>
+    /// Empty for the default rather than the default endpoint's own id, so that someone
+    /// who never opened the menu keeps following whatever Windows' own sound settings say
+    /// — including after they change it there.
+    /// </remarks>
+    public string MicrophoneDeviceId { get; init; } = string.Empty;
 
     /// <summary>
     /// The drawing style the toolbar was last left on, as <c>#AARRGGBB</c>. This is
@@ -1573,6 +1596,11 @@ public sealed record CaptureSettings
             RecordingFilenameTemplate = string.IsNullOrWhiteSpace(RecordingFilenameTemplate)
                 ? Output.FilenameTemplate.DefaultRecording
                 : RecordingFilenameTemplate.Trim(),
+            // Trimmed because an id is compared for equality against what the machine
+            // reports: a stray space from a hand-edited file would read as a device that
+            // is no longer there, and silently record from the default one instead.
+            MicrophoneDeviceId = MicrophoneDeviceId.Trim(),
+            CameraDeviceId = CameraDeviceId.Trim(),
             ThumbnailSeconds = Math.Clamp(ThumbnailSeconds, MinThumbnailSeconds, MaxThumbnailSeconds),
             ThumbnailScale = ThumbnailPlacement.SanePreviewScale(ThumbnailScale),
             RecordingFrameRate = Math.Clamp(
