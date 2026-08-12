@@ -380,6 +380,31 @@ public sealed class BeautifyRendererTests
     }
 
     /// <summary>
+    /// A capture of a window is never given a second title bar.
+    /// </summary>
+    /// <remarks>
+    /// Those pixels arrive with the window's own chrome and its own rounded corners in
+    /// them. The capture overlay hides the W/R segments for such a region and the editor
+    /// has no segments at all, so neither control is what prevents the wrong frame — this
+    /// is, and it is one rule rather than a copy in each window because the second copy is
+    /// the one that would be forgotten.
+    /// </remarks>
+    [TestMethod]
+    public void ForWindowSnap_DrawsNoChromeOverChromeThatIsAlreadyInThePixels()
+    {
+        var asked = new BeautifyOptions(Mode: BeautifyMode.Window, CornerRadius: 24);
+        var snapped = asked.ForWindowSnap();
+
+        Assert.AreEqual(BeautifyMode.Rounded, snapped.Mode);
+        Assert.AreEqual(BeautifyOptions.ShellWindowCorner, snapped.CornerRadius);
+        Assert.AreEqual(0, BeautifyRenderer.TitleBarFor(snapped));
+
+        // And nothing else moves: the background, the padding and the shadow are still the
+        // ones the user chose.
+        Assert.AreEqual(asked with { Mode = snapped.Mode, CornerRadius = snapped.CornerRadius }, snapped);
+    }
+
+    /// <summary>
     /// A frame asked for on a big capture is the same frame on a small one.
     /// </summary>
     /// <remarks>

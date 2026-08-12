@@ -2562,36 +2562,17 @@ public sealed partial class CaptureOverlayWindow : Window
     /// How this region is framed: the settings, with the card the region can actually take.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// A snapped window already carries a real title bar in its pixels, so window mode
-    /// would draw a second one above the first. macshot renders that region through a
-    /// separate path that lays down no synthetic chrome at all
-    /// (<c>BeautifyRenderer.swift:480-492</c>) and takes the W/R segments off the row;
-    /// forcing the mode here is the same picture, and it is what the hidden segments have
-    /// to mean — a control that is not there cannot be the only thing preventing the wrong
-    /// frame.
-    /// </para>
-    /// <para>
-    /// The corner goes the same way and for the same reason: those pixels arrive already
-    /// rounded to the shell's own radius, so the card has to be cut to match or the frame
-    /// shows a sliver of gradient inside each corner. macshot uses 10 there
-    /// (<c>OverlayView.swift:3018</c>), which is macOS's window corner; Windows 11 rounds
-    /// its own at 8.
-    /// </para>
+    /// <see cref="BeautifyOptions.ForWindowSnap"/> is what a region that came from clicking
+    /// a window gets instead, and says why.
     /// </remarks>
     private BeautifyOptions FrameOptions
     {
         get
         {
             var options = _settings.Current.ToBeautifyOptions(BeautifyBackgroundStore.Current);
-            return _capturedWindowTitle is null
-                ? options
-                : options with { Mode = BeautifyMode.Rounded, CornerRadius = ShellWindowCorner };
+            return _capturedWindowTitle is null ? options : options.ForWindowSnap();
         }
     }
-
-    /// <summary>What Windows 11 rounds a top-level window's corners to, in points.</summary>
-    private const double ShellWindowCorner = 8;
 
     private void FrameOptionsChanged()
     {
@@ -2831,11 +2812,11 @@ public sealed partial class CaptureOverlayWindow : Window
     /// what the window it came from is called. Null when there is nothing to deliver.
     /// </summary>
     /// <remarks>
-    /// The editable set is withheld from a framed capture. The background a frame puts
-    /// around the image is not one of the marks, so the pixels and the marks would
-    /// reopen as the picture without it — a different picture from the one that was
-    /// approved, and silently so. Archiving nothing for it is the honest answer until
-    /// the frame is something the editor can be handed back.
+    /// A framed capture is archived like any other, because the frame goes into the state
+    /// beside the pixels rather than into the pixels. The set has to reproduce what was
+    /// approved exactly, and a frame recorded as numbers does: the editor renders it from
+    /// the same options this delivery did, down to the scale that turned its points into
+    /// pixels.
     /// </remarks>
     private CaptureCompletion? Completed(CaptureOutcome outcome)
     {
@@ -2844,12 +2825,29 @@ public sealed partial class CaptureOverlayWindow : Window
             return null;
         }
 
-        var editable = _beautify || _selection is not { } region
+        var editable = _selection is not { } region
             ? null
-            : AnnotationCanvas.ToEditable(RawPixelsFor(region), new CaptureEditState(_effects));
+            : AnnotationCanvas.ToEditable(RawPixelsFor(region), EditState());
 
         return new CaptureCompletion(finished, outcome, editable, _capturedWindowTitle);
     }
+
+    /// <summary>
+    /// Everything this capture is carrying that is not a mark and not a pixel: the
+    /// adjustment, and the frame it is about to be delivered inside.
+    /// </summary>
+    /// <remarks>
+    /// <see cref="FrameOptions"/> rather than the settings, so what is written down is the
+    /// frame that was drawn and not the frame that was asked for — the two differ for a
+    /// snapped window, whose card this forces to rounded corners of the shell's own radius.
+    /// </remarks>
+    private CaptureEditState EditState() => new(
+        _effects,
+        BeautifyState.Of(
+            FrameOptions with { Enabled = _beautify },
+            isWindowSnap: _capturedWindowTitle is not null,
+            scale: _monitor.Scale,
+            background: BeautifyBackgroundStore.CurrentBytes));
 
     /// <summary>
     /// Asks for the window behind the region to be scrolled and the region stitched.
@@ -3446,10 +3444,10 @@ public sealed partial class CaptureOverlayWindow : Window
     /// or shown, and the overlay comes down behind it.
     /// </para>
     /// <para>
-    /// No editable pair goes with it, for the reason <see cref="Completed"/> already
-    /// withholds one from a framed capture: the marks and the original pixels would
-    /// reopen as the picture with its background back, which is not the picture that was
-    /// approved.
+    /// No editable pair goes with it, which is the one delivery here that archives nothing:
+    /// the marks and the original pixels would reopen as the picture with its background
+    /// back, and there is nothing to write down that would say it had been lifted out. A
+    /// frame can be kept as numbers; a cut-out cannot.
     /// </para>
     /// </remarks>
     private async Task RemoveBackgroundAsync()

@@ -45,8 +45,52 @@ internal static class BeautifyBackgroundStore
     /// </remarks>
     public static BeautifyBackdrop? Current { get; private set; }
 
+    /// <summary>
+    /// The same picture undecoded, for archiving beside a capture that was framed on it.
+    /// </summary>
+    /// <remarks>
+    /// The file's own bytes rather than the decoded pixels re-encoded: what goes into a
+    /// capture's sidecar is what the user chose, and re-encoding a screen-sized picture per
+    /// capture would cost more than reading it did. Held beside <see cref="Current"/> so
+    /// the two cannot disagree about which picture is in use.
+    /// </remarks>
+    public static byte[]? CurrentBytes { get; private set; }
+
     /// <summary>Reads the stored picture into <see cref="Current"/>.</summary>
-    public static async Task RefreshAsync() => Current = await LoadAsync();
+    public static async Task RefreshAsync()
+    {
+        var bytes = await ReadAsync();
+
+        CurrentBytes = bytes;
+        Current = bytes is null ? null : await DecodeAsync(bytes);
+    }
+
+    /// <summary>
+    /// One picture's bytes as pixels the renderer can sample, or null when they are not an
+    /// image any more.
+    /// </summary>
+    /// <remarks>
+    /// Used for the copy archived with a capture as well as for the current one: a capture
+    /// framed on a picture carries that picture's bytes, because the one on disk here is
+    /// whichever the user last chose and may no longer be the one the capture was delivered
+    /// on.
+    /// </remarks>
+    public static async Task<BeautifyBackdrop?> DecodeAsync(byte[] bytes)
+    {
+        ArgumentNullException.ThrowIfNull(bytes);
+
+        try
+        {
+            using var memory = new MemoryStream(bytes, writable: false);
+            var frame = await ImageLoader.LoadAsync(memory.AsRandomAccessStream());
+            return new BeautifyBackdrop(frame.Width, frame.Height, frame.BgraPixels);
+        }
+        catch (Exception exception)
+        {
+            DiagnosticLog.Write($"The beautify background could not be read: {exception.Message}");
+            return null;
+        }
+    }
 
     /// <summary>Takes a copy of <paramref name="sourcePath"/> as the background.</summary>
     public static void Keep(string sourcePath)
@@ -63,14 +107,14 @@ internal static class BeautifyBackgroundStore
     }
 
     /// <summary>
-    /// The stored picture, or null when there is none or it can no longer be read.
+    /// The stored file, or null when there is none or it can no longer be read.
     /// </summary>
     /// <remarks>
     /// Null rather than a throw for an unreadable file: the caller's answer either way is
     /// to draw a gradient, and a frame that quietly falls back is better than a capture
     /// that cannot be taken because of a background nobody is looking at.
     /// </remarks>
-    public static async Task<BeautifyBackdrop?> LoadAsync()
+    private static async Task<byte[]?> ReadAsync()
     {
         if (!Exists)
         {
@@ -79,8 +123,7 @@ internal static class BeautifyBackgroundStore
 
         try
         {
-            var frame = await ImageLoader.LoadAsync(Path);
-            return new BeautifyBackdrop(frame.Width, frame.Height, frame.BgraPixels);
+            return await File.ReadAllBytesAsync(Path);
         }
         catch (Exception exception)
         {

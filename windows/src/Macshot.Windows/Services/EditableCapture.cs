@@ -5,7 +5,7 @@ namespace Macshot.Windows.Services;
 
 /// <summary>
 /// A finished capture taken apart again: the pixels the marks were drawn on, the marks,
-/// and the adjustment they were seen through.
+/// and the state they were seen through — the adjustment, and the frame around them.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -15,9 +15,9 @@ namespace Macshot.Windows.Services;
 /// reopening a capture is for.
 /// </para>
 /// <para>
-/// <see cref="Raw"/> is the pixels before the adjustment rather than after it, which is
-/// the difference between an adjustment that can be taken back off and one that has
-/// become the capture. <see cref="State"/> says what was applied, so rasterizing
+/// <see cref="Raw"/> is the pixels before the adjustment and before the frame rather than
+/// after them, which is the difference between a layer that can be taken back off and one
+/// that has become the capture. <see cref="State"/> says what was applied, so rasterizing
 /// <see cref="Annotations"/> onto <see cref="Raw"/> seen through it reproduces the
 /// delivered image exactly rather than approximately — and it is why a capture the three
 /// cannot reproduce is handed over as null instead, rather than as a set that would

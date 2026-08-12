@@ -170,7 +170,43 @@ public sealed record BeautifyOptions(
     /// <summary>The far end of the shadow slider, in points.</summary>
     public const double MaximumShadowRadius = 100;
 
+    /// <summary>
+    /// What Windows 11 rounds a top-level window's corners to, in points.
+    /// </summary>
+    public const double ShellWindowCorner = 8;
+
     public static BeautifyOptions Default { get; } = new();
+
+    /// <summary>
+    /// The same frame around a capture of a window rather than of a region.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Those pixels arrive with the window's own chrome in them, so window mode would draw
+    /// a second title bar above the first. macshot renders that region through a separate
+    /// path that lays down no synthetic chrome at all
+    /// (<c>BeautifyRenderer.swift:480-492</c>) and takes the W/R segments off its options
+    /// row; forcing the mode here is the same picture, and it is what those hidden segments
+    /// have to mean — a control that is not there cannot be the only thing preventing the
+    /// wrong frame.
+    /// </para>
+    /// <para>
+    /// The corner goes the same way and for the same reason: those pixels arrive already
+    /// rounded to the shell's own radius, so the card has to be cut to match or the frame
+    /// shows a sliver of background inside each corner. macshot uses 10 there
+    /// (<c>OverlayView.swift:3018</c>), which is macOS's window corner.
+    /// </para>
+    /// <para>
+    /// Here rather than at the overlay that first needed it, because the editor needs the
+    /// same answer for a window capture reopened from the history — and two copies of this
+    /// rule would be one rule and one capture framed wrongly.
+    /// </para>
+    /// </remarks>
+    public BeautifyOptions ForWindowSnap() => this with
+    {
+        Mode = BeautifyMode.Rounded,
+        CornerRadius = ShellWindowCorner,
+    };
 
     /// <summary>
     /// Clamps every field into the range the renderer can honour, so a hand-edited
@@ -379,13 +415,18 @@ public static class BeautifyRenderer
     /// </para>
     /// </remarks>
     public static int PaddingFor(BeautifyOptions? options = null, double scale = 1) =>
-        (int)Math.Round((options ?? BeautifyOptions.Default).Normalized().Padding * Sane(scale));
+        (int)Math.Round((options ?? BeautifyOptions.Default).Normalized().Padding * SaneScale(scale));
 
     /// <summary>
     /// A usable pixels-per-point, so a display that has not reported one yet cannot make
     /// the frame vanish or grow without bound.
     /// </summary>
-    private static double Sane(double scale) =>
+    /// <remarks>
+    /// Public because <see cref="BeautifyState"/> archives a scale beside the capture it
+    /// framed, and the band a hand-edited sidecar is held to has to be the one the renderer
+    /// would have applied anyway rather than a second opinion about it.
+    /// </remarks>
+    public static double SaneScale(double scale) =>
         double.IsFinite(scale) && scale > 0 ? Math.Clamp(scale, 0.25, 8) : 1;
 
     /// <summary>
@@ -401,7 +442,7 @@ public static class BeautifyRenderer
     {
         var resolved = (options ?? BeautifyOptions.Default).Normalized();
         return resolved.Mode == BeautifyMode.Window
-            ? (int)Math.Round(BeautifyOptions.TitleBarHeight * Sane(scale))
+            ? (int)Math.Round(BeautifyOptions.TitleBarHeight * SaneScale(scale))
             : 0;
     }
 
@@ -534,7 +575,7 @@ public static class BeautifyRenderer
 
         // All three are points, and all three become pixels the same way: a corner drawn
         // at half the padding's scale would not follow the frame it is cut into.
-        var pixelsPerPoint = Sane(scale);
+        var pixelsPerPoint = SaneScale(scale);
         var padding = PaddingFor(resolved, scale);
         var radius = resolved.CornerRadius * pixelsPerPoint;
         var shadow = resolved.ShadowRadius * pixelsPerPoint;
