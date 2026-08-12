@@ -60,34 +60,57 @@
             SizeChanged="Scroller_SizeChanged"
             ViewChanged="Scroller_ViewChanged">
 
-            <!-- Sized to the image in pixels, so one layout unit is one pixel and the
-                 placement between marks and pixels is the identity. -->
+            <!-- Sized to what is on show, which is the image and the frame around it when
+                 there is one. Both are set from Present in pixels. -->
             <Grid x:Name="ImageHost">
-                <!-- Below the drawing surface, the way the overlay's selection canvas is:
-                     the surface's own layers are not hit testable, so pointer input falls
-                     through to here, and the text tool's box above it still gets clicks. -->
-                <local:PointerCanvas
-                    x:Name="InputCanvas"
-                    Background="Transparent"
-                    PointerPressed="InputCanvas_PointerPressed"
-                    PointerMoved="InputCanvas_PointerMoved"
-                    PointerReleased="InputCanvas_PointerReleased" />
+                <!-- The frame's background and shadow, with the capture's own area left
+                     clear — the same picture the export lays down, drawn around the image
+                     rather than into it, exactly as the capture overlay shows it. Behind
+                     everything and never hit testable: a mark cannot be drawn on the
+                     background, because the background is not part of the capture the marks
+                     are archived against. -->
+                <Image
+                    x:Name="FrameBackdrop"
+                    Stretch="Fill"
+                    IsHitTestVisible="False"
+                    Visibility="Collapsed" />
+
+                <!-- The capture itself, inset by however much frame is around it. Sized and
+                     placed from code rather than stretched, so the drawing surface's own
+                     origin stays the image's top-left corner whether or not there is a
+                     frame — which is what keeps a mark's coordinates the pixels it was
+                     drawn on. -->
+                <Grid
+                    x:Name="ImageSurface"
+                    HorizontalAlignment="Left"
+                    VerticalAlignment="Top">
+                    <!-- Below the drawing surface, the way the overlay's selection canvas
+                         is: the surface's own layers are not hit testable, so pointer input
+                         falls through to here, and the text tool's box above it still gets
+                         clicks. -->
+                    <local:PointerCanvas
+                        x:Name="InputCanvas"
+                        Background="Transparent"
+                        PointerPressed="InputCanvas_PointerPressed"
+                        PointerMoved="InputCanvas_PointerMoved"
+                        PointerReleased="InputCanvas_PointerReleased" />
 
 
-                <local:AnnotationCanvasView x:Name="AnnotationCanvas" />
+                    <local:AnnotationCanvasView x:Name="AnnotationCanvas" />
 
-                <!-- The crop rectangle being dragged out. Above the image, never hit
-                     testable: the drag is tracked on the input canvas below. A Canvas
-                     rather than a bare Rectangle because Canvas.Left and Canvas.Top are
-                     what position it, and they mean nothing to a Grid. -->
-                <Canvas IsHitTestVisible="False">
-                    <Rectangle
-                        x:Name="CropRectangle"
-                        Visibility="Collapsed"
-                        Stroke="#4CC2FF"
-                        StrokeThickness="2"
-                        Fill="#334CC2FF" />
-                </Canvas>
+                    <!-- The crop rectangle being dragged out. Above the image, never hit
+                         testable: the drag is tracked on the input canvas below. A Canvas
+                         rather than a bare Rectangle because Canvas.Left and Canvas.Top are
+                         what position it, and they mean nothing to a Grid. -->
+                    <Canvas IsHitTestVisible="False">
+                        <Rectangle
+                            x:Name="CropRectangle"
+                            Visibility="Collapsed"
+                            Stroke="#4CC2FF"
+                            StrokeThickness="2"
+                            Fill="#334CC2FF" />
+                    </Canvas>
+                </Grid>
             </Grid>
         </ScrollViewer>
 

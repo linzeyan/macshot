@@ -691,9 +691,9 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// Whether the capture is set to be framed, which lights the Beautify button.
     /// </summary>
     /// <remarks>
-    /// The toolbar shows it rather than decides it: what beautifying means differs
-    /// between a live capture, where it is a thing the delivered image will have done to
-    /// it, and the editor, where it is done to the pixels the moment it is asked for.
+    /// The toolbar shows it rather than decides it: the frame is a layer over the capture
+    /// in both windows, and which of them is holding it — the settings during a capture,
+    /// the capture's own state in the editor — is not this control's business.
     /// </remarks>
     public bool Beautified
     {
@@ -1171,9 +1171,9 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// Beautify is the one that owes anything: it opens the frame's settings on the options
     /// row rather than toggling the frame, because macshot's arms the frame on the first
     /// press of a session and never takes it off again (<c>OverlayView.swift:8031-8044</c>),
-    /// leaving that to the On switch on the row it opens. The editor has no such row —
-    /// there the frame is burned into the pixels the moment it is asked for — so there the
-    /// press goes straight out.
+    /// leaving that to the On switch on the row it opens. The editor has no such row, so
+    /// there the press goes straight out and that window makes it a toggle — the button
+    /// that armed the frame has to be the one that takes it off again.
     ///
     /// Here rather than in the button's own branch because the same command arrives from
     /// the keyboard as well, and a shortcut that armed the frame without showing its

@@ -10,7 +10,7 @@ namespace Macshot.Windows.Core.Tests.Annotations;
 [TestClass]
 public sealed class EditorStateTests
 {
-    private static EditorState Saved => new(3, 1, ImageEffectsOptions.Default);
+    private static EditorState Saved => new(3, 1, ImageEffectsOptions.Default, BeautifyState.Default);
 
     [TestMethod]
     public void AWindowNobodyTouchedClosesWithoutAsking()
@@ -19,7 +19,7 @@ public sealed class EditorStateTests
         // round-tripped floats, so a capture with nothing done to it asked "Save changes?"
         // on the way out. A prompt that appears when there is nothing to save is one people
         // learn to dismiss without reading, which is how a real edit gets thrown away.
-        var again = new EditorState(3, 1, ImageEffectsOptions.Default);
+        var again = new EditorState(3, 1, ImageEffectsOptions.Default, BeautifyState.Default);
 
         Assert.IsFalse(again.DiffersFrom(Saved));
     }
@@ -29,17 +29,17 @@ public sealed class EditorStateTests
     {
         // Every mark drawn, moved or deleted pushes an undo step, so the depth moving is
         // the user having edited the annotations.
-        Assert.IsTrue(new EditorState(4, 1, ImageEffectsOptions.Default).DiffersFrom(Saved));
+        Assert.IsTrue(new EditorState(4, 1, ImageEffectsOptions.Default, BeautifyState.Default).DiffersFrom(Saved));
     }
 
     [TestMethod]
-    public void CroppingOrFramingOffersDoneEvenThoughItLeavesNoUndoStep()
+    public void CroppingOffersDoneEvenThoughItLeavesNoUndoStep()
     {
         // An operation that replaces the pixels flattens the marks and resets the
         // document's history, so its undo depth goes back to nothing. Counted only through
         // that depth, cropping a capture would read as un-editing it — the one change that
         // cannot be recovered from the history would be the one nothing asked about.
-        Assert.IsTrue(new EditorState(0, 2, ImageEffectsOptions.Default).DiffersFrom(Saved));
+        Assert.IsTrue(new EditorState(0, 2, ImageEffectsOptions.Default, BeautifyState.Default).DiffersFrom(Saved));
     }
 
     [TestMethod]
@@ -51,6 +51,30 @@ public sealed class EditorStateTests
         var adjusted = Saved with { Effects = ImageEffectsOptions.Default with { Brightness = 0.2 } };
 
         Assert.IsTrue(adjusted.DiffersFrom(Saved));
+    }
+
+    [TestMethod]
+    public void ArmingTheFrameOffersDone()
+    {
+        // The frame leaves no undo step and no image operation either: it is a layer the
+        // delivered pixels are taken through, exactly as the adjust sliders are. Counted
+        // through neither, framing a capture and closing the window would throw the frame
+        // away without asking — and the capture in history would still be the unframed one.
+        var framed = Saved with { Beautify = BeautifyState.Default with { Enabled = true } };
+
+        Assert.IsTrue(framed.DiffersFrom(Saved));
+    }
+
+    [TestMethod]
+    public void ChangingTheFramesBackgroundOffersDone()
+    {
+        // Not only the switch. Picking another background while the frame is on changes
+        // what will be delivered as surely as turning it on did, and a state that compared
+        // only Enabled would call the second choice no edit at all.
+        var framed = Saved with { Beautify = BeautifyState.Default with { Enabled = true } };
+        var other = framed with { Beautify = framed.Beautify with { StyleIndex = 3 } };
+
+        Assert.IsTrue(other.DiffersFrom(framed));
     }
 
     [TestMethod]
@@ -72,7 +96,7 @@ public sealed class EditorStateTests
         // Delivering re-takes the baseline, which is what makes Done disappear after it has
         // been used and what stops the close prompt asking about edits already written
         // down. Without it every editor that had ever been saved would nag on the way out.
-        var edited = new EditorState(9, 3, ImageEffectsOptions.Default with { Contrast = 0.5 });
+        var edited = new EditorState(9, 3, ImageEffectsOptions.Default with { Contrast = 0.5 }, BeautifyState.Default);
         var rebaselined = edited;
 
         Assert.IsFalse(edited.DiffersFrom(rebaselined));

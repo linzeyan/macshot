@@ -21,14 +21,14 @@ namespace Macshot.Windows.Core.Annotations;
 /// to save is one people learn to dismiss without reading.
 /// </para>
 /// <para>
-/// Three components, because the editor has three ways to change a capture and no more.
-/// Marks are drawn, moved and deleted, which moves <see cref="UndoDepth"/>. Crop, flip,
-/// frame and add-capture replace the pixels, which cannot be an undo step of its own —
-/// they flatten the marks — and so are counted separately in
-/// <see cref="ImageOperations"/>. The adjust sliders are neither: they are a layer over the
-/// image that the delivered pixels are taken through, so the options themselves are the
-/// state. macshot splits it the same way, into an undo depth and a
-/// <c>CaptureEditState</c>.
+/// Four components, because the editor has four ways to change a capture and no more.
+/// Marks are drawn, moved and deleted, which moves <see cref="UndoDepth"/>. Crop, flip and
+/// add-capture replace the pixels, which cannot be an undo step of its own — they flatten
+/// the marks — and so are counted separately in <see cref="ImageOperations"/>. The adjust
+/// sliders and the frame are neither: both are layers over the image that the delivered
+/// pixels are taken through, so the settings themselves are the state. macshot splits it
+/// the same way, into an undo depth and a <c>CaptureEditState</c> whose two halves these
+/// last two are.
 /// </para>
 /// </remarks>
 /// <param name="UndoDepth">
@@ -38,10 +38,12 @@ namespace Macshot.Windows.Core.Annotations;
 /// How many operations that replaced the pixels have been applied and not undone.
 /// </param>
 /// <param name="Effects">What the adjust sliders are asking for.</param>
+/// <param name="Beautify">The frame the capture is being seen inside, if any.</param>
 public readonly record struct EditorState(
     int UndoDepth,
     int ImageOperations,
-    ImageEffectsOptions Effects)
+    ImageEffectsOptions Effects,
+    BeautifyState Beautify)
 {
     /// <summary>
     /// Whether anything has been changed since <paramref name="saved"/> was taken.

@@ -1,3 +1,4 @@
+using System.Runtime.InteropServices.WindowsRuntime;
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
@@ -13,6 +14,7 @@ using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Documents;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media.Imaging;
 using static Macshot.Windows.Services.Localization;
 
 // Imported rather than written out at each use site: inside namespace Macshot.Windows
@@ -83,6 +85,8 @@ public sealed partial class EditorWindow : Window
     /// stops describing anything real and is reset. This is what undo needs instead: the
     /// image as it was, and the annotations as objects again. The two timelines never
     /// interleave confusingly because an operation empties one of them.
+    /// The frame is not one of these. It is a layer the delivered pixels are taken through,
+    /// so it is taken back off by turning it off rather than by undoing it.
     /// </remarks>
     private readonly Stack<(CapturedFrame Frame, Annotation[] Annotations)> _imageUndo = new();
 
@@ -102,6 +106,43 @@ public sealed partial class EditorWindow : Window
     /// delivered pixels come from the preview, so what is on show is what is handed over.
     /// </summary>
     private ImageEffectsOptions _effects = ImageEffectsOptions.Default;
+
+    /// <summary>
+    /// The frame the capture is being seen inside, if any.
+    /// </summary>
+    /// <remarks>
+    /// A layer for the same reason the adjustment is one, and macshot's own answer: its
+    /// editor is the overlay's view in a scroll viewer, and beautify there is a switch read
+    /// at delivery (<c>DetachedEditorWindowController.swift:385-392</c>) rather than
+    /// something done to the pixels. This window used to burn it in as an image operation,
+    /// which made a framed capture the one kind that could not be archived in a form it
+    /// could be reopened from — the background is not one of the marks, so the marks and
+    /// the pixels alone would have reopened as a different picture.
+    /// </remarks>
+    private BeautifyState _beautify = BeautifyState.Default;
+
+    /// <summary>
+    /// The picture behind the frame, decoded from what <see cref="_beautify"/> carries.
+    /// </summary>
+    /// <remarks>
+    /// The capture's own copy rather than whichever picture the setting now names: there is
+    /// one custom background on the machine, and a capture archived on last month's would
+    /// otherwise reopen on this month's.
+    /// </remarks>
+    private BeautifyBackdrop? _backdrop;
+
+    /// <summary>
+    /// What the backdrop now on screen was drawn from, so it is drawn again only when it
+    /// would come out different.
+    /// </summary>
+    /// <remarks>
+    /// The adjust sliders repaint the whole window on every tick of a drag, and the frame
+    /// is not what they change: without this, dragging brightness over a framed 4K capture
+    /// would scan a frame-sized gradient sixty times a second to arrive at the same picture
+    /// each time. The same reason <see cref="BeautifyBackdrop"/> caches its blur.
+    /// </remarks>
+    private (int Width, int Height, BeautifyOptions Options, double Scale)? _backdropShown;
+
     private ToggleButton? _cropButton;
 
     /// <summary>
@@ -132,7 +173,7 @@ public sealed partial class EditorWindow : Window
     /// <see cref="ImageEffectsOptions"/> null — harmless to compare against, but not
     /// something to leave lying about in a field.
     /// </remarks>
-    private EditorState _saved = new(0, 0, ImageEffectsOptions.Default);
+    private EditorState _saved = new(0, 0, ImageEffectsOptions.Default, BeautifyState.Default);
 
     private bool _cropping;
     private Point? _cropStart;
@@ -171,9 +212,9 @@ public sealed partial class EditorWindow : Window
     /// be moved, restyled and undone rather than only drawn over.
     /// </param>
     /// <param name="state">
-    /// The adjustment the capture was archived carrying. It opens as the layer it was
-    /// rather than as pixels, which is what lets the user take it back off — the point of
-    /// keeping it as numbers at all.
+    /// The adjustment and the frame the capture was archived carrying. Both open as the
+    /// layers they were rather than as pixels, which is what lets the user take them back
+    /// off — the point of keeping them as numbers at all.
     /// </param>
     public EditorWindow(
         CapturedFrame frame,
@@ -184,7 +225,10 @@ public sealed partial class EditorWindow : Window
         _frame = frame ?? throw new ArgumentNullException(nameof(frame));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _opensWith = annotations;
-        _effects = (state ?? CaptureEditState.None).Effects;
+
+        var opening = state ?? CaptureEditState.None;
+        _effects = opening.Effects;
+        _beautify = opening.Beautify;
         InitializeComponent();
         // Every string in the XAML is already the English text macshot keys by,
         // so the page is translated in place rather than written twice.
@@ -227,6 +271,14 @@ public sealed partial class EditorWindow : Window
 
     public async Task ShowAsync()
     {
+        // Before anything is drawn, because the first Present is what puts the frame on
+        // screen and a background that arrived after it would show as the first gradient
+        // until something else changed.
+        if (_beautify.Background is { Length: > 0 } picture)
+        {
+            _backdrop = await BeautifyBackgroundStore.DecodeAsync(picture);
+        }
+
         WireToolbar();
         WireCanvas();
         BuildActions();
@@ -255,11 +307,6 @@ public sealed partial class EditorWindow : Window
         HintText.Text = StandingHint;
         Activate();
         EditorRoot.Focus(FocusState.Programmatic);
-
-        // Nothing here is asynchronous yet, and making the method async anyway keeps the
-        // call sites the same as every other window's — and leaves room for the decode a
-        // reopened capture needs.
-        await Task.CompletedTask;
     }
 
     /// <summary>
@@ -268,8 +315,6 @@ public sealed partial class EditorWindow : Window
     /// </summary>
     private void Present()
     {
-        ImageHost.Width = _frame.Width;
-        ImageHost.Height = _frame.Height;
         Title = $"macshot — {_frame.Width} × {_frame.Height}";
         var shown = _effects.IsIdentity
             ? _frame
@@ -280,7 +325,125 @@ public sealed partial class EditorWindow : Window
                 _frame.Height,
                 ImageEffects.Apply(_frame.Width, _frame.Height, _frame.BgraPixels, _effects));
 
+        // Before the canvas is presented onto it: the surface it draws on is the one this
+        // sizes and insets, and presenting into a surface still the previous size would
+        // stretch the capture until the next layout pass.
+        ShowFrame();
+
         AnnotationCanvas.Present(shown, new CaptureRegion(0, 0, shown.Width, shown.Height), _placement);
+    }
+
+    /// <summary>
+    /// How this capture is framed: what it is carrying, with the picture it named.
+    /// </summary>
+    private BeautifyOptions FrameOptions => _beautify.ToOptions(_backdrop);
+
+    /// <summary>
+    /// Puts the frame around the image, or takes it away, and leaves the drawing surface
+    /// inset by however much of it there is.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// What is drawn is <see cref="BeautifyRenderer.Backdrop"/> — the background and the
+    /// shadow the file will have, with the capture's own area left clear — behind the image
+    /// where it already is. Composited that is the same picture
+    /// <see cref="BeautifyRenderer.Render"/> makes at delivery, which is the point: the
+    /// preview is not a second set of numbers but the ones the export uses. The capture
+    /// overlay shows it the same way and for the same reason.
+    /// </para>
+    /// <para>
+    /// The image does not move within its own surface. Growing the host and insetting the
+    /// surface leaves a mark's coordinates the pixels it was drawn on, whether or not there
+    /// is a frame — so arming one cannot shift the marks, and neither can taking it off.
+    /// It also puts the background outside the input canvas, which is what stops a mark
+    /// being drawn on ground that is not part of the capture it would be archived against.
+    /// </para>
+    /// </remarks>
+    private void ShowFrame()
+    {
+        ImageSurface.Width = _frame.Width;
+        ImageSurface.Height = _frame.Height;
+
+        if (!_beautify.Enabled)
+        {
+            ImageSurface.Margin = new Thickness(0);
+            ImageHost.Width = _frame.Width;
+            ImageHost.Height = _frame.Height;
+            FrameBackdrop.Visibility = Visibility.Collapsed;
+
+            // Dropped rather than kept for next time: it is the size of a capture, and the
+            // one on screen is the only one worth holding.
+            FrameBackdrop.Source = null;
+            _backdropShown = null;
+            return;
+        }
+
+        var options = FrameOptions;
+        var wanted = (
+            Width: _frame.Width,
+            Height: _frame.Height,
+            Options: options,
+            Scale: _beautify.Scale);
+
+        if (_backdropShown is not { } shown || shown != wanted)
+        {
+            var (width, height, pixels) = BeautifyRenderer.Backdrop(
+                _frame.Width,
+                _frame.Height,
+                options,
+                _beautify.Scale);
+
+            var bitmap = new WriteableBitmap(width, height);
+            using (var stream = bitmap.PixelBuffer.AsStream())
+            {
+                stream.Write(pixels, 0, pixels.Length);
+            }
+
+            ImageHost.Width = width;
+            ImageHost.Height = height;
+            FrameBackdrop.Source = bitmap;
+            _backdropShown = wanted;
+        }
+
+        // Where the capture sits inside the frame: the padding on every side, and the title
+        // bar as well above it in window mode. Read from the same arithmetic the backdrop
+        // was drawn with rather than recomputed, so the clear area and the image cannot
+        // land a pixel apart.
+        var placed = BeautifyRenderer.FrameAround(
+            new CaptureRegion(0, 0, _frame.Width, _frame.Height), options, _beautify.Scale);
+
+        ImageSurface.Margin = new Thickness(-placed.X, -placed.Y, 0, 0);
+        FrameBackdrop.Visibility = Visibility.Visible;
+    }
+
+    /// <summary>
+    /// The capture as it is delivered: what was drawn, framed if the user asked for it.
+    /// </summary>
+    /// <remarks>
+    /// The frame goes on last, over the marks, so an arrow drawn to the edge of the image
+    /// stays on the screenshot rather than crossing the background it is mounted on. The
+    /// capture overlay finishes a capture the same way.
+    /// </remarks>
+    private CapturedFrame? Delivered()
+    {
+        if (AnnotationCanvas.ToFrame() is not { } finished)
+        {
+            return null;
+        }
+
+        if (!_beautify.Enabled)
+        {
+            return finished;
+        }
+
+        var (width, height, pixels) = BeautifyRenderer.Render(
+            finished.Width,
+            finished.Height,
+            finished.BgraPixels,
+            FrameOptions,
+            _beautify.Scale);
+
+        return new CapturedFrame(finished.VirtualX, finished.VirtualY, width, height, pixels);
     }
 
     private void WireToolbar()
@@ -308,15 +471,22 @@ public sealed partial class EditorWindow : Window
         };
         AnnotationToolbar.CommandInvoked += (_, command) => RunToolbarCommand(command);
 
-        // In the editor the frame is an image operation rather than a switch, so a
-        // background chosen here applies at once — the same as pressing the button.
-        AnnotationToolbar.FrameStyleChosen += (_, index) => FrameImage(index);
+        // Choosing a background arms the frame as well as choosing it, which is what the
+        // overlay does with the same picker: leaving it off would mean choosing one,
+        // watching nothing change, and then having to find the button that turns on the
+        // thing already chosen.
+        AnnotationToolbar.FrameStyleChosen += (_, index) => FrameWith(index);
         AnnotationToolbar.ShowToolbar(true);
 
         // After the strip exists, so the Adjust button is lit for a capture that was
         // archived carrying one — without it the popover would open at nought over an
         // image the editor is already showing adjusted.
         AnnotationToolbar.LoadEffects(_effects);
+
+        // And the Beautify button for the same reason: a capture reopened inside its frame
+        // has to show a lit button, or the only way to find out that the frame is on would
+        // be to deliver the capture and look at the file.
+        AnnotationToolbar.Beautified = _beautify.Enabled;
 
         // The strips sit at fixed corners of the window here rather than around a
         // selection, so what they are placed against is the window itself — and it is
@@ -380,10 +550,7 @@ public sealed partial class EditorWindow : Window
                 return;
 
             case ToolbarCommand.Beautify:
-                // The style last chosen from the Frame menu, which is where a different
-                // one is picked. One press for the usual answer, the menu for the rest —
-                // and the pixels change here and then, so Ctrl+Z is the way back.
-                FrameImage(_settings.Current.ToBeautifyOptions(BeautifyBackgroundStore.Current).StyleIndex);
+                ToggleFrame();
                 return;
 
             case ToolbarCommand.RemoveBackground:
@@ -480,12 +647,15 @@ public sealed partial class EditorWindow : Window
         frames.Picked += (_, index) =>
         {
             frameFlyout.Hide();
-            FrameImage(index);
+            FrameWith(index);
         };
 
         // Opened rather than built each time: painting 48 gradients is not free, and the
-        // only thing that changes between openings is which one is ringed.
-        frameFlyout.Opening += (_, _) => frames.Show(_settings.Current.ToBeautifyOptions(BeautifyBackgroundStore.Current).StyleIndex);
+        // only thing that changes between openings is which one is ringed. The capture's
+        // own background is ringed rather than the setting's, so a reopened framed capture
+        // shows the one it is wearing.
+        frameFlyout.Opening += (_, _) => frames.Show(
+            _beautify.Enabled ? _beautify.StyleIndex : _settings.Current.BeautifyStyleIndex);
         frame.Flyout = frameFlyout;
 
         // macshot's Add Capture: another capture, taken now, landing under this one. It
@@ -576,6 +746,11 @@ public sealed partial class EditorWindow : Window
             null,
             (float)Math.Clamp(zoom, Scroller.MinZoomFactor, Scroller.MaxZoomFactor));
 
+    /// <remarks>
+    /// Against what is on show rather than against the capture, because a frame around it
+    /// is on show too: fitted to the capture alone, a framed one would open with its
+    /// background cropped off at the edges of the viewport.
+    /// </remarks>
     private void ZoomToFit()
     {
         if (Scroller.ViewportWidth <= 0 || Scroller.ViewportHeight <= 0)
@@ -583,7 +758,9 @@ public sealed partial class EditorWindow : Window
             return;
         }
 
-        ZoomTo(Math.Min(Scroller.ViewportWidth / _frame.Width, Scroller.ViewportHeight / _frame.Height));
+        ZoomTo(Math.Min(
+            Scroller.ViewportWidth / ImageHost.Width,
+            Scroller.ViewportHeight / ImageHost.Height));
     }
 
     /// <summary>Keeps the reading honest however the zoom was changed — menu or wheel.</summary>
@@ -599,7 +776,7 @@ public sealed partial class EditorWindow : Window
     /// <remarks>
     /// Burned in rather than left as a movable mark, which is where this parts company
     /// with macshot: growing the canvas goes through the same flatten-and-replace that
-    /// crop and frame do, and that mechanism has no way to keep a live annotation across
+    /// crop and flip do, and that mechanism has no way to keep a live annotation across
     /// the operation. It undoes in one step like every other image operation.
     /// </remarks>
     public void AddCapture(CapturedFrame added)
@@ -672,7 +849,7 @@ public sealed partial class EditorWindow : Window
 
         _zoomFitted = true;
         var opening = CaptureFit.OpeningZoom(
-            _frame.Width,
+            ImageHost.Width,
             Scroller.ViewportWidth,
             Scroller.MinZoomFactor,
             Scroller.MaxZoomFactor);
@@ -1086,25 +1263,75 @@ public sealed partial class EditorWindow : Window
     }
 
     /// <summary>
-    /// Puts the image on one of the gradient backgrounds, and remembers which — the next
-    /// capture framed is almost always framed the same way.
+    /// Turns the frame on or off, which is the one control this window has for it.
     /// </summary>
-    private void FrameImage(int styleIndex)
+    /// <remarks>
+    /// macshot's Beautify button only ever arms the frame (<c>OverlayView.swift:8031-8044</c>)
+    /// and leaves taking it off to the On switch on the options row it opens. That row is
+    /// the capture overlay's; this window does not carry one, so the button that put the
+    /// frame on has to be the one that takes it off — otherwise a frame armed here could
+    /// only be undone by closing the capture without saving it.
+    /// </remarks>
+    private void ToggleFrame()
     {
-        var options = _settings.Current.ToBeautifyOptions(BeautifyBackgroundStore.Current) with { StyleIndex = styleIndex };
+        if (!_beautify.Enabled)
+        {
+            // The style last chosen, which is where a different one is picked from: one
+            // press for the usual answer, the Frame menu for the rest.
+            FrameWith(_settings.Current.BeautifyStyleIndex);
+            return;
+        }
 
-        ApplyImageOperation(
-            frame =>
-            {
-                var (width, height, pixels) = BeautifyRenderer.Render(
-                    frame.Width,
-                    frame.Height,
-                    frame.BgraPixels,
-                    options,
-                    EditorRoot.XamlRoot?.RasterizationScale ?? 1);
-                return new CapturedFrame(frame.VirtualX, frame.VirtualY, width, height, pixels);
-            },
-            $"Framed in {BeautifyRenderer.Styles[styleIndex].Name} • Ctrl+Z to undo");
+        _beautify = _beautify with { Enabled = false };
+        AnnotationToolbar.Beautified = false;
+        Present();
+        RefreshDone();
+        HintText.Text = StandingHint;
+    }
+
+    /// <summary>
+    /// Mounts the capture on one of the backgrounds, and remembers which — the next capture
+    /// framed is almost always framed the same way.
+    /// </summary>
+    /// <remarks>
+    /// The frame's own measurements come from the settings, which is where the capture
+    /// overlay's options row writes them. This window has no such row, so what it can
+    /// change is which background — and a capture reopened inside a frame it was delivered
+    /// with keeps that frame's numbers until something is picked here.
+    /// </remarks>
+    private void FrameWith(int styleIndex)
+    {
+        var options = _settings.Current.ToBeautifyOptions(BeautifyBackgroundStore.Current) with
+        {
+            StyleIndex = styleIndex,
+            Enabled = true,
+        };
+
+        // A capture that came from clicking a window already has a title bar and rounded
+        // corners in its pixels, and the state remembers that it did. The overlay applies
+        // the same rule to the frame it draws; without it here, reopening such a capture
+        // and picking another background would stack a drawn title bar on the real one.
+        _beautify = BeautifyState.Of(
+            _beautify.IsWindowSnap ? options.ForWindowSnap() : options,
+            _beautify.IsWindowSnap,
+            EditorRoot.XamlRoot?.RasterizationScale ?? 1,
+            BeautifyBackgroundStore.CurrentBytes);
+
+        _backdrop = BeautifyBackgroundStore.Current;
+
+        AnnotationToolbar.Beautified = true;
+        Present();
+
+        // By hand, for the reason the adjust sliders are: the frame is a layer the
+        // delivered pixels are taken through, so it leaves no undo step and no image
+        // operation behind and nothing the document raises says it happened.
+        RefreshDone();
+
+        HintText.Text = L(
+            "Framed in {0}",
+            _beautify.StyleIndex == BeautifyOptions.CustomBackgroundStyle
+                ? L("Your own picture")
+                : BeautifyRenderer.Styles[_beautify.StyleIndex].Name);
 
         try
         {
@@ -1112,7 +1339,7 @@ public sealed partial class EditorWindow : Window
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            // The image is already framed. Failing to remember which style is not worth
+            // The capture is already framed. Failing to remember which style is not worth
             // interrupting that.
             DiagnosticLog.Write($"Could not remember the frame style: {exception.Message}");
         }
@@ -1123,10 +1350,11 @@ public sealed partial class EditorWindow : Window
     /// it acts on is the image as the user sees it.
     /// </summary>
     /// <remarks>
-    /// Flattening is what makes crop, flip and frame one mechanism instead of three.
+    /// Flattening is what makes crop, flip and add-capture one mechanism instead of three.
     /// Carrying live annotations across a transform would mean a rule per operation for
-    /// where each mark lands, and framing has no answer at all for a mark outside the
-    /// image it just padded.
+    /// where each mark lands. The frame is not one of these and never was worth being one:
+    /// it has no answer at all for a mark outside the image it just padded, and as a layer
+    /// it does not need one.
     /// </remarks>
     private void ApplyImageOperation(Func<CapturedFrame, CapturedFrame> operation, string done)
     {
@@ -1162,6 +1390,10 @@ public sealed partial class EditorWindow : Window
         try
         {
             var lines = await AnnotationCanvas.RecognizeAsync();
+
+            // The capture rather than what would be delivered: a frame carries no text and
+            // no code, and reading one through a background would only mean handing the
+            // engine a larger picture with the same words in it.
             var frame = AnnotationCanvas.ToFrame() ?? _frame;
             var codes = await TextRecognizer.ScanQrCodesAsync(frame);
             HintText.Text = previousHint;
@@ -1376,7 +1608,7 @@ public sealed partial class EditorWindow : Window
         try
         {
             await AnnotationCanvas.FlushAsync();
-            if (AnnotationCanvas.ToFrame() is { } finished)
+            if (Delivered() is { } finished)
             {
                 await ImageDelivery.CopyToClipboardAsync(finished);
                 HintText.Text = L("Copied to the clipboard");
@@ -1396,10 +1628,15 @@ public sealed partial class EditorWindow : Window
     /// The clipboard rather than the canvas, which is what macshot's editor does with it
     /// (<c>DetachedEditorWindowController.swift:551</c>) even though its overlay finishes
     /// the capture instead. There is a reason to keep that split here beyond following
-    /// it: every other transform on this window — invert, frame, flip, crop — leaves an
-    /// opaque image behind, and the canvas composes against an opaque background. A
-    /// cut-out put back on it would be the subject over the old background, which is the
-    /// picture the button was pressed to get rid of.
+    /// it: every other transform on this window — invert, flip, crop — leaves an opaque
+    /// image behind, and the canvas composes against an opaque background. A cut-out put
+    /// back on it would be the subject over the old background, which is the picture the
+    /// button was pressed to get rid of.
+    /// </para>
+    /// <para>
+    /// The unframed canvas rather than what would be delivered, for the same reason: the
+    /// frame <em>is</em> a background, and lifting the subject out of a framed capture
+    /// would be asking the model to tell a gradient from a screenshot.
     /// </para>
     /// <para>
     /// So the window is left exactly as it was, and the transparency lives on the
@@ -1440,7 +1677,7 @@ public sealed partial class EditorWindow : Window
         try
         {
             await AnnotationCanvas.FlushAsync();
-            if (AnnotationCanvas.ToFrame() is { } finished
+            if (Delivered() is { } finished
                 && await SavePrompt.WriteAsync(this, finished, _settings.Current) is { } path)
             {
                 HintText.Text = L("Saved to {0}", path);
@@ -1462,7 +1699,7 @@ public sealed partial class EditorWindow : Window
         try
         {
             await AnnotationCanvas.FlushAsync();
-            if (AnnotationCanvas.ToFrame() is { } finished)
+            if (Delivered() is { } finished)
             {
                 await ShareSheet.ShowAsync(this, finished, _settings.Current);
             }
@@ -1478,7 +1715,7 @@ public sealed partial class EditorWindow : Window
         try
         {
             await AnnotationCanvas.FlushAsync();
-            if (AnnotationCanvas.ToFrame() is { } finished)
+            if (Delivered() is { } finished)
             {
                 // Null means the user dismissed the dialog they asked for, which is not a
                 // failure and not a save: the hint is left saying whatever it said.
@@ -1499,7 +1736,7 @@ public sealed partial class EditorWindow : Window
         try
         {
             await AnnotationCanvas.FlushAsync();
-            if (AnnotationCanvas.ToFrame() is { } finished)
+            if (Delivered() is { } finished)
             {
                 PinRequested?.Invoke(this, finished);
             }
@@ -1524,7 +1761,7 @@ public sealed partial class EditorWindow : Window
         try
         {
             await AnnotationCanvas.FlushAsync();
-            if (AnnotationCanvas.ToFrame() is not { } finished)
+            if (Delivered() is not { } finished)
             {
                 return;
             }
@@ -1562,7 +1799,7 @@ public sealed partial class EditorWindow : Window
         try
         {
             await AnnotationCanvas.FlushAsync();
-            if (AnnotationCanvas.ToFrame() is not { } finished)
+            if (Delivered() is not { } finished)
             {
                 return;
             }
@@ -1619,7 +1856,7 @@ public sealed partial class EditorWindow : Window
     /// </remarks>
     private void CommitEdits()
     {
-        if (AnnotationCanvas.ToFrame() is not { } finished)
+        if (Delivered() is not { } finished)
         {
             return;
         }
@@ -1666,20 +1903,21 @@ public sealed partial class EditorWindow : Window
     }
 
     /// <summary>Everything about this capture the user can have changed.</summary>
-    private EditorState Edits => new(_editor.Document.UndoDepth, _imageUndo.Count, _effects);
+    private EditorState Edits =>
+        new(_editor.Document.UndoDepth, _imageUndo.Count, _effects, _beautify);
 
     /// <summary>
     /// What this capture can be reopened from: the pixels as the image operations left
-    /// them, the marks, and the adjustment they are being seen through.
+    /// them, the marks, and the two layers they are being seen through.
     /// </summary>
     /// <remarks>
-    /// <see cref="_frame"/> rather than what is on the canvas, because the adjustment is a
-    /// layer here and the field is the image underneath it. Archiving the canvas would
-    /// bake the layer in and then store the numbers that made it beside it, so reopening
-    /// would apply it a second time.
+    /// <see cref="_frame"/> rather than what is on the canvas, because both the adjustment
+    /// and the frame are layers here and the field is the image underneath them. Archiving
+    /// the canvas would bake a layer in and then store the numbers that made it beside it,
+    /// so reopening would apply it a second time.
     /// </remarks>
     private EditableCapture? Editable =>
-        AnnotationCanvas.ToEditable(_frame, new CaptureEditState(_effects));
+        AnnotationCanvas.ToEditable(_frame, new CaptureEditState(_effects, _beautify));
 
     /// <summary>Records the capture as written down, and takes Done off the bar.</summary>
     private void Rebaseline()

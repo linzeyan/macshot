@@ -1589,10 +1589,10 @@ public sealed class CaptureController : IDisposable
     /// </summary>
     /// <remarks>
     /// The unannotated copy and the marks are read rather than the finished image, which
-    /// is what makes an arrow drawn last week something that can still be moved. An entry
-    /// archived without them — every entry from before this existed, and every framed
-    /// capture — opens as the flat image it is, so nothing that was reachable stops being
-    /// reachable.
+    /// is what makes an arrow drawn last week something that can still be moved, and a
+    /// frame something that can still be taken off. An entry archived without them — every
+    /// entry from before this existed — opens as the flat image it is, so nothing that was
+    /// reachable stops being reachable.
     /// </remarks>
     private async Task ReopenAsync(HistoryEntry entry)
     {
@@ -2533,8 +2533,8 @@ public sealed class CaptureController : IDisposable
     /// arrow is editing it, not taking another.
     /// </param>
     /// <param name="state">
-    /// The adjustment the entry was archived carrying, so it opens as a layer that can be
-    /// taken off rather than as pixels that cannot.
+    /// The adjustment and the frame the entry was archived carrying, so each opens as a
+    /// layer that can be taken off rather than as pixels that cannot.
     /// </param>
     private async Task ShowEditorAsync(
         CapturedFrame frame,

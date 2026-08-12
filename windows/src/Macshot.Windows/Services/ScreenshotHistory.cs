@@ -18,8 +18,9 @@ namespace Macshot.Windows.Services;
 /// </param>
 /// <param name="NotesPath">The marks, as <see cref="AnnotationFile"/> writes them.</param>
 /// <param name="EditPath">
-/// The adjustment the capture was carrying, as <see cref="CaptureEditState"/> writes it.
-/// Null for an entry that was carrying none, which is most of them.
+/// The adjustment and the frame the capture was carrying, as
+/// <see cref="CaptureEditState"/> writes them. Null for an entry that was carrying
+/// neither, which is most of them.
 /// </param>
 public sealed record HistoryEntry(
     string Path,
@@ -65,10 +66,11 @@ public sealed record HistoryEntry(
 /// </para>
 /// <para>
 /// A capture with marks on it is archived several times over: the finished image, the
-/// pixels before any mark <em>and before any adjustment</em>, the marks themselves, and
-/// the adjustment as numbers when there was one. That is what makes a capture reopened
-/// from here <em>editable</em> — the arrow can be moved or taken off and the brightness
-/// put back, rather than only looked at, which is what someone reopens a capture to do.
+/// pixels before any mark <em>and before any adjustment or frame</em>, the marks
+/// themselves, and the adjustment and frame as numbers when there were any. That is what
+/// makes a capture reopened from here <em>editable</em> — the arrow can be moved or taken
+/// off, the brightness put back and the frame taken away, rather than only looked at,
+/// which is what someone reopens a capture to do.
 /// The companions share the entry's name and carry it on, so the listing is still the
 /// index: a name with anything between the timestamp and the extension is a companion of
 /// the entry it names rather than an entry of its own.
@@ -94,7 +96,7 @@ public static class ScreenshotHistory
     /// <summary>The marks that were drawn on them.</summary>
     private const string NotesSuffix = ".notes.json";
 
-    /// <summary>The adjustment they were seen through, which is not one of the marks.</summary>
+    /// <summary>The adjustment and the frame, neither of which is one of the marks.</summary>
     private const string EditSuffix = ".edit.json";
 
     public static string Directory { get; } = Path.Combine(
@@ -115,10 +117,11 @@ public static class ScreenshotHistory
     /// thumbnail carries it so that its Delete can take the capture back out again.
     /// </returns>
     /// <param name="editable">
-    /// The pixels the marks were drawn on, the marks themselves, and the adjustment they
-    /// were seen through, when the finished image can be rebuilt from the three. Null when
-    /// it cannot — a framed capture, say, where the background is not one of the marks —
-    /// and then only the finished image is archived.
+    /// The pixels the marks were drawn on, the marks themselves, and the state they were
+    /// seen through — the adjustment and the frame — when the finished image can be rebuilt
+    /// from the three. Null when it cannot: a cut-out, say, where the background that was
+    /// lifted away is in neither the marks nor the state. Then only the finished image is
+    /// archived.
     /// </param>
     public static async Task<string?> RecordAsync(
         CapturedFrame frame,
@@ -243,10 +246,11 @@ public static class ScreenshotHistory
     /// Whether an entry gains anything from being archived in pieces.
     /// </summary>
     /// <remarks>
-    /// An adjustment counts as much as a mark does, which is macshot's rule
+    /// An adjustment or a frame counts as much as a mark does, which is macshot's rule
     /// (<c>ScreenshotHistory.swift:111</c>): a capture sent two stops brighter and drawn on
     /// by nobody is exactly the one whose brightness has to stay something the user can
-    /// take back off, and archiving only the finished image would make it the capture.
+    /// take back off, and a capture delivered inside a frame and drawn on by nobody is the
+    /// one whose background would otherwise become the screenshot.
     /// </remarks>
     private static bool Separable([NotNullWhen(true)] EditableCapture? editable) =>
         editable is not null && (editable.Annotations.Count > 0 || editable.State.HasPostProcessing);
