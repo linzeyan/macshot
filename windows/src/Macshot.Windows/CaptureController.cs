@@ -2103,7 +2103,8 @@ public sealed class CaptureController : IDisposable
                 current.WebcamCorner,
                 current.WebcamSize,
                 current.WebcamShape,
-                monitor.Scale)
+                monitor.Scale,
+                current.CameraDeviceId)
                 ? bubble
                 : null;
 
@@ -2134,7 +2135,10 @@ public sealed class CaptureController : IDisposable
         // answer macshot gives.
         var audio = format == RecordingFormat.Gif
             ? default
-            : new RecordingAudio(_settings.Current.RecordSystemAudio, _settings.Current.RecordMicAudio);
+            : new RecordingAudio(
+                _settings.Current.RecordSystemAudio,
+                _settings.Current.RecordMicAudio,
+                _settings.Current.MicrophoneDeviceId);
 
         try
         {

@@ -67,12 +67,17 @@ public sealed partial class WebcamWindow : Window
     /// says no. The caller closes the window then rather than leaving a black circle over
     /// the recording — a bubble showing nothing is worse than no bubble.
     /// </remarks>
+    /// <param name="cameraId">
+    /// Which camera, from the menu on the toolbar's own webcam switch, or empty for the
+    /// first one the machine offers.
+    /// </param>
     public async Task<bool> ShowInAsync(
         CaptureRegion region,
         WebcamCorner corner,
         WebcamSize size,
         WebcamShape shape,
-        double scale)
+        double scale,
+        string? cameraId)
     {
         var (x, y, width, height) = WebcamInset.For(region, corner, size, scale);
 
@@ -96,14 +101,14 @@ public sealed partial class WebcamWindow : Window
         // keyboard, and a camera bubble that stole focus would swallow Escape.
         appWindow.Show(activateWindow: false);
 
-        return await StartAsync();
+        return await StartAsync(cameraId);
     }
 
-    private async Task<bool> StartAsync()
+    private async Task<bool> StartAsync(string? cameraId)
     {
         try
         {
-            var source = await ColourSourceAsync();
+            var source = await ColourSourceAsync(cameraId);
             if (source is null)
             {
                 DiagnosticLog.Write("No camera to put in the recording.");
@@ -140,20 +145,13 @@ public sealed partial class WebcamWindow : Window
     /// Opens the camera and answers the frame source that gives colour pictures.
     /// </summary>
     /// <remarks>
-    /// A machine can have an infrared camera for Windows Hello alongside the colour one,
-    /// and it enumerates first on some of them. Taking the first source would put a
-    /// greyscale face-recognition feed in the recording.
+    /// Which camera that is comes from <see cref="CameraDevices"/>, which is also what
+    /// fills the menu offering the choice — one place, so that the camera a recording opens
+    /// is the one the menu ticked.
     /// </remarks>
-    private async Task<MediaFrameSource?> ColourSourceAsync()
+    private async Task<MediaFrameSource?> ColourSourceAsync(string? cameraId)
     {
-        var groups = await MediaFrameSourceGroup.FindAllAsync();
-
-        // The group is chosen by what it says it has before anything is opened, so a
-        // machine whose infrared camera enumerates first is not opened and then rejected.
-        var chosen = groups.FirstOrDefault(group => group.SourceInfos.Any(
-            info => info.SourceKind is MediaFrameSourceKind.Color));
-
-        if (chosen is null)
+        if (await CameraDevices.ChosenAsync(cameraId) is not { } chosen)
         {
             return null;
         }

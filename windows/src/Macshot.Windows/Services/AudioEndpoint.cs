@@ -57,6 +57,42 @@ internal sealed class AudioEndpoint : IDisposable
     private const uint StreamFlagsAutoConvertPcm = 0x80000000;
     private const uint StreamFlagsSrcDefaultQuality = 0x08000000;
 
+    /// <summary>eRender and eCapture, which is what tells the two endpoint kinds apart.</summary>
+    private const int RenderFlow = 0;
+
+    private const int CaptureFlow = 1;
+
+    /// <summary>eConsole: the endpoint the user hears and speaks into, not the one games use.</summary>
+    private const int ConsoleRole = 0;
+
+    /// <summary>DEVICE_STATE_ACTIVE. A disabled or unplugged endpoint is not offered.</summary>
+    private const uint DeviceStateActive = 0x1;
+
+    /// <summary>STGM_READ, which is all a name needs.</summary>
+    private const uint StorageRead = 0;
+
+    /// <summary>VT_LPWSTR, the only type a friendly name comes back as.</summary>
+    private const short VtLpwstr = 31;
+
+    /// <summary>
+    /// A PROPVARIANT, whose union starts one pointer in on both architectures this ships
+    /// for. Read by offset rather than as a struct, the way <see cref="WaveFormat"/>
+    /// writes its WAVEFORMATEX: the union has no C# spelling that does not either need
+    /// unsafe code or leave fields nothing ever assigns.
+    /// </summary>
+    private const int SizeOfPropVariant = 24;
+
+    private const int PropVariantValueOffset = 8;
+
+    /// <summary>
+    /// PKEY_Device_FriendlyName — "Headset (WH-1000XM4)" rather than the endpoint id.
+    /// </summary>
+    private static readonly PropertyKey FriendlyNameKey = new()
+    {
+        FormatId = new Guid("a45c254e-df1c-4efd-8020-67d146a850e0"),
+        Id = 14,
+    };
+
     /// <summary>How much the endpoint may hold before it starts overwriting: 200 ms, in 100 ns units.</summary>
     private const long BufferDuration = 2_000_000;
 
@@ -78,15 +114,21 @@ internal sealed class AudioEndpoint : IDisposable
     }
 
     /// <summary>
-    /// Opens the default endpoint for <paramref name="source"/>, or null when the
-    /// machine has none or refuses the format.
+    /// Opens an endpoint for <paramref name="source"/>, or null when the machine has none
+    /// or refuses the format.
     /// </summary>
+    /// <param name="deviceId">
+    /// Which microphone, from <see cref="Microphones"/>, or null for whichever one Windows
+    /// would open. Meaningless for <see cref="AudioSource.System"/>: what a loopback
+    /// stream records is what the machine is playing, and macshot offers no choice of that
+    /// either.
+    /// </param>
     /// <remarks>
     /// Null rather than an exception: a machine with no microphone is an ordinary
     /// machine, and a recording that fails outright because nothing is plugged in would
     /// be worse than one without sound.
     /// </remarks>
-    public static AudioEndpoint? Open(AudioSource source)
+    public static AudioEndpoint? Open(AudioSource source, string? deviceId)
     {
         nint format = 0;
         try
@@ -96,10 +138,27 @@ internal sealed class AudioEndpoint : IDisposable
             // A loopback stream is opened on the *render* endpoint — the speakers — and
             // read from as though it were a capture device. eConsole rather than
             // eMultimedia: it is what the user hears.
-            var flow = source == AudioSource.System ? 0 : 1;
-            if (enumerator.GetDefaultAudioEndpoint(flow, 0, out var device) != 0 || device is null)
+            var flow = source == AudioSource.System ? RenderFlow : CaptureFlow;
+
+            IMMDevice? device = null;
+            if (source == AudioSource.Microphone && !string.IsNullOrEmpty(deviceId)
+                && enumerator.GetDevice(deviceId, out var chosen) == 0)
             {
-                return null;
+                device = chosen;
+            }
+
+            // A remembered microphone that no longer resolves falls through to the default
+            // one, which is macshot's answer (RecordingEngine.swift:278). A headset
+            // unplugged since the last recording must not be why this one is silent.
+            if (device is null)
+            {
+                if (enumerator.GetDefaultAudioEndpoint(flow, ConsoleRole, out var fallback) != 0
+                    || fallback is null)
+                {
+                    return null;
+                }
+
+                device = fallback;
             }
 
             var audioClientId = typeof(IAudioClient).GUID;
@@ -145,6 +204,114 @@ internal sealed class AudioEndpoint : IDisposable
             {
                 Marshal.FreeHGlobal(format);
             }
+        }
+    }
+
+    /// <summary>
+    /// Every microphone the machine has switched on, in the order the audio engine lists
+    /// them — which is the order Windows itself prefers them in.
+    /// </summary>
+    /// <remarks>
+    /// Through the same API the endpoint is opened with rather than through
+    /// <c>DeviceInformation</c>, because the id has to be one <c>GetDevice</c> accepts:
+    /// the enumeration APIs name the same hardware differently, and a remembered id from
+    /// the wrong one would resolve to nothing every time and silently record from the
+    /// default microphone for ever.
+    /// </remarks>
+    public static IReadOnlyList<RecordingDevice> Microphones()
+    {
+        var found = new List<RecordingDevice>();
+
+        try
+        {
+            var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumerator();
+            if (enumerator.EnumAudioEndpoints(CaptureFlow, DeviceStateActive, out var collection) != 0
+                || collection is null)
+            {
+                return found;
+            }
+
+            try
+            {
+                if (collection.GetCount(out var count) != 0)
+                {
+                    return found;
+                }
+
+                for (uint index = 0; index < count; index++)
+                {
+                    if (collection.Item(index, out var device) != 0 || device is null)
+                    {
+                        continue;
+                    }
+
+                    try
+                    {
+                        // Both or neither: a device with no name has no row to show, and
+                        // one with no id has nothing to remember the choice by.
+                        if (device.GetId(out var id) == 0 && FriendlyName(device) is { } name)
+                        {
+                            found.Add(new RecordingDevice(id, name));
+                        }
+                    }
+                    finally
+                    {
+                        Marshal.ReleaseComObject(device);
+                    }
+                }
+            }
+            finally
+            {
+                Marshal.ReleaseComObject(collection);
+            }
+        }
+        catch (COMException)
+        {
+            // A machine whose audio service will not answer offers no menu, which is the
+            // same as a machine with no microphone.
+        }
+        catch (InvalidCastException)
+        {
+        }
+
+        return found;
+    }
+
+    /// <summary>
+    /// The microphone Windows would open unasked, or null when there is none.
+    /// </summary>
+    /// <remarks>
+    /// Asked for so the menu can tick it: with nothing remembered, the row that would
+    /// actually be recorded is the default one, and a menu ticking nothing would read as
+    /// though the switch were off.
+    /// </remarks>
+    public static string? DefaultMicrophoneId()
+    {
+        try
+        {
+            var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumerator();
+            if (enumerator.GetDefaultAudioEndpoint(CaptureFlow, ConsoleRole, out var device) != 0
+                || device is null)
+            {
+                return null;
+            }
+
+            try
+            {
+                return device.GetId(out var id) == 0 ? id : null;
+            }
+            finally
+            {
+                Marshal.ReleaseComObject(device);
+            }
+        }
+        catch (COMException)
+        {
+            return null;
+        }
+        catch (InvalidCastException)
+        {
+            return null;
         }
     }
 
@@ -261,6 +428,59 @@ internal sealed class AudioEndpoint : IDisposable
     }
 
     /// <summary>
+    /// What an endpoint calls itself, or null when it will not say.
+    /// </summary>
+    /// <remarks>
+    /// The name is what the menu shows, so a device that has none is not offered: a blank
+    /// row cannot be chosen between, and an endpoint id shown in its place would be forty
+    /// characters of braces and zeroes.
+    /// </remarks>
+    private static string? FriendlyName(IMMDevice device)
+    {
+        if (device.OpenPropertyStore(StorageRead, out var store) != 0 || store is null)
+        {
+            return null;
+        }
+
+        var key = FriendlyNameKey;
+        var value = Marshal.AllocHGlobal(SizeOfPropVariant);
+
+        try
+        {
+            // Zeroed first: PropVariantClear reads the tag to decide what to free, and
+            // whatever AllocHGlobal handed over would be freed as though it were one.
+            for (var offset = 0; offset < SizeOfPropVariant; offset += sizeof(long))
+            {
+                Marshal.WriteInt64(value, offset, 0);
+            }
+
+            if (store.GetValue(ref key, value) != 0 || Marshal.ReadInt16(value, 0) != VtLpwstr)
+            {
+                return null;
+            }
+
+            return Marshal.PtrToStringUni(Marshal.ReadIntPtr(value, PropVariantValueOffset));
+        }
+        finally
+        {
+            PropVariantClear(value);
+            Marshal.FreeHGlobal(value);
+            Marshal.ReleaseComObject(store);
+        }
+    }
+
+    [DllImport("ole32.dll")]
+    private static extern int PropVariantClear(nint value);
+
+    /// <summary>A PROPERTYKEY: which property, of which set.</summary>
+    [StructLayout(LayoutKind.Sequential)]
+    private struct PropertyKey
+    {
+        public Guid FormatId;
+        public uint Id;
+    }
+
+    /// <summary>
     /// The class object <c>new</c> asks COM for. It has no members because it is only
     /// ever cast to <see cref="IMMDeviceEnumerator"/>.
     /// </summary>
@@ -270,17 +490,17 @@ internal sealed class AudioEndpoint : IDisposable
     {
     }
 
-    // The three interfaces below are declared in the order their methods appear in
-    // Mmdeviceapi.h and Audioclient.h. The order *is* the binding — a method declared
-    // out of place calls whichever function sits at that slot — so nothing here may be
-    // reordered or left out, however unused it is.
+    // The interfaces below are declared in the order their methods appear in
+    // Mmdeviceapi.h, Audioclient.h and Propsys.h. The order *is* the binding — a method
+    // declared out of place calls whichever function sits at that slot — so nothing here
+    // may be reordered or left out, however unused it is.
     [ComImport]
     [Guid("A95664D2-9614-4F35-A746-DE8DB63617E6")]
     [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
     private interface IMMDeviceEnumerator
     {
         [PreserveSig]
-        int EnumAudioEndpoints(int dataFlow, uint stateMask, out nint devices);
+        int EnumAudioEndpoints(int dataFlow, uint stateMask, out IMMDeviceCollection? devices);
 
         [PreserveSig]
         int GetDefaultAudioEndpoint(int dataFlow, int role, out IMMDevice? device);
@@ -308,13 +528,48 @@ internal sealed class AudioEndpoint : IDisposable
             [MarshalAs(UnmanagedType.IUnknown)] out object? instance);
 
         [PreserveSig]
-        int OpenPropertyStore(uint access, out nint store);
+        int OpenPropertyStore(uint access, out IPropertyStore? store);
 
         [PreserveSig]
         int GetId([MarshalAs(UnmanagedType.LPWStr)] out string id);
 
         [PreserveSig]
         int GetState(out uint state);
+    }
+
+    [ComImport]
+    [Guid("0BD7A1BE-7A1A-44DB-8397-CC5392387B5E")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IMMDeviceCollection
+    {
+        [PreserveSig]
+        int GetCount(out uint count);
+
+        [PreserveSig]
+        int Item(uint index, out IMMDevice? device);
+    }
+
+    [ComImport]
+    [Guid("886D8EEB-8CF2-4446-8D02-CDBA1DBDCF99")]
+    [InterfaceType(ComInterfaceType.InterfaceIsIUnknown)]
+    private interface IPropertyStore
+    {
+        [PreserveSig]
+        int GetCount(out uint count);
+
+        [PreserveSig]
+        int GetAt(uint index, out PropertyKey key);
+
+        // The value is a caller-allocated PROPVARIANT, passed as memory rather than as a
+        // struct for the reason SizeOfPropVariant gives.
+        [PreserveSig]
+        int GetValue(ref PropertyKey key, nint value);
+
+        [PreserveSig]
+        int SetValue(ref PropertyKey key, nint value);
+
+        [PreserveSig]
+        int Commit();
     }
 
     [ComImport]

@@ -210,10 +210,10 @@ internal sealed partial class ToolbarButton : UserControl
     private void Repaint()
     {
         // The tools have a menu behind them — right-clicking one offers to take it off the
-        // strip — and so does Save, which offers the way of saving that is not the default.
-        // Right-clicking anything else does nothing, and without the mark there is nothing
-        // at all to say which is which; macOS draws the same triangle for the same reason.
-        _menuMark.Visibility = Item.Tool is null && Item.Command != ToolbarCommand.Save
+        // strip — and so do the three below. Right-clicking anything else does nothing, and
+        // without the mark there is nothing at all to say which is which; macOS draws the
+        // same triangle for the same reason, on the same buttons.
+        _menuMark.Visibility = Item.Tool is null && !HasMenu(Item.Command)
             ? Visibility.Collapsed
             : Visibility.Visible;
 
@@ -225,6 +225,15 @@ internal sealed partial class ToolbarButton : UserControl
                     ? ToolbarPalette.HoverBrush
                     : ToolbarPalette.TransparentBrush;
     }
+
+    /// <summary>
+    /// Which buttons that are not tools carry a menu: Save offers the way of saving that
+    /// is not the default, and the microphone and the camera offer which device they open.
+    /// macshot marks the same three (<c>ToolbarDefinitions.swift:445</c>, <c>:458</c>,
+    /// <c>:506</c>).
+    /// </summary>
+    private static bool HasMenu(ToolbarCommand command) =>
+        command is ToolbarCommand.Save or ToolbarCommand.MicAudio or ToolbarCommand.Webcam;
 
     /// <summary>
     /// What the tooltip says: the button's name, and the key that does the same thing when
