@@ -23,7 +23,17 @@ using Windows.Storage.Streams;
 namespace Macshot.Windows.Services;
 
 /// <summary>One finished recording, and what it took to make it.</summary>
-public sealed record RecordingResult(string Path, TimeSpan Duration, int Frames, int DroppedFrames);
+/// <param name="AudioTracks">
+/// Each source of the recording's sound, kept apart, or null when there was only one of
+/// them to keep. This is what the merge panel weighs one against the other; the recording
+/// itself carries them summed.
+/// </param>
+public sealed record RecordingResult(
+    string Path,
+    TimeSpan Duration,
+    int Frames,
+    int DroppedFrames,
+    RecordedAudioTracks? AudioTracks = null);
 
 /// <summary>
 /// Which sounds a recording carries, if any.
@@ -329,7 +339,13 @@ public sealed class ScreenRecorder : IDisposable
         }
 
         await prepared.TranscodeAsync();
-        return new RecordingResult(path, frames.Elapsed, kept, frames.Dropped);
+
+        // Closed here rather than left to the using below, because closing is what finishes
+        // the files each source was kept in — until then they carry the length they were
+        // opened with, which is none, and the result would name a pair nothing can read.
+        track?.Dispose();
+
+        return new RecordingResult(path, frames.Elapsed, kept, frames.Dropped, track?.SeparateTracks);
     }
 
     /// <summary>
