@@ -1,3 +1,4 @@
+using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
 
 namespace Macshot.Windows.Core.Tests.Imaging;
@@ -55,6 +56,21 @@ public sealed class MagnifiedPatchTests
 
         Assert.AreEqual((200, 100, 50), PatchPixel(patch, 8, 4, 4));
         Assert.AreEqual(byte.MaxValue, patch[(((4 * 8) + 1) * 4) + 3], "no hole where the frame ran out");
+    }
+
+    [TestMethod]
+    public void TheMiddleOfThePatch_ShowsTheMarkTheReadoutIsReporting()
+    {
+        // The circle promises which pixel a click will take. Magnifying the bare capture
+        // while the hint line reports a mark's colour would break that promise everywhere
+        // anything had been drawn — the two have to read the same pixels.
+        var frame = Frame((6, 6, 10, 20, 30));
+        var mark = new byte[] { 90, 80, 70, byte.MaxValue };
+        var rendered = new RenderedRegion(mark, 1, 1, new CaptureRegion(6, 6, 1, 1));
+
+        var patch = PixelEffects.MagnifiedPatch(frame, Size, Size, 6, 6, 8, zoom: 2, rendered);
+
+        Assert.AreEqual((70, 80, 90), PatchPixel(patch, 8, 4, 4));
     }
 
     /// <summary>An otherwise black frame with the given pixels painted in.</summary>

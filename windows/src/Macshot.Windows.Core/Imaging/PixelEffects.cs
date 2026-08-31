@@ -25,18 +25,58 @@ public static class PixelEffects
     /// screen — <c>BitBlt</c> leaves it at zero — so carrying it through would sample
     /// every pixel of the desktop as invisible.
     /// </para>
+    /// <para>
+    /// <paramref name="rendered"/> is the part of the capture that is showing marks, and
+    /// where it is given the colour comes from there. See <see cref="RenderedRegion"/>.
+    /// </para>
     /// </remarks>
-    public static AnnotationColor Sample(byte[] bgraPixels, int width, int height, int x, int y)
+    public static AnnotationColor Sample(
+        byte[] bgraPixels,
+        int width,
+        int height,
+        int x,
+        int y,
+        RenderedRegion? rendered = null)
     {
         ArgumentNullException.ThrowIfNull(bgraPixels);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
 
+        var (pixels, offset) = PixelAt(bgraPixels, width, height, rendered, x, y);
+
+        return new AnnotationColor(pixels[offset + 2], pixels[offset + 1], pixels[offset]);
+    }
+
+    /// <summary>
+    /// Where the pixel at a capture coordinate lives: inside <paramref name="rendered"/>
+    /// when the point falls in it, and in the capture itself otherwise.
+    /// </summary>
+    /// <remarks>
+    /// The coordinate is scaled into the rendered buffer rather than merely offset, for
+    /// the reason <see cref="RenderedRegion.Covers"/> exists.
+    /// </remarks>
+    private static (byte[] Pixels, int Offset) PixelAt(
+        byte[] bgraPixels,
+        int width,
+        int height,
+        RenderedRegion? rendered,
+        int x,
+        int y)
+    {
         var column = Math.Clamp(x, 0, width - 1);
         var row = Math.Clamp(y, 0, height - 1);
-        var offset = (((row * width) + column) * 4);
 
-        return new AnnotationColor(bgraPixels[offset + 2], bgraPixels[offset + 1], bgraPixels[offset]);
+        if (rendered is { Width: > 0, Height: > 0 } over && over.Covers.Contains(column, row))
+        {
+            var acrossX = Math.Clamp(
+                (int)((column - over.Covers.X) / over.Covers.Width * over.Width), 0, over.Width - 1);
+            var acrossY = Math.Clamp(
+                (int)((row - over.Covers.Y) / over.Covers.Height * over.Height), 0, over.Height - 1);
+
+            return (over.Pixels, ((acrossY * over.Width) + acrossX) * 4);
+        }
+
+        return (bgraPixels, (((row * width) + column) * 4));
     }
 
     /// <summary>
@@ -382,6 +422,12 @@ public static class PixelEffects
     /// hole, because a sampler aimed at the very corner of the screen still has to show
     /// what it is pointing at.
     /// </para>
+    /// <para>
+    /// It reads through <paramref name="rendered"/> for the same reason
+    /// <see cref="Sample"/> does, and it has to be the same reason: the circle is a promise
+    /// about which pixel a click will take, so magnifying the bare capture while reporting
+    /// a mark's colour would make the two disagree wherever anything had been drawn.
+    /// </para>
     /// </remarks>
     public static byte[] MagnifiedPatch(
         byte[] bgraPixels,
@@ -390,7 +436,8 @@ public static class PixelEffects
         int centerX,
         int centerY,
         int diameter,
-        double zoom)
+        double zoom,
+        RenderedRegion? rendered = null)
     {
         ValidateFrame(bgraPixels, width, height);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(diameter);
@@ -410,14 +457,14 @@ public static class PixelEffects
                     continue;
                 }
 
-                var sampleX = Math.Clamp((int)Math.Floor(centerX + 0.5 + (offsetX / zoom)), 0, width - 1);
-                var sampleY = Math.Clamp((int)Math.Floor(centerY + 0.5 + (offsetY / zoom)), 0, height - 1);
+                var sampleX = (int)Math.Floor(centerX + 0.5 + (offsetX / zoom));
+                var sampleY = (int)Math.Floor(centerY + 0.5 + (offsetY / zoom));
 
-                var from = ((sampleY * width) + sampleX) * 4;
+                var (source, from) = PixelAt(bgraPixels, width, height, rendered, sampleX, sampleY);
                 var to = ((y * diameter) + x) * 4;
-                patch[to] = bgraPixels[from];
-                patch[to + 1] = bgraPixels[from + 1];
-                patch[to + 2] = bgraPixels[from + 2];
+                patch[to] = source[from];
+                patch[to + 1] = source[from + 1];
+                patch[to + 2] = source[from + 2];
 
                 // Opaque whatever the screenshot's own alpha byte holds: BitBlt leaves
                 // it undefined, and a transparent patch would show nothing at all.

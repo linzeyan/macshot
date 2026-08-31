@@ -2000,15 +2000,21 @@ public sealed partial class EditorWindow : Window
     }
 
     /// <summary>
-    /// The colour of the image under a point, read from the unannotated pixels so a mark
-    /// already drawn cannot be sampled by accident.
+    /// The colour on the canvas under a point.
     /// </summary>
+    /// <remarks>
+    /// The canvas rather than the image it was opened with, which is macshot's
+    /// <c>sampleCanvasColor</c>: a colour already used in a mark can be picked back up.
+    /// It also makes the reading agree with the picture when an adjustment is on — reading
+    /// <c>_frame</c> reported the colour before Invert had been applied to it.
+    /// </remarks>
     private AnnotationColor SampleAt(CapturePoint point) => PixelEffects.Sample(
         _frame.BgraPixels,
         _frame.Width,
         _frame.Height,
         (int)point.X,
-        (int)point.Y);
+        (int)point.Y,
+        AnnotationCanvas.Rendered);
 
     private CapturePoint ToFrame(PointerRoutedEventArgs e) =>
         _placement.ToFrame(e.GetCurrentPoint(InputCanvas).Position);
