@@ -35,17 +35,33 @@ internal static class TestAudio
     public static readonly double[] Ladder = [0.10, 0.25, 0.40, 0.55, 0.70, 0.85];
 
     /// <summary>The tone as a WAV, at the product's own sample rate and channel count.</summary>
-    public static async Task<StorageFile> WriteToneAsync(StorageFolder folder, int seconds)
+    public static Task<StorageFile> WriteToneAsync(StorageFolder folder, int seconds) =>
+        WriteToneAsync(folder, seconds, Frequency, frame => Ladder[Math.Min(Ladder.Length - 1, frame / AudioPlan.SampleRate)]);
+
+    /// <summary>
+    /// A tone that holds one pitch and one loudness for the whole of it.
+    /// </summary>
+    /// <remarks>
+    /// What the merge tests want, where the question is not <em>when</em> a sound was made
+    /// but <em>which source</em> made it: two constant tones an octave and a half apart can
+    /// be told from each other in the same file, which two amplitudes of the same tone
+    /// cannot.
+    /// </remarks>
+    public static Task<StorageFile> WriteToneAsync(
+        StorageFolder folder, int seconds, double frequency, double amplitude) =>
+        WriteToneAsync(folder, seconds, frequency, _ => amplitude);
+
+    private static async Task<StorageFile> WriteToneAsync(
+        StorageFolder folder, int seconds, double frequency, Func<int, double> amplitudeAt)
     {
         var frames = AudioPlan.SampleRate * seconds;
         var samples = new byte[frames * AudioPlan.Channels * (AudioPlan.BitsPerSample / 8)];
 
         for (var frame = 0; frame < frames; frame++)
         {
-            var second = Math.Min(Ladder.Length - 1, frame / AudioPlan.SampleRate);
-            var value = (short)(Ladder[second]
+            var value = (short)(amplitudeAt(frame)
                 * short.MaxValue
-                * Math.Sin(2 * Math.PI * Frequency * frame / AudioPlan.SampleRate));
+                * Math.Sin(2 * Math.PI * frequency * frame / AudioPlan.SampleRate));
 
             for (var channel = 0; channel < AudioPlan.Channels; channel++)
             {
@@ -55,6 +71,37 @@ internal static class TestAudio
             }
         }
 
+        return await WriteWavAsync(folder, samples);
+    }
+
+    /// <summary>
+    /// The two sources summed at unity, which is the track a macshot recording carries.
+    /// </summary>
+    /// <remarks>
+    /// Through the product's own mixer rather than a second addition written here: what the
+    /// merge has to replace is exactly what <see cref="AudioMerge.Blend"/> at unity
+    /// produces, and a test that summed them its own way would be asserting against its own
+    /// arithmetic.
+    /// </remarks>
+    public static async Task<StorageFile> SummedAsync(
+        StorageFolder folder, StorageFile microphone, StorageFile system)
+    {
+        var first = await ReadAsync(microphone);
+        var second = await ReadAsync(system);
+        var samples = new byte[Math.Max(first.Length, second.Length) - WavAudio.HeaderBytes];
+
+        AudioMerge.Blend(
+            first.AsSpan(WavAudio.HeaderBytes),
+            second.AsSpan(WavAudio.HeaderBytes),
+            samples,
+            AudioMerge.DefaultVolume,
+            AudioMerge.DefaultVolume);
+
+        return await WriteWavAsync(folder, samples);
+    }
+
+    private static async Task<StorageFile> WriteWavAsync(StorageFolder folder, byte[] samples)
+    {
         var file = await folder.CreateFileAsync(
             "macshot-tone.wav", CreationCollisionOption.GenerateUniqueName);
 
@@ -98,6 +145,56 @@ internal static class TestAudio
         return Nearest(rms);
     }
 
+    /// <summary>
+    /// How loud <paramref name="hz"/> is over one window, as the amplitude of a sine at
+    /// that pitch — so 0 means the source that made it is not in this file at all.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Goertzel rather than a full transform, which is one accumulator and no library: the
+    /// question is only ever about the two pitches the sources were given, and answering it
+    /// for two known bins is a dozen lines against a dependency.
+    /// </para>
+    /// <para>
+    /// Both pitches divide the sample rate a whole number of times over a whole second, so
+    /// a window on a second boundary lands exactly on their bins and neither leaks into the
+    /// other.
+    /// </para>
+    /// </remarks>
+    public static double Level(byte[] wav, double hz, double from, double to)
+    {
+        var layout = WavAudio.Read(wav)
+            ?? throw new InvalidOperationException("the rendered audio is not a WAV this can read");
+
+        var first = (long)(from * layout.SampleRate);
+        var last = Math.Min(layout.Frames, (long)(to * layout.SampleRate));
+        var coefficient = 2 * Math.Cos(2 * Math.PI * hz / layout.SampleRate);
+
+        double previous = 0;
+        double before = 0;
+        long count = 0;
+
+        for (var frame = first; frame < last; frame++)
+        {
+            var i = layout.DataOffset + (frame * layout.BytesPerFrame);
+            var value = (short)(wav[i] | (wav[i + 1] << 8)) / (double)short.MaxValue;
+            var current = value + (coefficient * previous) - before;
+
+            before = previous;
+            previous = current;
+            count++;
+        }
+
+        if (count == 0)
+        {
+            return 0;
+        }
+
+        var power = (previous * previous) + (before * before) - (coefficient * previous * before);
+
+        return 2 * Math.Sqrt(Math.Max(0, power)) / count;
+    }
+
     /// <summary>The sound of <paramref name="video"/> as a WAV, ready to measure.</summary>
     public static async Task<byte[]> SoundAsync(StorageFolder folder, StorageFile video)
     {
@@ -115,7 +212,17 @@ internal static class TestAudio
         Assert.AreEqual(
             TranscodeFailureReason.None, result, "the export's sound could not be rendered");
 
-        var buffer = await FileIO.ReadBufferAsync(rendered);
+        return await ReadAsync(rendered);
+    }
+
+    /// <remarks>
+    /// Through the WinRT buffer rather than <c>File.ReadAllBytes</c>, because a file the
+    /// transcoder has just finished with can still be held open for a moment and this is the
+    /// API that waits for it.
+    /// </remarks>
+    private static async Task<byte[]> ReadAsync(StorageFile file)
+    {
+        var buffer = await FileIO.ReadBufferAsync(file);
         var bytes = new byte[buffer.Length];
         using (var reader = DataReader.FromBuffer(buffer))
         {

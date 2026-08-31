@@ -167,7 +167,8 @@ windows/
 │   └── Upload/                     # Request and response shapes for every provider
 │
 ├── src/Macshot.Windows.Recording/  # WinRT media APIs, no WinUI — so the export is testable
-│   └── VideoEffectsCompositor.cs   # Applies the effects band and writes the mp4
+│   ├── VideoEffectsCompositor.cs   # Applies the effects band and writes the mp4
+│   └── AudioMixdown.cs             # Re-mixes a recording's two sources at chosen volumes
 │
 ├── src/Macshot.Windows/            # WinUI 3, Windows only
 │   ├── App.xaml(.cs)               # Entry point → CaptureController
@@ -184,7 +185,7 @@ windows/
 │       └── upstream/*.strings      # The Mac app's, vendored — do not edit, run the sync script
 │
 ├── tests/Macshot.Windows.Core.Tests/
-└── tests/Macshot.Windows.Recording.Tests/   # Exports real video and measures it back
+└── tests/Macshot.Windows.Recording.Tests/   # Exports real video and audio, measures it back
 ```
 
 **Logic goes in Core.** Anything decidable without a window — geometry, formatting,
@@ -416,8 +417,9 @@ start the macOS pipeline on `main`, and vice versa.
   export carries the audio, re-timed where a speed or freeze moved it. Each kind is now
   exported and read back by `Macshot.Windows.Recording.Tests`, which is what found that
   every export of a recording *with sound* had been throwing unless a speed segment was on
-  the band. What is still unmeasured is `ScreenRecorder` itself, which wants a display, and
-  the mic + system sidecar merge.
+  the band. The mic + system merge is measured there too, by pitch rather than by loudness.
+  What is still unmeasured is `ScreenRecorder` itself, which wants a display, and
+  `GifExporter`.
 - The MSIX installs, launches and captures — measured on the VM with a test certificate.
   What used to stop it was never the container: the capture path called an API a packaged
   app may only use with the `graphicsCaptureProgrammatic` capability, and the manifest
