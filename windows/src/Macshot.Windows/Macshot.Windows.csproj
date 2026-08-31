@@ -93,20 +93,47 @@
     Removing it does not remove background removal. That comes from .AI's
     Microsoft.Graphics.Imaging, and .AI depends only on .Base and .Foundation.
 
+    .DWrite and .Widgets went the same way, and the check is the same one: no component
+    package depends on either — only the aggregate does — and nothing here names
+    DWriteCore or a widget. Each contributes exactly one native DLL, 3.10 MB and 2.36 MB.
+    WinUI draws its text through the system DirectWrite; DWriteCore is a redistributable
+    copy for apps that need a newer one than the machine has, which this is not.
+
     These are the versions Microsoft.WindowsAppSDK 2.2.0 pins, which is what makes this a
     subset of that package rather than a different set of components. They move together:
-    to take a new SDK, read the aggregate's dependency list and copy it, minus .ML.
+    to take a new SDK, read the aggregate's dependency list and copy it, minus .ML,
+    .DWrite and .Widgets — then confirm against the component nuspecs that nothing kept
+    has started depending on one of the three.
   -->
   <ItemGroup>
     <PackageReference Include="Microsoft.WindowsAppSDK.AI" Version="2.2.3" />
     <PackageReference Include="Microsoft.WindowsAppSDK.Base" Version="2.0.4" />
-    <PackageReference Include="Microsoft.WindowsAppSDK.DWrite" Version="2.1.0" />
     <PackageReference Include="Microsoft.WindowsAppSDK.Foundation" Version="2.1.0" />
     <PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" Version="2.0.15" />
     <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" Version="2.2.0" />
-    <PackageReference Include="Microsoft.WindowsAppSDK.Widgets" Version="2.0.5" />
     <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="2.2.1" />
   </ItemGroup>
+
+  <!--
+    Do not drop WinUI's 172 .mui files. They look like 3.37 MB of pure overhead — 86
+    locales of WinUI's own error text, for an app that carries its own translations — and
+    removing them was tried here and reverted, because they are not only strings: the MRM
+    resource loader wants them present. Without them the app still builds with no warning,
+    still starts, still takes a screenshot, and then PreferencesWindow opens blank over
+
+      COMException: The resource loader cache didn't load a MUI item.
+
+    which is a failure no compiler, no test and no offline reasoning reaches. If this is
+    ever retried, the check is opening preferences on the VM, not the file count.
+
+    Two mechanical traps, recorded so the next attempt does not rediscover them: the SDK's
+    own MicrosoftWindowsAppSDKFilesExcluded hook cannot match these files at all — its
+    Remove is an exact string comparison against identities that keep an un-normalized
+    "buildTransitive\..\" in them — and a target that removes them from None must use
+    AfterTargets alone, since adding BeforeTargets="AssignTargetPaths" schedules it ahead
+    of the payload target, where None holds no .mui yet and the removal silently does
+    nothing.
+  -->
 
   <!--
     Background removal's own runtime, and only where it can be reached. The offline variant
