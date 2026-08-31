@@ -13,6 +13,15 @@ separately and their version numbers are not related.
   built from source as part of the app. Like HEIC and WebP it is probed for before it is
   offered, and falls back to JPEG if the encoder is missing or refuses a picture.
 
+### Fixed
+
+- **Exporting a recording that has sound, with anything on the effects band except a speed
+  change, failed instead of exporting.** The recording's own file was being laid back
+  beside the rendered frames as a background audio track, which Windows refuses outright
+  for a file with video in it — so a zoom, a censor, a caption or a cut on a recording with
+  audio threw. The track is now lifted out of the recording first, whichever way the sound
+  is going back on.
+
 ## [1.0.0-beta.1] - 2026-08-03
 
 The first Windows release: a port of macshot to C# and WinUI 3, following the macOS app
