@@ -22,7 +22,7 @@ namespace Macshot.Windows.Services;
 /// available here. The tracks are not in the file — this port sums them as it records, for
 /// the reason <see cref="AudioPlan"/> gives — so the balance is mixed again from the copies
 /// <see cref="AudioSidecar"/> kept; and Windows has no muxer that would put a new audio
-/// track beside an encoded video one, which <see cref="VideoEffectsCompositor"/> found the
+/// track beside an encoded video one, which <see cref="Macshot.Windows.Recording.VideoEffectsCompositor"/> found the
 /// same way, so the video is re-encoded to carry it.
 /// </para>
 /// <para>
@@ -159,7 +159,7 @@ internal static class AudioMerger
     /// </summary>
     /// <remarks>
     /// Streamed rather than read whole, unlike the retimed track in
-    /// <see cref="VideoEffectsCompositor"/>: this reads both files front to back exactly
+    /// <see cref="Macshot.Windows.Recording.VideoEffectsCompositor"/>: this reads both files front to back exactly
     /// once, so there is nothing to be gained by holding half an hour of uncompressed audio
     /// in memory — twice.
     /// </remarks>

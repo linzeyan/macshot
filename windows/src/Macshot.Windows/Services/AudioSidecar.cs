@@ -64,7 +64,7 @@ internal sealed class AudioSidecar : IDisposable
     /// <remarks>
     /// Past it the pair is abandoned and the panel is not offered, rather than filling the
     /// user's temporary directory for a question about a recording far longer than the one
-    /// the panel is for. <see cref="Macshot.Windows.Services.VideoEffectsCompositor"/> caps
+    /// the panel is for. <see cref="Macshot.Windows.Recording.VideoEffectsCompositor"/> caps
     /// the track it reads at the same place for the same reason.
     /// </remarks>
     private const long LargestTrackBytes = 400L * 1024 * 1024;

@@ -84,6 +84,7 @@ was skipped, say so — "done" is wrong if anything was silently left out.
 | Target | Where it can be built |
 | --- | --- |
 | `Macshot.Windows.Core` and its tests | Anywhere — plain `net10.0` |
+| `Macshot.Windows.Recording` and its tests | Windows only — WinRT, but no WinUI |
 | `Macshot.Windows` (WinUI 3) | Windows only |
 | `native/macshot-avif` (Rust) | Anywhere — `cargo test` runs on this Mac |
 
@@ -165,6 +166,9 @@ windows/
 │   ├── Recognition/                # OCR and QR result shaping
 │   └── Upload/                     # Request and response shapes for every provider
 │
+├── src/Macshot.Windows.Recording/  # WinRT media APIs, no WinUI — so the export is testable
+│   └── VideoEffectsCompositor.cs   # Applies the effects band and writes the mp4
+│
 ├── src/Macshot.Windows/            # WinUI 3, Windows only
 │   ├── App.xaml(.cs)               # Entry point → CaptureController
 │   ├── CaptureController.cs        # Tray icon, hotkeys, capture orchestration
@@ -179,7 +183,8 @@ windows/
 │       ├── *.strings               # This port's own strings
 │       └── upstream/*.strings      # The Mac app's, vendored — do not edit, run the sync script
 │
-└── tests/Macshot.Windows.Core.Tests/
+├── tests/Macshot.Windows.Core.Tests/
+└── tests/Macshot.Windows.Recording.Tests/   # Exports real video and measures it back
 ```
 
 **Logic goes in Core.** Anything decidable without a window — geometry, formatting,
@@ -187,6 +192,15 @@ parsing, state machines, layout arithmetic — belongs there, because that is th
 can be tested from this machine. `Macshot.Windows` should be the part that draws. Core must
 not reference `Microsoft.UI.*`, `Windows.*`, or P/Invoke; that rule is the only thing
 keeping the logic testable off Windows.
+
+**And what is neither** — code that needs the OS media APIs but no window — goes in
+`Macshot.Windows.Recording`. It exists because `Macshot.Windows` is a WinExe that pulls in
+the Windows App SDK, forces a `RuntimeIdentifier` and builds a Rust crate on the way past,
+so a test project referencing it would need all three to run one composition. Anything
+there is reachable from an ordinary `dotnet test` on Windows. Do **not** name a namespace
+under it `Media`: inside `namespace Macshot.Windows` the name `Windows` binds to
+`Macshot.Windows`, so it would shadow `Windows.Media`, which is what the whole layer is
+written against.
 
 ---
 
