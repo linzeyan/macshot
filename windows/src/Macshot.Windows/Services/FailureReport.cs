@@ -1,4 +1,3 @@
-using System.Runtime.InteropServices;
 using System.Text;
 
 namespace Macshot.Windows.Services;
@@ -15,17 +14,15 @@ namespace Macshot.Windows.Services;
 /// text once the box has been dismissed.
 /// </para>
 /// <para>
-/// A shell message box rather than a XAML dialog, because a failure while starting a
-/// capture may have no window to host one — and the failures worth reporting most are
-/// the ones where building a window is what went wrong.
+/// A shell alert rather than a XAML dialog, because a failure while starting a capture
+/// may have no window to host one — and the failures worth reporting most are the ones
+/// where building a window is what went wrong.
 /// </para>
 /// </remarks>
 public static class FailureReport
 {
-    /// <summary>Stack frames reported. A message box does not scroll.</summary>
+    /// <summary>Stack frames reported. An alert does not scroll.</summary>
     private const int StackFrames = 8;
-
-    private const uint IconError = 0x00000010;
 
     public static void Show(nint owner, Exception exception)
     {
@@ -41,7 +38,8 @@ public static class FailureReport
     /// Told the same way a failure is, because it is worth no less. These notices used
     /// to go straight to <c>MessageBox</c> with the message window as owner, which is
     /// the one combination that shows nothing at all — and the fallback reason is the
-    /// only evidence there is that the preferred backend broke.
+    /// only evidence there is that the preferred backend broke. <see cref="Alert"/> is
+    /// what asks again with no owner now.
     /// </remarks>
     public static void Notice(nint owner, string text)
     {
@@ -52,15 +50,7 @@ public static class FailureReport
         // afterwards must not.
         DiagnosticLog.Write(text);
 
-        // A message-only window cannot own a dialog, and macshot reports most failures
-        // from exactly such a window — the one that receives the hotkeys. MessageBox
-        // answers a refusal with zero rather than an error, which is how a whole class
-        // of failures came to be reported to nobody. Asking again with no owner is what
-        // keeps the report on screen.
-        if (MessageBox(owner, text, "macshot", IconError) == 0 && owner != IntPtr.Zero)
-        {
-            MessageBox(IntPtr.Zero, text, "macshot", IconError);
-        }
+        Alert.Show(owner, null, text, Alert.Icon.Error, Localization.L("OK"));
     }
 
     /// <summary>
@@ -104,7 +94,4 @@ public static class FailureReport
 
         return text.ToString();
     }
-
-    [DllImport("user32.dll", EntryPoint = "MessageBoxW", CharSet = CharSet.Unicode)]
-    private static extern int MessageBox(IntPtr window, string text, string caption, uint type);
 }
