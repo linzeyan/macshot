@@ -364,13 +364,25 @@ writing to `HKCU` are what a packaged app is supposed to declare in its manifest
 **`macshot:` URL scheme** (`UrlSchemeHost` → `windows.protocol`). Expect both to be dead in
 the MSIX build. Where settings and history land under the container has not been checked.
 
-**And the packaged build cannot take a screenshot yet.** Installed and launched from
-`C:\Program Files\WindowsApps`, it starts, logs *Screen capture fell back to the older
-backend: access denied*, and the capture hotkey raises no overlay — the container denies
-what the unpackaged build is simply allowed. That is a capability the manifest has to ask
-for, and it is unfinished work rather than a footnote: an installer that installs an app
-which cannot do the one thing it is for is not shippable. Until it is settled the MSIX is
-an addition and the zip is still how macshot is meant to be run.
+**The packaged build could not take a screenshot, and the reason was not the container.**
+Installed from `C:\Program Files\WindowsApps` it started, logged *Screen capture fell back
+to the older backend: access denied*, and raised no overlay. That read like a sandbox
+refusing what an unpackaged process is simply allowed. It was not. `GraphicsCaptureService`
+opened its items through `GraphicsCaptureItem.TryCreateFromDisplayId` /
+`TryCreateFromWindowId`, and those require `RequestAccessAsync(Programmatic)`, which a
+*packaged* app may only call with the `graphicsCaptureProgrammatic` restricted capability
+declared. `AppxManifest.xml` declares `runFullTrust` and nothing else. The unpackaged build
+was unaffected because the capability check only applies to packaged ones.
+
+Those statics also need build 20348 while the app declares a floor of 19041, so the same
+call had been failing on every consumer Windows 10 from 20H2 to 22H2 — telling the user the
+good backend broke when it had never been reachable.
+
+Both are gone: the service now opens items through `IGraphicsCaptureItemInterop`, which has
+been there since build 18362, needs no capability and shows no picker. **The manifest
+therefore needs no new capability.** What has not been done is reinstalling the MSIX and
+confirming it captures; until that is checked, treat the packaged build as unproven rather
+than fixed.
 
 A tag push runs the workflow **as it exists at the tagged commit**, so tagging here cannot
 start the macOS pipeline on `main`, and vice versa.
@@ -385,11 +397,14 @@ start the macOS pipeline on `main`, and vice versa.
   worked through on a real desktop is placing and exporting each kind in turn; the entry
   that used to sit here said the band was zoom-only and dropped the audio, which the code
   contradicts on both counts.
-- The MSIX installs and launches but cannot capture: the container denies the screen, and
-  the manifest has still to ask for it. It is also never signed — there is no certificate,
-  so no release has carried an installer yet. With `windows.startupTask` and
-  `windows.protocol`, that is what stands between it and being the way macshot is
-  installed. See Releasing.
+- The MSIX installs and launches; whether it can capture is now unproven rather than known
+  broken. What stopped it was never the container — the capture path called an API that a
+  packaged app may only use with the `graphicsCaptureProgrammatic` capability, and the
+  manifest declares only `runFullTrust`. That path is gone, so nothing needs adding to the
+  manifest, but the package has not been rebuilt and retried. It is also never signed —
+  there is no certificate, so no release has carried an installer yet. With
+  `windows.startupTask` and `windows.protocol`, that is what stands between it and being
+  the way macshot is installed. See Releasing.
 - Save formats match macOS: PNG, JPEG, HEIC, WebP and AVIF. WIC writes neither WebP nor
   AVIF — its support for both is a decoder — so each has its own encoder beside the app.
   WebP is libwebp, carried per architecture from `Imazen.WebP.NativeRuntime.win-*` and
