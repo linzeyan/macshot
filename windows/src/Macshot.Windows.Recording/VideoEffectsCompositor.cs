@@ -96,8 +96,10 @@ public sealed record VideoCaption(VideoTextSegment Segment, FrameOverlay.VideoCa
 /// which is a second reason beyond the one <see cref="GifExporter"/> already records.
 /// </para>
 /// <para>
-/// Compile-checked only. Nothing in continuous integration has an encoder or a recording
-/// to encode.
+/// Exercised end to end by <c>Macshot.Windows.Recording.Tests</c>, which synthesizes a
+/// recording, exports it through here, and reads the answer back off the frames and out of
+/// the track. That is why this class lives in a library of its own rather than beside the
+/// window that calls it: a WinUI project cannot be loaded by a test host.
 /// </para>
 /// </remarks>
 public static class VideoEffectsCompositor

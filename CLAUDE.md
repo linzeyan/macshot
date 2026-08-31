@@ -413,10 +413,11 @@ start the macOS pipeline on `main`, and vice versa.
 
 - The effects band carries all six of macOS's kinds — zoom, censor, cut, speed, freeze
   and text — through `VideoEffects`, the compositor and the band's own picker, and an
-  export carries the audio, re-timed where a speed or freeze moved it. What has not been
-  worked through on a real desktop is placing and exporting each kind in turn; the entry
-  that used to sit here said the band was zoom-only and dropped the audio, which the code
-  contradicts on both counts.
+  export carries the audio, re-timed where a speed or freeze moved it. Each kind is now
+  exported and read back by `Macshot.Windows.Recording.Tests`, which is what found that
+  every export of a recording *with sound* had been throwing unless a speed segment was on
+  the band. What is still unmeasured is `ScreenRecorder` itself, which wants a display, and
+  the mic + system sidecar merge.
 - The MSIX installs, launches and captures — measured on the VM with a test certificate.
   What used to stop it was never the container: the capture path called an API a packaged
   app may only use with the `graphicsCaptureProgrammatic` capability, and the manifest

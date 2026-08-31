@@ -137,10 +137,16 @@ public sealed class VideoEffectsCompositorTests
         }
     }
 
-    private async Task<StorageFile> ExportAsync(VideoEffects effects) =>
-        await TestExport.RunAsync(
+    private async Task<StorageFile> ExportAsync(VideoEffects effects)
+    {
+        var (written, carried) = await TestExport.RunAsync(
             _scratch,
             await TestVideo.WriteSecondsAsync(_scratch, SourceSeconds),
             SourceSeconds,
             effects);
+
+        Assert.IsFalse(carried, "a silent recording cannot have carried audio into the export");
+
+        return written;
+    }
 }
