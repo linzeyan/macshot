@@ -167,7 +167,9 @@ internal static class TestVideo
             + ((a.G - b.G) * (a.G - b.G))
             + ((a.B - b.B) * (a.B - b.B)));
 
-    private static int Nearest((byte R, byte G, byte B) colour)
+    /// <summary>Which entry of <see cref="Palette"/> a colour is, for a frame read from
+    /// somewhere other than an mp4.</summary>
+    public static int Nearest((byte R, byte G, byte B) colour)
     {
         var best = 0;
         var closest = double.MaxValue;
