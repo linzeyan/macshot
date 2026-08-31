@@ -1,0 +1,27 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <!--
+      The half of the Windows product that is not the part that draws: OS media APIs and
+      Core, no WinUI. It exists so the export can be tested. Macshot.Windows is a WinExe
+      that pulls in the Windows App SDK, forces a RuntimeIdentifier and builds a Rust
+      crate on the way past, so a test project referencing it would need all three to run
+      one composition; this needs the WinRT projection and nothing else.
+
+      Deliberately not named Macshot.Windows.Media. Inside namespace Macshot.Windows the
+      name "Windows" binds to Macshot.Windows — the trap CLAUDE.md records — so a Media
+      namespace here would shadow Windows.Media, which is the namespace this whole layer
+      is written against.
+
+      19041 is the floor the product declares; 26100 is only what the WinUI half needs.
+    -->
+    <TargetFramework>net10.0-windows10.0.19041.0</TargetFramework>
+    <SupportedOSPlatformVersion>10.0.19041.0</SupportedOSPlatformVersion>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\Macshot.Windows.Core\Macshot.Windows.Core.csproj" />
+  </ItemGroup>
+</Project>

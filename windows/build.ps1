@@ -16,7 +16,9 @@
     configuration where the warning-as-error settings match a release run.
 
 .PARAMETER Test
-    Runs the Core unit tests after building.
+    Runs the unit tests after building — the whole solution, which is what CI
+    runs. Macshot.Windows.Recording.Tests exports real video through the product's
+    own compositor, so it takes about a minute on its own.
 
 .PARAMETER Publish
     Produces a runnable folder under windows/dist (override with -OutputPath).
@@ -71,7 +73,6 @@ $ErrorActionPreference = 'Stop'
 $root = $PSScriptRoot
 $solution = Join-Path $root 'Macshot.Windows.sln'
 $app = Join-Path $root 'src/Macshot.Windows/Macshot.Windows.csproj'
-$coreTests = Join-Path $root 'tests/Macshot.Windows.Core.Tests/Macshot.Windows.Core.Tests.csproj'
 
 function Invoke-Step {
     param([string]$Description, [scriptblock]$Action)
@@ -106,8 +107,11 @@ Invoke-Step "Building $Configuration" {
 }
 
 if ($Test) {
-    Invoke-Step 'Running Core tests' {
-        dotnet test $coreTests --configuration $Configuration --no-build
+    # The solution rather than the Core project alone, which is what CI runs: the
+    # export tests live in their own project and a -Test that skipped them would say
+    # "tests passed" about half of them.
+    Invoke-Step 'Running tests' {
+        dotnet test $solution --configuration $Configuration --no-build
     }
 }
 

@@ -4,6 +4,7 @@ using System.Runtime.InteropServices;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Output;
+using Macshot.Windows.Recording;
 using Macshot.Windows.Rendering;
 using Macshot.Windows.Services;
 using Microsoft.UI.Dispatching;

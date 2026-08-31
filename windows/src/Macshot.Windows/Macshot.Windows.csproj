@@ -217,6 +217,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\Macshot.Windows.Core\Macshot.Windows.Core.csproj" />
+    <ProjectReference Include="..\Macshot.Windows.Recording\Macshot.Windows.Recording.csproj" />
   </ItemGroup>
 
   <!--

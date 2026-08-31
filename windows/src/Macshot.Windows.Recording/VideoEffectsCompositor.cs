@@ -12,7 +12,7 @@ using Windows.Media.MediaProperties;
 using Windows.Media.Transcoding;
 using Windows.Storage;
 
-namespace Macshot.Windows.Services;
+namespace Macshot.Windows.Recording;
 
 /// <summary>A caption and the pixels it was rasterized to.</summary>
 /// <remarks>
@@ -20,7 +20,7 @@ namespace Macshot.Windows.Services;
 /// raster depends only on the output size and the segment's rectangle, and neither
 /// changes once Save has been pressed.
 /// </remarks>
-internal sealed record VideoCaption(VideoTextSegment Segment, FrameOverlay.VideoCaptionRaster Raster);
+public sealed record VideoCaption(VideoTextSegment Segment, FrameOverlay.VideoCaptionRaster Raster);
 
 /// <summary>
 /// Writes a recording out with the effects band applied to it.
@@ -99,7 +99,7 @@ internal sealed record VideoCaption(VideoTextSegment Segment, FrameOverlay.Video
 /// to encode.
 /// </para>
 /// </remarks>
-internal static class VideoEffectsCompositor
+public static class VideoEffectsCompositor
 {
     /// <summary>
     /// Reads <paramref name="source"/>, applies <paramref name="effects"/>, and writes the
