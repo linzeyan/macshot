@@ -32,6 +32,17 @@
          working tree calls itself, and it is deliberately below any published version so
          a development build is never offered to itself as an update. -->
     <Version Condition="'$(Version)' == ''">0.0.0</Version>
+    <!-- Program.cs is the entry point instead, because Velopack has to run before any UI
+         does and the generated Main cannot be edited. That file is a copy of what the
+         markup compiler emits for this project; see the remarks on it.
+
+         A DefineConstants entry rather than a property of its own: the generated Main sits
+         behind `#if !DISABLE_XAML_GENERATED_MAIN`, so this is a preprocessor symbol and an
+         MSBuild property by the same name reaches nothing. Setting it as a property builds
+         both mains and fails with CS0101 plus, more confusingly, two XamlCompiler errors
+         about a missing LocalAssembly. -->
+    <DefineConstants>$(DefineConstants);DISABLE_XAML_GENERATED_MAIN</DefineConstants>
+
     <ImplicitUsings>enable</ImplicitUsings>
     <Nullable>enable</Nullable>
     <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
@@ -112,6 +123,14 @@
     <PackageReference Include="Microsoft.WindowsAppSDK.InteractiveExperiences" Version="2.0.15" />
     <PackageReference Include="Microsoft.WindowsAppSDK.Runtime" Version="2.2.0" />
     <PackageReference Include="Microsoft.WindowsAppSDK.WinUI" Version="2.2.1" />
+  </ItemGroup>
+
+  <!-- The updater. 626 KB and no dependencies of its own on .NET 8 or later, which is why
+       it can sit in a build whose whole point is to get smaller: what it adds to the zip is
+       Update.exe and a launch stub, 4.77 MB, against a per-update download that goes from
+       78.8 MB to 413 KB. Measured on this app, not quoted. -->
+  <ItemGroup>
+    <PackageReference Include="Velopack" Version="1.2.0" />
   </ItemGroup>
 
   <!--
