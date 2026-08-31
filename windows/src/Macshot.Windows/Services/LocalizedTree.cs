@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 
 namespace Macshot.Windows.Services;
@@ -63,6 +64,16 @@ public static class LocalizedTree
             ToolTipService.SetToolTip(node, AppFonts.Tip(Localization.L(tip)));
         }
 
+        // An accessible name is a string the user is read, so it is translated like every
+        // other one. It is attached rather than a property of the control, which is why it
+        // needs a line of its own here — and it is only ever set where the control cannot
+        // name itself, so an empty one means there is nothing to translate rather than
+        // that a name was lost.
+        if (AutomationProperties.GetName(node) is { Length: > 0 } name)
+        {
+            AutomationProperties.SetName(node, Localization.L(name));
+        }
+
         // A context menu hangs off the element rather than sitting inside it, exactly as a
         // button's flyout does, so nothing in the switch below reaches it. Without this the
         // thumbnail and pin panels came up translated with an English right-click menu —
@@ -100,6 +111,14 @@ public static class LocalizedTree
             // Its label is Text, not Content: MenuFlyoutItemBase is not a ContentControl,
             // so the case below never sees one.
             item.Text = Localization.L(item.Text);
+            break;
+
+        case UserControl user:
+            // A UserControl is a Control, not a ContentControl, so the case below never
+            // saw one and the walk simply stopped at every composite this project builds.
+            // That is why the settings page's three colour wells showed English labels in
+            // all forty languages, and why HotkeyBox's own Localize() call did nothing.
+            Walk(user.Content, depth + 1);
             break;
 
         case ContentControl control:

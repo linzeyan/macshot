@@ -141,6 +141,7 @@
              keyboard traversal and narration are the ListView's job, not this window's. -->
         <ListView
             x:Name="Tabs"
+            AutomationProperties.Name="Macshot Settings"
             Margin="0,8,0,4"
             HorizontalAlignment="Center"
             SelectionMode="Single"
@@ -260,6 +261,7 @@
                             <TextBlock Text="Language:" Style="{StaticResource RowLabel}" />
                             <ComboBox
                                 x:Name="LanguageBox"
+                                AutomationProperties.Name="Language:"
                                 Width="240"
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
@@ -296,6 +298,7 @@
                             <TextBlock Text="Menu bar icon:" Style="{StaticResource RowLabel}" />
                             <ComboBox
                                 x:Name="TrayIconBox"
+                                AutomationProperties.Name="Menu bar icon:"
                                 Width="240"
                                 SelectionChanged="TrayIcon_SelectionChanged" />
                         </StackPanel>
@@ -303,6 +306,7 @@
                             <TextBlock Text="" Style="{StaticResource RowLabel}" />
                             <TextBox
                                 x:Name="TrayIconPathBox"
+                                AutomationProperties.Name="Menu bar icon:"
                                 FontSize="13"
                                 Width="240"
                                 PlaceholderText="macshot's own icon"
@@ -336,6 +340,7 @@
                                 Unchecked="Setting_Toggled" />
                             <Button
                                 x:Name="UrlSchemeInfoButton"
+                                AutomationProperties.Name="Supported URL Scheme Commands"
                                 Padding="6,2,6,2"
                                 Background="Transparent"
                                 BorderThickness="0"
@@ -396,6 +401,7 @@
                             <TextBlock Text="Theme:" Style="{StaticResource RowLabel}" />
                             <ComboBox
                                 x:Name="ThemeBox"
+                                AutomationProperties.Name="Theme:"
                                 Width="240"
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
@@ -454,6 +460,7 @@
                             <TextBlock Text="Enter / Quick Capture:" Style="{StaticResource RowLabel}" />
                             <ComboBox
                                 x:Name="QuickCaptureBox"
+                                AutomationProperties.Name="Enter / Quick Capture:"
                                 FontSize="13"
                                 Width="240"
                                 SelectionChanged="Setting_SelectionChanged" />
@@ -468,6 +475,7 @@
                             <TextBlock Text="OCR &amp; QR Capture:" Style="{StaticResource RowLabel}" />
                             <ComboBox
                                 x:Name="OcrActionBox"
+                                AutomationProperties.Name="OCR &amp; QR Capture:"
                                 Width="240"
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
@@ -493,6 +501,7 @@
                             <TextBlock Text="  Dismiss after:" Style="{StaticResource RowLabel}" />
                             <NumberBox
                                 x:Name="ThumbnailSecondsBox"
+                                AutomationProperties.Name="  Dismiss after:"
                                 Width="120"
                                 FontSize="13"
                                 Minimum="1"
@@ -505,6 +514,7 @@
                             <TextBlock Text="  Multiple previews:" Style="{StaticResource RowLabel}" />
                             <ComboBox
                                 x:Name="ThumbnailStackingBox"
+                                AutomationProperties.Name="  Multiple previews:"
                                 Width="240"
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
@@ -512,6 +522,7 @@
                             <TextBlock Text="  Position:" Style="{StaticResource RowLabel}" />
                             <ComboBox
                                 x:Name="ThumbnailCornerBox"
+                                AutomationProperties.Name="  Position:"
                                 Width="240"
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
@@ -519,6 +530,7 @@
                             <TextBlock Text="  Preview size:" Style="{StaticResource RowLabel}" />
                             <Slider
                                 x:Name="ThumbnailScaleSlider"
+                                AutomationProperties.Name="  Preview size:"
                                 Width="180"
                                 Minimum="50"
                                 Maximum="200"
@@ -588,12 +600,13 @@
                             <TextBlock Text="Save action:" Style="{StaticResource RowLabel}" />
                             <ComboBox
                                 x:Name="SaveActionBox"
+                                AutomationProperties.Name="Save action:"
                                 Width="240"
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Save folder:" Style="{StaticResource RowLabel}" />
-                            <TextBox x:Name="DirectoryBox" FontSize="13" Width="240" PlaceholderText="Pictures\Macshot" IsReadOnly="True" />
+                            <TextBox x:Name="DirectoryBox" FontSize="13" Width="240" PlaceholderText="Pictures\Macshot" IsReadOnly="True" AutomationProperties.Name="Save folder:" />
                             <Button Content="Browse…" FontSize="13" Click="Browse_Click" />
                             <Button Content="Reset" FontSize="13" Click="ResetDirectory_Click" />
                         </StackPanel>
@@ -605,6 +618,7 @@
                                  letter when it does not do what was meant. -->
                             <TextBox
                                 x:Name="TemplateBox"
+                                AutomationProperties.Name="Filename:"
                                 FontSize="13"
                                 FontFamily="Cascadia Mono, Consolas"
                                 Width="240"
@@ -618,6 +632,7 @@
                                  disappears when the pointer leaves it cannot be. -->
                             <Button
                                 x:Name="FilenameTokenButton"
+                                AutomationProperties.Name="Show available filename tokens"
                                 Padding="6,2,6,2"
                                 Background="Transparent"
                                 BorderThickness="0"
@@ -662,12 +677,13 @@
                         <TextBlock x:Name="TemplatePreview" Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Image format:" Style="{StaticResource RowLabel}" />
-                            <ComboBox x:Name="FormatBox" FontSize="13" Width="160" SelectionChanged="Format_SelectionChanged" />
+                            <ComboBox x:Name="FormatBox" FontSize="13" Width="160" SelectionChanged="Format_SelectionChanged" AutomationProperties.Name="Image format:" />
                         </StackPanel>
                         <StackPanel x:Name="QualityPanel" Style="{StaticResource Row}">
                             <TextBlock Text="Quality:" Style="{StaticResource RowLabel}" />
                             <Slider
                                 x:Name="QualitySlider"
+                                AutomationProperties.Name="Quality:"
                                 Width="240"
                                 Minimum="1"
                                 Maximum="100"
@@ -694,7 +710,7 @@
                              which carries only one of them. -->
                         <StackPanel x:Name="BackgroundRemovalPanel" Style="{StaticResource Row}">
                             <TextBlock Text="Remove Background:" Style="{StaticResource RowLabel}" />
-                            <ComboBox x:Name="BackgroundRemovalBox" FontSize="13" Width="200" SelectionChanged="Setting_SelectionChanged" />
+                            <ComboBox x:Name="BackgroundRemovalBox" FontSize="13" Width="200" SelectionChanged="Setting_SelectionChanged" AutomationProperties.Name="Remove Background:" />
                         </StackPanel>
                         <TextBlock
                             x:Name="BackgroundRemovalCaption"
@@ -703,6 +719,7 @@
                             <TextBlock Text="History size:" Style="{StaticResource RowLabel}" />
                             <NumberBox
                                 x:Name="HistorySizeBox"
+                                AutomationProperties.Name="History size:"
                                 Width="120"
                                 FontSize="13"
                                 Minimum="0"
@@ -851,6 +868,7 @@
                             <TextBlock Text="Frame rate:" Style="{StaticResource RowLabel}" />
                             <ComboBox
                                 x:Name="RecordingFrameRateBox"
+                                AutomationProperties.Name="Frame rate:"
                                 FontSize="13"
                                 Width="160"
                                 SelectionChanged="Setting_SelectionChanged" />
@@ -861,12 +879,13 @@
                              would remove the settings rather than de-duplicate them. -->
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Format:" Style="{StaticResource RowLabel}" />
-                            <ComboBox x:Name="RecordingFormatBox" FontSize="13" Width="160" SelectionChanged="RecordingFormat_SelectionChanged" />
+                            <ComboBox x:Name="RecordingFormatBox" FontSize="13" Width="160" SelectionChanged="RecordingFormat_SelectionChanged" AutomationProperties.Name="Format:" />
                         </StackPanel>
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="GIF:" Style="{StaticResource RowLabel}" />
                             <NumberBox
                                 x:Name="GifFrameRateBox"
+                                AutomationProperties.Name="GIF:"
                                 Width="120"
                                 FontSize="13"
                                 Minimum="2"
@@ -879,6 +898,7 @@
                             <TextBlock Text="Save folder:" Style="{StaticResource RowLabel}" />
                             <TextBox
                                 x:Name="RecordingDirectoryBox"
+                                AutomationProperties.Name="Save folder:"
                                 FontSize="13"
                                 Width="240"
                                 PlaceholderText="Same as screenshots"
@@ -890,6 +910,7 @@
                             <TextBlock Text="Filename:" Style="{StaticResource RowLabel}" />
                             <TextBox
                                 x:Name="RecordingTemplateBox"
+                                AutomationProperties.Name="Filename:"
                                 FontSize="13"
                                 FontFamily="Cascadia Mono, Consolas"
                                 Width="240"
@@ -901,6 +922,7 @@
                                  is the builder rather than the panel. -->
                             <Button
                                 x:Name="RecordingFilenameTokenButton"
+                                AutomationProperties.Name="Show available filename tokens"
                                 Padding="6,2,6,2"
                                 Background="Transparent"
                                 BorderThickness="0"
@@ -945,6 +967,7 @@
                             <TextBlock Text="When done:" Style="{StaticResource RowLabel}" />
                             <ComboBox
                                 x:Name="RecordingOnStopBox"
+                                AutomationProperties.Name="When done:"
                                 Width="240"
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
@@ -969,6 +992,7 @@
                             <TextBlock Text="Keystrokes:" Style="{StaticResource RowLabel}" />
                             <ComboBox
                                 x:Name="KeystrokeModeBox"
+                                AutomationProperties.Name="Keystrokes:"
                                 Width="240"
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
@@ -980,6 +1004,7 @@
                             <TextBlock Text="Position:" Style="{StaticResource RowLabel}" />
                             <ComboBox
                                 x:Name="WebcamCornerBox"
+                                AutomationProperties.Name="Position:"
                                 Width="240"
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
@@ -987,6 +1012,7 @@
                             <TextBlock Text="Size:" Style="{StaticResource RowLabel}" />
                             <ComboBox
                                 x:Name="WebcamSizeBox"
+                                AutomationProperties.Name="Size:"
                                 Width="240"
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
@@ -994,6 +1020,7 @@
                             <TextBlock Text="Shape:" Style="{StaticResource RowLabel}" />
                             <ComboBox
                                 x:Name="WebcamShapeBox"
+                                AutomationProperties.Name="Shape:"
                                 Width="240"
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
@@ -1024,6 +1051,7 @@
                             <TextBlock Text="Scroll speed:" Style="{StaticResource RowLabel}" />
                             <ComboBox
                                 x:Name="ScrollSpeedBox"
+                                AutomationProperties.Name="Scroll speed:"
                                 Width="240"
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
@@ -1034,6 +1062,7 @@
                             <TextBlock Text="Max height:" Style="{StaticResource RowLabel}" />
                             <NumberBox
                                 x:Name="ScrollMaxHeightBox"
+                                AutomationProperties.Name="Max height:"
                                 Width="120"
                                 FontSize="13"
                                 Minimum="0"
@@ -1066,6 +1095,7 @@
                             <TextBlock Text="Provider:" Style="{StaticResource RowLabel}" />
                             <ComboBox
                                 x:Name="UploadProviderBox"
+                                AutomationProperties.Name="Provider:"
                                 FontSize="13"
                                 Width="240"
                                 SelectionChanged="Setting_SelectionChanged" />
@@ -1100,6 +1130,7 @@
                             <TextBlock Text="Endpoint:" Style="{StaticResource RowLabel}" />
                             <TextBox
                                 x:Name="S3EndpointBox"
+                                AutomationProperties.Name="Endpoint:"
                                 FontSize="13"
                                 Width="300"
                                 FontFamily="Consolas"
@@ -1110,6 +1141,7 @@
                             <TextBlock Text="Region:" Style="{StaticResource RowLabel}" />
                             <TextBox
                                 x:Name="S3RegionBox"
+                                AutomationProperties.Name="Region:"
                                 FontSize="13"
                                 Width="300"
                                 FontFamily="Consolas"
@@ -1120,6 +1152,7 @@
                             <TextBlock Text="Bucket:" Style="{StaticResource RowLabel}" />
                             <TextBox
                                 x:Name="S3BucketBox"
+                                AutomationProperties.Name="Bucket:"
                                 FontSize="13"
                                 Width="300"
                                 FontFamily="Consolas"
@@ -1130,6 +1163,7 @@
                             <TextBlock Text="Access Key:" Style="{StaticResource RowLabel}" />
                             <TextBox
                                 x:Name="S3AccessKeyBox"
+                                AutomationProperties.Name="Access Key:"
                                 FontSize="13"
                                 Width="300"
                                 FontFamily="Consolas"
@@ -1143,6 +1177,7 @@
                                  enough that a secret in plain sight is a real leak. -->
                             <PasswordBox
                                 x:Name="S3SecretKeyBox"
+                                AutomationProperties.Name="Secret Key:"
                                 FontSize="13"
                                 Width="300"
                                 FontFamily="Consolas"
@@ -1152,6 +1187,7 @@
                             <TextBlock Text="Public URL:" Style="{StaticResource RowLabel}" />
                             <TextBox
                                 x:Name="S3PublicUrlBox"
+                                AutomationProperties.Name="Public URL:"
                                 FontSize="13"
                                 Width="300"
                                 FontFamily="Consolas"
@@ -1165,6 +1201,7 @@
                             <TextBlock Text="Path Prefix:" Style="{StaticResource RowLabel}" />
                             <TextBox
                                 x:Name="S3PathPrefixBox"
+                                AutomationProperties.Name="Path Prefix:"
                                 FontSize="13"
                                 Width="300"
                                 FontFamily="Consolas"
@@ -1198,6 +1235,7 @@
                             <TextBlock Text="API key:" Style="{StaticResource RowLabel}" />
                             <TextBox
                                 x:Name="ImgbbKeyBox"
+                                AutomationProperties.Name="API key:"
                                 FontSize="13"
                                 Width="300"
                                 FontFamily="Consolas"

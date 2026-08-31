@@ -1,6 +1,7 @@
 using Macshot.Windows.Core.Input;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Macshot.Windows.Services;
@@ -63,6 +64,19 @@ public sealed partial class HotkeyBox : UserControl
                 ? Visibility.Collapsed
                 : Visibility.Visible;
         }
+    }
+
+    /// <summary>What this shortcut does, for a reader rather than for the eye.</summary>
+    /// <remarks>
+    /// Set instead of <see cref="Header"/> where the page labels the row itself, which is
+    /// every row in preferences. The button's own text is the key it currently holds, so
+    /// without this a reader arriving at one is told "Ctrl+Shift+X, button" and nothing
+    /// about which command that is — and on the six rows that ship unbound, "None".
+    /// </remarks>
+    public string Label
+    {
+        get => AutomationProperties.GetName(RecordButton);
+        set => AutomationProperties.SetName(RecordButton, value);
     }
 
     /// <summary>
