@@ -138,11 +138,17 @@ public sealed class VideoOverlayExportTests
     }
 
     private async Task<StorageFile> ExportAsync(
-        VideoEffects effects, IReadOnlyList<VideoCaption>? captions = null) =>
-        await TestExport.RunAsync(
+        VideoEffects effects, IReadOnlyList<VideoCaption>? captions = null)
+    {
+        var (written, carried) = await TestExport.RunAsync(
             _scratch,
             await TestVideo.WriteQuadrantsAsync(_scratch, SourceSeconds),
             SourceSeconds,
             effects,
             captions);
+
+        Assert.IsFalse(carried, "a silent recording cannot have carried audio into the export");
+
+        return written;
+    }
 }

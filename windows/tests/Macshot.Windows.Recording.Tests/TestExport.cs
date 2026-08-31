@@ -16,12 +16,14 @@ internal static class TestExport
     /// <summary>Enough for 640x480 that the colours come back unambiguous.</summary>
     public const int Bitrate = 4_000_000;
 
-    public static async Task<StorageFile> RunAsync(
+    /// <returns>The file written, and whether the recording's sound came with it.</returns>
+    public static async Task<(StorageFile File, bool CarriedAudio)> RunAsync(
         StorageFolder scratch,
         StorageFile source,
         double sourceSeconds,
         VideoEffects effects,
-        IReadOnlyList<VideoCaption>? captions = null)
+        IReadOnlyList<VideoCaption>? captions = null,
+        bool hasAudio = false)
     {
         var destination = await scratch.CreateFileAsync(
             "macshot-export.mp4", CreationCollisionOption.GenerateUniqueName);
@@ -39,11 +41,9 @@ internal static class TestExport
             TestVideo.Height,
             FrameRate,
             Bitrate,
-            hasAudio: false);
+            hasAudio);
 
-        Assert.IsFalse(carried, "a silent recording cannot have carried audio into the export");
-
-        return destination;
+        return (destination, carried);
     }
 
     /// <summary>A scratch folder of this run's own, deleted with everything in it.</summary>

@@ -92,7 +92,13 @@ internal static class TestVideo
     public static readonly (byte R, byte G, byte B) BottomLeft = (0, 0, 255);
 
     /// <summary>An mp4 of <paramref name="seconds"/> seconds, a colour a second.</summary>
-    public static async Task<StorageFile> WriteSecondsAsync(StorageFolder folder, int seconds)
+    /// <param name="sound">
+    /// A track to lay under it, for the tests that check the sound moved with the picture.
+    /// Null leaves the recording silent, which is the cheaper path through the export and
+    /// the one the picture tests want.
+    /// </param>
+    public static async Task<StorageFile> WriteSecondsAsync(
+        StorageFolder folder, int seconds, StorageFile? sound = null)
     {
         var images = new List<StorageFile>(seconds);
         var composition = new MediaComposition();
@@ -103,6 +109,12 @@ internal static class TestVideo
             images.Add(image);
             composition.Clips.Add(
                 await MediaClip.CreateFromImageFileAsync(image, TimeSpan.FromSeconds(1)));
+        }
+
+        if (sound is not null)
+        {
+            composition.BackgroundAudioTracks.Add(
+                await BackgroundAudioTrack.CreateFromFileAsync(sound));
         }
 
         return await RenderAsync(folder, composition, images);
