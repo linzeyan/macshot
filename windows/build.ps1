@@ -146,17 +146,23 @@ if ($Run -or $Publish) {
 }
 
 if ($Msix) {
-    # Published separately and self-contained, whatever -FrameworkDependent said. The
-    # packaged app cannot use the unpackaged folder above — WindowsPackageType decides
-    # whether the Windows App SDK bootstrapper runs at startup, and it must not inside a
-    # package — and a package that assumed a runtime on the machine would defeat the point
-    # of shipping an installer.
+    # Published separately and self-contained, whatever -FrameworkDependent said: a package
+    # that assumed a runtime on the machine would defeat the point of shipping an installer.
+    #
+    # Deliberately without -p:WindowsPackageType=MSIX. That property reads like the one
+    # thing that makes a publish packageable — it decides whether the Windows App SDK
+    # bootstrapper is wired into startup, and a bootstrapper must not run inside a package
+    # — and setting it fails the publish outright with "no AppxManifest is specified",
+    # because a single-project MSIX build wants the manifest as a project item and this
+    # tree keeps one template outside the project for all four release legs. The release
+    # workflow packs the ordinary publish for the same reason. Measured on the VM: a
+    # package made this way installs from C:\Program Files\WindowsApps, launches, and
+    # captures.
     $packagedOutput = Join-Path $root "dist/$Configuration-msix"
     Invoke-Step "Publishing the packaged build to $packagedOutput" {
         dotnet publish $app `
             --configuration $Configuration `
             --self-contained true `
-            -p:WindowsPackageType=MSIX `
             --output $packagedOutput
     }
 

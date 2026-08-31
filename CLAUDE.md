@@ -362,7 +362,7 @@ packaging. It also puts the process in an MSIX container, and two things macshot
 writing to `HKCU` are what a packaged app is supposed to declare in its manifest instead:
 **Launch at login** (`StartupRegistration`, the `Run` key → `windows.startupTask`) and the
 **`macshot:` URL scheme** (`UrlSchemeHost` → `windows.protocol`). Expect both to be dead in
-the MSIX build. Where settings and history land under the container has not been checked.
+the MSIX build.
 
 **The packaged build could not take a screenshot, and the reason was not the container.**
 Installed from `C:\Program Files\WindowsApps` it started, logged *Screen capture fell back
@@ -380,9 +380,15 @@ good backend broke when it had never been reachable.
 
 Both are gone: the service now opens items through `IGraphicsCaptureItemInterop`, which has
 been there since build 18362, needs no capability and shows no picker. **The manifest
-therefore needs no new capability.** What has not been done is reinstalling the MSIX and
-confirming it captures; until that is checked, treat the packaged build as unproven rather
-than fixed.
+therefore needs no new capability**, and the packaged build captures. Measured on the VM,
+signed with a test certificate and installed from `C:\Program Files\WindowsApps`: hotkey →
+*desktop captured 2038x1588 via WindowsGraphicsCapture* → overlay → a 600×500 region
+delivered and written to `Pictures\Macshot`.
+
+Two things that had been open are answered by the same run. Settings and history land where
+they do unpackaged — `%LOCALAPPDATA%\macshot\` — not under `LocalCache`, because a
+`runFullTrust` desktop app is not filesystem-virtualized. And libwebp loads from inside the
+package, so the optional codecs work there too.
 
 A tag push runs the workflow **as it exists at the tagged commit**, so tagging here cannot
 start the macOS pipeline on `main`, and vice versa.
@@ -397,14 +403,14 @@ start the macOS pipeline on `main`, and vice versa.
   worked through on a real desktop is placing and exporting each kind in turn; the entry
   that used to sit here said the band was zoom-only and dropped the audio, which the code
   contradicts on both counts.
-- The MSIX installs and launches; whether it can capture is now unproven rather than known
-  broken. What stopped it was never the container — the capture path called an API that a
-  packaged app may only use with the `graphicsCaptureProgrammatic` capability, and the
-  manifest declares only `runFullTrust`. That path is gone, so nothing needs adding to the
-  manifest, but the package has not been rebuilt and retried. It is also never signed —
-  there is no certificate, so no release has carried an installer yet. With
-  `windows.startupTask` and `windows.protocol`, that is what stands between it and being
-  the way macshot is installed. See Releasing.
+- The MSIX installs, launches and captures — measured on the VM with a test certificate.
+  What used to stop it was never the container: the capture path called an API a packaged
+  app may only use with the `graphicsCaptureProgrammatic` capability, and the manifest
+  declares only `runFullTrust`. That path is gone and the manifest needs nothing added.
+  What is left is that no release carries an installer, because there is no certificate to
+  sign one with, and that `windows.startupTask` and `windows.protocol` are still
+  undeclared, so launch-at-login and the `macshot:` scheme are dead in a package. See
+  Releasing.
 - Save formats match macOS: PNG, JPEG, HEIC, WebP and AVIF. WIC writes neither WebP nor
   AVIF — its support for both is a decoder — so each has its own encoder beside the app.
   WebP is libwebp, carried per architecture from `Imazen.WebP.NativeRuntime.win-*` and
