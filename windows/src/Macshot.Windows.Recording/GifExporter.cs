@@ -5,7 +5,7 @@ using Windows.Media.Editing;
 using Windows.Storage;
 using Windows.Storage.Streams;
 
-namespace Macshot.Windows.Services;
+namespace Macshot.Windows.Recording;
 
 /// <summary>What came of writing a video out as a GIF.</summary>
 /// <param name="Frames">How many frames reached the file.</param>
@@ -20,10 +20,9 @@ public sealed record GifExportResult(int Frames, bool Truncated);
 /// </summary>
 /// <remarks>
 /// <para>
-/// The video editor's GIF export. <see cref="ScreenRecorder"/> writes a GIF while the
-/// screen is being recorded, from frames Windows hands it; this one starts from a file
-/// that already exists, which means seeking to each moment and asking the platform for
-/// the frame there.
+/// The video editor's GIF export. <c>ScreenRecorder</c> writes a GIF while the screen is
+/// being recorded, from frames Windows hands it; this one starts from a file that already
+/// exists, which means seeking to each moment and asking the platform for the frame there.
 /// </para>
 /// <para>
 /// Frame by frame through <see cref="MediaComposition.GetThumbnailAsync"/> rather than in
@@ -32,7 +31,7 @@ public sealed record GifExportResult(int Frames, bool Truncated);
 /// begins. Slower, and the only version that cannot silently mis-split.
 /// </para>
 /// </remarks>
-internal static class GifExporter
+public static class GifExporter
 {
     /// <summary>What the GIF's own timing is measured in.</summary>
     /// <remarks>
@@ -83,8 +82,19 @@ internal static class GifExporter
         var written = 0;
         var truncated = false;
 
-        for (var at = trim.Start; at < trim.End; at += step)
+        for (var index = 0; ; index++)
         {
+            // Multiplied out rather than accumulated. Twenty additions of a tenth land a
+            // hair *below* two seconds, so a trim whose length the step divides exactly
+            // gets one extra frame on the end of it — a two-second trim at ten a second
+            // came out twenty-one frames long.
+            var at = trim.Start + (index * step);
+
+            if (at >= trim.End)
+            {
+                break;
+            }
+
             cancellation.ThrowIfCancellationRequested();
 
             if (written >= GifRecordingPlan.MaximumFrames)
@@ -155,9 +165,14 @@ internal static class GifExporter
             BitmapPixelFormat.Bgra8,
             BitmapAlphaMode.Ignore,
 
-            // Scaled here as well as at the thumbnail, because a thumbnail is fitted
-            // inside what it is asked for and comes back short on one edge for any aspect
-            // ratio that does not match. Every frame of a GIF must be the same size.
+            // Scaled here as well as at the thumbnail, because a thumbnail is documented
+            // to be fitted inside what it is asked for and would come back short on one
+            // edge for any aspect ratio that does not match — and every frame of a GIF must
+            // be the same size. Measured on 10.0.26200 it is doing nothing: GetThumbnailAsync
+            // stretches to exactly the size asked for, both wider and taller than the
+            // source's own shape. Kept anyway, because a resample that is already the right
+            // size costs nothing and the failure it guards against is a file no viewer will
+            // open.
             new BitmapTransform { ScaledWidth = (uint)width, ScaledHeight = (uint)height },
             ExifOrientationMode.IgnoreExifOrientation,
             ColorManagementMode.DoNotColorManage);
