@@ -1,4 +1,5 @@
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 
@@ -40,11 +41,18 @@ internal sealed partial class ColorChoice : UserControl
         _picker = new ColorPicker { IsAlphaEnabled = false };
         _picker.ColorChanged += (_, args) => Show(args.NewColor);
 
-        Content = new Button
+        var button = new Button
         {
             Content = face,
             Flyout = new Flyout { Content = _picker },
         };
+
+        // The label is inside the button rather than being it, and a swatch beside a
+        // TextBlock is not a name WinUI will infer — the automation tree showed all three
+        // of these wells as an unnamed button. Set in English, like every other string
+        // here, so the page-wide pass translates it along with the visible label.
+        AutomationProperties.SetName(button, label);
+        Content = button;
     }
 
     /// <summary>

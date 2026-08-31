@@ -11,6 +11,7 @@ using Macshot.Windows.Services;
 using Macshot.Windows.Toolbar;
 using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
@@ -371,6 +372,10 @@ public sealed partial class PreferencesWindow : Window
         // macshot's order — accent, icon, background (SettingsWindowController.swift:539).
         foreach (var choice in new[] { _toolbarAccent, _toolbarIcon, _toolbarBackground })
         {
+            // Built after the page-wide pass, so it has to ask for its own translation.
+            // Accent, Icon and Background ship in all forty languages and these three
+            // wells were showing the English in every one of them.
+            choice.Localize();
             choice.Changed += Setting_Changed;
             ToolbarColorRow.Children.Add(choice);
         }
@@ -414,6 +419,7 @@ public sealed partial class PreferencesWindow : Window
 
         void Add(string label, HotkeyBox box, string fallback)
         {
+            box.Label = L(label);
             box.BindingChanged += Setting_Changed;
 
             var clear = SmallButton(ClearGlyph, L("None"));
@@ -425,6 +431,11 @@ public sealed partial class PreferencesWindow : Window
             reset.Click += (_, _) => box.Assign(fallback);
 
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+
+            // The row is what the label names, not the box: "None" and "Reset to default"
+            // are the same two words on all twelve rows, and a group name is what tells a
+            // reader which shortcut the pair it has just landed on belongs to.
+            AutomationProperties.SetName(row, L(label));
             row.Children.Add(new TextBlock { Text = $"{L(label)}:", Style = labelStyle });
             row.Children.Add(box);
             row.Children.Add(clear);
@@ -494,6 +505,10 @@ public sealed partial class PreferencesWindow : Window
             };
 
             var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+
+            // As in the global rows above: "Set", "None" and "Reset to default" repeat
+            // down the whole page, so the name that distinguishes them is the row's.
+            AutomationProperties.SetName(row, L(shortcut.Label));
             row.Children.Add(new TextBlock { Text = $"{L(shortcut.Label)}:", Style = labelStyle });
             row.Children.Add(field);
             row.Children.Add(set);
@@ -525,6 +540,11 @@ public sealed partial class PreferencesWindow : Window
         };
 
         ToolTipService.SetToolTip(button, AppFonts.Tip(tooltip));
+
+        // The glyph is the whole of the button, so without this a reader reaches it and
+        // has nothing to say. The tooltip is already the sentence that explains it, and
+        // is already translated by the time it arrives here.
+        AutomationProperties.SetName(button, tooltip);
         return button;
     }
 
@@ -821,6 +841,10 @@ public sealed partial class PreferencesWindow : Window
         };
 
         ToolTipService.SetToolTip(button, AppFonts.Tip(tooltip));
+
+        // <see cref="SmallButton"/>'s reason, and the same fix: a chevron says nothing to
+        // a reader.
+        AutomationProperties.SetName(button, tooltip);
         button.Click += (_, _) =>
         {
             _menuOrder = CaptureMenuItems.Move(_menuOrder, index, by);
