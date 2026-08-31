@@ -807,7 +807,7 @@ public sealed partial class CaptureOverlayWindow : Window
             // the eye reports, and there is no way to tell before committing to it.
             var sampling = ToFrame(e);
             Report(SamplingHint, SampleAt(sampling).ToHex());
-            Loupe().Track(sampling);
+            Loupe().Track(sampling, AnnotationCanvas.Rendered);
             return;
         }
 
@@ -3728,19 +3728,22 @@ public sealed partial class CaptureOverlayWindow : Window
     }
 
     /// <summary>
-    /// The colour of the frozen screenshot under a frame-space point.
+    /// The colour on the canvas under a frame-space point.
     /// </summary>
     /// <remarks>
-    /// The screenshot rather than the preview, so a mark already drawn cannot be
-    /// sampled by accident: what the sampler is for is the colour of the thing being
-    /// annotated, and every annotation on top of it is macshot's own.
+    /// The canvas rather than the bare screenshot, so a colour already used in a mark can
+    /// be picked back up — macshot's <c>sampleCanvasColor</c>. This used to read the
+    /// screenshot on the grounds that a mark could otherwise be sampled by accident, which
+    /// had it backwards: what is under the pointer is what the user is aiming at, and a
+    /// second arrow that cannot be given the first one's colour is the common case.
     /// </remarks>
     private AnnotationColor SampleAt(CapturePoint point) => PixelEffects.Sample(
         _desktopFrame.BgraPixels,
         _desktopFrame.Width,
         _desktopFrame.Height,
         (int)point.X,
-        (int)point.Y);
+        (int)point.Y,
+        AnnotationCanvas.Rendered);
 
     private void RenderAnnotations() => AnnotationCanvas.Render();
 

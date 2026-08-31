@@ -180,6 +180,12 @@ public sealed partial class AnnotationCanvasView : UserControl
     public CapturedFrame? ToFrame() => _preview?.ToFrame();
 
     /// <summary>
+    /// What is on the canvas — the capture with the marks drawn into it — and where it
+    /// sits, or null before anything is being previewed. What the colour sampler reads.
+    /// </summary>
+    public RenderedRegion? Rendered => _preview?.Rendered;
+
+    /// <summary>
     /// The same capture in the pieces it was made from, for archiving it in a form that
     /// can be edited again. Null before anything is being previewed.
     /// </summary>

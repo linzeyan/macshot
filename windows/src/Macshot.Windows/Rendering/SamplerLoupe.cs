@@ -92,7 +92,12 @@ public sealed class SamplerLoupe
     }
 
     /// <summary>Redraws the circle around a frame-space point and shows it.</summary>
-    public void Track(CapturePoint point)
+    /// <param name="rendered">
+    /// What the canvas is showing, so the circle magnifies the marks along with the
+    /// capture. Passed per call rather than held, because it changes with every mark
+    /// drawn while the loupe is built once.
+    /// </param>
+    public void Track(CapturePoint point, RenderedRegion? rendered = null)
     {
         var centerX = (int)Math.Round(point.X);
         var centerY = (int)Math.Round(point.Y);
@@ -104,7 +109,8 @@ public sealed class SamplerLoupe
             centerX,
             centerY,
             Diameter,
-            Zoom);
+            Zoom,
+            rendered);
 
         using (var stream = _bitmap.PixelBuffer.AsStream())
         {

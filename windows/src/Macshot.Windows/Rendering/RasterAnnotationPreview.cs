@@ -78,6 +78,16 @@ public sealed class RasterAnnotationPreview
     }
 
     /// <summary>
+    /// The live buffer and the part of the capture it covers, for the colour sampler.
+    /// </summary>
+    /// <remarks>
+    /// Uncopied, unlike <see cref="ToFrame"/>: the sampler reads a pixel per pointer move,
+    /// and cloning the selection each time to read one of them would cost more than
+    /// rendering it did. Nothing outside this class writes to it.
+    /// </remarks>
+    public RenderedRegion Rendered => new(_pixels, _baseFrame.Width, _baseFrame.Height, _region);
+
+    /// <summary>
     /// The pixels on screen right now, as a frame that can be delivered directly.
     /// Copied because rendering keeps writing into the live buffer.
     /// </summary>
