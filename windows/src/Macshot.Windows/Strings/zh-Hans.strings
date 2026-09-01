@@ -47,7 +47,7 @@
 "Draw the capture as a window, or on its own" = "将截图画成窗口，或单独呈现";
 "Draw to annotate • Ctrl+Z undo • Ctrl+S save • Ctrl+C copy" = "绘制以标注 • Ctrl+Z 撤销 • Ctrl+S 保存 • Ctrl+C 复制";
 "Enter to take the last selection again • Drag for a new one • Esc to cancel" = "按 Enter 再次使用上次的选取范围 • 拖移以重新选取 • Esc 取消";
-"Esc or Stop keeps what has been captured so far" = "按 Esc 或“停止”会保留目前已捕获的内容";
+"Stop keeps what has been captured so far; Esc discards it" = "“停止”保留目前已捕获的内容；Esc 则全部舍弃";
 "Exported {0} settings." = "已导出 {0} 项设置。";
 "Files are uploaded to a \"macshot\" folder in your Google Drive. Everything stays private — nothing is shared publicly." = "文件会上传至你 Google 云端硬盘中的“macshot”文件夹。一切保持私密 — 不会公开分享任何内容。";
 "Fit canvas" = "适合画布";

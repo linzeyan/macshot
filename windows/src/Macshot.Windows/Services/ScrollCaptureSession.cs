@@ -111,9 +111,8 @@ public sealed class ScrollCaptureSession
     public const int PreviewWidth = 200;
 
     /// <summary>
-    /// Scrolls <paramref name="window"/> to its end, or until
-    /// <paramref name="cancellation"/> asks it to stop, and returns everything seen
-    /// on the way as one tall image.
+    /// Scrolls <paramref name="window"/> to its end, or until it is asked to stop, and
+    /// returns everything seen on the way as one tall image.
     /// </summary>
     /// <param name="region">
     /// The part of the desktop to keep, in virtual space, or null for the whole window.
@@ -122,9 +121,21 @@ public sealed class ScrollCaptureSession
     /// rectangle are stitched — which is what lets a page be captured without the
     /// browser's chrome repeated down the side of it.
     /// </param>
+    /// <param name="finish">
+    /// Ends the capture here and hands back what has been stitched — the HUD's Stop
+    /// button. Kept apart from <paramref name="cancellation"/> because the two are
+    /// opposite answers to the same key press: one delivers a short page, the other
+    /// delivers nothing at all.
+    /// </param>
+    /// <param name="cancellation">
+    /// Abandons the capture, throwing <see cref="OperationCanceledException"/> so that
+    /// no caller can mistake it for a result — Escape, which must leave nothing saved,
+    /// copied or in history.
+    /// </param>
     public async Task<ScrollCaptureResult> RunAsync(
         CaptureWindow window,
         CaptureRegion? region = null,
+        CancellationToken finish = default,
         CancellationToken cancellation = default)
     {
         if (!_driven)
@@ -139,7 +150,7 @@ public sealed class ScrollCaptureSession
                     Localization.L("macshot could not bring that window forward."));
             }
 
-            return await CaptureAsync(window, region, cancellation);
+            return await CaptureAsync(window, region, finish, cancellation);
         }
 
         var over = region is { } aimed
@@ -154,7 +165,7 @@ public sealed class ScrollCaptureSession
 
         try
         {
-            return await CaptureAsync(window, region, cancellation);
+            return await CaptureAsync(window, region, finish, cancellation);
         }
         finally
         {
@@ -168,6 +179,7 @@ public sealed class ScrollCaptureSession
     private async Task<ScrollCaptureResult> CaptureAsync(
         CaptureWindow window,
         CaptureRegion? region,
+        CancellationToken finish,
         CancellationToken cancellation)
     {
         var first = await _captureWindow(window.Id)
@@ -190,6 +202,10 @@ public sealed class ScrollCaptureSession
 
         var stitcher = new ScrollStitcher(band.Width, band.Height);
         var policy = new ScrollCapturePolicy(_maximumHeight, _driven);
+
+        // One source for the whole run rather than one per settle: the delay is the only
+        // place either signal can arrive while the loop is not looking, and both end it.
+        using var settling = CancellationTokenSource.CreateLinkedTokenSource(finish, cancellation);
 
         byte[]? pixels = band.Pixels;
         var frames = 0;
@@ -223,7 +239,11 @@ public sealed class ScrollCaptureSession
                 return Finish(first, crop, stitcher, stop, frames);
             }
 
-            if (cancellation.IsCancellationRequested)
+            // Before the Stop button, so a page that was both stopped and abandoned in
+            // the same frame is abandoned. Nothing delivered is the recoverable mistake.
+            cancellation.ThrowIfCancellationRequested();
+
+            if (finish.IsCancellationRequested)
             {
                 // Stopping early is a complete capture of what was scrolled through,
                 // not a failure: the user asked for it to end here.
@@ -237,10 +257,12 @@ public sealed class ScrollCaptureSession
 
             try
             {
-                await Task.Delay(SettleDelay, cancellation);
+                await Task.Delay(SettleDelay, settling.Token);
             }
-            catch (TaskCanceledException)
+            catch (OperationCanceledException)
             {
+                // Which of the two woke it decides whether there is anything to hand back.
+                cancellation.ThrowIfCancellationRequested();
                 return Finish(first, crop, stitcher, ScrollCaptureStop.Complete, frames);
             }
 

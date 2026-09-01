@@ -19,7 +19,7 @@
                 x:Name="StopHintText"
                 Foreground="#B0B0B0"
                 FontSize="10"
-                Text="Esc or Stop keeps what has been captured so far" />
+                Text="Stop keeps what has been captured so far; Esc discards it" />
         </StackPanel>
 
         <!-- 56 × 24 at corner 12 in 12 semibold — :86–102. There is deliberately no

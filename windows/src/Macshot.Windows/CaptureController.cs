@@ -110,7 +110,7 @@ public sealed class CaptureController : IDisposable
     /// because the foreground during a scroll capture belongs to the window being
     /// captured rather than to macshot.
     /// </summary>
-    private const int HotkeyStopScrollCapture = 3;
+    private const int HotkeyCancelScrollCapture = 3;
 
     private const int HotkeyRecordScreen = 4;
 
@@ -1890,20 +1890,27 @@ public sealed class CaptureController : IDisposable
     /// </para>
     /// <para>
     /// Stopping early is not a failure. Whatever was scrolled through is delivered
-    /// the same way a whole page would be.
+    /// the same way a whole page would be. Escaping is not stopping early: it leaves
+    /// nothing saved, copied or in history, because the reason to reach for it is
+    /// having started the capture on the wrong window.
     /// </para>
     /// </remarks>
     private async Task ScrollCaptureAsync(ScrollCaptureRequest request)
     {
         DismissOverlays();
 
+        // Two signals, not one. The Stop button ends the capture and delivers what was
+        // scrolled through; Escape abandons it and delivers nothing, which is the only
+        // way out for someone who started one on the wrong window.
+        using var finish = new CancellationTokenSource();
         using var cancellation = new CancellationTokenSource();
+
         var hud = new ScrollCaptureHudWindow();
-        hud.StopRequested += (_, _) => cancellation.Cancel();
+        hud.StopRequested += (_, _) => finish.Cancel();
         hud.ShowHud();
 
         var holdsEscape = _hotkeys.TryRegisterBareKey(
-            HotkeyStopScrollCapture,
+            HotkeyCancelScrollCapture,
             VirtualKeyEscape,
             cancellation.Cancel);
 
@@ -1928,13 +1935,19 @@ public sealed class CaptureController : IDisposable
         ScrollCaptureResult result;
         try
         {
-            result = await session.RunAsync(request.Window, request.Region, cancellation.Token);
+            result = await session.RunAsync(
+                request.Window, request.Region, finish.Token, cancellation.Token);
+        }
+        catch (OperationCanceledException)
+        {
+            DiagnosticLog.Verbose("scroll capture cancelled");
+            return;
         }
         finally
         {
             if (holdsEscape)
             {
-                _hotkeys.Unregister(HotkeyStopScrollCapture);
+                _hotkeys.Unregister(HotkeyCancelScrollCapture);
             }
 
             // Before delivery, so the panels are not still claiming to be scrolling
