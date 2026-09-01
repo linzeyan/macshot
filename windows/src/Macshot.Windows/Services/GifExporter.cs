@@ -34,15 +34,6 @@ public sealed record GifExportResult(int Frames, bool Truncated);
 /// </remarks>
 internal static class GifExporter
 {
-    /// <summary>What the GIF's own timing is measured in.</summary>
-    /// <remarks>
-    /// A GIF frame's delay is stored in hundredths of a second, so a rate that does not
-    /// divide 100 is rounded to one that does — 15 a second becomes 7 hundredths, which
-    /// plays at a little over 14. Every encoder has this; it is the format, not a
-    /// shortcut taken here.
-    /// </remarks>
-    private const double DelayUnitsPerSecond = 100;
-
     private const float Dpi = 96f;
 
     public static async Task<GifExportResult> WriteAsync(
@@ -61,12 +52,19 @@ internal static class GifExporter
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
 
         var rate = Math.Clamp(frameRate, GifRecordingPlan.MinFrameRate, GifRecordingPlan.MaxFrameRate);
-        var delay = (ushort)Math.Max(1, Math.Round(DelayUnitsPerSecond / rate));
 
-        // From the delay actually written rather than from the rate asked for, so the
-        // frames sampled from the source are spaced the way the file will play them back.
-        // Sampling at 15 and playing at 14.3 would drift half a second a minute.
-        var step = delay / DelayUnitsPerSecond;
+        // The rate asked for, at both ends of the export. A GIF stores a delay in whole
+        // hundredths of a second, so 15 a second is 6.67 of them and cannot be written as
+        // one number. Taking round(100 / rate) and sampling at that — 7 hundredths — does
+        // keep the file in step with the source, which is why it was written that way; but
+        // it quietly delivers 14.3 frames a second when the picker offered 15. Rounding
+        // each delay against the running total spends 7, 6, 7, 7 instead: still in step,
+        // and at the rate that was chosen. It is also how the recording path has written
+        // one all along, and what macshot changed its own encoder to do
+        // (GIFEncoder.swift:frameProperties) — one tree should not hold two GIF writers
+        // that disagree about time.
+        var step = 1.0 / rate;
+        var timing = new GifFrameTiming();
 
         var composition = new MediaComposition();
         composition.Clips.Add(await MediaClip.CreateFromFileAsync(source));
@@ -83,8 +81,18 @@ internal static class GifExporter
         var written = 0;
         var truncated = false;
 
-        for (var at = trim.Start; at < trim.End; at += step)
+        for (var index = 0; ; index++)
         {
+            // Multiplied out rather than accumulated, now that the step need not be a whole
+            // number of hundredths: ninety additions of a fifteenth can land either side of
+            // six seconds, and which side decides whether the last frame exists.
+            var at = trim.Start + (index * step);
+
+            if (at >= trim.End)
+            {
+                break;
+            }
+
             cancellation.ThrowIfCancellationRequested();
 
             if (written >= GifRecordingPlan.MaximumFrames)
@@ -116,7 +124,10 @@ internal static class GifExporter
 
             await encoder.BitmapProperties.SetPropertiesAsync(new BitmapPropertySet
             {
-                { "/grctlext/Delay", new BitmapTypedValue(delay, PropertyType.UInt16) },
+                {
+                    "/grctlext/Delay",
+                    new BitmapTypedValue((ushort)timing.Next(TimeSpan.FromSeconds(step)), PropertyType.UInt16)
+                },
             });
 
             written++;
