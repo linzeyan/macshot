@@ -1881,11 +1881,6 @@ public sealed partial class VideoEditorWindow : Window
             throw new InvalidOperationException("This recording does not say what size its frames are.");
         }
 
-        // Reported as it goes: a GIF is written frame by frame, and a minute of recording
-        // is hundreds of seeks. A bar that does not move reads as one that has stopped.
-        var progress = new Progress<double>(done =>
-            StatusText.Text = L("Exporting...") + $" {done:P0}");
-
         var result = await GifExporter.WriteAsync(
             source,
             destination,
@@ -1893,7 +1888,7 @@ public sealed partial class VideoEditorWindow : Window
             width,
             height,
             GifFrameRate,
-            progress);
+            ExportProgress());
 
         // Said rather than left to be noticed. Not through L, since macshot has no string
         // for either of these limits, neither of which it has.
@@ -1939,12 +1934,6 @@ public sealed partial class VideoEditorWindow : Window
             throw new InvalidOperationException("This recording does not say what size its frames are.");
         }
 
-        // Reported as it goes, as the GIF export is: an effects export seeks to every
-        // frame, and a bar that does not move on a minute of recording reads as one that
-        // has stopped.
-        var progress = new Progress<double>(done =>
-            StatusText.Text = L("Exporting...") + $" {done:P0}");
-
         var carried = await VideoEffectsCompositor.WriteAsync(
             source,
             destination,
@@ -1959,7 +1948,7 @@ public sealed partial class VideoEditorWindow : Window
             FrameRate,
             VideoExportPlan.Bitrate(width, height, FrameRate, ExportQuality),
             _sourceHasAudio,
-            progress);
+            ExportProgress());
 
         // Only when the recording had sound and it did not survive, which now means the
         // machine would not decode the track rather than that macshot cannot re-time one.
@@ -2092,7 +2081,15 @@ public sealed partial class VideoEditorWindow : Window
         // Precise rather than the nearest key frame: a recording is trimmed to the moment
         // something happens, and key frames seconds apart put the cut on the wrong side
         // of it.
-        var reason = await composition.RenderToFileAsync(destination, MediaTrimmingPreference.Precise, profile);
+        //
+        // Awaited through AsTask so the platform's own progress reaches the status line.
+        // This is the export that looks stalled: the other two write a frame at a time and
+        // had something to say between frames, while this one hands the whole file to
+        // Windows and used to sit on "Exporting..." until it came back — which is what had
+        // people pressing Save again (macshot #323).
+        var reason = await composition
+            .RenderToFileAsync(destination, MediaTrimmingPreference.Precise, profile)
+            .AsTask(ExportProgress(outOf: 100));
 
         if (reason != TranscodeFailureReason.None)
         {
@@ -2108,6 +2105,23 @@ public sealed partial class VideoEditorWindow : Window
         _sourceWidth > 0 && _sourceHeight > 0
             ? VideoExportPlan.Scaled(_sourceWidth, _sourceHeight, ExportPercent)
             : (0, 0);
+
+    /// <summary>
+    /// How far the export has got, in the status line.
+    /// </summary>
+    /// <param name="outOf">
+    /// What a finished export reports. One for the two written here, which count their own
+    /// frames; a hundred for <see cref="MediaComposition.RenderToFileAsync"/>, which
+    /// reports a percentage.
+    /// </param>
+    /// <remarks>
+    /// Built on the UI thread on purpose: a <see cref="Progress{T}"/> takes the
+    /// synchronization context of wherever it was constructed, and all three exports
+    /// report from a thread of the encoder's own. Constructed one call deeper — inside the
+    /// encoder — the same object would set <c>StatusText</c> from that thread and throw.
+    /// </remarks>
+    private Progress<double> ExportProgress(double outOf = 1) => new(done =>
+        StatusText.Text = L("Exporting...") + $" {done / outOf:P0}");
 
     /// <summary>
     /// Puts the buttons that would start a second export out of reach while one is
