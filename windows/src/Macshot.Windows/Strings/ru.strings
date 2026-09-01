@@ -47,7 +47,7 @@
 "Draw the capture as a window, or on its own" = "Рисовать снимок как окно или сам по себе";
 "Draw to annotate • Ctrl+Z undo • Ctrl+S save • Ctrl+C copy" = "Рисуйте, чтобы аннотировать • Ctrl+Z отменить • Ctrl+S сохранить • Ctrl+C копировать";
 "Enter to take the last selection again • Drag for a new one • Esc to cancel" = "Enter — повторить прошлое выделение • Перетащите для нового • Esc — отмена";
-"Esc or Stop keeps what has been captured so far" = "Esc или «Стоп» сохранит уже снятое";
+"Stop keeps what has been captured so far; Esc discards it" = "«Стоп» сохранит уже снятое; Esc — отменит";
 "Exported {0} settings." = "Экспортировано настроек: {0}.";
 "Files are uploaded to a \"macshot\" folder in your Google Drive. Everything stays private — nothing is shared publicly." = "Файлы загружаются в папку «macshot» на вашем Google Диске. Всё остаётся приватным — ничего не публикуется.";
 "Fit canvas" = "Уместить целиком";

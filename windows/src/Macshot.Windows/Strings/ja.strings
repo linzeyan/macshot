@@ -47,7 +47,7 @@
 "Draw the capture as a window, or on its own" = "キャプチャをウインドウとして描くか、単体で描くか";
 "Draw to annotate • Ctrl+Z undo • Ctrl+S save • Ctrl+C copy" = "描いて注釈 • Ctrl+Z 取り消し • Ctrl+S 保存 • Ctrl+C コピー";
 "Enter to take the last selection again • Drag for a new one • Esc to cancel" = "Enter で前回の選択範囲をもう一度 • ドラッグで新しく選択 • Esc でキャンセル";
-"Esc or Stop keeps what has been captured so far" = "Esc または「停止」で、ここまでに取り込んだ分が残ります";
+"Stop keeps what has been captured so far; Esc discards it" = "「停止」でここまでに取り込んだ分が残り、Esc は破棄します";
 "Exported {0} settings." = "{0} 件の設定を書き出しました。";
 "Files are uploaded to a \"macshot\" folder in your Google Drive. Everything stays private — nothing is shared publicly." = "ファイルは Google ドライブ内の「macshot」フォルダにアップロードされます。すべて非公開のままで、公開されることはありません。";
 "Fit canvas" = "全体を表示";

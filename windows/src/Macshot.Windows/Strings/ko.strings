@@ -47,7 +47,7 @@
 "Draw the capture as a window, or on its own" = "캡처를 창처럼 그릴지, 그 자체로 그릴지";
 "Draw to annotate • Ctrl+Z undo • Ctrl+S save • Ctrl+C copy" = "그려서 주석 • Ctrl+Z 실행 취소 • Ctrl+S 저장 • Ctrl+C 복사";
 "Enter to take the last selection again • Drag for a new one • Esc to cancel" = "Enter로 지난 선택 영역을 다시 사용 • 드래그하면 새로 선택 • Esc로 취소";
-"Esc or Stop keeps what has been captured so far" = "Esc 또는 ‘중지’를 누르면 지금까지 캡처한 내용이 남습니다";
+"Stop keeps what has been captured so far; Esc discards it" = "‘중지’를 누르면 지금까지 캡처한 내용이 남고, Esc는 버립니다";
 "Exported {0} settings." = "설정 {0}개를 내보냈습니다.";
 "Files are uploaded to a \"macshot\" folder in your Google Drive. Everything stays private — nothing is shared publicly." = "파일은 Google 드라이브의 ‘macshot’ 폴더에 업로드됩니다. 모두 비공개로 유지되며 공개적으로 공유되지 않습니다.";
 "Fit canvas" = "화면에 맞추기";
