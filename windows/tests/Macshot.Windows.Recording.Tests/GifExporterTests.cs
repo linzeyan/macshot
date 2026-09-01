@@ -6,21 +6,23 @@ using Windows.Storage;
 namespace Macshot.Windows.Recording.Tests;
 
 /// <summary>
-/// That a GIF export samples the recording where the file will play it back, and at the
-/// size and over the stretch it was asked for.
+/// That a GIF export runs at the rate it was asked for, stays in step with the recording
+/// while it does, and comes out at the size and over the stretch it was given.
 /// </summary>
 /// <remarks>
 /// <para>
 /// A GIF is the one output whose timing the format decides rather than the app: a delay is
-/// stored in hundredths of a second, so 15 frames a second is not expressible and becomes 7
-/// hundredths, which plays at 14.3. The export therefore has two rates in it — the one
-/// asked for and the one the file will run at — and sampling at the first while writing the
-/// second drifts half a second every minute. Nothing about the resulting file looks wrong;
-/// it is simply out of step with what was recorded, further with every frame.
+/// stored in whole hundredths of a second, so 15 frames a second is 6.67 of them and cannot
+/// be written as one number. There are two ways to be honest about that and they are not
+/// the same. Spending one rounded delay on every frame and sampling at that same 7
+/// hundredths keeps the file in step, but hands back 14.3 frames a second when 15 was
+/// chosen. Rounding each delay against the running total spends 7, 6, 7, 7 — uneven, in
+/// step, and at the rate on the picker.
 /// </para>
 /// <para>
-/// So these read the frames back out of the finished GIF and ask which source second each
-/// one is showing, which is a question only the picture can answer.
+/// So these read the frames back out of the finished GIF, add up the delays it stores, and
+/// ask which source second each frame is showing at the moment its own delays put it. Both
+/// are questions only the file can answer.
 /// </para>
 /// </remarks>
 [TestClass]
@@ -29,12 +31,10 @@ public sealed class GifExporterTests
     private const int Seconds = 6;
 
     /// <summary>
-    /// The rate the format cannot express: 100/15 rounds to 7 hundredths, so the file plays
-    /// at 14.3 and the export has to follow it there.
+    /// The rate the format cannot express: 100/15 is 6.67 hundredths, so no single delay
+    /// value plays at it and the export has to vary them.
     /// </summary>
     private const int AwkwardRate = 15;
-
-    private const double AwkwardStep = 0.07;
 
     private StorageFolder _scratch = null!;
 
@@ -45,42 +45,60 @@ public sealed class GifExporterTests
     public async Task DeleteScratchAsync() => await _scratch.DeleteAsync();
 
     /// <summary>
-    /// Every frame shows the source second that belongs at the moment the file will play it
-    /// — which is the one thing that separates a GIF sampled at the rate asked for from one
-    /// sampled at the rate written into it.
+    /// The picker's number reaches the file: a rate the format cannot express as one delay
+    /// still yields that many frames, over exactly the stretch they came from. One rounded
+    /// delay everywhere would be self-consistent and quietly 5% short of what was chosen.
     /// </summary>
     [TestMethod]
-    public async Task WriteAsync_SamplesTheSourceAtTheRateTheGifWillPlayBackAt()
+    public async Task WriteAsync_DeliversTheFrameRateThatWasAskedFor()
     {
         var (result, gif) = await ExportAsync(new VideoTrim(0, Seconds), AwkwardRate);
 
         Assert.IsFalse(result.Truncated, "six seconds is nowhere near the frame ceiling");
         Assert.AreEqual(
-            (int)Math.Ceiling(Seconds / AwkwardStep),
+            Seconds * AwkwardRate,
             result.Frames,
-            "a frame every seven hundredths of a second is what the delay written into the file asks for");
+            "six seconds at fifteen a second, not the 86 a fixed seven-hundredth delay allows");
 
         var decoder = await BitmapDecoder.CreateAsync(await gif.OpenReadAsync());
 
         Assert.AreEqual((uint)result.Frames, decoder.FrameCount, "the file holds fewer frames than were written");
+        Assert.AreEqual(
+            Seconds * 100,
+            (await DelaysAsync(decoder)).Sum(),
+            "the delays do not add up to the stretch of recording they came from");
+    }
+
+    /// <summary>
+    /// Every frame shows the source second that belongs at the moment the file's own delays
+    /// play it. Uneven delays are what buys the rate above, and they are also the way to
+    /// lose this: a sampling step that no longer matches what was written drifts further
+    /// from the recording with every frame, and nothing about the result looks wrong.
+    /// </summary>
+    [TestMethod]
+    public async Task WriteAsync_ShowsEachSourceMomentAtTheMomentItPlays()
+    {
+        var (result, gif) = await ExportAsync(new VideoTrim(0, Seconds), AwkwardRate);
+
+        var decoder = await BitmapDecoder.CreateAsync(await gif.OpenReadAsync());
+        var delays = await DelaysAsync(decoder);
+
+        var at = 0.0;
 
         for (var index = 0; index < result.Frames; index++)
         {
-            var at = index * AwkwardStep;
-
             // Frames landing within a source frame or two of a colour change are skipped:
             // which side of it NearestFrame picks there is not what this is asserting, and
-            // the frames that separate the two sampling rates are nowhere near one — frame
-            // 44 sits at 3.08s, which the rate asked for would have put at 2.93s.
-            if (Math.Abs(at - Math.Round(at)) < 0.05)
+            // a step that had drifted would be caught long before the drift was that small.
+            if (Math.Abs(at - Math.Round(at)) >= 0.05)
             {
-                continue;
+                Assert.AreEqual(
+                    (int)at,
+                    await SecondShownAsync(decoder, index),
+                    $"frame {index}, which plays {at:0.00}s in, shows the wrong source second");
             }
 
-            Assert.AreEqual(
-                (int)at,
-                await SecondShownAsync(decoder, index),
-                $"frame {index}, which plays {at:0.00}s in, shows the wrong source second");
+            at += delays[index] / 100.0;
         }
     }
 
@@ -159,6 +177,29 @@ public sealed class GifExporterTests
             new byte[] { 3, 1, 0, 0 },
             (byte[])properties["/appext/data"].Value,
             "the loop count is not the one that means without end");
+    }
+
+    /// <summary>
+    /// How long each frame of the GIF is held, in hundredths of a second, in order.
+    /// </summary>
+    /// <remarks>
+    /// Read back out of the file rather than recomputed from the rate, because the
+    /// recomputation is the thing under test — a helper that derived them would agree with
+    /// a broken exporter.
+    /// </remarks>
+    private static async Task<IReadOnlyList<int>> DelaysAsync(BitmapDecoder decoder)
+    {
+        var delays = new List<int>();
+
+        for (var index = 0u; index < decoder.FrameCount; index++)
+        {
+            var frame = await decoder.GetFrameAsync(index);
+            var properties = await frame.BitmapProperties.GetPropertiesAsync(["/grctlext/Delay"]);
+
+            delays.Add((ushort)properties["/grctlext/Delay"].Value);
+        }
+
+        return delays;
     }
 
     /// <summary>Which entry of <see cref="TestVideo.Palette"/> one frame of the GIF is.</summary>
