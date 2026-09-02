@@ -86,7 +86,12 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// How far a control that draws no disabled state of its own is faded when it is off,
     /// which is what <see cref="StyleSegments.SetSegmentEnabled"/> already fades one to.
     /// </summary>
-    private const double DisabledOpacity = 0.35;
+    /// <remarks>
+    /// Reachable from outside this class because the video editor's caption row fades its
+    /// outline well by the same rule and macshot uses one number for both — a second 0.35
+    /// written down elsewhere is one that stops matching the day this one is adjusted.
+    /// </remarks>
+    internal const double DisabledOpacity = 0.35;
 
     private readonly Canvas _surface = new();
     private readonly ToolbarStrip _tools = new(Orientation.Horizontal);

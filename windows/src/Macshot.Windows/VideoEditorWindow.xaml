@@ -150,18 +150,58 @@
 
                     <!-- Only up while a caption is selected. macshot puts these on the
                          pill's own context menu; this port has no band menu, so they are a
-                         row that appears with the thing they belong to. -->
-                    <StackPanel
+                         row that appears with the thing they belong to.
+
+                         In a scroller for the reason the export row below is: a horizontal
+                         StackPanel measures at infinity and arranges past its bounds rather
+                         than shrinking, so at the window's 900 minimum this row would draw
+                         over the buttons beside it instead of being cut off. macshot absorbs
+                         the same overspend with a lessThanOrEqualTo on its font popup; there
+                         is already a scroller in this window doing it, and two answers to
+                         one problem in one window is one too many. -->
+                    <ScrollViewer
                         x:Name="CaptionPanel"
+                        Visibility="Collapsed"
+                        HorizontalScrollMode="Auto"
+                        HorizontalScrollBarVisibility="Hidden"
+                        VerticalScrollMode="Disabled"
+                        VerticalScrollBarVisibility="Disabled">
+                    <StackPanel
                         Orientation="Horizontal"
-                        Spacing="6"
-                        Visibility="Collapsed">
+                        Spacing="6">
                         <TextBox
                             x:Name="CaptionBox"
                             Width="280"
                             Height="28"
                             FontSize="12"
                             TextChanged="Caption_Changed" />
+                        <!-- macshot's font popup, size slider and its "48pt" reading
+                             (VideoTextOptionsPanel.swift:261-262). The ends of both sliders
+                             are set in code from the model's own constants rather than
+                             written here, so the row cannot offer a size the model clamps
+                             away. The preset size menu that used to sit beside the band is
+                             gone with them: macshot replaced its own with this slider. -->
+                        <ComboBox
+                            x:Name="CaptionFontBox"
+                            Width="132"
+                            FontSize="12"
+                            SelectionChanged="CaptionStyle_Changed" />
+                        <Slider
+                            x:Name="CaptionSizeSlider"
+                            Width="90"
+                            StepFrequency="1"
+                            VerticalAlignment="Center"
+                            ValueChanged="CaptionSlider_Changed" />
+                        <!-- A fixed width, so the row does not shift under the thumb as the
+                             reading goes from two digits to three. macshot sets 38 and a
+                             monospaced-digit face; WinUI has no way to ask a TextBlock for
+                             tabular figures, so the block is pinned instead of the digits. -->
+                        <TextBlock
+                            x:Name="CaptionSizeText"
+                            Width="38"
+                            FontSize="11"
+                            Foreground="#B3FFFFFF"
+                            VerticalAlignment="Center" />
                         <!-- A CheckBox is shaped for a settings page by default: the label
                              sits above the box on a row this short unless the alignment,
                              the padding and the minimum height are all said here. -->
@@ -200,12 +240,39 @@
                             Width="112"
                             FontSize="12"
                             SelectionChanged="CaptionStyle_Changed" />
+                        <!-- macshot's outline group: the switch, an unlabelled well and the
+                             width (VideoTextOptionsPanel.swift:267). The well is built in
+                             code like the two before it, and this panel is where it lands. -->
+                        <CheckBox
+                            x:Name="CaptionOutlineBox"
+                            Content="Outline"
+                            FontSize="12"
+                            MinWidth="0"
+                            MinHeight="28"
+                            Padding="8,0,0,0"
+                            VerticalContentAlignment="Center"
+                            Checked="CaptionStyle_Changed"
+                            Unchecked="CaptionStyle_Changed" />
+                        <StackPanel
+                            x:Name="CaptionOutlineWell"
+                            Orientation="Horizontal"
+                            VerticalAlignment="Center" />
+                        <!-- Half a point a step, so the thinnest rim macshot offers is
+                             actually reachable — a Slider steps by 1 unless told otherwise,
+                             which would put the bottom of this range out of reach. -->
+                        <Slider
+                            x:Name="CaptionOutlineSlider"
+                            Width="60"
+                            StepFrequency="0.5"
+                            VerticalAlignment="Center"
+                            ValueChanged="CaptionSlider_Changed" />
                         <ComboBox
                             x:Name="CaptionAlignBox"
                             Width="96"
                             FontSize="12"
                             SelectionChanged="CaptionStyle_Changed" />
                     </StackPanel>
+                    </ScrollViewer>
                 </StackPanel>
 
                 <Grid>

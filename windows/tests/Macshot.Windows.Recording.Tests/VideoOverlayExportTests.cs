@@ -111,9 +111,13 @@ public sealed class VideoOverlayExportTests
             VideoTextSegment.DefaultFontSize,
             Bold: false,
             Italic: false,
+            VideoTextSegment.SystemFontFamily,
             new AnnotationColor(255, 255, 255),
             VideoTextBackground.None,
             new AnnotationColor(0, 0, 0),
+            OutlineEnabled: false,
+            VideoTextSegment.DefaultOutlineColor,
+            VideoTextSegment.DefaultOutlineWidth,
             VideoTextAlignment.Centre,
             FadeIn: 0,
             FadeOut: 0);

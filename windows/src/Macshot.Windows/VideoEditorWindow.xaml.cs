@@ -12,6 +12,7 @@ using Macshot.Windows.Toolbar;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Controls.Primitives;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -157,6 +158,12 @@ public sealed partial class VideoEditorWindow : Window
     private static readonly VideoTextBackground[] CaptionBackgrounds =
         [VideoTextBackground.None, VideoTextBackground.Solid, VideoTextBackground.Rounded];
 
+    /// <summary>
+    /// Where the installed families start in the font popup: after the system entry and the
+    /// rule under it, which is macshot's own shape for this menu.
+    /// </summary>
+    private const int FirstCaptionFont = 2;
+
     /// <summary>macshot's pill colours, one per kind.</summary>
     /// <remarks>
     /// Taken from <c>EffectsBandView.draw</c> rather than chosen here: the colour is how a
@@ -189,12 +196,23 @@ public sealed partial class VideoEditorWindow : Window
     private readonly List<BandPill> _pills = [];
 
     /// <summary>
-    /// The caption's two colour wells. Both offer alpha, because macshot's own default fill
-    /// uses it — black at seven tenths — and a well that could not express the default would
-    /// turn it opaque the first time it was opened.
+    /// The caption's three colour wells. All three offer alpha, because macshot's own
+    /// default fill uses it — black at seven tenths — and a well that could not express the
+    /// default would turn it opaque the first time it was opened.
     /// </summary>
     private readonly ColorChoice _captionColor = new(L("Text Color"), transparency: true, named: false);
     private readonly ColorChoice _captionBackColor = new(L("Background"), transparency: true, named: false);
+    private readonly ColorChoice _captionOutlineColor = new(L("Outline"), transparency: true, named: false);
+
+    /// <summary>
+    /// The families the font popup offers below its rule, in the order it offers them.
+    /// </summary>
+    /// <remarks>
+    /// Kept beside the popup because a caption stores a family <em>name</em> while the
+    /// popup reports an index, and the two entries above the rule — "System" and the rule
+    /// itself — make that mapping an offset rather than an identity.
+    /// </remarks>
+    private readonly List<string> _captionFonts = [.. InstalledFonts.Families()];
 
     private MediaPlayer? _player;
     private BitmapImage? _gif;
@@ -585,7 +603,15 @@ public sealed partial class VideoEditorWindow : Window
                 .ToList();
             CaptionBackBox.SelectedIndex = Array.IndexOf(CaptionBackgrounds, VideoTextBackground.Rounded);
 
-            BuildCaptionColors();
+            CaptionSizeSlider.Minimum = VideoTextSegment.MinFontSize;
+            CaptionSizeSlider.Maximum = VideoTextSegment.MaxFontSize;
+            CaptionSizeSlider.Value = VideoTextSegment.DefaultFontSize;
+
+            CaptionOutlineSlider.Minimum = VideoTextSegment.MinOutlineWidth;
+            CaptionOutlineSlider.Maximum = VideoTextSegment.MaxOutlineWidth;
+            CaptionOutlineSlider.Value = VideoTextSegment.DefaultOutlineWidth;
+
+            BuildCaptionControls();
 
             SourceInfoText.Text = _sourceWidth > 0
                 ? $"{Bytes(_sourceBytes)}  ·  {_sourceWidth} × {_sourceHeight}"
@@ -629,8 +655,10 @@ public sealed partial class VideoEditorWindow : Window
         DeleteButton.IsEnabled = _selected is not null;
 
         // A cut has nothing to set: its whole statement is where it starts and where it
-        // ends, both of which are the pill. An empty box beside it would look broken.
-        OptionBox.Visibility = OptionKind is VideoEffectKind.Cut
+        // ends, both of which are the pill. Neither has a caption any more — the row below
+        // carries its size along with everything else about it, which is where macshot puts
+        // it too. An empty box beside either would look broken.
+        OptionBox.Visibility = OptionKind is VideoEffectKind.Cut or VideoEffectKind.Text
             ? Visibility.Collapsed
             : Visibility.Visible;
 
@@ -1256,20 +1284,10 @@ public sealed partial class VideoEditorWindow : Window
                             : VideoFreezeSegment.DefaultHold);
                     break;
 
-                case VideoEffectKind.Text:
-                    OptionBox.ItemsSource = VideoTextSegment.PresetFontSizes
-                        .Select(preset => L(preset.Name))
-                        .ToList();
-                    OptionBox.SelectedIndex = Nearest(
-                        VideoTextSegment.PresetFontSizes.Select(preset => preset.Size).ToList(),
-                        chosen is { Kind: VideoEffectKind.Text, Index: var text }
-                            ? _effects.Texts[text].FontSize
-                            : VideoTextSegment.DefaultFontSize);
-                    break;
-
                 default:
-                    // A cut has nothing to set. The box is emptied as well as hidden, so a
-                    // stale list cannot be read back by the next selection.
+                    // Neither a cut nor a caption has anything to set here. The box is
+                    // emptied as well as hidden, so a stale list cannot be read back by the
+                    // next selection.
                     OptionBox.ItemsSource = new List<string>();
                     break;
             }
@@ -1326,12 +1344,6 @@ public sealed partial class VideoEditorWindow : Window
             ? VideoFreezeSegment.PresetHolds[OptionBox.SelectedIndex]
             : VideoFreezeSegment.DefaultHold;
 
-    private double SelectedFontSize => OptionKind is VideoEffectKind.Text
-        && OptionBox.SelectedIndex >= 0
-        && OptionBox.SelectedIndex < VideoTextSegment.PresetFontSizes.Count
-            ? VideoTextSegment.PresetFontSizes[OptionBox.SelectedIndex].Size
-            : VideoTextSegment.DefaultFontSize;
-
     private void Option_Changed(object sender, SelectionChangedEventArgs e)
     {
         if (_filling || _selected is not { } chosen)
@@ -1358,10 +1370,6 @@ public sealed partial class VideoEditorWindow : Window
                 _effects.Freezes[chosen.Index] = _effects.Freezes[chosen.Index].WithHold(SelectedFreezeHold);
                 break;
 
-            case VideoEffectKind.Text:
-                _effects.Texts[chosen.Index] = _effects.Texts[chosen.Index] with { FontSize = SelectedFontSize };
-                break;
-
             default:
                 return;
         }
@@ -1370,24 +1378,68 @@ public sealed partial class VideoEditorWindow : Window
     }
 
     /// <summary>
-    /// Fills the caption row's two colour wells and puts the captions macshot writes in
-    /// front of them.
+    /// Fills the caption row's font popup and its three colour wells, and puts the captions
+    /// macshot writes in front of two of them.
     /// </summary>
     /// <remarks>
     /// In code because a <see cref="ColorChoice"/> is told what it is called when it is
-    /// made. The two captions are macshot's own and are not translated on the Mac either:
-    /// "Aa" and "BG" read the same in every language it ships, and spelling the two names
-    /// out would cost more of this row than the font and the alignment together.
+    /// made, and because the font popup's contents are whatever this machine has installed.
+    /// The two captions are macshot's own and are not translated on the Mac either: "Aa"
+    /// and "BG" read the same in every language it ships, and spelling the two names out
+    /// would cost more of this row than the font and the alignment together. The outline's
+    /// well gets none, because the switch beside it already says what it is for.
     /// </remarks>
-    private void BuildCaptionColors()
+    private void BuildCaptionControls()
     {
         _captionColor.Changed += (_, _) => ApplyCaptionStyle();
         _captionBackColor.Changed += (_, _) => ApplyCaptionStyle();
+        _captionOutlineColor.Changed += (_, _) => ApplyCaptionStyle();
 
         CaptionColorGroup.Children.Add(CaptionColorCaption("Aa"));
         CaptionColorGroup.Children.Add(_captionColor);
         CaptionColorGroup.Children.Add(CaptionColorCaption("BG"));
         CaptionColorGroup.Children.Add(_captionBackColor);
+        CaptionOutlineWell.Children.Add(_captionOutlineColor);
+
+        // macshot's menu: the system entry, a rule, then every family sorted
+        // (rebuildFontMenu). InstalledFonts already sorts, and the families it already drops
+        // — the @-prefixed vertical-writing forms — are Windows' answer to the leading-dot
+        // families macshot skips, so there is nothing to filter again here.
+        //
+        // The word and the sentinel are separate on the Mac too: what the row says is
+        // translated, what the caption stores is not.
+        CaptionFontBox.Items.Add(new ComboBoxItem { Content = L("System") });
+
+        // A disabled container rather than a bare Border, exactly as FontPickerView's rule
+        // is: anything in an items control is a row that can be chosen, and a rule that can
+        // be chosen is a caption set in nothing.
+        CaptionFontBox.Items.Add(new ComboBoxItem
+        {
+            IsEnabled = false,
+            MinHeight = 0,
+            Padding = new Thickness(0),
+            Content = new Border
+            {
+                Height = 1,
+                Margin = new Thickness(0, 4, 0, 4),
+                Background = ToolbarPalette.IconBrush(0.2),
+            },
+        });
+
+        foreach (var family in _captionFonts)
+        {
+            // Each name in the interface's face rather than in its own, which is what
+            // macshot's video font menu does too — FontPickerView, the screenshot label's,
+            // is the one that sets each row in the face it names. The difference is worth
+            // keeping: this row appears the instant a caption is selected, and loading
+            // three hundred faces to fill it is a stutter arriving mid-edit.
+            CaptionFontBox.Items.Add(new ComboBoxItem { Content = family });
+        }
+
+        // Neither of these two says what it is anywhere on the row, and neither has room
+        // for a label that would. macshot names both the same way.
+        ToolTipService.SetToolTip(CaptionFontBox, AppFonts.Tip(L("Font")));
+        ToolTipService.SetToolTip(CaptionSizeSlider, AppFonts.Tip(L("Size")));
 
         static TextBlock CaptionColorCaption(string text) => new()
         {
@@ -1397,7 +1449,10 @@ public sealed partial class VideoEditorWindow : Window
         };
     }
 
-    /// <summary>Puts the selected caption's own text, weight and colours into the row below.</summary>
+    /// <summary>
+    /// Puts the selected caption's own text, face, size, weight, colours and outline into
+    /// the row below.
+    /// </summary>
     private void FillCaption()
     {
         if (_selected is not { Kind: VideoEffectKind.Text, Index: var index })
@@ -1410,17 +1465,75 @@ public sealed partial class VideoEditorWindow : Window
         {
             var caption = _effects.Texts[index];
             CaptionBox.Text = caption.Text;
+            CaptionFontBox.SelectedIndex = CaptionFontIndex(caption);
+            CaptionSizeSlider.Value = caption.FontSize;
             CaptionBoldBox.IsChecked = caption.Bold;
             CaptionItalicBox.IsChecked = caption.Italic;
             CaptionAlignBox.SelectedIndex = Array.IndexOf(CaptionAlignments, caption.Alignment);
             CaptionBackBox.SelectedIndex = Array.IndexOf(CaptionBackgrounds, caption.Background);
             _captionColor.Color = ToUiColor(caption.TextColor);
             _captionBackColor.Color = ToUiColor(caption.BackgroundColor);
+
+            CaptionOutlineBox.IsChecked = caption.OutlineEnabled;
+            CaptionOutlineSlider.Value = caption.OutlineWidth;
+            _captionOutlineColor.Color = ToUiColor(caption.OutlineColor);
         }
         finally
         {
             _filling = false;
         }
+
+        ShowCaptionSize();
+        ShowCaptionOutlineEnabled();
+    }
+
+    /// <summary>Which row of the font popup <paramref name="caption"/> is set in.</summary>
+    /// <remarks>
+    /// The system entry for a family this machine does not have, which is macshot's own
+    /// answer (<c>selectFontFamily</c> falls back to index 0) and the truth as well — WinUI
+    /// falls through to the interface face when it cannot resolve the name.
+    /// </remarks>
+    private int CaptionFontIndex(VideoTextSegment caption)
+    {
+        if (caption.UsesSystemFont)
+        {
+            return 0;
+        }
+
+        var found = _captionFonts.IndexOf(caption.FontFamily);
+
+        return found >= 0 ? found + FirstCaptionFont : 0;
+    }
+
+    /// <summary>The family the font popup names, or macshot's sentinel for the system face.</summary>
+    private string SelectedCaptionFont =>
+        CaptionFontBox.SelectedIndex >= FirstCaptionFont
+        && CaptionFontBox.SelectedIndex - FirstCaptionFont < _captionFonts.Count
+            ? _captionFonts[CaptionFontBox.SelectedIndex - FirstCaptionFont]
+            : VideoTextSegment.SystemFontFamily;
+
+    /// <remarks>
+    /// macshot's "48pt", untranslated there too: the unit is the same two letters in every
+    /// language it ships, and a reading that said "48 點" would not fit beside the slider.
+    /// </remarks>
+    private void ShowCaptionSize() =>
+        CaptionSizeText.Text = $"{(int)Math.Round(CaptionSizeSlider.Value)}pt";
+
+    /// <summary>Greys the outline's well and its width while the outline is switched off.</summary>
+    /// <remarks>
+    /// macshot disables both and drops the well to 0.35 —
+    /// <c>VideoTextOptionsPanel.swift:94-97</c>. The number is reached for across the file
+    /// rather than written again: it is the same fade the toolbar already applies to a
+    /// control that draws no disabled state of its own, and one idea with two greys is how
+    /// the two drift apart. A slider draws its own, so only the well is faded.
+    /// </remarks>
+    private void ShowCaptionOutlineEnabled()
+    {
+        var outlined = CaptionOutlineBox.IsChecked is true;
+
+        _captionOutlineColor.IsEnabled = outlined;
+        _captionOutlineColor.Opacity = outlined ? 1 : AnnotationToolbarView.DisabledOpacity;
+        CaptionOutlineSlider.IsEnabled = outlined;
     }
 
     private void Caption_Changed(object sender, TextChangedEventArgs e)
@@ -1443,16 +1556,32 @@ public sealed partial class VideoEditorWindow : Window
 
     private void CaptionStyle_Changed(object sender, RoutedEventArgs e) => ApplyCaptionStyle();
 
+    /// <remarks>
+    /// Its own handler because a <see cref="Slider"/> reports a value change rather than a
+    /// routed event, so it cannot share one with the boxes beside it. Both sliders come
+    /// here: rewriting the size reading when it was the outline's width that moved costs a
+    /// string and keeps this to one handler.
+    /// </remarks>
+    private void CaptionSlider_Changed(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        ShowCaptionSize();
+        ApplyCaptionStyle();
+    }
+
     /// <summary>
     /// Reads the whole caption row back into the selected caption.
     /// </summary>
     /// <remarks>
     /// One method rather than one per control, because the wells report through a plain
-    /// <see cref="EventHandler"/> and the checkboxes through a routed one — and every edit
-    /// here rewrites the same record anyway.
+    /// <see cref="EventHandler"/>, the sliders through a value change and the checkboxes
+    /// through a routed one — and every edit here rewrites the same record anyway.
     /// </remarks>
     private void ApplyCaptionStyle()
     {
+        // Outside the guard below: the outline's switch greys its own well and width
+        // whether or not there is a caption selected to write the change into.
+        ShowCaptionOutlineEnabled();
+
         if (_filling || _selected is not { Kind: VideoEffectKind.Text, Index: var index })
         {
             return;
@@ -1468,15 +1597,23 @@ public sealed partial class VideoEditorWindow : Window
                 ? CaptionBackgrounds[CaptionBackBox.SelectedIndex]
                 : VideoTextBackground.Rounded;
 
-        _effects.Texts[index] = _effects.Texts[index] with
+        // The two sizes go through the model's own setters, which hold them to the ends of
+        // macshot's sliders. Belt and braces while the row is the only caller, and the
+        // clamp that matters the moment a caption arrives from anywhere else.
+        _effects.Texts[index] = (_effects.Texts[index] with
         {
+            FontFamily = SelectedCaptionFont,
             Bold = CaptionBoldBox.IsChecked is true,
             Italic = CaptionItalicBox.IsChecked is true,
             Alignment = alignment,
             Background = background,
             TextColor = ToAnnotationColor(_captionColor.Color),
             BackgroundColor = ToAnnotationColor(_captionBackColor.Color),
-        };
+            OutlineEnabled = CaptionOutlineBox.IsChecked is true,
+            OutlineColor = ToAnnotationColor(_captionOutlineColor.Color),
+        })
+            .WithFontSize(CaptionSizeSlider.Value)
+            .WithOutlineWidth(CaptionOutlineSlider.Value);
 
         Touched();
     }

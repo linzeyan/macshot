@@ -20,11 +20,12 @@ namespace Macshot.Windows.Rendering;
 /// fallback, and Core composites those pixels without a font engine.
 /// </para>
 /// <para>
-/// The face is <see cref="AppFonts.Family"/> rather than macOS's system font, because a
-/// caption is typed by the user and may be in a language Segoe UI has no glyphs for. The
-/// weight is the segment's own and not <see cref="AppFonts.Heavier"/>: a caption's bold
-/// is a switch the user set, and deciding it from the script instead would make that
-/// switch do nothing for half the world's captions.
+/// The face a caption asks for sits in front of <see cref="AppFonts.Family"/> rather than
+/// instead of it, because a caption is typed by the user and may be in a language the
+/// chosen family has no glyphs for. The weight is the segment's own and not
+/// <see cref="AppFonts.Heavier"/>: a caption's bold is a switch the user set, and deciding
+/// it from the script instead would make that switch do nothing for half the world's
+/// captions.
 /// </para>
 /// </remarks>
 internal static class VideoCaptionGlyphs
@@ -80,17 +81,50 @@ internal static class VideoCaptionGlyphs
         var fontPixels = VideoTextSegment.PixelFontSize(caption.FontSize, framePixelHeight, pixelHeight);
         var toLayout = 1 / rasterizationScale;
         var pad = fontPixels * PadFraction * toLayout;
+        var rim = caption.OutlinePixels(framePixelHeight) * toLayout;
 
-        var glyphs = new TextBlock
+        // The rim is the same mark a label's is — same ring, same number of copies — so it
+        // is drawn by the same code. Nothing here reads the outline colour unless the rim
+        // has a width, which is what OutlinePixels returning zero is for.
+        var body = rim > 0
+            ? TextGlyphs.Ringed(
+                Glyphs,
+                GlyphSpriteFactory.ToBrushColor(caption.OutlineColor, 1),
+                GlyphSpriteFactory.ToBrushColor(caption.TextColor, 1),
+                rim)
+            : Glyphs(GlyphSpriteFactory.ToBrushColor(caption.TextColor, 1));
+
+        var shortSide = Math.Min(pixelWidth, pixelHeight) * toLayout;
+        var corner = caption.Background is VideoTextBackground.Rounded
+            ? Math.Min(shortSide * CornerOfShortSide, pixelHeight * toLayout * CornerOfHeight)
+            : 0;
+
+        var pill = new Border
+        {
+            Width = pixelWidth * toLayout,
+            Height = pixelHeight * toLayout,
+            Padding = new Thickness(pad, pad / 2, pad, pad / 2),
+            CornerRadius = new CornerRadius(corner),
+            Background = caption.Background is VideoTextBackground.None
+                ? null
+                : new SolidColorBrush(GlyphSpriteFactory.ToBrushColor(caption.BackgroundColor, 1)),
+            Child = body,
+        };
+
+        var sprite = await GlyphSpriteFactory.RenderAsync(host, pill);
+
+        return new FrameOverlay.VideoCaptionRaster(sprite.Width, sprite.Height, sprite.Pixels.ToArray());
+
+        TextBlock Glyphs(global::Windows.UI.Color colour) => new()
         {
             Text = caption.Text,
             FontSize = fontPixels * toLayout,
-            FontFamily = AppFonts.Family,
+            FontFamily = FaceFor(caption),
             FontWeight = caption.Bold ? FontWeights.Bold : FontWeights.Normal,
             FontStyle = caption.Italic
                 ? global::Windows.UI.Text.FontStyle.Italic
                 : global::Windows.UI.Text.FontStyle.Normal,
-            Foreground = new SolidColorBrush(GlyphSpriteFactory.ToBrushColor(caption.TextColor, 1)),
+            Foreground = new SolidColorBrush(colour),
             TextAlignment = caption.Alignment switch
             {
                 VideoTextAlignment.Centre => TextAlignment.Center,
@@ -109,26 +143,19 @@ internal static class VideoCaptionGlyphs
             VerticalAlignment = VerticalAlignment.Center,
             HorizontalAlignment = HorizontalAlignment.Stretch,
         };
-
-        var shortSide = Math.Min(pixelWidth, pixelHeight) * toLayout;
-        var corner = caption.Background is VideoTextBackground.Rounded
-            ? Math.Min(shortSide * CornerOfShortSide, pixelHeight * toLayout * CornerOfHeight)
-            : 0;
-
-        var pill = new Border
-        {
-            Width = pixelWidth * toLayout,
-            Height = pixelHeight * toLayout,
-            Padding = new Thickness(pad, pad / 2, pad, pad / 2),
-            CornerRadius = new CornerRadius(corner),
-            Background = caption.Background is VideoTextBackground.None
-                ? null
-                : new SolidColorBrush(GlyphSpriteFactory.ToBrushColor(caption.BackgroundColor, 1)),
-            Child = glyphs,
-        };
-
-        var sprite = await GlyphSpriteFactory.RenderAsync(host, pill);
-
-        return new FrameOverlay.VideoCaptionRaster(sprite.Width, sprite.Height, sprite.Pixels.ToArray());
     }
+
+    /// <summary>The face a caption is set in.</summary>
+    /// <remarks>
+    /// macshot resolves the family by name and falls back to the system font when the
+    /// machine does not have it (<c>VideoTextRasterizer.font</c>). Here the named family is
+    /// put in <em>front</em> of <see cref="AppFonts.Family"/> rather than instead of it:
+    /// WinUI resolves a comma-separated list per glyph, so an uninstalled family falls
+    /// through to the interface face — which is macshot's fallback — and so does a single
+    /// glyph the chosen family happens to lack, which matters because a caption is typed by
+    /// the user and Impact has no Chinese in it.
+    /// </remarks>
+    private static FontFamily FaceFor(VideoTextSegment caption) => caption.UsesSystemFont
+        ? AppFonts.Family
+        : new FontFamily($"{caption.FontFamily}, {AppFonts.Family.Source}");
 }
