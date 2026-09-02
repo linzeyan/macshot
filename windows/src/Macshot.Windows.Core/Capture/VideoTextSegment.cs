@@ -197,6 +197,31 @@ public readonly record struct VideoTextSegment(
     public VideoTextSegment WithRect(CaptureRegion rect) => this with { Rect = ClampRect(rect) };
 
     /// <summary>
+    /// This caption dressed the way <paramref name="other"/> is, keeping its own timing,
+    /// rectangle and words.
+    /// </summary>
+    /// <remarks>
+    /// The line between the two halves is macshot's, and it is the point of the whole
+    /// feature: a caption's appearance is worth carrying to the next one, while its words
+    /// and where it sits are what the user just chose. Nothing is clamped on the way
+    /// through, because everything here came off a caption that was clamped when it was set.
+    /// </remarks>
+    public VideoTextSegment StyledLike(VideoTextSegment other) => this with
+    {
+        FontSize = other.FontSize,
+        Bold = other.Bold,
+        Italic = other.Italic,
+        FontFamily = other.FontFamily,
+        TextColor = other.TextColor,
+        Background = other.Background,
+        BackgroundColor = other.BackgroundColor,
+        OutlineEnabled = other.OutlineEnabled,
+        OutlineColor = other.OutlineColor,
+        OutlineWidth = other.OutlineWidth,
+        Alignment = other.Alignment,
+    };
+
+    /// <summary>
     /// Sets what the caption says, refusing to leave it empty.
     /// </summary>
     /// <remarks>

@@ -265,6 +265,18 @@ public sealed partial class VideoEditorWindow : Window
     /// </remarks>
     private CaptureRegion _rectAtPress;
 
+    /// <summary>
+    /// The appearance the last caption edited here was left in, which the next one placed
+    /// starts from.
+    /// </summary>
+    /// <remarks>
+    /// Held here as well as in the settings file because the file is only written when this
+    /// window closes. macshot keeps a static cache beside its stored blob for exactly this
+    /// reason: without one, the second caption of a session would open at the defaults the
+    /// first had just been styled away from.
+    /// </remarks>
+    private VideoTextSegment? _captionStyle;
+
     /// <summary>How many rows deep the band was last drawn.</summary>
     private int _bandRows = 1;
 
@@ -1189,7 +1201,10 @@ public sealed partial class VideoEditorWindow : Window
                 break;
 
             default:
-                _effects.Texts.Add(VideoTextSegment.Placed(at, _duration));
+                var placed = VideoTextSegment.Placed(at, _duration);
+                _effects.Texts.Add(_captionStyle is { } style
+                    ? placed.StyledLike(style)
+                    : _settings.Current.CaptionStyled(placed));
                 Select((kind, _effects.Texts.Count - 1));
                 break;
         }
@@ -1615,6 +1630,7 @@ public sealed partial class VideoEditorWindow : Window
             .WithFontSize(CaptionSizeSlider.Value)
             .WithOutlineWidth(CaptionOutlineSlider.Value);
 
+        _captionStyle = _effects.Texts[index];
         Touched();
     }
 
@@ -2459,6 +2475,7 @@ public sealed partial class VideoEditorWindow : Window
 
     private void Teardown()
     {
+        RememberCaptionStyle();
         _ticker.Stop();
         Player.SetMediaPlayer(null);
 
@@ -2470,6 +2487,43 @@ public sealed partial class VideoEditorWindow : Window
 
         _gif = null;
         GifView.Source = null;
+    }
+
+    /// <summary>
+    /// Writes the last caption's appearance out, so the next recording opens on it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// On the way out rather than at every edit, which is what
+    /// <see cref="AnnotationToolbarView.PersistStyle"/> already does with the drawing
+    /// style and for the same reason: the size and the rim widths are sliders, and a
+    /// settings file rewritten on every pointer move during a drag is a file written
+    /// twenty times to record one decision. macshot instead debounces its write by 250 ms;
+    /// this window has a moment it is finished, so it does not need a timer to find one.
+    /// </para>
+    /// <para>
+    /// Swallowed on failure like that one, and for the same reason: this runs while the
+    /// window is being torn down, there is nothing left to report into, and the cost is
+    /// that the next recording starts from the previous caption's style.
+    /// </para>
+    /// </remarks>
+    private void RememberCaptionStyle()
+    {
+        if (_captionStyle is not { } style)
+        {
+            return;
+        }
+
+        try
+        {
+            _settings.Save(_settings.Current.WithCaptionStyle(style));
+        }
+        catch (IOException)
+        {
+        }
+        catch (UnauthorizedAccessException)
+        {
+        }
     }
 
     private static string Bytes(long bytes) => bytes switch

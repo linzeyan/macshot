@@ -579,6 +579,58 @@ public sealed record CaptureSettings
     public string AnnotationTextGlyphStroke { get; init; } = string.Empty;
 
     /// <summary>
+    /// The size the last caption on a recording was left set at, in points against a
+    /// 1080-tall frame.
+    /// </summary>
+    /// <remarks>
+    /// macshot's <c>videoTextLastUsedStyle</c>, and the eleven properties under this one
+    /// are the rest of it. Spread out rather than kept as its single encoded blob, which is
+    /// what every other remembered style in this file already is: <see cref="Normalized"/>
+    /// can then repair each of them on its own, and a hand-edited file has words in it.
+    /// A caption's own words, timing and rectangle are deliberately not here — those are
+    /// what the user just placed, and only the appearance is worth carrying forward.
+    /// </remarks>
+    public double VideoCaptionFontSize { get; init; } = VideoTextSegment.DefaultFontSize;
+
+    /// <summary>Whether the last caption was bold. macshot places its first one bold.</summary>
+    public bool VideoCaptionBold { get; init; } = true;
+
+    public bool VideoCaptionItalic { get; init; }
+
+    /// <summary>
+    /// The face, or <see cref="VideoTextSegment.SystemFontFamily"/> for the interface's own.
+    /// </summary>
+    public string VideoCaptionFontFamily { get; init; } = VideoTextSegment.SystemFontFamily;
+
+    /// <summary>The glyphs' colour as <c>#AARRGGBB</c>.</summary>
+    public string VideoCaptionTextColor { get; init; } = VideoTextSegment.DefaultTextColor.ToHex();
+
+    /// <summary>What sits behind the glyphs.</summary>
+    public VideoTextBackground VideoCaptionBackground { get; init; } = VideoTextBackground.Rounded;
+
+    /// <summary>That fill's colour as <c>#AARRGGBB</c>, alpha included.</summary>
+    public string VideoCaptionBackgroundColor { get; init; } =
+        VideoTextSegment.DefaultBackgroundColor.ToHex();
+
+    /// <summary>Whether a rim is drawn round the glyphs.</summary>
+    /// <remarks>
+    /// Its own switch rather than an unreadable colour meaning off, which is how the
+    /// annotation halo above stores the same idea. The two differ because a caption's rim
+    /// keeps a colour and a width while it is switched off, and the row shows both back —
+    /// folding the switch into the colour would lose what the user last chose the moment
+    /// they untick it.
+    /// </remarks>
+    public bool VideoCaptionOutline { get; init; }
+
+    public string VideoCaptionOutlineColor { get; init; } = VideoTextSegment.DefaultOutlineColor.ToHex();
+
+    /// <summary>How thick that rim is, in the same points against 1080 the size is in.</summary>
+    public double VideoCaptionOutlineWidth { get; init; } = VideoTextSegment.DefaultOutlineWidth;
+
+    /// <summary>Which edge the caption's lines hang from.</summary>
+    public VideoTextAlignment VideoCaptionAlignment { get; init; } = VideoTextAlignment.Centre;
+
+    /// <summary>
     /// How much a freehand stroke is rounded off once it is finished. Smoothed by
     /// default: a path sampled from a mouse is a staircase, and nobody draws one on
     /// purpose.
@@ -1617,6 +1669,48 @@ public sealed record CaptureSettings
     }
 
     /// <summary>
+    /// <paramref name="caption"/> wearing the appearance the last one was left in.
+    /// </summary>
+    /// <remarks>
+    /// What macshot's <c>withLastUsedStyle</c> does, and the reason it exists: a recording
+    /// annotated with six captions in the same face and colour should be styled once, not
+    /// six times. Timing, rectangle and words are left alone — they are what was just
+    /// placed, and carrying those forward would drop the second caption on top of the
+    /// first saying the same thing.
+    /// </remarks>
+    public VideoTextSegment CaptionStyled(VideoTextSegment caption) =>
+        (caption with
+        {
+            Bold = VideoCaptionBold,
+            Italic = VideoCaptionItalic,
+            FontFamily = VideoCaptionFontFamily,
+            TextColor = Color(VideoCaptionTextColor, VideoTextSegment.DefaultTextColor),
+            Background = VideoCaptionBackground,
+            BackgroundColor = Color(VideoCaptionBackgroundColor, VideoTextSegment.DefaultBackgroundColor),
+            OutlineEnabled = VideoCaptionOutline,
+            OutlineColor = Color(VideoCaptionOutlineColor, VideoTextSegment.DefaultOutlineColor),
+            Alignment = VideoCaptionAlignment,
+        })
+            .WithFontSize(VideoCaptionFontSize)
+            .WithOutlineWidth(VideoCaptionOutlineWidth);
+
+    /// <summary>These settings remembering how <paramref name="caption"/> is dressed.</summary>
+    public CaptureSettings WithCaptionStyle(VideoTextSegment caption) => this with
+    {
+        VideoCaptionFontSize = caption.FontSize,
+        VideoCaptionBold = caption.Bold,
+        VideoCaptionItalic = caption.Italic,
+        VideoCaptionFontFamily = caption.FontFamily,
+        VideoCaptionTextColor = caption.TextColor.ToHex(),
+        VideoCaptionBackground = caption.Background,
+        VideoCaptionBackgroundColor = caption.BackgroundColor.ToHex(),
+        VideoCaptionOutline = caption.OutlineEnabled,
+        VideoCaptionOutlineColor = caption.OutlineColor.ToHex(),
+        VideoCaptionOutlineWidth = caption.OutlineWidth,
+        VideoCaptionAlignment = caption.Alignment,
+    };
+
+    /// <summary>
     /// Clamps every field into range. The settings file is user-editable and can
     /// also be stale after an upgrade, so nothing downstream may assume it is sane;
     /// this is the one place that repairs it.
@@ -1716,6 +1810,32 @@ public sealed record CaptureSettings
             AnnotationTextAlignment = Enum.IsDefined(AnnotationTextAlignment)
                 ? AnnotationTextAlignment
                 : LabelAlignment.Left,
+            // The caption's own remembered style. Its colours default rather than turning
+            // off, because a caption always has all three: there is no reading of an
+            // unparseable one that leaves the glyphs uncoloured.
+            VideoCaptionFontSize = double.IsFinite(VideoCaptionFontSize)
+                ? Math.Clamp(VideoCaptionFontSize, VideoTextSegment.MinFontSize, VideoTextSegment.MaxFontSize)
+                : VideoTextSegment.DefaultFontSize,
+            VideoCaptionFontFamily = string.IsNullOrWhiteSpace(VideoCaptionFontFamily)
+                ? VideoTextSegment.SystemFontFamily
+                : VideoCaptionFontFamily.Trim(),
+            VideoCaptionTextColor = Color(VideoCaptionTextColor, VideoTextSegment.DefaultTextColor).ToHex(),
+            VideoCaptionBackground = Enum.IsDefined(VideoCaptionBackground)
+                ? VideoCaptionBackground
+                : VideoTextBackground.Rounded,
+            VideoCaptionBackgroundColor =
+                Color(VideoCaptionBackgroundColor, VideoTextSegment.DefaultBackgroundColor).ToHex(),
+            VideoCaptionOutlineColor =
+                Color(VideoCaptionOutlineColor, VideoTextSegment.DefaultOutlineColor).ToHex(),
+            VideoCaptionOutlineWidth = double.IsFinite(VideoCaptionOutlineWidth)
+                ? Math.Clamp(
+                    VideoCaptionOutlineWidth,
+                    VideoTextSegment.MinOutlineWidth,
+                    VideoTextSegment.MaxOutlineWidth)
+                : VideoTextSegment.DefaultOutlineWidth,
+            VideoCaptionAlignment = Enum.IsDefined(VideoCaptionAlignment)
+                ? VideoCaptionAlignment
+                : VideoTextAlignment.Centre,
             AnnotationLineStyle = Enum.IsDefined(AnnotationLineStyle) ? AnnotationLineStyle : LineStyle.Solid,
             AnnotationArrowStyle = Enum.IsDefined(AnnotationArrowStyle) ? AnnotationArrowStyle : ArrowStyle.Filled,
             AnnotationShapeFill = Enum.IsDefined(AnnotationShapeFill) ? AnnotationShapeFill : ShapeFill.Stroke,

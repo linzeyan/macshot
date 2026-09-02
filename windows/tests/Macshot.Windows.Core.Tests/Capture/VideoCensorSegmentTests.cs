@@ -283,4 +283,51 @@ public sealed class VideoTextSegmentTests
         Assert.IsTrue((caption with { FontFamily = "  " }).UsesSystemFont);
         Assert.IsFalse((caption with { FontFamily = "Impact" }).UsesSystemFont);
     }
+
+    /// <summary>
+    /// The whole point of remembering a style: the second caption on a recording arrives
+    /// dressed like the first, so a video wanting six of them in the same face is styled
+    /// once. Everything appearance is carried; nothing else may be.
+    /// </summary>
+    [TestMethod]
+    public void StyledLike_CarriesEveryPartOfTheLookAndNothingElse()
+    {
+        var placed = VideoTextSegment.Placed(12, 30).WithText("The new one");
+        var styled = VideoTextSegment.Placed(1, 30) with
+        {
+            FontSize = 96,
+            Bold = false,
+            Italic = true,
+            FontFamily = "Impact",
+            TextColor = new AnnotationColor(255, 204, 0),
+            Background = VideoTextBackground.None,
+            BackgroundColor = new AnnotationColor(1, 2, 3, 4),
+            OutlineEnabled = true,
+            OutlineColor = new AnnotationColor(255, 0, 0),
+            OutlineWidth = 5,
+            Alignment = VideoTextAlignment.Right,
+            Text = "The old one",
+        };
+
+        var dressed = placed.StyledLike(styled);
+
+        Assert.AreEqual(96, dressed.FontSize, Tolerance);
+        Assert.IsFalse(dressed.Bold);
+        Assert.IsTrue(dressed.Italic);
+        Assert.AreEqual("Impact", dressed.FontFamily);
+        Assert.AreEqual(new AnnotationColor(255, 204, 0), dressed.TextColor);
+        Assert.AreEqual(VideoTextBackground.None, dressed.Background);
+        Assert.AreEqual(new AnnotationColor(1, 2, 3, 4), dressed.BackgroundColor);
+        Assert.IsTrue(dressed.OutlineEnabled);
+        Assert.AreEqual(new AnnotationColor(255, 0, 0), dressed.OutlineColor);
+        Assert.AreEqual(5, dressed.OutlineWidth, Tolerance);
+        Assert.AreEqual(VideoTextAlignment.Right, dressed.Alignment);
+
+        // What the user just placed. Carrying these too would drop the second caption on
+        // top of the first, at the first's moment, saying the same words.
+        Assert.AreEqual(placed.Start, dressed.Start, Tolerance);
+        Assert.AreEqual(placed.End, dressed.End, Tolerance);
+        Assert.AreEqual(placed.Rect, dressed.Rect);
+        Assert.AreEqual("The new one", dressed.Text);
+    }
 }

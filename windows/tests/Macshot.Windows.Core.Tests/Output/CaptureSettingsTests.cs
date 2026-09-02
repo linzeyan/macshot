@@ -600,6 +600,99 @@ public sealed class CaptureSettingsTests
         Assert.AreEqual(WebcamInset.DefaultSide, stored.WebcamSizePoints);
     }
 
+    /// <summary>
+    /// A caption's look is remembered across recordings, not merely within one editor
+    /// window. Someone who captions every clip in the same face and colour sets it up once;
+    /// dropping it at the end of the session would mean doing that work again tomorrow.
+    /// </summary>
+    [TestMethod]
+    public void ACaptionsLookSurvivesTheSettingsFileAndDressesTheNextOnePlaced()
+    {
+        var styled = VideoTextSegment.Placed(1, 30) with
+        {
+            FontSize = 72,
+            Bold = false,
+            Italic = true,
+            FontFamily = "Impact",
+            TextColor = new AnnotationColor(255, 204, 0),
+            Background = VideoTextBackground.Solid,
+            BackgroundColor = new AnnotationColor(0, 0, 0, 128),
+            OutlineEnabled = true,
+            OutlineColor = new AnnotationColor(255, 0, 0),
+            OutlineWidth = 5,
+            Alignment = VideoTextAlignment.Right,
+        };
+
+        // Through the file, not just the record: the colours are stored as hex and a
+        // remembered style that could not survive being written down is not remembered.
+        var stored = JsonSerializer.Deserialize<CaptureSettings>(
+            JsonSerializer.Serialize(
+                CaptureSettings.Default.WithCaptionStyle(styled),
+                CaptureSettingsJson.Options),
+            CaptureSettingsJson.Options);
+
+        Assert.IsNotNull(stored);
+        var dressed = stored.Normalized().CaptionStyled(VideoTextSegment.Placed(12, 30));
+
+        Assert.AreEqual(styled.FontSize, dressed.FontSize, 0.001);
+        Assert.IsFalse(dressed.Bold);
+        Assert.IsTrue(dressed.Italic);
+        Assert.AreEqual("Impact", dressed.FontFamily);
+        Assert.AreEqual(styled.TextColor, dressed.TextColor);
+        Assert.AreEqual(VideoTextBackground.Solid, dressed.Background);
+        Assert.AreEqual(styled.BackgroundColor, dressed.BackgroundColor);
+        Assert.IsTrue(dressed.OutlineEnabled);
+        Assert.AreEqual(styled.OutlineColor, dressed.OutlineColor);
+        Assert.AreEqual(styled.OutlineWidth, dressed.OutlineWidth, 0.001);
+        Assert.AreEqual(VideoTextAlignment.Right, dressed.Alignment);
+
+        // And the placement is the new caption's own — the memory is of a look, not of a
+        // caption.
+        Assert.AreEqual(VideoTextSegment.DefaultText, dressed.Text);
+        Assert.IsTrue(dressed.Start >= 10);
+    }
+
+    /// <summary>
+    /// A hand-edited or upgraded file must not be able to hand the editor a caption it
+    /// cannot draw. An unreadable colour defaults rather than switching anything off — a
+    /// caption always has glyphs, so there is no reading of a broken colour that leaves
+    /// them uncoloured.
+    /// </summary>
+    [TestMethod]
+    public void Normalized_RepairsARememberedCaptionStyle()
+    {
+        var settings = (CaptureSettings.Default with
+        {
+            VideoCaptionFontSize = 4000,
+            VideoCaptionOutlineWidth = double.NaN,
+            VideoCaptionFontFamily = "   ",
+            VideoCaptionTextColor = "not a colour",
+            VideoCaptionBackground = (VideoTextBackground)42,
+            VideoCaptionAlignment = (VideoTextAlignment)42,
+        }).Normalized();
+
+        Assert.AreEqual(VideoTextSegment.MaxFontSize, settings.VideoCaptionFontSize, 0.001);
+        Assert.AreEqual(VideoTextSegment.DefaultOutlineWidth, settings.VideoCaptionOutlineWidth, 0.001);
+        Assert.AreEqual(VideoTextSegment.SystemFontFamily, settings.VideoCaptionFontFamily);
+        Assert.AreEqual(VideoTextSegment.DefaultTextColor.ToHex(), settings.VideoCaptionTextColor);
+        Assert.AreEqual(VideoTextBackground.Rounded, settings.VideoCaptionBackground);
+        Assert.AreEqual(VideoTextAlignment.Centre, settings.VideoCaptionAlignment);
+    }
+
+    /// <summary>
+    /// A machine with no remembered caption style has to place macshot's own caption. The
+    /// defaults are stated twice — once on the segment, once in the settings — and a
+    /// disagreement would mean the first caption after an upgrade came up different from
+    /// the first caption on a fresh install.
+    /// </summary>
+    [TestMethod]
+    public void ACaptionPlacedWithNothingRememberedIsMacshotsOwn()
+    {
+        var placed = VideoTextSegment.Placed(5, 30);
+
+        Assert.AreEqual(placed, CaptureSettings.Default.CaptionStyled(placed));
+    }
+
     [TestMethod]
     public void ShortcutsTravelToAnotherMachine()
     {
