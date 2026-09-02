@@ -232,6 +232,20 @@ public sealed partial class VideoEditorWindow : Window
     /// <summary>Where in the rectangle the press landed, in the overlay's own units.</summary>
     private global::Windows.Foundation.Point _rectGrabOffset;
 
+    /// <summary>
+    /// The rectangle as it stood when the press landed, which is what a resize measures
+    /// against — macshot's <c>originalView</c>.
+    /// </summary>
+    /// <remarks>
+    /// A censor and a caption keep the rectangle they were given, so measuring against the
+    /// live one would give the same answer. A zoom does not: it stores a centre and a
+    /// level, and the window read back is a square drawn around that centre, so the corner
+    /// a resize anchors to slides as the drag proceeds. Measured against the live
+    /// rectangle, a drag two hundred pixels across moved the level from 2.11x to 2.18x —
+    /// each step re-centred the square and swallowed most of the one before it.
+    /// </remarks>
+    private CaptureRegion _rectAtPress;
+
     /// <summary>How many rows deep the band was last drawn.</summary>
     private int _bandRows = 1;
 
@@ -1621,15 +1635,23 @@ public sealed partial class VideoEditorWindow : Window
 
     private void ShowRectOverlay() =>
         RectOverlay.Visibility =
-            (_selected?.Kind is VideoEffectKind.Censor or VideoEffectKind.Text) && !SourceIsGif
+            (_selected?.Kind is VideoEffectKind.Zoom or VideoEffectKind.Censor or VideoEffectKind.Text)
+            && !SourceIsGif
                 ? Visibility.Visible
                 : Visibility.Collapsed;
 
     private void RectOverlay_SizeChanged(object sender, SizeChangedEventArgs e) => DrawRectOverlay();
 
-    /// <summary>Where the selected censor or caption's rectangle is, or nothing.</summary>
+    /// <summary>Where the selected zoom, censor or caption's rectangle is, or nothing.</summary>
+    /// <remarks>
+    /// A zoom has no rectangle of its own — it is a level and a centre — so what is drawn
+    /// for it is the window those two name. Keeping the model that way rather than storing
+    /// a rectangle is macshot's choice, and it is what lets the level picker beside the
+    /// band and the region on the picture stay two views of one number.
+    /// </remarks>
     private CaptureRegion? SelectedRect => _selected switch
     {
+        { Kind: VideoEffectKind.Zoom, Index: var index } => _effects.Zooms[index].Window,
         { Kind: VideoEffectKind.Censor, Index: var index } => _effects.Censors[index].Rect,
         { Kind: VideoEffectKind.Text, Index: var index } => _effects.Texts[index].Rect,
         _ => null,
@@ -1693,6 +1715,7 @@ public sealed partial class VideoEditorWindow : Window
             return;
         }
 
+        _rectAtPress = normalized;
         RectOverlay.CapturePointer(e.Pointer);
     }
 
@@ -1709,24 +1732,22 @@ public sealed partial class VideoEditorWindow : Window
             return;
         }
 
-        var drawn = VideoOverlayGeometry.Denormalize(normalized, box);
-        var point = e.GetCurrentPoint(RectOverlay).Position;
+        var back = DraggedRect(normalized, box, e.GetCurrentPoint(RectOverlay).Position);
 
-        var moved = _rectDragging is RectGrab.Corner
-            ? new CaptureRegion(
-                drawn.X,
-                drawn.Y,
-                Math.Max(1, point.X - drawn.X),
-                Math.Max(1, point.Y - drawn.Y))
-            : new CaptureRegion(
-                point.X - _rectGrabOffset.X,
-                point.Y - _rectGrabOffset.Y,
-                drawn.Width,
-                drawn.Height);
+        if (_selected is { Kind: VideoEffectKind.Zoom, Index: var zoom })
+        {
+            _effects.Zooms[zoom] = _effects.Zooms[zoom].WithWindow(back);
 
-        var back = VideoOverlayGeometry.Normalize(moved, box);
-
-        if (_selected is { Kind: VideoEffectKind.Censor, Index: var censor })
+            // The picker beside the band names the same level the region does. Two controls
+            // for one number that disagreed would be worse than either alone. Refilled only
+            // when the nearest preset actually moves, because FillOptions replaces the box's
+            // items and a drag would otherwise do that on every pointer move.
+            if (OptionBox.SelectedIndex != Nearest(ZoomLevels, _effects.Zooms[zoom].Level))
+            {
+                FillOptions();
+            }
+        }
+        else if (_selected is { Kind: VideoEffectKind.Censor, Index: var censor })
         {
             _effects.Censors[censor] = _effects.Censors[censor].WithRect(back);
         }
@@ -1737,6 +1758,51 @@ public sealed partial class VideoEditorWindow : Window
 
         _exported = null;
         DrawRectOverlay();
+    }
+
+    /// <summary>
+    /// Where the drag in progress has put the rectangle, as fractions of the source frame.
+    /// </summary>
+    /// <remarks>
+    /// A zoom's corner is the one case that is not a free drag. Its window is one fraction
+    /// of the frame in both axes at once, so the corner names that fraction rather than a
+    /// width and a height, and <see cref="VideoZoomSegment.ResizedWindow"/> is where that
+    /// arithmetic lives — in Core, because it is the half of this that can be tested.
+    /// </remarks>
+    private CaptureRegion DraggedRect(
+        CaptureRegion normalized,
+        CaptureRegion box,
+        global::Windows.Foundation.Point point)
+    {
+        var drawn = VideoOverlayGeometry.Denormalize(normalized, box);
+
+        if (_rectDragging is RectGrab.Body)
+        {
+            return VideoOverlayGeometry.Normalize(
+                new CaptureRegion(
+                    point.X - _rectGrabOffset.X,
+                    point.Y - _rectGrabOffset.Y,
+                    drawn.Width,
+                    drawn.Height),
+                box);
+        }
+
+        if (_selected?.Kind is VideoEffectKind.Zoom)
+        {
+            return VideoZoomSegment.ResizedWindow(
+                _rectAtPress,
+                new CapturePoint((point.X - box.X) / box.Width, (point.Y - box.Y) / box.Height),
+                _sourceWidth,
+                _sourceHeight);
+        }
+
+        return VideoOverlayGeometry.Normalize(
+            new CaptureRegion(
+                drawn.X,
+                drawn.Y,
+                Math.Max(1, point.X - drawn.X),
+                Math.Max(1, point.Y - drawn.Y)),
+            box);
     }
 
     private void RectOverlay_PointerReleased(object sender, PointerRoutedEventArgs e)
