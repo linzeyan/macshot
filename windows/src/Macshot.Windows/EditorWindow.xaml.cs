@@ -233,6 +233,7 @@ public sealed partial class EditorWindow : Window
         // Every string in the XAML is already the English text macshot keys by,
         // so the page is translated in place rather than written twice.
         this.Localize();
+        this.CloseOnControlW();
 
         // After the markup has run: the canvas it redraws is a field the markup creates.
         _hold = new PressHold(DispatcherQueue, _editor, AnnotationCanvas.Render);

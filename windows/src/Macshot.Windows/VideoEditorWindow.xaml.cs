@@ -287,6 +287,7 @@ public sealed partial class VideoEditorWindow : Window
         // window is translated in place rather than written twice.
         this.Localize();
         this.GetAppWindow().UseAppIcon();
+        this.CloseOnControlW();
 
         Title = $"macshot — {Path.GetFileName(path)}";
 
