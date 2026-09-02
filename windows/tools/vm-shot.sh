@@ -245,6 +245,7 @@ if ($Drag) {
     # never sees happening.
     $at = $Drag.Split(",")
     $fromX = [int]$at[0]; $fromY = [int]$at[1]; $toX = [int]$at[2]; $toY = [int]$at[3]
+    $screen = [System.Windows.Forms.SystemInformation]::VirtualScreen
     [VmShot.Pointer]::SetCursorPos($fromX, $fromY) | Out-Null
     Start-Sleep -Milliseconds 120
     [VmShot.Pointer]::mouse_event(0x0002, 0, 0, 0, 0)
@@ -258,9 +259,20 @@ if ($Drag) {
         if ($holdKey -and $step -eq 7)  { [VmShot.Pointer]::keybd_event([byte]$holdKey, 0, 0, 0) }
         if ($holdKey -and $step -eq 14) { [VmShot.Pointer]::keybd_event([byte]$holdKey, 0, 2, 0) }
 
-        [VmShot.Pointer]::SetCursorPos(
-            $fromX + [int](($toX - $fromX) * $step / 20),
-            $fromY + [int](($toY - $fromY) * $step / 20)) | Out-Null
+        # An injected event rather than SetCursorPos. SetCursorPos puts the cursor where it
+        # is asked and nothing more: a WinUI window that reads pointer input through
+        # WM_POINTER never hears about it, so a press landed and every move after it was
+        # lost. The video editor's rectangle and its playhead both jumped to wherever the
+        # button went down and then ignored the rest of the gesture. mouse_event goes
+        # through the input queue, which is what Windows synthesizes the pointer messages
+        # from. Coordinates are the virtual desktop in 0..65535.
+        $stepX = $fromX + [int](($toX - $fromX) * $step / 20)
+        $stepY = $fromY + [int](($toY - $fromY) * $step / 20)
+        [VmShot.Pointer]::mouse_event(
+            0xC001,
+            [uint32](($stepX - $screen.Left) * 65535 / ($screen.Width - 1)),
+            [uint32](($stepY - $screen.Top) * 65535 / ($screen.Height - 1)),
+            0, 0)
         Start-Sleep -Milliseconds 40
     }
 
