@@ -725,6 +725,39 @@ public sealed partial class PreferencesWindow : Window
     }
 
     /// <summary>
+    /// The camera-bubble slider, which carries its own reading for the same reason the
+    /// preview-size one does — and more so, because a bubble is only ever seen against a
+    /// recording that is not being made yet.
+    /// </summary>
+    private void WebcamSize_Changed(object sender, RangeBaseValueChangedEventArgs e)
+    {
+        ShowWebcamSize();
+        Apply();
+    }
+
+    /// <summary>
+    /// Writes the reading beside the slider, if there is one yet.
+    /// </summary>
+    /// <remarks>
+    /// The guard <see cref="ShowThumbnailScale"/> explains, kept here even though this
+    /// slider's ends are set in code and so cannot fire during <c>InitializeComponent</c>.
+    /// It is what makes writing them back into the markup a layout decision rather than a
+    /// window that will not open.
+    /// </remarks>
+    private void ShowWebcamSize()
+    {
+        if (WebcamSizeReading is not { } reading)
+        {
+            return;
+        }
+
+        // Whole numbers and macshot's own "px" suffix
+        // (SettingsWindowController.swift:2707), untranslated there and so untranslated
+        // here: it is a unit rather than a word.
+        reading.Text = $"{WebcamSizeSlider.Value:0} px";
+    }
+
+    /// <summary>
     /// Takes what a text box holds when the focus leaves it, rather than as it is typed.
     /// </summary>
     /// <remarks>
@@ -1123,8 +1156,9 @@ public sealed partial class PreferencesWindow : Window
         RecordingOnStopBox.SelectedIndex = Array.IndexOf(OnStopOrder, settings.RecordingOnStop);
         HideRecordingHudCheck.IsChecked = settings.HideRecordingHud;
 
-        // macshot's own four corners, four sizes and two shapes, in its order, so every
-        // entry is a string its translations are keyed by.
+        // macshot's own four corners and two shapes, in its order, so every entry is a
+        // string its translations are keyed by. The size between them is no longer a list:
+        // macshot made it a slider, and a number has nothing to translate.
         WebcamCornerBox.ItemsSource = new List<string>
         {
             L("Bottom Right"),
@@ -1134,14 +1168,12 @@ public sealed partial class PreferencesWindow : Window
         };
         WebcamCornerBox.SelectedIndex = (int)settings.WebcamCorner;
 
-        WebcamSizeBox.ItemsSource = new List<string>
-        {
-            L("Webcam Size Small"),
-            L("Webcam Size Medium"),
-            L("Webcam Size Large"),
-            L("Webcam Size Extra Large"),
-        };
-        WebcamSizeBox.SelectedIndex = (int)settings.WebcamSize;
+        // The ends before the value, or the value would be coerced into the range WinUI
+        // gives a Slider by default — 0 to 100 — and a stored 300 would arrive as 100.
+        WebcamSizeSlider.Minimum = WebcamInset.MinimumSide;
+        WebcamSizeSlider.Maximum = WebcamInset.MaximumSide;
+        WebcamSizeSlider.Value = settings.WebcamSizePoints;
+        ShowWebcamSize();
 
         WebcamShapeBox.ItemsSource = new List<string> { L("Circle"), L("Rounded Rectangle") };
         WebcamShapeBox.SelectedIndex = (int)settings.WebcamShape;
@@ -1579,7 +1611,7 @@ public sealed partial class PreferencesWindow : Window
             RecordingOnStop = OnStopOrder[Math.Max(RecordingOnStopBox.SelectedIndex, 0)],
             HideRecordingHud = HideRecordingHudCheck.IsChecked == true,
             WebcamCorner = (WebcamCorner)Math.Max(WebcamCornerBox.SelectedIndex, 0),
-            WebcamSize = (WebcamSize)Math.Max(WebcamSizeBox.SelectedIndex, 0),
+            WebcamSizePoints = WebcamSizeSlider.Value,
             WebcamShape = (WebcamShape)Math.Max(WebcamShapeBox.SelectedIndex, 0),
             // macshot's four: save, copy, both, neither. The port already had both
             // switches; this is the one list that spells out what each pair means.

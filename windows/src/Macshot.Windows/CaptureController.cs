@@ -2123,7 +2123,7 @@ public sealed class CaptureController : IDisposable
             webcam = await bubble.ShowInAsync(
                 request.Region ?? monitor.Bounds,
                 current.WebcamCorner,
-                current.WebcamSize,
+                current.WebcamSizePoints,
                 current.WebcamShape,
                 monitor.Scale,
                 current.CameraDeviceId)

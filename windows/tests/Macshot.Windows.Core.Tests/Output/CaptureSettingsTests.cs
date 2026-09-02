@@ -1,3 +1,4 @@
+using System.Text.Json;
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
@@ -558,6 +559,45 @@ public sealed class CaptureSettingsTests
     public void AFileWithNoAdjustmentAsksForNothing()
     {
         Assert.IsTrue(CaptureSettings.Default.ToImageEffectsOptions().IsIdentity);
+    }
+
+    /// <summary>
+    /// The camera bubble's size is a number the user drags now, and the only numbers that
+    /// can reach the file from outside the slider are a hand edit or an import. Either can
+    /// name a bubble the settings window cannot show — a 4000-pixel one has no thumb
+    /// position and no way back.
+    /// </summary>
+    [TestMethod]
+    public void Normalized_HoldsTheCameraBubbleToTheSizesTheSliderCanShow()
+    {
+        Assert.AreEqual(
+            WebcamInset.MaximumSide,
+            (CaptureSettings.Default with { WebcamSizePoints = 4000 }).Normalized().WebcamSizePoints);
+
+        Assert.AreEqual(
+            WebcamInset.MinimumSide,
+            (CaptureSettings.Default with { WebcamSizePoints = 0 }).Normalized().WebcamSizePoints);
+    }
+
+    /// <summary>
+    /// The size used to be one of four names and is now a number, and the old name is why
+    /// the key changed with it. A file written by any earlier build still says
+    /// <c>"webcamSize": "Medium"</c> — a string where a number would now be read — and
+    /// under the same key that is not a setting that fails, it is a parse that fails, and
+    /// every other preference in the file goes down with it. Under the new key the old
+    /// entry is one nothing reads, and what arrives is the default, which is the size
+    /// Medium was.
+    /// </summary>
+    [TestMethod]
+    public void ASettingsFileNamingOneOfTheOldWebcamSizesStillLoads()
+    {
+        var stored = JsonSerializer.Deserialize<CaptureSettings>(
+            """{ "webcamSize": "ExtraLarge", "quality": 71 }""",
+            CaptureSettingsJson.Options);
+
+        Assert.IsNotNull(stored);
+        Assert.AreEqual(71, stored.Quality, "the rest of the file has to survive the dead key");
+        Assert.AreEqual(WebcamInset.DefaultSide, stored.WebcamSizePoints);
     }
 
     [TestMethod]

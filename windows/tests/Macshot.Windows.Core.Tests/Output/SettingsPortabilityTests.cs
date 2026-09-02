@@ -136,7 +136,7 @@ public sealed class SettingsPortabilityTests
             HideRecordingHud = true,
             RecordWebcam = true,
             WebcamCorner = WebcamCorner.TopLeft,
-            WebcamSize = WebcamSize.ExtraLarge,
+            WebcamSizePoints = 320,
             WebcamShape = WebcamShape.RoundedRect,
             FilenameTemplate = "{window} {date}",
             RecordingFilenameTemplate = "Clip {time}",

@@ -1008,13 +1008,22 @@
                                 Width="240"
                                 SelectionChanged="Setting_SelectionChanged" />
                         </StackPanel>
+                        <!-- A slider, not the four named steps this used to offer: macshot
+                             replaced its own popup with one because a bubble sized for a
+                             laptop is a dot on a 4K panel
+                             (SettingsWindowController.swift:1636). The reading beside it is
+                             what makes a size one you can go back to. Its ends are set in
+                             code from WebcamInset rather than written here, so the slider
+                             and the clamp behind it cannot come to disagree. -->
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Size:" Style="{StaticResource RowLabel}" />
-                            <ComboBox
-                                x:Name="WebcamSizeBox"
+                            <Slider
+                                x:Name="WebcamSizeSlider"
                                 AutomationProperties.Name="Size:"
-                                Width="240"
-                                SelectionChanged="Setting_SelectionChanged" />
+                                Width="180"
+                                StepFrequency="1"
+                                ValueChanged="WebcamSize_Changed" />
+                            <TextBlock x:Name="WebcamSizeReading" Style="{StaticResource RowText}" />
                         </StackPanel>
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="Shape:" Style="{StaticResource RowLabel}" />
