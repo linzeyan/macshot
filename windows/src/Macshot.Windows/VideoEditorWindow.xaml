@@ -28,10 +28,10 @@
             Stretch="Uniform"
             Visibility="Collapsed" />
 
-        <!-- macshot's EffectsPreviewOverlayView: where a censor or a caption goes on the
-             picture, dragged on top of the player itself rather than typed as numbers.
-             Only up while one of those two is selected on the band — a frame drawn over
-             the video the rest of the time would read as part of the recording. -->
+        <!-- macshot's EffectsPreviewOverlayView: where a zoom, a censor or a caption goes
+             on the picture, dragged on top of the player itself rather than typed as
+             numbers. Only up while one of those three is selected on the band — a frame
+             drawn over the video the rest of the time would read as part of the recording. -->
         <Canvas
             x:Name="RectOverlay"
             Grid.Row="0"
@@ -49,7 +49,12 @@
                 Fill="#1AFFFFFF" />
             <!-- One corner rather than macshot's eight handles: the other seven would each
                  need their own hit region on a surface this port cannot photograph to
-                 check. Drag the middle to move it, this corner to resize it. -->
+                 check. Drag the middle to move it, this corner to resize it.
+
+                 For a zoom the one corner is not a shortfall at all. Its window is locked to
+                 the video's aspect — one fraction of the frame in both axes — so every
+                 handle macshot draws sets the same single number, and eight of them would be
+                 eight ways to say what this one says. -->
             <Rectangle
                 x:Name="RectHandle"
                 Width="12"
