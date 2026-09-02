@@ -166,6 +166,7 @@ public sealed partial class PreferencesWindow : Window
         // so the page is translated in place rather than written twice.
         this.Localize();
         ShoutTheSectionHeadings();
+        this.CloseOnControlW();
         AppThemes.Apply(this, _settings.Current.Theme);
 
         // The markup selects the first item, which happens while the pages it switches

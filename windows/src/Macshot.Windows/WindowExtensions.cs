@@ -2,7 +2,9 @@ using System.Runtime.InteropServices;
 using Microsoft.UI;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
+using Microsoft.UI.Xaml.Input;
 using Windows.Graphics;
+using Windows.System;
 using WinRT.Interop;
 
 namespace Macshot.Windows;
@@ -92,6 +94,52 @@ internal static class WindowExtensions
         {
             // Cosmetic, and already reported once by the tray icon if the file is gone.
         }
+    }
+
+    /// <summary>
+    /// Closes the window on Ctrl+W.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// macOS gets this from one File menu, whose Close Window item routes through the
+    /// responder chain to whichever window is key
+    /// (<c>AppDelegate.swift</c>, <c>de95d60</c>). There is no menu bar to hang it on
+    /// here, so each window that ought to answer the key asks for it — which is why this
+    /// is one call rather than one handler per window.
+    /// </para>
+    /// <para>
+    /// Only the windows with a title bar call it, because that is what
+    /// <c>performClose</c> acts on: a chromeless panel — the HUDs, the toast, the pin —
+    /// has no close button, and a key that dismissed one would be a way to lose a
+    /// recording's controls with the recording still running.
+    /// </para>
+    /// <para>
+    /// On the content rather than the window: a WinUI <see cref="Window"/> is not a
+    /// <see cref="UIElement"/> and has no accelerators of its own.
+    /// </para>
+    /// </remarks>
+    public static void CloseOnControlW(this Window window)
+    {
+        if (window.Content is not UIElement content)
+        {
+            return;
+        }
+
+        var accelerator = new KeyboardAccelerator
+        {
+            Modifiers = VirtualKeyModifiers.Control,
+            Key = VirtualKey.W,
+        };
+
+        accelerator.Invoked += (_, args) =>
+        {
+            // Handled, or the key carries on to whatever else is listening — a text box
+            // being edited on the page would take it as a word delete.
+            args.Handled = true;
+            window.Close();
+        };
+
+        content.KeyboardAccelerators.Add(accelerator);
     }
 
     /// <summary>

@@ -81,6 +81,7 @@ public sealed partial class AudioMergeWindow : Window
         // built after Localize has to do both by hand.
         BuildTrackRows();
         this.Localize();
+        this.CloseOnControlW();
         AppThemes.Apply(this, settings.Current.Theme);
 
         // The close button is macshot's Skip: a recording that has just been made must not
