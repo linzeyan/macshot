@@ -170,6 +170,9 @@
 "Right-click to add points" = "H\U00F6gerklicka f\U00F6r att l\U00E4gga till punkter";
 "Hold 1 auto-vertical  \U00B7  Hold 2 auto-horizontal" = "H\U00E5ll 1 auto-vertikalt  \U00B7  H\U00E5ll 2 auto-horisontellt";
 "Limit to selection" = "Begränsa till markering";
+"Effect" = "Effekt";
+"Font" = "Typsnitt";
+"System" = "System";
 
 /* Overlay / Canvas */
 "Click a window  \U00B7  Drag for custom area  \U00B7  F for full screen" = "Klicka p\U00E5 ett f\U00F6nster  \U00B7  Dra f\U00F6r eget omr\U00E5de  \U00B7  F f\U00F6r helsk\U00E4rm";
@@ -666,3 +669,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "Öppna en historikpost i redigeraren (behåller anteckningarna redigerbara)";
+
+/* Selection edge adjustment */
+"Auto-Adjust Selection" = "Autojustera markering";
+"Auto-adjust selection" = "Autojustera markering";
+"Could not analyze selection edges" = "Det gick inte att analysera markeringens kanter";
+"Detecting nearby edges…" = "Identifierar närliggande kanter…";
+"No nearby edges found" = "Inga närliggande kanter hittades";
+"Selection adjusted" = "Markeringen har justerats";
+"Selection is already aligned" = "Markeringen är redan justerad";
+"Space to move. Release to annotate and edit" = "Håll ned mellanslag för att flytta. Släpp för att kommentera och redigera";
+"Space to move. Release to finish" = "Håll ned mellanslag för att flytta. Släpp för att slutföra";

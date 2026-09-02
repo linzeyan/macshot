@@ -1714,6 +1714,28 @@ public sealed partial class AnnotationToolbarView : UserControl
     }
 
     /// <summary>
+    /// The key <paramref name="command"/> also answers to, ready to read — or empty for
+    /// none, and for the user who has turned the hint off.
+    /// </summary>
+    /// <remarks>
+    /// For the one control that is not on a strip: the auto-adjust button in the
+    /// resolution-presets popover. It comes through here rather than reading the settings
+    /// itself so that the strips stay the one place that knows which key is on what, which
+    /// is the same reason <see cref="ToolbarItem.Shortcut"/> is carried on the item.
+    /// </remarks>
+    public string ShortcutFor(ToolbarCommand command)
+    {
+        var settings = _settings?.Current ?? CaptureSettings.Default;
+        if (!settings.ShowShortcutsInTooltips)
+        {
+            return string.Empty;
+        }
+
+        var key = KeyFor(new ToolbarItem(command, string.Empty), settings);
+        return key.Length == 0 ? string.Empty : ToolShortcuts.Describe(key);
+    }
+
+    /// <summary>
     /// The same buttons, each carrying the key that also does its job.
     /// </summary>
     /// <remarks>

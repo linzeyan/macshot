@@ -163,6 +163,9 @@
 "Right-click to add points" = "புள்ளிகளைச் சேர்க்க வலது கிளிக் செய்";
 "Hold 1 auto-vertical  ·  Hold 2 auto-horizontal" = "1 அழுத்தி தானியங்கு-செங்குத்து  ·  2 அழுத்தி தானியங்கு-கிடைமட்டம்";
 "Limit to selection" = "தேர்வுக்கு மட்டுப்படுத்து";
+"Effect" = "விளைவு";
+"Font" = "எழுத்துரு";
+"System" = "சிஸ்டம்";
 
 /* Overlay / Canvas */
 "Click a window  ·  Drag for custom area  ·  F for full screen" = "சாளரத்தைக் கிளிக் செய்  ·  தனிப்பயன் பகுதிக்கு இழு  ·  முழுத்திரைக்கு F";
@@ -668,3 +671,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "வரலாற்று உள்ளீட்டைத் தொகுப்பாளரில் திற (எழுத்துக்குறிப்புகளைத் திருத்தக்கூடியதாக வைத்திருக்கும்)";
+
+/* Selection edge adjustment */
+"Auto-Adjust Selection" = "தேர்வைத் தானாகச் சரிசெய்";
+"Auto-adjust selection" = "தேர்வைத் தானாகச் சரிசெய்";
+"Could not analyze selection edges" = "தேர்வின் விளிம்புகளைப் பகுப்பாய்வு செய்ய முடியவில்லை";
+"Detecting nearby edges…" = "அருகிலுள்ள விளிம்புகளைக் கண்டறிகிறது…";
+"No nearby edges found" = "அருகிலுள்ள விளிம்புகள் எதுவும் காணப்படவில்லை";
+"Selection adjusted" = "தேர்வு சரிசெய்யப்பட்டது";
+"Selection is already aligned" = "தேர்வு ஏற்கனவே சீரமைக்கப்பட்டுள்ளது";
+"Space to move. Release to annotate and edit" = "நகர்த்த ஸ்பேஸ் விசையைப் பிடிக்கவும். குறிப்புரையிட்டு திருத்த விடுவிக்கவும்";
+"Space to move. Release to finish" = "நகர்த்த ஸ்பேஸ் விசையைப் பிடிக்கவும். முடிக்க விடுவிக்கவும்";

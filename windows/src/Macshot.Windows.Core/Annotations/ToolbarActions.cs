@@ -20,6 +20,15 @@ public enum ToolbarCommand
     /// <summary>Drag the chosen region without redrawing it.</summary>
     MoveSelection,
 
+    /// <summary>
+    /// Take every edge of the chosen region out to the nearest real border in the picture.
+    /// </summary>
+    /// <remarks>
+    /// On no strip, here or on macOS: it is reached by its key and by the button in the
+    /// resolution-presets popover, which is where the region's other measurements are.
+    /// </remarks>
+    AdjustSelection,
+
     /// <summary>Carry on with this capture in the editor window.</summary>
     OpenEditor,
 

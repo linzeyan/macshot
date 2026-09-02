@@ -401,6 +401,25 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </remarks>
     private volatile BoundarySnapIndex? _boundaries;
 
+    /// <summary>Whether the scan that fills <see cref="_boundaries"/> is already running.</summary>
+    /// <remarks>
+    /// Auto-adjust starts that scan when the boundary-snap setting left it unstarted, and
+    /// it can be pressed again while it is going. Two scans would read every pixel on the
+    /// display twice for one answer.
+    /// </remarks>
+    private bool _buildingBoundaries;
+
+    /// <summary>
+    /// Set when auto-adjust was asked for before the lines had been read, so it can run the
+    /// moment they have been — macshot's <c>pendingAutoAdjustSelection</c>.
+    /// </summary>
+    /// <remarks>
+    /// A press that did nothing and left no trace would be indistinguishable from a broken
+    /// key. The alternative, blocking the UI thread on the scan, is a frozen overlay for as
+    /// long as a display takes to read.
+    /// </remarks>
+    private bool _adjustWhenBoundariesLand;
+
     public CaptureOverlayWindow(
         CapturedFrame desktopFrame,
         MonitorLayout layout,
@@ -506,6 +525,11 @@ public sealed partial class CaptureOverlayWindow : Window
             // microphone is the same failure without the light to give it away.
             HideWebcamPreview();
             HideMicMeter();
+
+            // An auto-adjust still waiting on the boundary scan would land here after the
+            // window had gone and redraw a canvas nobody is looking at. Escape during the
+            // scan is exactly how that happens.
+            _adjustWhenBoundariesLand = false;
         };
 
         var appWindow = this.GetAppWindow();
@@ -535,7 +559,14 @@ public sealed partial class CaptureOverlayWindow : Window
         BuildSnapLine();
         ShowIdleInstruction();
         OfferRememberedSelection();
-        BuildBoundaryIndex();
+
+        // Only the drag-time snap is behind the setting. Auto-adjust starts the same scan
+        // itself when it is asked for, because it is one explicit press and macshot does
+        // not consult the setting for it either (OverlayView.swift:7221).
+        if (_settings.Current.BoundarySnap)
+        {
+            BuildBoundaryIndex();
+        }
     }
 
     /// <summary>
@@ -550,11 +581,12 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </remarks>
     private void BuildBoundaryIndex()
     {
-        if (!_settings.Current.BoundarySnap)
+        if (_buildingBoundaries)
         {
             return;
         }
 
+        _buildingBoundaries = true;
         var frame = _monitorFrame;
 
         // Frame space, not virtual: the index is asked about edges in the coordinates a
@@ -577,7 +609,107 @@ public sealed partial class CaptureOverlayWindow : Window
             // one load on the UI thread, and marshalling back would queue work behind the
             // pointer moves this exists to serve.
             _boundaries = index;
+
+            // The hop back is only to finish an auto-adjust that was asked for too early —
+            // after the store, so nothing waits on the queue to start snapping. Always
+            // rather than only when one is pending: the flag is the UI thread's, and
+            // reading it here would lose a press made while the scan was already running.
+            DispatcherQueue.TryEnqueue(BoundariesArrived);
         });
+    }
+
+    /// <summary>
+    /// Runs the auto-adjust that was waiting for the lines, now that they are read.
+    /// </summary>
+    private void BoundariesArrived()
+    {
+        if (!_adjustWhenBoundariesLand)
+        {
+            return;
+        }
+
+        _adjustWhenBoundariesLand = false;
+
+        if (_boundaries is null)
+        {
+            // The scan ran and came back with nothing, which for this display means it is
+            // too large to index at all. Said out loud rather than swallowed: the user
+            // pressed a key and was told edges were being looked for.
+            Hint(L("Could not analyze selection edges"));
+            return;
+        }
+
+        AutoAdjustSelection();
+    }
+
+    /// <summary>
+    /// Takes all four edges of the chosen region out — or in — to the nearest real border
+    /// in the picture, in one explicit press.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// macshot's <c>autoAdjustSelection()</c>. A region dragged out by hand around a window
+    /// or a panel is never on its border, and trimming four edges by eye with the grips is
+    /// four careful drags; this is the same result from one key.
+    /// </para>
+    /// <para>
+    /// Nothing is said when the region is too small to have been aimed, which is macshot's
+    /// silent guard: a two-pixel drag is a misfire, and a message about edges would be an
+    /// answer to a question nobody asked.
+    /// </para>
+    /// </remarks>
+    private void AutoAdjustSelection()
+    {
+        if (_selection is not { } region)
+        {
+            return;
+        }
+
+        if (_boundaries is not { } index)
+        {
+            // Started here rather than left to the setting, and the press is remembered so
+            // it lands when the scan does.
+            _adjustWhenBoundariesLand = true;
+            BuildBoundaryIndex();
+            Hint(L("Detecting nearby edges…"));
+            return;
+        }
+
+        _adjustWhenBoundariesLand = false;
+
+        // The field rather than Boundaries: Alt suppresses the snap for the drag it is held
+        // during, and there is no drag here to hold it during.
+        var fit = BoundarySnapping.Fit(region, index, _monitor.Scale);
+
+        switch (fit.Outcome)
+        {
+            case SelectionFitOutcome.Adjusted:
+                break;
+
+            case SelectionFitOutcome.AlreadyAligned:
+                Hint(L("Selection is already aligned"));
+                return;
+
+            case SelectionFitOutcome.NothingNearby:
+                Hint(L("No nearby edges found"));
+                return;
+
+            default:
+                return;
+        }
+
+        // A held shape is given up, because the edges the picture supplied are the answer
+        // the user asked for and a ratio would pull one of them straight back off it.
+        _lockedAspect = null;
+        HideBoundaryGuides();
+
+        // And a window snap is given up with it: the region no longer matches the window it
+        // was clicked out of, so its pixels come from the screenshot from here on and its
+        // grips come back. macshot drops the snap at the same point.
+        RegionIsNoLongerAWindow();
+
+        ApplyRegion(SelectionHandles.ClampTo(fit.Region, MonitorBounds));
+        Hint(L("Selection adjusted"));
     }
 
     /// <summary>
@@ -2127,6 +2259,12 @@ public sealed partial class CaptureOverlayWindow : Window
         };
 
         _sizeBox.KeepRatioToggled += (_, on) => KeepRatioChanged(on);
+        _sizeBox.AutoAdjustRequested += (_, _) => AutoAdjustSelection();
+
+        // Read once, after the toolbar has its settings: the strips are the one place that
+        // knows which key is on what, and the panel's button carries the same hint every
+        // toolbar button does.
+        _sizeBox.AutoAdjustShortcut = AnnotationToolbar.ShortcutFor(ToolbarCommand.AdjustSelection);
 
         // The overlay's keyboard is only on loan to the fields. Without this, Escape and
         // every tool shortcut would keep going to a text box the user has finished with.
@@ -2342,6 +2480,10 @@ public sealed partial class CaptureOverlayWindow : Window
 
             case ToolbarCommand.MoveSelection:
                 BeginRegionMove();
+                return;
+
+            case ToolbarCommand.AdjustSelection:
+                AutoAdjustSelection();
                 return;
 
             case ToolbarCommand.OpenEditor:

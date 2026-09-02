@@ -179,6 +179,9 @@
 "Right-click to add points" = "Kliknutim pravym tlacidlom pridajte body";
 "Hold 1 auto-vertical  ·  Hold 2 auto-horizontal" = "Drzte 1 auto-vertikalne  ·  Drzte 2 auto-horizontalne";
 "Limit to selection" = "Obmedziť na výber";
+"Effect" = "Efekt";
+"Font" = "Písmo";
+"System" = "Systémové";
 
 /* Overlay / Canvas */
 "Click a window  ·  Drag for custom area  ·  F for full screen" = "Kliknite na okno  ·  Potiahnite pre vlastnu oblast  ·  F pre celu obrazovku";
@@ -666,3 +669,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "Otvoriť položku histórie v editore (anotácie zostanú upraviteľné)";
+
+/* Auto-adjust selection (#317) */
+"Auto-Adjust Selection" = "Automatické prispôsobenie výberu";
+"Auto-adjust selection" = "Automaticky prispôsobiť výber";
+"Could not analyze selection edges" = "Nepodarilo sa analyzovať okraje výberu";
+"Detecting nearby edges…" = "Zisťujú sa blízke okraje…";
+"No nearby edges found" = "Nenašli sa žiadne blízke okraje";
+"Selection adjusted" = "Výber bol prispôsobený";
+"Selection is already aligned" = "Výber je už zarovnaný";
+"Space to move. Release to annotate and edit" = "Medzerník na presun. Pustite pre anotovanie a úpravy";
+"Space to move. Release to finish" = "Medzerník na presun. Pustite pre dokončenie";

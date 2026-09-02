@@ -159,6 +159,9 @@
 "Right-click to add points" = "右クリックでポイントを追加";
 "Hold 1 auto-vertical  ·  Hold 2 auto-horizontal" = "1 長押しで自動垂直  ·  2 長押しで自動水平";
 "Limit to selection" = "選択範囲内に制限";
+"Effect" = "エフェクト";
+"Font" = "フォント";
+"System" = "システム";
 
 /* Overlay / Canvas */
 "Click a window  ·  Drag for custom area  ·  F for full screen" = "ウインドウをクリック · ドラッグで範囲選択 · F でフルスクリーン";
@@ -666,3 +669,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "履歴の項目をエディタで開く（注釈を編集可能なまま維持）";
+
+/* Selection auto-adjust and Spacebar movement */
+"Auto-Adjust Selection" = "選択範囲を自動調整";
+"Auto-adjust selection" = "選択範囲を自動調整";
+"Could not analyze selection edges" = "選択範囲の境界を解析できませんでした";
+"Detecting nearby edges…" = "近くの境界を検出中…";
+"No nearby edges found" = "近くに境界が見つかりませんでした";
+"Selection adjusted" = "選択範囲を調整しました";
+"Selection is already aligned" = "選択範囲はすでに揃っています";
+"Space to move. Release to annotate and edit" = "スペースバーを押している間は移動できます。離すと注釈の追加と編集に戻ります";
+"Space to move. Release to finish" = "スペースバーを押している間は移動できます。離すと完了します";

@@ -159,6 +159,9 @@
 "Right-click to add points" = "انقر بزر الفأرة الأيمن لإضافة نقاط";
 "Hold 1 auto-vertical  ·  Hold 2 auto-horizontal" = "اضغط 1 عمودي تلقائي  ·  اضغط 2 أفقي تلقائي";
 "Limit to selection" = "حصر في التحديد";
+"Effect" = "تأثير";
+"Font" = "الخط";
+"System" = "النظام";
 
 /* Overlay / Canvas */
 "Click a window  ·  Drag for custom area  ·  F for full screen" = "انقر على نافذة  ·  اسحب لتحديد منطقة  ·  F لملء الشاشة";
@@ -668,3 +671,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "فتح إدخال من السجل في المحرّر (يُبقي التعليقات التوضيحية قابلة للتحرير)";
+
+/* Selection auto-adjust and Spacebar movement */
+"Auto-Adjust Selection" = "الضبط التلقائي للتحديد";
+"Auto-adjust selection" = "ضبط التحديد تلقائيًا";
+"Could not analyze selection edges" = "تعذّر تحليل حواف التحديد";
+"Detecting nearby edges…" = "جارٍ اكتشاف الحواف القريبة…";
+"No nearby edges found" = "لم يتم العثور على حواف قريبة";
+"Selection adjusted" = "تم ضبط التحديد";
+"Selection is already aligned" = "التحديد محاذى بالفعل";
+"Space to move. Release to annotate and edit" = "اضغط على مفتاح المسافة للتحريك. حرّره لإضافة التعليقات التوضيحية والتحرير";
+"Space to move. Release to finish" = "اضغط على مفتاح المسافة للتحريك. حرّره للإنهاء";

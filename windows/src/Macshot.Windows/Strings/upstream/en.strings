@@ -670,3 +670,15 @@
 
 /* Measure tool: clamp toggle (#212) */
 "Limit to selection" = "Limit to selection";
+"Effect" = "Effect";
+"Font" = "Font";
+"System" = "System";
+
+/* Auto-adjust selection (#317) */
+"Auto-Adjust Selection" = "Auto-Adjust Selection";
+"Auto-adjust selection" = "Auto-adjust selection";
+"Could not analyze selection edges" = "Could not analyze selection edges";
+"Detecting nearby edges…" = "Detecting nearby edges…";
+"No nearby edges found" = "No nearby edges found";
+"Selection adjusted" = "Selection adjusted";
+"Selection is already aligned" = "Selection is already aligned";

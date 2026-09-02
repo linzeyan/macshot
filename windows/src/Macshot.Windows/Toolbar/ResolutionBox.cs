@@ -147,6 +147,17 @@ internal sealed partial class ResolutionBox : UserControl
     public event EventHandler<bool>? UnitPicked;
 
     /// <summary>
+    /// Raised when the panel's auto-adjust button is pressed. The box owns the panel, but
+    /// only the overlay knows where the lines in the picture are.
+    /// </summary>
+    public event EventHandler? AutoAdjustRequested;
+
+    /// <summary>
+    /// The key auto-adjust also answers to, for that button's tooltip. Empty for none.
+    /// </summary>
+    public string AutoAdjustShortcut { get; set; } = string.Empty;
+
+    /// <summary>
     /// What the overlay has stored for the next drag, which is the row the panel ticks.
     /// </summary>
     /// <remarks>
@@ -295,8 +306,22 @@ internal sealed partial class ResolutionBox : UserControl
         };
 
         // Filled as it opens rather than once: the tick goes on whatever shape is being
-        // held right now, and the two footer controls show what is stored right now.
-        flyout.Opening += (_, _) => _presetsView.Show(ActivePreSelection, KeepRatio, ShowPoints);
+        // held right now, and the footer controls show what is stored right now.
+        flyout.Opening += (_, _) =>
+        {
+            _presetsView.AutoAdjustShortcut = AutoAdjustShortcut;
+            _presetsView.Show(ActivePreSelection, KeepRatio, ShowPoints);
+        };
+
+        // Dismissed, where the switch and the segments are not: this one moves the region
+        // the panel is hanging off, so leaving the panel up would leave it covering the
+        // thing it just changed. macshot dismisses it too.
+        _presetsView.AutoAdjustRequested += (_, _) =>
+        {
+            flyout.Hide();
+            AutoAdjustRequested?.Invoke(this, EventArgs.Empty);
+            EditingEnded?.Invoke(this, EventArgs.Empty);
+        };
 
         _presetsView.PresetPicked += (_, preset) =>
         {

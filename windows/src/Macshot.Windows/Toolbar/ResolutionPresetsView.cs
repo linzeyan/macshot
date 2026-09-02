@@ -1,3 +1,4 @@
+using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Services;
 using Microsoft.UI.Text;
@@ -10,7 +11,8 @@ namespace Macshot.Windows.Toolbar;
 
 /// <summary>
 /// What the presets button opens: the shapes in one column, the exact sizes in the other,
-/// and underneath them the two things that outlive this capture.
+/// and underneath them the two settings that outlive this capture and the one button that
+/// acts on it.
 /// </summary>
 /// <remarks>
 /// <para>
@@ -46,6 +48,15 @@ internal sealed partial class ResolutionPresetsView : UserControl
     /// </summary>
     private const double FooterRow = (78 - (FooterPad * 2)) / 2;
 
+    /// <summary>
+    /// The band the auto-adjust button gets, and the button inside it — macshot's 34 and 24
+    /// (<c>ResolutionPresetsView.swift:97, 150</c>). The band is taller than the button so
+    /// the button clears the unit row above it rather than sitting against it.
+    /// </summary>
+    private const double AutoAdjustRow = 34;
+
+    private const double AutoAdjustHeight = 24;
+
     private const double RowIndent = 14;
 
     /// <summary>The footer's two labels — <c>ResolutionPresetsView.swift:96, 115</c>.</summary>
@@ -78,12 +89,37 @@ internal sealed partial class ResolutionPresetsView : UserControl
     private readonly RowDefinition _unitsRow = new() { Height = new GridLength(FooterRow) };
     private readonly TextBlock _unitsLabel;
 
+    /// <summary>The same, for the band the auto-adjust button stands in.</summary>
+    private readonly RowDefinition _autoAdjustRow = new() { Height = new GridLength(AutoAdjustRow) };
+
+    /// <summary>
+    /// The button that fits the selection to the picture. An ordinary themed button, where
+    /// the rows above are drawn by hand: macshot gives it a bezel too
+    /// (<c>bezelStyle = .rounded</c>), because unlike the switch and the segments it does
+    /// something the moment it is pressed and has to read as pressable.
+    /// </summary>
+    private readonly Button _autoAdjust;
+
+    private readonly TextBlock _autoAdjustLabel;
+
     public ResolutionPresetsView()
     {
         _units.SetSegments([new StyleSegment(null, "px", 40), new StyleSegment(null, "pt", 40)]);
         _units.SelectionChanged += (_, index) => UnitPicked?.Invoke(this, index == 1);
         _keepRatio.Toggled += (_, _) => KeepRatioToggled?.Invoke(this, _keepRatio.IsOn);
         _unitsLabel = Label(L("Units"));
+
+        // At the preset rows' size rather than the footer labels': it is the other thing in
+        // this panel that is clicked, and the 11 the two labels beside their controls use is
+        // a caption size, not a button one.
+        _autoAdjustLabel = new TextBlock
+        {
+            Text = L("Auto-adjust selection"),
+            FontSize = RowFontSize,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        _autoAdjust = BuildAutoAdjust();
 
         var columns = new Grid { ColumnDefinitions = { Fixed(), Fixed(1), Fixed() } };
         Add(columns, _ratios, 0, 0);
@@ -92,7 +128,12 @@ internal sealed partial class ResolutionPresetsView : UserControl
 
         _footer = new Grid
         {
-            RowDefinitions = { new RowDefinition { Height = new GridLength(FooterRow) }, _unitsRow },
+            RowDefinitions =
+            {
+                new RowDefinition { Height = new GridLength(FooterRow) },
+                _unitsRow,
+                _autoAdjustRow,
+            },
             ColumnDefinitions = { new ColumnDefinition(), Fixed(80) },
             Padding = new Thickness(RowIndent, FooterPad, 12, FooterPad),
         };
@@ -101,6 +142,11 @@ internal sealed partial class ResolutionPresetsView : UserControl
         Add(_footer, _keepRatio, 0, 1);
         Add(_footer, _unitsLabel, 1, 0);
         Add(_footer, _units, 1, 1);
+
+        // Across both columns: it is one wide button rather than a labelled control, which
+        // is how macshot draws it too — full width less the panel's own margins.
+        Grid.SetColumnSpan(_autoAdjust, 2);
+        Add(_footer, _autoAdjust, 2, 0);
 
         var rule = Rule(vertical: false);
         rule.Margin = new Thickness(12, 0, 12, 0);
@@ -124,8 +170,26 @@ internal sealed partial class ResolutionPresetsView : UserControl
     /// </remarks>
     public bool ShowsUnits { get; set; } = true;
 
+    /// <summary>
+    /// Whether the panel offers the button that fits the selection to the picture. Off for
+    /// the pre-selection button, for the same reason the unit choice is: there is no region
+    /// yet for it to be about.
+    /// </summary>
+    /// <remarks>Read by <see cref="Show"/>, as <see cref="ShowsUnits"/> is.</remarks>
+    public bool ShowsAutoAdjust { get; set; } = true;
+
+    /// <summary>
+    /// The key that also does what the button does, written as a keyboard writes it, or
+    /// empty for none and for the user who has turned the hint off. It reaches the tooltip
+    /// and nothing else — macshot puts it in the same place.
+    /// </summary>
+    public string AutoAdjustShortcut { get; set; } = string.Empty;
+
     /// <summary>Raised when a shape or a size is chosen.</summary>
     public event EventHandler<ResolutionPreset>? PresetPicked;
+
+    /// <summary>Raised when the auto-adjust button is pressed.</summary>
+    public event EventHandler? AutoAdjustRequested;
 
     /// <summary>Raised when the keep-ratio switch is moved, with its new state.</summary>
     public event EventHandler<bool>? KeepRatioToggled;
@@ -168,7 +232,61 @@ internal sealed partial class ResolutionPresetsView : UserControl
         _unitsLabel.Visibility = visibility;
         _units.Visibility = visibility;
         _unitsRow.Height = new GridLength(ShowsUnits ? FooterRow : 0);
-        _footer.Height = (FooterPad * 2) + (ShowsUnits ? FooterRow * 2 : FooterRow);
+
+        _autoAdjust.Visibility = ShowsAutoAdjust ? Visibility.Visible : Visibility.Collapsed;
+        _autoAdjustRow.Height = new GridLength(ShowsAutoAdjust ? AutoAdjustRow : 0);
+
+        // Set here rather than when the panel is built: the key can be rebound between two
+        // captures, and the owner has no reason to know when the flyout is about to open.
+        ToolTipService.SetToolTip(_autoAdjust, AppFonts.Tip(AutoAdjustShortcut.Length == 0
+            ? _autoAdjustLabel.Text
+            : $"{_autoAdjustLabel.Text} ({AutoAdjustShortcut})"));
+
+        _footer.Height = (FooterPad * 2)
+            + (ShowsUnits ? FooterRow * 2 : FooterRow)
+            + (ShowsAutoAdjust ? AutoAdjustRow : 0);
+    }
+
+    /// <summary>
+    /// The icon and the words, the way macshot lays the button out — <c>imageLeading</c>
+    /// with the <c>viewfinder</c> symbol. The icon alone would be a mystery at the bottom
+    /// of a panel of words, and the words alone would not say the button acts on the frame.
+    /// </summary>
+    private Button BuildAutoAdjust()
+    {
+        var content = new StackPanel
+        {
+            Orientation = Orientation.Horizontal,
+            Spacing = 6,
+            HorizontalAlignment = HorizontalAlignment.Center,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        if (ToolbarIcons.For(new ToolbarItem(ToolbarCommand.AdjustSelection, "Auto-adjust selection")) is { } icon)
+        {
+            icon.VerticalAlignment = VerticalAlignment.Center;
+            content.Children.Add(icon);
+        }
+
+        content.Children.Add(_autoAdjustLabel);
+
+        var button = new Button
+        {
+            Content = content,
+            Height = AutoAdjustHeight,
+
+            // Both minimums cleared for the reason the size box's fields clear theirs: a
+            // themed Button carries a form-sized minimum that beats an explicit Height, and
+            // the footer is laid out from these numbers rather than measured.
+            MinWidth = 0,
+            MinHeight = 0,
+            Padding = new Thickness(8, 0, 8, 0),
+            HorizontalAlignment = HorizontalAlignment.Stretch,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+
+        button.Click += (_, _) => AutoAdjustRequested?.Invoke(this, EventArgs.Empty);
+        return button;
     }
 
     private static ColumnDefinition Fixed(double width = ColumnWidth) =>

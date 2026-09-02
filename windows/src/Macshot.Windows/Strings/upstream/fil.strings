@@ -166,6 +166,9 @@
 "Right-click to add points" = "I-right-click upang magdagdag ng mga punto";
 "Hold 1 auto-vertical  ·  Hold 2 auto-horizontal" = "Pindutin 1 auto-patayo  ·  Pindutin 2 auto-pahalang";
 "Limit to selection" = "Limitahan sa pinili";
+"Effect" = "Epekto";
+"Font" = "Font";
+"System" = "System";
 
 /* Overlay / Canvas */
 "Click a window  ·  Drag for custom area  ·  F for full screen" = "I-click ang window  ·  I-drag para sa custom na lugar  ·  F para sa buong screen";
@@ -668,3 +671,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "Buksan ang isang history entry sa editor (nananatiling ma-e-edit ang mga anotasyon)";
+
+/* Selection auto-adjust and Spacebar movement */
+"Auto-Adjust Selection" = "Awtomatikong Ayusin ang Pinili";
+"Auto-adjust selection" = "Awtomatikong ayusin ang pinili";
+"Could not analyze selection edges" = "Hindi masuri ang mga gilid ng pinili";
+"Detecting nearby edges…" = "Hinahanap ang mga kalapit na gilid…";
+"No nearby edges found" = "Walang nakitang kalapit na gilid";
+"Selection adjusted" = "Naisayos ang pinili";
+"Selection is already aligned" = "Naka-align na ang pinili";
+"Space to move. Release to annotate and edit" = "Pindutin nang matagal ang Space para ilipat. Bitawan para mag-anotate at mag-edit";
+"Space to move. Release to finish" = "Pindutin nang matagal ang Space para ilipat. Bitawan para tapusin";

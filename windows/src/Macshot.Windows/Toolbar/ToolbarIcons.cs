@@ -118,9 +118,13 @@ internal static class ToolbarIcons
         // the corners frame is a sheet, and at this size the fold is the only thing that
         // makes the sheet a sheet rather than a box.
         ToolbarCommand.ReadText => Icon(
-            Outline("M3 8V5a2 2 0 0 1 2 -2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1 -2 2h-3M8 21H5a2 2 0 0 1 -2 -2v-3"),
+            Outline(Viewfinder),
             Outline("M8.9 6.6h2.9L16.7 11.5v4.3a1.6 1.6 0 0 1 -1.6 1.6H8.9a1.6 1.6 0 0 1 -1.6 -1.6V8.2a1.6 1.6 0 0 1 1.6 -1.6z"),
             Outline("M11.8 6.6v4.9h4.9")),
+
+        // viewfinder, on its own — the corners closing in are the whole of what this does
+        // to a selection, so there is nothing for them to frame.
+        ToolbarCommand.AdjustSelection => Icon(Outline(Viewfinder)),
 
         // slider.horizontal.3 — three tracks at three settings, which is what the popover
         // behind the button holds. The knobs are rings and each track stops short of the
@@ -377,6 +381,13 @@ internal static class ToolbarIcons
 
     /// <summary>The two commands that are the same cross, written once.</summary>
     private const string Xmark = "M6 6 18 18M18 6 6 18";
+
+    /// <summary>
+    /// viewfinder's four corners, shared by the command that reads what is between them and
+    /// the one that moves them onto it.
+    /// </summary>
+    private const string Viewfinder =
+        "M3 8V5a2 2 0 0 1 2 -2h3M16 3h3a2 2 0 0 1 2 2v3M21 16v3a2 2 0 0 1 -2 2h-3M8 21H5a2 2 0 0 1 -2 -2v-3";
 
     /// <summary>
     /// Puts an icon's layers on the 16-unit square a button centres.

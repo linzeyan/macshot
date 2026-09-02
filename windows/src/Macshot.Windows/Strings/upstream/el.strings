@@ -163,6 +163,9 @@
 "Right-click to add points" = "Δεξί κλικ για προσθήκη σημείων";
 "Hold 1 auto-vertical  ·  Hold 2 auto-horizontal" = "Κρατήστε 1 αυτόματα κατακόρυφα  ·  Κρατήστε 2 αυτόματα οριζόντια";
 "Limit to selection" = "Περιορισμός στην επιλογή";
+"Effect" = "Εφέ";
+"Font" = "Γραμματοσειρά";
+"System" = "Σύστημα";
 
 /* Aspect Ratio & Resolution Presets */
 "Aspect ratio" = "Αναλογία διαστάσεων";
@@ -668,3 +671,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "Άνοιγμα καταχώρισης ιστορικού στον επεξεργαστή (διατηρεί τις επισημάνσεις επεξεργάσιμες)";
+
+/* Selection auto-adjust and Spacebar movement */
+"Auto-Adjust Selection" = "Αυτόματη προσαρμογή επιλογής";
+"Auto-adjust selection" = "Αυτόματη προσαρμογή επιλογής";
+"Could not analyze selection edges" = "Δεν ήταν δυνατή η ανάλυση των ορίων της επιλογής";
+"Detecting nearby edges…" = "Εντοπισμός κοντινών ορίων…";
+"No nearby edges found" = "Δεν βρέθηκαν κοντινά όρια";
+"Selection adjusted" = "Η επιλογή προσαρμόστηκε";
+"Selection is already aligned" = "Η επιλογή είναι ήδη ευθυγραμμισμένη";
+"Space to move. Release to annotate and edit" = "Κρατήστε πατημένο το πλήκτρο διαστήματος για μετακίνηση. Αφήστε το για σχολιασμό και επεξεργασία";
+"Space to move. Release to finish" = "Κρατήστε πατημένο το πλήκτρο διαστήματος για μετακίνηση. Αφήστε το για ολοκλήρωση";

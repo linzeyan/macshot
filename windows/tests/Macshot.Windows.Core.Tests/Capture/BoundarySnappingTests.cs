@@ -150,6 +150,151 @@ public sealed class BoundarySnappingTests
             new CapturePoint(0, 0), new CapturePoint(10, 10), null, Radius).GuideX);
     }
 
+    /// <summary>
+    /// The whole point of the command: a rectangle thrown roughly around a panel comes back
+    /// sitting on it. The four edges here are 30 and 40 pixels out, an order of magnitude
+    /// past the drag snap's four, which is why this cannot just call <see cref="Resize"/>.
+    /// </summary>
+    [TestMethod]
+    public void Fit_TakesARoughSelectionOutToTheBoxItWasDraggedAround()
+    {
+        var index = Painted(400, 300, new CaptureRegion(100, 80, 200, 140));
+
+        var fit = BoundarySnapping.Fit(new CaptureRegion(60, 50, 280, 200), index, scale: 1);
+
+        Assert.AreEqual(SelectionFitOutcome.Adjusted, fit.Outcome);
+        Assert.AreEqual(new CaptureRegion(100, 80, 200, 140), fit.Region);
+    }
+
+    /// <summary>
+    /// "Already aligned" and "nothing found" are different answers to the user, so a
+    /// selection sitting exactly on a border must not be reported as an empty picture.
+    /// </summary>
+    [TestMethod]
+    public void Fit_SaysASelectionAlreadyOnTheBorderIsAligned()
+    {
+        var index = Painted(400, 300, new CaptureRegion(100, 80, 200, 140));
+        var region = new CaptureRegion(100, 80, 200, 140);
+
+        var fit = BoundarySnapping.Fit(region, index, scale: 1);
+
+        Assert.AreEqual(SelectionFitOutcome.AlreadyAligned, fit.Outcome);
+        Assert.AreEqual(region, fit.Region);
+    }
+
+    [TestMethod]
+    public void Fit_SaysSoWhenThereWasNothingToAimAt()
+    {
+        // A flat picture: every seam in it is zero, so no edge has anything to move onto.
+        var index = Painted(400, 300);
+        var region = new CaptureRegion(100, 80, 200, 140);
+
+        var fit = BoundarySnapping.Fit(region, index, scale: 1);
+
+        Assert.AreEqual(SelectionFitOutcome.NothingNearby, fit.Outcome);
+        Assert.AreEqual(region, fit.Region);
+    }
+
+    /// <summary>
+    /// A border that stops short at its rounded corners is still that border. Scored over
+    /// the whole side it would fail the support fraction, which is what the span inset is
+    /// there to prevent — and without it the command would refuse every window on screen.
+    /// </summary>
+    [TestMethod]
+    public void Fit_FindsAnEdgeThatBreaksOffBeforeTheCorners()
+    {
+        // The upright sides exist over the middle half of the selection's height only:
+        // 50% of the full span, under the 55% a seam needs, but 71% of the inset one.
+        var index = Painted(400, 300, new CaptureRegion(100, 100, 200, 100));
+
+        var fit = BoundarySnapping.Fit(new CaptureRegion(60, 50, 280, 200), index, scale: 1);
+
+        Assert.AreEqual(SelectionFitOutcome.Adjusted, fit.Outcome);
+        Assert.AreEqual(100, fit.Region.X, 1e-9);
+        Assert.AreEqual(300, fit.Region.Right, 1e-9);
+    }
+
+    /// <summary>
+    /// Both edges of a narrow selection can find the same line, and taking both would leave
+    /// nothing selected at all — an auto-adjust that can delete the selection is worse than
+    /// one that occasionally does nothing.
+    /// </summary>
+    [TestMethod]
+    public void Fit_WillNotCloseTheSelectionOntoOneLine()
+    {
+        var index = Painted(100, 40, new CaptureRegion(50, 0, 50, 40));
+        var region = new CaptureRegion(40, 0, 20, 40);
+
+        var fit = BoundarySnapping.Fit(region, index, scale: 1);
+
+        Assert.AreEqual(region, fit.Region);
+        Assert.AreEqual(SelectionFitOutcome.AlreadyAligned, fit.Outcome);
+    }
+
+    /// <summary>
+    /// The reach is written in layout units, so the same border is the same distance away
+    /// to the eye on any display. Left in pixels it would be half as far on a 200% screen,
+    /// which is where most of this port runs.
+    /// </summary>
+    [TestMethod]
+    public void Fit_ReachesAsFarOnScreenWhateverTheDisplayIsRunningAt()
+    {
+        var index = Painted(300, 100, new CaptureRegion(40, 0, 220, 100));
+
+        // 60 pixels out from both upright borders: past the 48-unit floor at 100%, inside
+        // it at 200%, and too small a fraction of its own width to raise the floor either way.
+        var region = new CaptureRegion(100, 20, 100, 60);
+
+        Assert.AreEqual(
+            SelectionFitOutcome.NothingNearby,
+            BoundarySnapping.Fit(region, index, scale: 1).Outcome);
+
+        var retina = BoundarySnapping.Fit(region, index, scale: 2);
+
+        Assert.AreEqual(SelectionFitOutcome.Adjusted, retina.Outcome);
+        Assert.AreEqual(40, retina.Region.X, 1e-9);
+        Assert.AreEqual(260, retina.Region.Right, 1e-9);
+    }
+
+    /// <summary>
+    /// Nothing is said about a selection that is barely a selection: a few pixels across is
+    /// a drag that misfired, and moving its edges would be guessing at what was meant.
+    /// </summary>
+    [TestMethod]
+    public void Fit_LeavesASelectionTooSmallToHaveBeenAimed()
+    {
+        var index = Painted(400, 300, new CaptureRegion(100, 80, 200, 140));
+        var region = new CaptureRegion(99, 79, 3, 3);
+
+        var fit = BoundarySnapping.Fit(region, index, scale: 1);
+
+        Assert.AreEqual(SelectionFitOutcome.TooSmall, fit.Outcome);
+        Assert.AreEqual(region, fit.Region);
+    }
+
+    /// <summary>A black picture with white rectangles painted into it.</summary>
+    private static BoundarySnapIndex Painted(int width, int height, params CaptureRegion[] shapes)
+    {
+        var pixels = new byte[width * height * 4];
+
+        foreach (var shape in shapes)
+        {
+            for (var y = (int)shape.Y; y < (int)shape.Bottom; y++)
+            {
+                for (var x = (int)shape.X; x < (int)shape.Right; x++)
+                {
+                    var at = ((y * width) + x) * 4;
+                    pixels[at] = 255;
+                    pixels[at + 1] = 255;
+                    pixels[at + 2] = 255;
+                }
+            }
+        }
+
+        return BoundarySnapIndex.Build(pixels, width, height, 0, 0)
+            ?? throw new InvalidOperationException("the fixture must produce an index");
+    }
+
     /// <summary>A picture that is black to the left of <paramref name="edgeAt"/> and white to its right.</summary>
     /// <param name="rows">How far down the picture that edge runs, all the way by default.</param>
     private static BoundarySnapIndex Striped(

@@ -170,6 +170,9 @@
 "Right-click to add points" = "H\U00F8yreklikk for \U00E5 legge til punkter";
 "Hold 1 auto-vertical  \U00B7  Hold 2 auto-horizontal" = "Hold 1 auto-vertikal  \U00B7  Hold 2 auto-horisontal";
 "Limit to selection" = "Begrens til utvalg";
+"Effect" = "Effekt";
+"Font" = "Skrift";
+"System" = "System";
 
 /* Overlay / Canvas */
 "Click a window  \U00B7  Drag for custom area  \U00B7  F for full screen" = "Klikk et vindu  \U00B7  Dra for egendefinert omr\U00E5de  \U00B7  F for fullskjerm";
@@ -666,3 +669,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "Åpne et loggelement i editoren (beholder merknader redigerbare)";
+
+/* Auto-adjust selection (#317) */
+"Auto-Adjust Selection" = "Juster markering automatisk";
+"Auto-adjust selection" = "Juster markeringen automatisk";
+"Could not analyze selection edges" = "Kunne ikke analysere kantene på markeringen";
+"Detecting nearby edges…" = "Finner kanter i nærheten…";
+"No nearby edges found" = "Fant ingen kanter i nærheten";
+"Selection adjusted" = "Markeringen er justert";
+"Selection is already aligned" = "Markeringen er allerede justert etter kantene";
+"Space to move. Release to annotate and edit" = "Mellomrom for å flytte. Slipp for å kommentere og redigere";
+"Space to move. Release to finish" = "Mellomrom for å flytte. Slipp for å fullføre";
