@@ -29,9 +29,9 @@ public enum VideoTextAlignment
 /// <para>
 /// macshot's <c>VideoTextSegment</c>, and deliberately much simpler than the screenshot
 /// text tool: one face, a weight, a slant, a colour, an optional fill behind it, an
-/// alignment and the two ramps. No per-character formatting, for macshot's stated
-/// reason — a label on a video is a consistent string, and rich text on a moving picture
-/// reads as a mistake.
+/// optional rim round the glyphs, an alignment and the two ramps. No per-character
+/// formatting, for macshot's stated reason — a label on a video is a consistent string,
+/// and rich text on a moving picture reads as a mistake.
 /// </para>
 /// <para>
 /// The colours are <see cref="AnnotationColor"/> rather than macshot's own four doubles.
@@ -48,9 +48,13 @@ public readonly record struct VideoTextSegment(
     double FontSize,
     bool Bold,
     bool Italic,
+    string FontFamily,
     AnnotationColor TextColor,
     VideoTextBackground Background,
     AnnotationColor BackgroundColor,
+    bool OutlineEnabled,
+    AnnotationColor OutlineColor,
+    double OutlineWidth,
     VideoTextAlignment Alignment,
     double FadeIn,
     double FadeOut)
@@ -72,22 +76,43 @@ public readonly record struct VideoTextSegment(
     /// </remarks>
     public const double DefaultFontSize = 48;
 
+    /// <summary>The ends of the size slider — macshot's 12 and 200.</summary>
+    /// <remarks>
+    /// A slider and not the four named presets this row used to offer: macshot dropped its
+    /// own preset menu for a continuous one, and a caption is one of the few marks where
+    /// the exact size matters more than a word for it — it has to sit inside a rectangle
+    /// the user drew rather than beside a shape the user placed.
+    /// </remarks>
+    public const double MinFontSize = 12;
+
+    public const double MaxFontSize = 200;
+
     /// <summary>
-    /// The sizes the box beside the band offers, with macshot's names and numbers.
+    /// The name that stands for "whatever this machine sets its interface in".
     /// </summary>
     /// <remarks>
-    /// Named rather than numeric because the number is meaningless on its own: it is
-    /// points against a 1080-tall frame, and nobody choosing a caption size is thinking
-    /// in those. The keys are the English words macshot's menu uses, so they translate
-    /// through the strings this port already vendors.
+    /// macshot's sentinel, and a real family name is stored as itself. A sentinel rather
+    /// than an empty string because a caption's family is one of the things the row shows
+    /// back to the user, and "System" is what that row has to say.
     /// </remarks>
-    public static IReadOnlyList<(string Name, double Size)> PresetFontSizes { get; } =
-    [
-        ("Small", 32),
-        ("Medium", 48),
-        ("Large", 72),
-        ("Huge", 104),
-    ];
+    public const string SystemFontFamily = "System";
+
+    /// <summary>
+    /// The thinnest and thickest rim macshot's slider will set, in the same points against
+    /// a 1080-tall frame that <see cref="FontSize"/> is in.
+    /// </summary>
+    public const double MinOutlineWidth = 0.5;
+
+    public const double MaxOutlineWidth = 8;
+
+    /// <summary>macshot's 2 — a rim that reads over a busy frame without closing up a glyph.</summary>
+    public const double DefaultOutlineWidth = 2;
+
+    /// <summary>
+    /// Black, which is what a rim is for: white glyphs over a pale screenshot are the case
+    /// the outline exists to rescue, and the pill cannot be relied on to be there.
+    /// </summary>
+    public static AnnotationColor DefaultOutlineColor { get; } = new(0, 0, 0);
 
     /// <summary>
     /// The smallest a caption rectangle may be, as a fraction of the frame. Larger than
@@ -145,9 +170,13 @@ public readonly record struct VideoTextSegment(
             DefaultFontSize,
             Bold: true,
             Italic: false,
+            SystemFontFamily,
             DefaultTextColor,
             VideoTextBackground.Rounded,
             DefaultBackgroundColor,
+            OutlineEnabled: false,
+            DefaultOutlineColor,
+            DefaultOutlineWidth,
             VideoTextAlignment.Centre,
             fade,
             fade);
@@ -177,6 +206,35 @@ public readonly record struct VideoTextSegment(
     /// </remarks>
     public VideoTextSegment WithText(string? text) =>
         this with { Text = string.IsNullOrWhiteSpace(text) ? DefaultText : text };
+
+    /// <summary>Sets the size, holding it to the ends of macshot's slider.</summary>
+    /// <remarks>
+    /// Clamped here rather than trusted from the row, because a size also arrives from a
+    /// caption written by another build, and <see cref="PixelFontSize"/> has no ceiling of
+    /// its own — a 4000-point caption would be capped by its own rectangle into a raster
+    /// the size of the frame.
+    /// </remarks>
+    public VideoTextSegment WithFontSize(double points) =>
+        this with { FontSize = Math.Clamp(points, MinFontSize, MaxFontSize) };
+
+    /// <summary>Sets the rim's thickness, holding it to the ends of macshot's slider.</summary>
+    /// <remarks>
+    /// The ceiling is what matters: the rim is drawn as copies of the glyphs offset around
+    /// them, so a width past the stem thickness fills the counters in and the caption
+    /// becomes a row of blobs rather than becoming more readable.
+    /// </remarks>
+    public VideoTextSegment WithOutlineWidth(double points) =>
+        this with { OutlineWidth = Math.Clamp(points, MinOutlineWidth, MaxOutlineWidth) };
+
+    /// <summary>Whether the caption is set in the interface's own face rather than a named one.</summary>
+    /// <remarks>
+    /// An unset family counts as the system one too. Nothing in the row can produce it, but
+    /// a caption decoded from somewhere else can, and falling back to the interface face is
+    /// what macshot does with a family it cannot resolve either.
+    /// </remarks>
+    public bool UsesSystemFont =>
+        string.IsNullOrWhiteSpace(FontFamily)
+        || string.Equals(FontFamily, SystemFontFamily, StringComparison.Ordinal);
 
     /// <summary>How strongly the caption is drawn at <paramref name="seconds"/>.</summary>
     public double OpacityAt(double seconds)
@@ -234,14 +292,59 @@ public readonly record struct VideoTextSegment(
     /// </remarks>
     public static double PixelFontSize(double logicalSize, double frameHeight, double rectHeight)
     {
-        const double ReferenceHeight = 1080;
         const double FitsInRect = 0.78;
         const double Smallest = 8;
 
-        var scaled = logicalSize * Math.Max(1, frameHeight) / ReferenceHeight;
-        var capped = Math.Min(scaled, rectHeight * FitsInRect);
+        var capped = Math.Min(ScaledToFrame(logicalSize, frameHeight), rectHeight * FitsInRect);
 
         return Math.Max(Smallest, capped);
+    }
+
+    /// <summary>
+    /// How thick the rim round the glyphs is drawn, in pixels of a frame
+    /// <paramref name="frameHeight"/> tall — zero when the caption has no rim.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Scaled by the frame exactly as <see cref="PixelFontSize"/> is, which is the whole
+    /// reason the width is stated in points against 1080 rather than in pixels: a rim that
+    /// stayed two pixels wide while the glyphs quadrupled would have vanished at 4K.
+    /// </para>
+    /// <para>
+    /// Not capped by the rectangle the way the size is. macshot leaves it uncapped too, and
+    /// on purpose — where a rectangle has already shrunk the glyphs, thinning their rim to
+    /// match would take away the readability the rim was turned on for.
+    /// </para>
+    /// <para>
+    /// Zero rather than a thin line when the outline is off, so nothing downstream has to
+    /// consult the switch as well: the colour and the width are then unreachable, which is
+    /// what makes a caption without an outline identical whatever those two happen to hold.
+    /// </para>
+    /// </remarks>
+    public double OutlinePixels(double frameHeight)
+    {
+        // macshot's floor. Below half a pixel the rim lands on the same pixels as the fill
+        // and disappears altogether rather than getting thinner.
+        const double Thinnest = 0.5;
+
+        return OutlineEnabled && OutlineWidth > 0
+            ? Math.Max(Thinnest, ScaledToFrame(OutlineWidth, frameHeight))
+            : 0;
+    }
+
+    /// <summary>
+    /// A point size against a 1080-tall frame, in pixels of a frame that tall.
+    /// </summary>
+    /// <remarks>
+    /// The one place the reference height is written down. The size and the rim have to
+    /// grow together — a rim scaled against a different frame than the glyphs it surrounds
+    /// would thicken or thin with the export resolution.
+    /// </remarks>
+    private static double ScaledToFrame(double points, double frameHeight)
+    {
+        const double ReferenceHeight = 1080;
+
+        return points * Math.Max(1, frameHeight) / ReferenceHeight;
     }
 
     private static VideoTextSegment Refaded(VideoTextSegment segment)

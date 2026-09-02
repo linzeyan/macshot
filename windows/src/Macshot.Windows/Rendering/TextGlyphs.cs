@@ -174,26 +174,46 @@ internal static class TextGlyphs
         };
     }
 
+    private static FrameworkElement Outlined(
+        string text,
+        AnnotationStyle style,
+        double rasterizationScale,
+        AnnotationColor edge) =>
+        Ringed(
+            colour => Glyphs(text, style, rasterizationScale, colour),
+            GlyphSpriteFactory.ToBrushColor(edge, style.Opacity),
+            GlyphSpriteFactory.ToBrushColor(style),
+            AnnotationStyle.GlyphStrokeWidth(style.FontSize) / rasterizationScale);
+
     /// <summary>
-    /// The glyphs with a line round them: the text laid down <see cref="OutlineCopies"/>
-    /// times in the outline colour on a circle of the outline's width, then once more in
-    /// its own colour on top.
+    /// Glyphs with a line round them: <paramref name="glyphs"/> laid down
+    /// <see cref="OutlineCopies"/> times in <paramref name="stroke"/> on a circle of radius
+    /// <paramref name="reach"/>, then once more in <paramref name="fill"/> on top.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// The copies are moved by their margins rather than by a transform, so the block ends
     /// up as wide as the outline actually reaches — a transform leaves layout alone, and
     /// the sprite is cut to the layout, so the left edge of the line would be sliced off.
     /// Each copy carries the same total margin, which is what keeps every one of them
     /// measuring and breaking its lines identically.
+    /// </para>
+    /// <para>
+    /// Taking the glyphs as a factory rather than being written twice, because a video
+    /// caption's outline has to be the same mark as a label's. They arrive at
+    /// <paramref name="reach"/> from different places — a label's is a fraction of its font
+    /// size, a caption's is a width the user set — but what an outline <em>looks like</em>
+    /// must not be two answers.
+    /// </para>
     /// </remarks>
-    private static FrameworkElement Outlined(
-        string text,
-        AnnotationStyle style,
-        double rasterizationScale,
-        AnnotationColor edge)
+    public static FrameworkElement Ringed(
+        Func<global::Windows.UI.Color, FrameworkElement> glyphs,
+        global::Windows.UI.Color stroke,
+        global::Windows.UI.Color fill,
+        double reach)
     {
-        var reach = AnnotationStyle.GlyphStrokeWidth(style.FontSize) / rasterizationScale;
-        var stroke = GlyphSpriteFactory.ToBrushColor(edge, style.Opacity);
+        ArgumentNullException.ThrowIfNull(glyphs);
+
         var block = new Grid();
 
         for (var copy = 0; copy < OutlineCopies; copy++)
@@ -202,12 +222,12 @@ internal static class TextGlyphs
             var across = reach * Math.Cos(angle);
             var down = reach * Math.Sin(angle);
 
-            var ghost = Glyphs(text, style, rasterizationScale, stroke);
+            var ghost = glyphs(stroke);
             ghost.Margin = new Thickness(reach + across, reach + down, reach - across, reach - down);
             block.Children.Add(ghost);
         }
 
-        var face = Glyphs(text, style, rasterizationScale, GlyphSpriteFactory.ToBrushColor(style));
+        var face = glyphs(fill);
         face.Margin = new Thickness(reach);
         block.Children.Add(face);
 

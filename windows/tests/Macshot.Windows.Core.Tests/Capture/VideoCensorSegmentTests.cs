@@ -1,3 +1,4 @@
+using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
 
 namespace Macshot.Windows.Core.Tests.Capture;
@@ -151,9 +152,13 @@ public sealed class VideoTextSegmentTests
             VideoTextSegment.DefaultFontSize,
             Bold: true,
             Italic: false,
+            VideoTextSegment.SystemFontFamily,
             VideoTextSegment.DefaultTextColor,
             VideoTextBackground.Rounded,
             VideoTextSegment.DefaultBackgroundColor,
+            OutlineEnabled: false,
+            VideoTextSegment.DefaultOutlineColor,
+            VideoTextSegment.DefaultOutlineWidth,
             VideoTextAlignment.Centre,
             VideoTextSegment.DefaultFade,
             VideoTextSegment.DefaultFade);
@@ -176,5 +181,106 @@ public sealed class VideoTextSegmentTests
         Assert.IsTrue(caption.Rect.Y > 0.5);
         Assert.IsTrue(caption.Rect.Bottom <= 1);
         Assert.AreEqual(VideoTextAlignment.Centre, caption.Alignment);
+    }
+
+    /// <summary>
+    /// A new caption arrives set in the interface's own face with no rim round it, which is
+    /// macshot's default and the only one that is safe: a caption that came up outlined
+    /// would have to be switched off by everybody who did not want one, and a caption that
+    /// came up in a named family would be set in a face the next machine may not have.
+    /// </summary>
+    [TestMethod]
+    public void Placed_LeavesTheFaceToTheSystemAndTheOutlineOff()
+    {
+        var caption = VideoTextSegment.Placed(5, 20);
+
+        Assert.AreEqual(VideoTextSegment.SystemFontFamily, caption.FontFamily);
+        Assert.IsTrue(caption.UsesSystemFont);
+        Assert.IsFalse(caption.OutlineEnabled);
+        Assert.AreEqual(VideoTextSegment.DefaultOutlineColor, caption.OutlineColor);
+        Assert.AreEqual(VideoTextSegment.DefaultOutlineWidth, caption.OutlineWidth, Tolerance);
+    }
+
+    /// <summary>
+    /// The rim is stated in points against a 1080-tall frame for the same reason the size
+    /// is, so the two have to scale together: a rim that kept its pixel width while the
+    /// glyphs quadrupled would be a hairline at 4K and a slab at 360, and the caption would
+    /// stop looking like the one the user set up on the preview.
+    /// </summary>
+    [TestMethod]
+    public void OutlinePixels_ScaleWithTheFrameExactlyAsTheFontSizeDoes()
+    {
+        var caption = VideoTextSegment.Placed(5, 20) with { OutlineEnabled = true, OutlineWidth = 4 };
+
+        Assert.AreEqual(4, caption.OutlinePixels(1080), Tolerance);
+        Assert.AreEqual(8, caption.OutlinePixels(2160), Tolerance);
+
+        // The same ratio the glyphs grow by, measured against a rectangle tall enough that
+        // nothing is capped: the rim tracking the frame is only useful if it tracks the
+        // glyphs it surrounds.
+        Assert.AreEqual(
+            VideoTextSegment.PixelFontSize(48, 2160, rectHeight: 4000)
+                / VideoTextSegment.PixelFontSize(48, 1080, rectHeight: 4000),
+            caption.OutlinePixels(2160) / caption.OutlinePixels(1080),
+            Tolerance);
+    }
+
+    /// <summary>
+    /// Switching the outline off has to make the colour and the width unreachable, not
+    /// merely ignored somewhere downstream. A caption keeps both while the switch is off so
+    /// that turning it back on restores what was set — and if anything drawing the caption
+    /// consulted them anyway, the export would carry a rim nobody asked for.
+    /// </summary>
+    [TestMethod]
+    public void OutlinePixels_AreNothingWhileTheOutlineIsOffWhateverItsColourAndWidthHold()
+    {
+        var plain = VideoTextSegment.Placed(5, 20);
+        var loud = plain with
+        {
+            OutlineColor = new AnnotationColor(255, 0, 0),
+            OutlineWidth = VideoTextSegment.MaxOutlineWidth,
+        };
+
+        Assert.AreEqual(0, plain.OutlinePixels(1080), Tolerance);
+        Assert.AreEqual(0, loud.OutlinePixels(1080), Tolerance);
+        Assert.AreEqual(0, loud.OutlinePixels(2160), Tolerance);
+    }
+
+    /// <summary>
+    /// Both sizes are held to the ends of macshot's sliders. The ceilings are what matter:
+    /// the size has no ceiling of its own — <see cref="VideoTextSegment.PixelFontSize"/>
+    /// caps by the rectangle, so a four-thousand-point caption would rasterize a bitmap the
+    /// size of the frame — and a rim past the stem thickness fills the counters of the
+    /// glyphs in and makes the caption less readable rather than more.
+    /// </summary>
+    [TestMethod]
+    public void WithFontSizeAndWithOutlineWidth_HoldBothToTheEndsOfTheSliderThatSetsThem()
+    {
+        var caption = VideoTextSegment.Placed(5, 20);
+
+        Assert.AreEqual(VideoTextSegment.MaxFontSize, caption.WithFontSize(4000).FontSize, Tolerance);
+        Assert.AreEqual(VideoTextSegment.MinFontSize, caption.WithFontSize(0).FontSize, Tolerance);
+        Assert.AreEqual(64, caption.WithFontSize(64).FontSize, Tolerance);
+
+        Assert.AreEqual(VideoTextSegment.MaxOutlineWidth, caption.WithOutlineWidth(99).OutlineWidth, Tolerance);
+        Assert.AreEqual(VideoTextSegment.MinOutlineWidth, caption.WithOutlineWidth(-1).OutlineWidth, Tolerance);
+        Assert.AreEqual(3, caption.WithOutlineWidth(3).OutlineWidth, Tolerance);
+    }
+
+    /// <summary>
+    /// The sentinel and an unset family both mean the interface's own face. The rasterizer
+    /// asks this rather than comparing strings itself, because a caption decoded from
+    /// anywhere but this row can carry an empty family, and a caption set in a face named
+    /// by the empty string is one that renders in nothing.
+    /// </summary>
+    [TestMethod]
+    public void UsesSystemFont_TreatsAnUnsetFamilyAsTheSystemOne()
+    {
+        var caption = VideoTextSegment.Placed(5, 20);
+
+        Assert.IsTrue((caption with { FontFamily = VideoTextSegment.SystemFontFamily }).UsesSystemFont);
+        Assert.IsTrue((caption with { FontFamily = string.Empty }).UsesSystemFont);
+        Assert.IsTrue((caption with { FontFamily = "  " }).UsesSystemFont);
+        Assert.IsFalse((caption with { FontFamily = "Impact" }).UsesSystemFont);
     }
 }
