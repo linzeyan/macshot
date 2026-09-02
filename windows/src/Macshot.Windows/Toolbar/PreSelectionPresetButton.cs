@@ -31,7 +31,16 @@ internal sealed partial class PreSelectionPresetButton : UserControl
 {
     private readonly Border _surface;
     private readonly FontIcon _icon;
-    private readonly ResolutionPresetsView _presetsView = new() { ShowsUnits = false };
+    /// <summary>
+    /// The same panel the size box opens, less the two things that need a region to be
+    /// about: nothing is selected yet, so there is no size to choose a unit for and no
+    /// edges to fit to the picture.
+    /// </summary>
+    private readonly ResolutionPresetsView _presetsView = new()
+    {
+        ShowsUnits = false,
+        ShowsAutoAdjust = false,
+    };
     private readonly Flyout _flyout;
     private PreSelectionPreset _preset;
     private bool _isHovered;

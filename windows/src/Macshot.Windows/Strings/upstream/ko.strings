@@ -159,6 +159,9 @@
 "Right-click to add points" = "우클릭으로 포인트 추가";
 "Hold 1 auto-vertical  ·  Hold 2 auto-horizontal" = "1 유지 자동 세로  ·  2 유지 자동 가로";
 "Limit to selection" = "선택 영역 내로 제한";
+"Effect" = "효과";
+"Font" = "글꼴";
+"System" = "시스템";
 
 /* Overlay / Canvas */
 "Click a window  ·  Drag for custom area  ·  F for full screen" = "윈도우 클릭  ·  드래그하여 영역 선택  ·  F 전체 화면";
@@ -668,3 +671,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "기록 항목을 편집기에서 열기 (주석을 편집 가능한 상태로 유지)";
+
+/* Auto-adjust selection (#317) */
+"Auto-Adjust Selection" = "선택 영역 자동 조정";
+"Auto-adjust selection" = "선택 영역 자동 조정";
+"Could not analyze selection edges" = "선택 영역의 가장자리를 분석할 수 없습니다";
+"Detecting nearby edges…" = "주변 가장자리를 감지하는 중…";
+"No nearby edges found" = "주변에서 가장자리를 찾지 못했습니다";
+"Selection adjusted" = "선택 영역을 조정했습니다";
+"Selection is already aligned" = "선택 영역이 이미 정렬되어 있습니다";
+"Space to move. Release to annotate and edit" = "스페이스바로 이동. 놓으면 주석 및 편집";
+"Space to move. Release to finish" = "스페이스바로 이동. 놓으면 완료";

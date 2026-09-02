@@ -179,6 +179,9 @@
 "Right-click to add points" = "Клацніть правою кнопкою, щоб додати точки";
 "Hold 1 auto-vertical  ·  Hold 2 auto-horizontal" = "Тримайте 1 автовертикаль  ·  Тримайте 2 автогоризонталь";
 "Limit to selection" = "Обмежити виділенням";
+"Effect" = "Ефект";
+"Font" = "Шрифт";
+"System" = "Системний";
 
 /* Overlay / Canvas */
 "Click a window  ·  Drag for custom area  ·  F for full screen" = "Клацніть вікно  ·  Перетягніть для довільної області  ·  F для повного екрана";
@@ -666,3 +669,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "Відкрити запис історії в редакторі (анотації залишаються редагованими)";
+
+/* Selection edge adjustment */
+"Auto-Adjust Selection" = "Автовирівнювання виділення";
+"Auto-adjust selection" = "Автоматично вирівняти виділення";
+"Could not analyze selection edges" = "Не вдалося проаналізувати межі виділення";
+"Detecting nearby edges…" = "Виявлення найближчих меж…";
+"No nearby edges found" = "Найближчих меж не знайдено";
+"Selection adjusted" = "Виділення скориговано";
+"Selection is already aligned" = "Виділення вже вирівняно";
+"Space to move. Release to annotate and edit" = "Утримуйте Пробіл, щоб перемістити. Відпустіть, щоб додати анотацію та редагувати";
+"Space to move. Release to finish" = "Утримуйте Пробіл, щоб перемістити. Відпустіть, щоб завершити";

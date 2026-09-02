@@ -29,10 +29,12 @@ public readonly record struct ToolShortcut(
 /// </para>
 /// <para>
 /// Every one of macshot's is here. Highlight was the last to arrive, held back while the
-/// tool had no renderer and so no button either — a key bound to something that is not on
-/// the strip is a key that appears to do nothing, and a test says so. Remove Background
-/// is here for the opposite reason: whether the machine can carry it out is answered when
-/// it is pressed, not by leaving the key out.
+/// tool had no renderer and so no button either — a key bound to something the user cannot
+/// also click is a key that appears to do nothing, and a test says so. Auto-Adjust
+/// Selection is the one whose control is not on a strip: it is the button in the
+/// resolution-presets popover, which is where macshot puts it too. Remove Background is
+/// here for the opposite reason: whether the machine can carry it out is answered when it
+/// is pressed, not by leaving the key out.
 /// </para>
 /// <para>
 /// Upload is here unconditionally, as Translate is, even though the offline build has no
@@ -67,6 +69,7 @@ public static class ToolShortcuts
         new("loupe", "Loupe", Unbound, ToolbarCommand.PickTool, AnnotationTool.Loupe),
 
         new("moveSelection", "Move Selection", " ", ToolbarCommand.MoveSelection),
+        new("adjustSelection", "Auto-Adjust Selection", "s", ToolbarCommand.AdjustSelection),
         new("openInEditor", "Open in Editor", "e", ToolbarCommand.OpenEditor),
         new("pin", "Pin", "f", ToolbarCommand.Pin),
         new("upload", "Upload", "u", ToolbarCommand.Upload),

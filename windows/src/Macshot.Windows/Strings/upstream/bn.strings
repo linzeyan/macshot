@@ -162,6 +162,9 @@
 "Right-click to add points" = "পয়েন্ট যোগ করতে ডান-ক্লিক করুন";
 "Hold 1 auto-vertical  ·  Hold 2 auto-horizontal" = "1 ধরে রাখুন স্বয়ংক্রিয়-উল্লম্ব  ·  2 ধরে রাখুন স্বয়ংক্রিয়-অনুভূমিক";
 "Limit to selection" = "নির্বাচনে সীমাবদ্ধ";
+"Effect" = "ইফেক্ট";
+"Font" = "ফন্ট";
+"System" = "সিস্টেম";
 
 /* Overlay / Canvas */
 "Click a window  ·  Drag for custom area  ·  F for full screen" = "উইন্ডোতে ক্লিক করুন  ·  কাস্টম এলাকার জন্য টানুন  ·  পূর্ণ স্ক্রিনের জন্য F";
@@ -668,3 +671,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "এডিটরে একটি ইতিহাস এন্ট্রি খুলুন (টীকা সম্পাদনাযোগ্য থাকে)";
+
+/* Selection auto-adjust and Spacebar movement */
+"Auto-Adjust Selection" = "নির্বাচনের স্বয়ংক্রিয় সমন্বয়";
+"Auto-adjust selection" = "নির্বাচন স্বয়ংক্রিয়ভাবে সামঞ্জস্য করুন";
+"Could not analyze selection edges" = "নির্বাচনের প্রান্ত বিশ্লেষণ করা যায়নি";
+"Detecting nearby edges…" = "কাছাকাছি প্রান্ত শনাক্ত করা হচ্ছে…";
+"No nearby edges found" = "কাছাকাছি কোনো প্রান্ত পাওয়া যায়নি";
+"Selection adjusted" = "নির্বাচন সামঞ্জস্য করা হয়েছে";
+"Selection is already aligned" = "নির্বাচন ইতিমধ্যে সারিবদ্ধ";
+"Space to move. Release to annotate and edit" = "সরাতে স্পেস চেপে ধরুন। টীকা যোগ ও সম্পাদনা করতে ছেড়ে দিন";
+"Space to move. Release to finish" = "সরাতে স্পেস চেপে ধরুন। শেষ করতে ছেড়ে দিন";

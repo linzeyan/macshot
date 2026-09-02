@@ -165,6 +165,9 @@
 "Right-click to add points" = "Rechtsklik om punten toe te voegen";
 "Hold 1 auto-vertical  ·  Hold 2 auto-horizontal" = "Houd 1 ingedrukt auto-verticaal  ·  Houd 2 ingedrukt auto-horizontaal";
 "Limit to selection" = "Beperken tot selectie";
+"Effect" = "Effect";
+"Font" = "Lettertype";
+"System" = "Systeem";
 
 /* Overlay / Canvas */
 "Click a window  ·  Drag for custom area  ·  F for full screen" = "Klik op een venster  ·  Sleep voor aangepast gebied  ·  F voor volledig scherm";
@@ -668,3 +671,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "Open een geschiedenisitem in de editor (annotaties blijven bewerkbaar)";
+
+/* Auto-adjust selection (#317) */
+"Auto-Adjust Selection" = "Selectie automatisch aanpassen";
+"Auto-adjust selection" = "Selectie automatisch aanpassen";
+"Could not analyze selection edges" = "Kon de randen van de selectie niet analyseren";
+"Detecting nearby edges…" = "Nabije randen detecteren…";
+"No nearby edges found" = "Geen nabije randen gevonden";
+"Selection adjusted" = "Selectie aangepast";
+"Selection is already aligned" = "Selectie is al uitgelijnd";
+"Space to move. Release to annotate and edit" = "Spatie om te verplaatsen. Laat los om te annoteren en bewerken";
+"Space to move. Release to finish" = "Spatie om te verplaatsen. Laat los om te voltooien";

@@ -166,6 +166,9 @@
 "Right-click to add points" = "Clic derecho para agregar puntos";
 "Hold 1 auto-vertical  ·  Hold 2 auto-horizontal" = "Manten 1 auto-vertical  ·  Manten 2 auto-horizontal";
 "Limit to selection" = "Limitar a la selección";
+"Effect" = "Efecto";
+"Font" = "Fuente";
+"System" = "Sistema";
 
 /* Overlay / Canvas */
 "Click a window  ·  Drag for custom area  ·  F for full screen" = "Clic en una ventana  ·  Arrastra para area personalizada  ·  F para pantalla completa";
@@ -668,3 +671,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "Abrir una entrada del historial en el editor (mantiene las anotaciones editables)";
+
+/* Selection auto-adjust and Spacebar movement */
+"Auto-Adjust Selection" = "Ajuste automático de la selección";
+"Auto-adjust selection" = "Ajustar selección automáticamente";
+"Could not analyze selection edges" = "No se pudieron analizar los bordes de la selección";
+"Detecting nearby edges…" = "Detectando bordes cercanos…";
+"No nearby edges found" = "No se encontraron bordes cercanos";
+"Selection adjusted" = "Selección ajustada";
+"Selection is already aligned" = "La selección ya está alineada";
+"Space to move. Release to annotate and edit" = "Mantén pulsada la barra espaciadora para mover. Suéltala para anotar y editar";
+"Space to move. Release to finish" = "Mantén pulsada la barra espaciadora para mover. Suéltala para terminar";

@@ -170,6 +170,9 @@
 "Right-click to add points" = "Lisaa pisteet hiiren oikealla painikkeella";
 "Hold 1 auto-vertical  ·  Hold 2 auto-horizontal" = "Pida 1 automaattinen pystysuunta  ·  Pida 2 automaattinen vaakasuunta";
 "Limit to selection" = "Rajoita valintaan";
+"Effect" = "Tehoste";
+"Font" = "Fontti";
+"System" = "Järjestelmä";
 
 /* Overlay / Canvas */
 "Click a window  ·  Drag for custom area  ·  F for full screen" = "Napsauta ikkunaa  ·  Vedä valitaksesi alue  ·  F koko ruudulle";
@@ -666,3 +669,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "Avaa historian merkintä editorissa (merkinnät pysyvät muokattavina)";
+
+/* Selection auto-adjust and Spacebar movement */
+"Auto-Adjust Selection" = "Säädä valinta automaattisesti";
+"Auto-adjust selection" = "Säädä valinta automaattisesti";
+"Could not analyze selection edges" = "Valinnan reunoja ei voitu analysoida";
+"Detecting nearby edges…" = "Etsitään lähellä olevia reunoja…";
+"No nearby edges found" = "Läheisiä reunoja ei löytynyt";
+"Selection adjusted" = "Valintaa säädettiin";
+"Selection is already aligned" = "Valinta on jo kohdistettu";
+"Space to move. Release to annotate and edit" = "Siirrä pitämällä välilyöntiä painettuna. Vapauta lisätäksesi merkintöjä ja muokataksesi";
+"Space to move. Release to finish" = "Siirrä pitämällä välilyöntiä painettuna. Vapauta lopettaaksesi";

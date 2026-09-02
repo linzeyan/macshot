@@ -159,6 +159,9 @@
 "Right-click to add points" = "کلیک راست برای افزودن نقطه";
 "Hold 1 auto-vertical  ·  Hold 2 auto-horizontal" = "نگه‌داشتن 1 عمودی خودکار  ·  نگه‌داشتن 2 افقی خودکار";
 "Limit to selection" = "محدود به انتخاب";
+"Effect" = "جلوه";
+"Font" = "قلم";
+"System" = "سیستم";
 
 /* Overlay / Canvas */
 "Click a window  ·  Drag for custom area  ·  F for full screen" = "کلیک روی پنجره  ·  کشیدن برای ناحیه دلخواه  ·  F برای تمام صفحه";
@@ -668,3 +671,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "باز کردن یک مورد از تاریخچه در ویرایشگر (حاشیه‌نویسی‌ها قابل ویرایش می‌مانند)";
+
+/* Selection auto-adjust and Spacebar movement */
+"Auto-Adjust Selection" = "تنظیم خودکار محدودهٔ انتخاب";
+"Auto-adjust selection" = "تنظیم خودکار محدودهٔ انتخاب";
+"Could not analyze selection edges" = "تحلیل لبه‌های محدودهٔ انتخاب ممکن نشد";
+"Detecting nearby edges…" = "در حال شناسایی لبه‌های نزدیک…";
+"No nearby edges found" = "هیچ لبهٔ نزدیکی پیدا نشد";
+"Selection adjusted" = "محدودهٔ انتخاب تنظیم شد";
+"Selection is already aligned" = "محدودهٔ انتخاب از قبل تراز است";
+"Space to move. Release to annotate and edit" = "برای جابه‌جایی، کلید فاصله را نگه دارید. برای حاشیه‌نویسی و ویرایش رها کنید";
+"Space to move. Release to finish" = "برای جابه‌جایی، کلید فاصله را نگه دارید. برای پایان دادن رها کنید";

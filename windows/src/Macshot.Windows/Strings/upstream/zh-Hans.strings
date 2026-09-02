@@ -159,6 +159,9 @@
 "Right-click to add points" = "右键点按以添加控制点";
 "Hold 1 auto-vertical  ·  Hold 2 auto-horizontal" = "按住 1 自动垂直  ·  按住 2 自动水平";
 "Limit to selection" = "限制在选区内";
+"Effect" = "效果";
+"Font" = "字体";
+"System" = "系统";
 
 /* Overlay / Canvas */
 "Click a window  ·  Drag for custom area  ·  F for full screen" = "点按窗口  ·  拖拽自定义区域  ·  F 全屏";
@@ -668,3 +671,14 @@
 
 /* URL scheme: edit (PR #272) */
 "Open a history entry in the editor (keeps annotations editable)" = "在编辑器中打开历史记录（保持标注可编辑）";
+
+/* Selection edge adjustment */
+"Auto-Adjust Selection" = "自动调整选区";
+"Auto-adjust selection" = "自动调整选区";
+"Could not analyze selection edges" = "无法分析选区边缘";
+"Detecting nearby edges…" = "正在检测附近边缘…";
+"No nearby edges found" = "未找到附近边缘";
+"Selection adjusted" = "已调整选区";
+"Selection is already aligned" = "选区已对齐";
+"Space to move. Release to annotate and edit" = "按住空格键移动。松开后进行标注和编辑";
+"Space to move. Release to finish" = "按住空格键移动。松开后完成";
