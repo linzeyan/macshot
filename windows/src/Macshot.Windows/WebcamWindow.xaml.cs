@@ -74,7 +74,7 @@ public sealed partial class WebcamWindow : Window
     public async Task<bool> ShowInAsync(
         CaptureRegion region,
         WebcamCorner corner,
-        WebcamSize size,
+        double size,
         WebcamShape shape,
         double scale,
         string? cameraId)
@@ -88,14 +88,17 @@ public sealed partial class WebcamWindow : Window
         CircleRing.Visibility = shape is WebcamShape.Circle ? Visibility.Visible : Visibility.Collapsed;
         RectRing.Visibility = shape is WebcamShape.Circle ? Visibility.Collapsed : Visibility.Visible;
 
+        // Cut from the side the bubble actually got, not the one the slider asked for: a
+        // region too small for the chosen size arrives here already shrunk to fit.
+        var radius = WebcamInset.CornerRadiusFor(width, shape);
+
         if (shape is WebcamShape.RoundedRect)
         {
-            var radius = WebcamInset.CornerRadiusFor(size, shape) * scale;
             RectRing.RadiusX = radius;
             RectRing.RadiusY = radius;
         }
 
-        Cut(shape, width, height, (int)Math.Round(WebcamInset.CornerRadiusFor(size, shape) * scale));
+        Cut(shape, width, height, (int)Math.Round(radius));
 
         // Ordered front rather than activated: the overlay behind it is taking the
         // keyboard, and a camera bubble that stole focus would swallow Escape.

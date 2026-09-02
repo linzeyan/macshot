@@ -2524,8 +2524,12 @@ public sealed partial class CaptureOverlayWindow : Window
                 ToggleInvert();
                 return;
 
+            // Nothing. The button opens the frame's settings on the options row and no
+            // longer arms the frame on the way past, which is macshot's own change
+            // (OverlayView.swift:8165-8173): a press that both opened a row and turned
+            // something on left the row's first control unable to say what it had done.
+            // Arming is the row's switch, which arrives as FrameOptionsChanged.
             case ToolbarCommand.Beautify:
-                ArmBeautify();
                 return;
 
             case ToolbarCommand.RemoveBackground:
@@ -2678,28 +2682,6 @@ public sealed partial class CaptureOverlayWindow : Window
         _inverted = !_inverted;
         AnnotationToolbar.Inverted = _inverted;
         AnnotationCanvas.Present(PixelsFor(region), region, _placement);
-    }
-
-    /// <summary>
-    /// Turns the gradient frame on or off for this capture.
-    /// </summary>
-    /// <remarks>
-    /// A switch rather than something done to the pixels there and then, which is what
-    /// macshot's own button is: the frame goes on at the end, over the marks, and until
-    /// then it is shown around the region rather than baked into it.
-    /// </remarks>
-    private void ArmBeautify()
-    {
-        if (!IsAnnotating || _beautify)
-        {
-            return;
-        }
-
-        // Written down rather than held for this capture alone: the row's On switch reads
-        // it back, and a frame that vanished between two captures while the switch still
-        // said On would be the row lying about what the file will look like.
-        _settings.Save(_settings.Current with { BeautifyEnabled = true });
-        ShowFrameFromSettings();
     }
 
     /// <summary>
@@ -3235,7 +3217,7 @@ public sealed partial class CaptureOverlayWindow : Window
         var started = await bubble.ShowInAsync(
             _layout.FrameToVirtual(region),
             settings.WebcamCorner,
-            settings.WebcamSize,
+            settings.WebcamSizePoints,
             settings.WebcamShape,
             _monitor.Scale,
             settings.CameraDeviceId);

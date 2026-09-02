@@ -247,8 +247,24 @@ public sealed record CaptureSettings
     /// <summary>Which corner of the recorded region the camera sits in.</summary>
     public WebcamCorner WebcamCorner { get; init; } = WebcamCorner.BottomRight;
 
-    /// <summary>How big the camera bubble is. macshot's <c>webcamSize</c>.</summary>
-    public WebcamSize WebcamSize { get; init; } = WebcamSize.Medium;
+    /// <summary>How big the camera bubble is, in points. macshot's <c>webcamSizePoints</c>.</summary>
+    /// <remarks>
+    /// <para>
+    /// Named for the unit, and not for the setting it replaces, on purpose. macshot wrote
+    /// four named steps under <c>webcamSize</c> and this port wrote the same enum; a file
+    /// from either still says <c>"webcamSize": "Medium"</c>, which is a string where a
+    /// number now belongs. Under a new name that entry is simply a key nothing reads, and
+    /// the default below is what Medium meant — under the old name it would be a parse
+    /// failure that took every other setting in the file down with it.
+    /// </para>
+    /// <para>
+    /// macshot reads the old key when the new one is missing and carries the four steps
+    /// forward (<c>WebcamOverlay.swift:27-36</c>). This does not: someone who had picked
+    /// Small or Extra Large gets 120 back and one drag to say so, which is the price of
+    /// not carrying a second name for a setting for the rest of the port's life.
+    /// </para>
+    /// </remarks>
+    public double WebcamSizePoints { get; init; } = WebcamInset.DefaultSide;
 
     /// <summary>Whether the camera is a circle or a rounded rectangle.</summary>
     public WebcamShape WebcamShape { get; init; } = WebcamShape.Circle;
@@ -1811,6 +1827,12 @@ public sealed record CaptureSettings
             BeautifyShadowRadius = Clamp(
                 BeautifyShadowRadius, BeautifyOptions.Default.ShadowRadius, 0, BeautifyOptions.MaximumShadowRadius),
             BeautifyMode = Enum.IsDefined(BeautifyMode) ? BeautifyMode : BeautifyOptions.Default.Mode,
+
+            // The size slider's own ends. A file predating the slider says "Medium" here
+            // under a name nothing reads any more, so what arrives is the default; what
+            // this catches is a hand-edited number, which off the ends of the slider is a
+            // bubble the settings window cannot show and the user cannot get back from.
+            WebcamSizePoints = WebcamInset.Clamp(WebcamSizePoints),
             EffectsPreset = effects.Preset,
             EffectsBrightness = effects.Brightness,
             EffectsContrast = effects.Contrast,

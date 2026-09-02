@@ -73,14 +73,20 @@ public sealed partial class AnnotationToolbarView : UserControl
 
     private const double MaxStroke = 32;
 
-    /// <summary>The frame row's sliders — macshot's 60 (<c>ToolOptionsRowView.swift:1374</c>).</summary>
+    /// <summary>The frame row's sliders — macshot's 60 (<c>ToolOptionsRowView.swift:1382</c>).</summary>
     private const double FrameSliderWidth = 60;
 
-    /// <summary>And its background swatch — <c>:1318</c>.</summary>
+    /// <summary>And its background swatch — <c>:1340</c>.</summary>
     private const int FrameSwatchExtent = 22;
 
-    /// <summary>And its W/R segments — <c>:1290</c>.</summary>
+    /// <summary>And its W/R segments — <c>:1312</c>.</summary>
     private const double FrameModeWidth = 56;
+
+    /// <summary>
+    /// How far a control that draws no disabled state of its own is faded when it is off,
+    /// which is what <see cref="StyleSegments.SetSegmentEnabled"/> already fades one to.
+    /// </summary>
+    private const double DisabledOpacity = 0.35;
 
     private readonly Canvas _surface = new();
     private readonly ToolbarStrip _tools = new(Orientation.Horizontal);
@@ -442,13 +448,13 @@ public sealed partial class AnnotationToolbarView : UserControl
 
     /// <summary>
     /// The frame's own three sliders — macshot's <c>addBeautifySlider</c>
-    /// (<c>ToolOptionsRowView.swift:1362-1380</c>), 60 wide with the name in front and no
+    /// (<c>ToolOptionsRowView.swift:1369-1387</c>), 60 wide with the name in front and no
     /// readout after. No number beside them because the frame is the readout: unlike a
     /// stroke width, every one of these three is visible in full the moment it moves.
     /// </summary>
     /// <summary>
     /// Window or Rounded: whether the card is drawn as a macOS window with a title bar
-    /// above the capture (<c>ToolOptionsRowView.swift:1286-1296</c>), 56 wide in two.
+    /// above the capture (<c>ToolOptionsRowView.swift:1306-1318</c>), 56 wide in two.
     /// </summary>
     private readonly StyleSegments _frameMode = new() { Width = FrameModeWidth };
 
@@ -470,7 +476,7 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// <summary>
     /// The fourth slider, and the only one that is not always there: macshot shows it
     /// while a picture is the background and not while a gradient is
-    /// (<c>ToolOptionsRowView.swift:1310</c>), because there is nothing to soften about a
+    /// (<c>ToolOptionsRowView.swift:1332</c>), because there is nothing to soften about a
     /// gradient and a slider that does nothing is worse than one that is absent.
     /// </summary>
     private readonly TextBlock _frameBlurLabel = OptionLabel(L("Blur"));
@@ -481,7 +487,7 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// <summary>
     /// The background in use, and the way to the other forty-seven. macshot draws the
     /// swatch and the chevron as two borderless buttons that do the same thing
-    /// (<c>ToolOptionsRowView.swift:1317-1343</c>); one button holding both is the same
+    /// (<c>ToolOptionsRowView.swift:1338-1364</c>); one button holding both is the same
     /// picture, one press target, and no way for half of it to stop working.
     /// </summary>
     private readonly Border _frameSwatch = new()
@@ -500,11 +506,17 @@ public sealed partial class AnnotationToolbarView : UserControl
     };
 
     /// <summary>
-    /// Whether there is a frame at all. macshot's is the only way to take one off — its
-    /// Beautify button arms the frame and opens this row but never disarms it
-    /// (<c>OverlayView.swift:8031-8044</c>), so the switch has to be here.
+    /// Whether there is a frame at all, and the first thing on the row.
     /// </summary>
-    private readonly CheckBox _frameOn = OptionCheck(L("On"));
+    /// <remarks>
+    /// The only way to arm or disarm one during a capture: the Beautify button opens this
+    /// row and no longer touches the setting (<c>OverlayView.swift:8165-8173</c>). It went
+    /// first, and stopped being called "On", when it became the switch rather than an
+    /// afterthought at the end — a row of controls that do nothing reads as broken until
+    /// you find the switch, and the switch has to be where you look first
+    /// (<c>ToolOptionsRowView.swift:1286-1303</c>).
+    /// </remarks>
+    private readonly CheckBox _frameOn = OptionCheck(L("Beautify"));
 
     /// <summary>
     /// The hairlines between groups of controls, each paired with the group it introduces
@@ -1169,11 +1181,14 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// </summary>
     /// <remarks>
     /// Beautify is the one that owes anything: it opens the frame's settings on the options
-    /// row rather than toggling the frame, because macshot's arms the frame on the first
-    /// press of a session and never takes it off again (<c>OverlayView.swift:8031-8044</c>),
-    /// leaving that to the On switch on the row it opens. The editor has no such row, so
-    /// there the press goes straight out and that window makes it a toggle — the button
-    /// that armed the frame has to be the one that takes it off again.
+    /// row and does nothing else, which is all macshot's does
+    /// (<c>OverlayView.swift:8165-8173</c>). It used to arm the frame on the way past, on
+    /// both sides; macshot stopped, because a press that opens a row and silently turns
+    /// something on leaves the switch at the head of that row unable to say whether it or
+    /// the press is what put the frame there. Arming is now only ever the switch. The
+    /// editor has no such row, so there the press goes straight out and that window makes
+    /// it a toggle — the button that armed the frame has to be the one that takes it off
+    /// again.
     ///
     /// Here rather than in the button's own branch because the same command arrives from
     /// the keyboard as well, and a shortcut that armed the frame without showing its
@@ -2716,10 +2731,10 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// </summary>
     /// <remarks>
     /// <para>
-    /// macshot's order (<c>ToolOptionsRowView.swift:1281-1361</c>): the three measurements,
-    /// then the background, then the switch. Its groups are added last here because they
-    /// never appear beside the tool's — <see cref="ShowOptionsFor"/> shows one set or the
-    /// other — so where they sit among the rest cannot be seen.
+    /// macshot's order (<c>ToolOptionsRowView.swift:1281-1366</c>): the switch, then the
+    /// mode, then the measurements, then the background. Its groups are added last here
+    /// because they never appear beside the tool's — <see cref="ShowOptionsFor"/> shows one
+    /// set or the other — so where they sit among the rest cannot be seen.
     /// </para>
     /// <para>
     /// One of macshot's controls is missing, because the port has nothing behind it: the
@@ -2778,6 +2793,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         _frameOn.Checked += (_, _) => FrameArmed(true);
         _frameOn.Unchecked += (_, _) => FrameArmed(false);
 
+        AddGroup(_frameOn);
         AddGroup(_frameMode);
         AddGroup(
             _framePaddingLabel,
@@ -2789,10 +2805,10 @@ public sealed partial class AnnotationToolbarView : UserControl
             _frameBlurLabel,
             _frameBlur);
         AddGroup(_frameStyle);
-        AddGroup(_frameOn);
 
         _frameControls.AddRange(
         [
+            _frameOn,
             _frameMode,
             _framePaddingLabel,
             _framePadding,
@@ -2803,7 +2819,6 @@ public sealed partial class AnnotationToolbarView : UserControl
             _frameBlurLabel,
             _frameBlur,
             _frameStyle,
-            _frameOn,
         ]);
     }
 
@@ -2831,7 +2846,13 @@ public sealed partial class AnnotationToolbarView : UserControl
         FrameOptionsChanged?.Invoke(this, EventArgs.Empty);
     }
 
-    /// <summary>Turns the frame on or off, which is what the row's last control is for.</summary>
+    /// <summary>Turns the frame on or off, which is what the row's first control is for.</summary>
+    /// <remarks>
+    /// The rest of the row follows the switch immediately rather than at the next rebuild.
+    /// macshot reaches the same place by rebuilding its whole toolbar from the toggle
+    /// (<c>ToolOptionsRowView.swift:1448</c>); here the row's controls already exist, so
+    /// only their enabled state has to be said again.
+    /// </remarks>
     private void FrameArmed(bool armed)
     {
         if (_loadingFrame)
@@ -2840,7 +2861,50 @@ public sealed partial class AnnotationToolbarView : UserControl
         }
 
         Remember(current => current with { BeautifyEnabled = armed });
+        ShowFrameControlsEnabled(armed);
         FrameOptionsChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>
+    /// Greys the frame's controls out while the frame is off, and brings them back with it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// macshot's <c>controlsEnabled</c> (<c>ToolOptionsRowView.swift:1284</c>). Worth the
+    /// code because the switch and the controls it governs are one row: a padding slider
+    /// that moves and changes nothing is a control that appears broken, where a greyed one
+    /// points at the switch beside it.
+    /// </para>
+    /// <para>
+    /// The two hand-drawn controls are dimmed as well as disabled. A <see cref="Slider"/>
+    /// draws its own disabled state, but the mode segments are Borders inside a
+    /// <see cref="UserControl"/> — which has no disabled look for WinUI to reach — and the
+    /// background button's swatch and chevron are painted from brushes of their own, which
+    /// beat anything a disabled visual state would set. Both would otherwise sit at full
+    /// strength while refusing to be pressed.
+    /// </para>
+    /// </remarks>
+    private void ShowFrameControlsEnabled(bool enabled)
+    {
+        _frameMode.IsEnabled = enabled;
+        _framePadding.IsEnabled = enabled;
+        _frameRadius.IsEnabled = enabled;
+        _frameShadow.IsEnabled = enabled;
+        _frameBlur.IsEnabled = enabled;
+        _frameStyle.IsEnabled = enabled;
+
+        _frameMode.Opacity = enabled ? 1 : DisabledOpacity;
+        _frameStyle.Opacity = enabled ? 1 : DisabledOpacity;
+
+        // macshot's own two alphas for the names in front of its sliders
+        // (ToolOptionsRowView.swift:1373). The enabled 0.5 is the frame row's own, a shade
+        // brighter than the 0.4 RepaintChrome gives the tool row's labels; both are
+        // macshot's, and this row had been carrying no alpha at all.
+        var ink = ToolbarPalette.IconBrush(enabled ? 0.5 : 0.22);
+        _framePaddingLabel.Foreground = ink;
+        _frameRadiusLabel.Foreground = ink;
+        _frameShadowLabel.Foreground = ink;
+        _frameBlurLabel.Foreground = ink;
     }
 
     /// <summary>
@@ -2850,13 +2914,13 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// A snapped window arrives with its own chrome already in the pixels, so a synthetic
     /// title bar would put a second one above it and a corner radius would round corners
     /// that are already round. macshot leaves both controls out for that region
-    /// (<c>ToolOptionsRowView.swift:1286</c> and <c>:1302</c>) rather than showing them
+    /// (<c>ToolOptionsRowView.swift:1307</c> and <c>:1324</c>) rather than showing them
     /// doing nothing.
     /// </remarks>
     private bool FramedHere(FrameworkElement control)
     {
         // Only while a picture is the background, whatever the region is: macshot hides
-        // the blur slider behind the same condition (ToolOptionsRowView.swift:1310).
+        // the blur slider behind the same condition (ToolOptionsRowView.swift:1332).
         if (control == _frameBlur || control == _frameBlurLabel)
         {
             return _settings?.Current.BeautifyStyleIndex == BeautifyOptions.CustomBackgroundStyle
@@ -2908,6 +2972,8 @@ public sealed partial class AnnotationToolbarView : UserControl
         {
             _loadingFrame = false;
         }
+
+        ShowFrameControlsEnabled(options.Enabled);
 
         // Set rather than raised: SelectedIndex repaints without calling back, so filling
         // the row from the settings cannot be mistaken for the user choosing a mode.
