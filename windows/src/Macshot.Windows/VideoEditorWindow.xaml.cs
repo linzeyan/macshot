@@ -1,12 +1,14 @@
 using System.ComponentModel;
 using System.Diagnostics;
 using System.Runtime.InteropServices;
+using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Output;
 using Macshot.Windows.Recording;
 using Macshot.Windows.Rendering;
 using Macshot.Windows.Services;
+using Macshot.Windows.Toolbar;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
@@ -151,6 +153,10 @@ public sealed partial class VideoEditorWindow : Window
     private static readonly VideoTextAlignment[] CaptionAlignments =
         [VideoTextAlignment.Left, VideoTextAlignment.Centre, VideoTextAlignment.Right];
 
+    /// <summary>What a caption can have behind it, in macshot's segment order.</summary>
+    private static readonly VideoTextBackground[] CaptionBackgrounds =
+        [VideoTextBackground.None, VideoTextBackground.Solid, VideoTextBackground.Rounded];
+
     /// <summary>macshot's pill colours, one per kind.</summary>
     /// <remarks>
     /// Taken from <c>EffectsBandView.draw</c> rather than chosen here: the colour is how a
@@ -181,6 +187,14 @@ public sealed partial class VideoEditorWindow : Window
 
     /// <summary>Where each pill was drawn, so a press can be matched to one.</summary>
     private readonly List<BandPill> _pills = [];
+
+    /// <summary>
+    /// The caption's two colour wells. Both offer alpha, because macshot's own default fill
+    /// uses it — black at seven tenths — and a well that could not express the default would
+    /// turn it opaque the first time it was opened.
+    /// </summary>
+    private readonly ColorChoice _captionColor = new(L("Text Color"), transparency: true, named: false);
+    private readonly ColorChoice _captionBackColor = new(L("Background"), transparency: true, named: false);
 
     private MediaPlayer? _player;
     private BitmapImage? _gif;
@@ -551,6 +565,13 @@ public sealed partial class VideoEditorWindow : Window
 
             CaptionAlignBox.ItemsSource = new List<string> { L("Left"), L("Center"), L("Right") };
             CaptionAlignBox.SelectedIndex = 1;
+
+            CaptionBackBox.ItemsSource = CaptionBackgrounds
+                .Select(background => L(VideoEffectLabels.BackgroundKey(background)))
+                .ToList();
+            CaptionBackBox.SelectedIndex = Array.IndexOf(CaptionBackgrounds, VideoTextBackground.Rounded);
+
+            BuildCaptionColors();
 
             SourceInfoText.Text = _sourceWidth > 0
                 ? $"{Bytes(_sourceBytes)}  ·  {_sourceWidth} × {_sourceHeight}"
@@ -1334,7 +1355,35 @@ public sealed partial class VideoEditorWindow : Window
         Touched();
     }
 
-    /// <summary>Puts the selected caption's own text and weight into the row below.</summary>
+    /// <summary>
+    /// Fills the caption row's two colour wells and puts the captions macshot writes in
+    /// front of them.
+    /// </summary>
+    /// <remarks>
+    /// In code because a <see cref="ColorChoice"/> is told what it is called when it is
+    /// made. The two captions are macshot's own and are not translated on the Mac either:
+    /// "Aa" and "BG" read the same in every language it ships, and spelling the two names
+    /// out would cost more of this row than the font and the alignment together.
+    /// </remarks>
+    private void BuildCaptionColors()
+    {
+        _captionColor.Changed += (_, _) => ApplyCaptionStyle();
+        _captionBackColor.Changed += (_, _) => ApplyCaptionStyle();
+
+        CaptionColorGroup.Children.Add(CaptionColorCaption("Aa"));
+        CaptionColorGroup.Children.Add(_captionColor);
+        CaptionColorGroup.Children.Add(CaptionColorCaption("BG"));
+        CaptionColorGroup.Children.Add(_captionBackColor);
+
+        static TextBlock CaptionColorCaption(string text) => new()
+        {
+            Text = text,
+            FontSize = 12,
+            VerticalAlignment = VerticalAlignment.Center,
+        };
+    }
+
+    /// <summary>Puts the selected caption's own text, weight and colours into the row below.</summary>
     private void FillCaption()
     {
         if (_selected is not { Kind: VideoEffectKind.Text, Index: var index })
@@ -1350,6 +1399,9 @@ public sealed partial class VideoEditorWindow : Window
             CaptionBoldBox.IsChecked = caption.Bold;
             CaptionItalicBox.IsChecked = caption.Italic;
             CaptionAlignBox.SelectedIndex = Array.IndexOf(CaptionAlignments, caption.Alignment);
+            CaptionBackBox.SelectedIndex = Array.IndexOf(CaptionBackgrounds, caption.Background);
+            _captionColor.Color = ToUiColor(caption.TextColor);
+            _captionBackColor.Color = ToUiColor(caption.BackgroundColor);
         }
         finally
         {
@@ -1375,7 +1427,17 @@ public sealed partial class VideoEditorWindow : Window
         Touched();
     }
 
-    private void CaptionStyle_Changed(object sender, RoutedEventArgs e)
+    private void CaptionStyle_Changed(object sender, RoutedEventArgs e) => ApplyCaptionStyle();
+
+    /// <summary>
+    /// Reads the whole caption row back into the selected caption.
+    /// </summary>
+    /// <remarks>
+    /// One method rather than one per control, because the wells report through a plain
+    /// <see cref="EventHandler"/> and the checkboxes through a routed one — and every edit
+    /// here rewrites the same record anyway.
+    /// </remarks>
+    private void ApplyCaptionStyle()
     {
         if (_filling || _selected is not { Kind: VideoEffectKind.Text, Index: var index })
         {
@@ -1387,15 +1449,29 @@ public sealed partial class VideoEditorWindow : Window
                 ? CaptionAlignments[CaptionAlignBox.SelectedIndex]
                 : VideoTextAlignment.Centre;
 
+        var background = CaptionBackBox.SelectedIndex >= 0
+            && CaptionBackBox.SelectedIndex < CaptionBackgrounds.Length
+                ? CaptionBackgrounds[CaptionBackBox.SelectedIndex]
+                : VideoTextBackground.Rounded;
+
         _effects.Texts[index] = _effects.Texts[index] with
         {
             Bold = CaptionBoldBox.IsChecked is true,
             Italic = CaptionItalicBox.IsChecked is true,
             Alignment = alignment,
+            Background = background,
+            TextColor = ToAnnotationColor(_captionColor.Color),
+            BackgroundColor = ToAnnotationColor(_captionBackColor.Color),
         };
 
         Touched();
     }
+
+    private static Color ToUiColor(AnnotationColor color) =>
+        Color.FromArgb(color.Alpha, color.Red, color.Green, color.Blue);
+
+    private static AnnotationColor ToAnnotationColor(Color color) =>
+        new(color.R, color.G, color.B, color.A);
 
     private void EffectsBand_PointerPressed(object sender, PointerRoutedEventArgs e)
     {

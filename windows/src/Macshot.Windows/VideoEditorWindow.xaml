@@ -157,11 +157,6 @@
                             Height="28"
                             FontSize="12"
                             TextChanged="Caption_Changed" />
-                        <ComboBox
-                            x:Name="CaptionAlignBox"
-                            Width="96"
-                            FontSize="12"
-                            SelectionChanged="CaptionStyle_Changed" />
                         <!-- A CheckBox is shaped for a settings page by default: the label
                              sits above the box on a row this short unless the alignment,
                              the padding and the minimum height are all said here. -->
@@ -185,6 +180,26 @@
                             VerticalContentAlignment="Center"
                             Checked="CaptionStyle_Changed"
                             Unchecked="CaptionStyle_Changed" />
+                        <!-- The two wells are built in code, because a ColorChoice takes
+                             what it is called as a constructor argument. macshot's two
+                             captions stand in front of them (VideoTextOptionsPanel.swift:264)
+                             and are not translated there either: "Aa" and "BG" are the same
+                             two characters in every language it ships. -->
+                        <StackPanel
+                            x:Name="CaptionColorGroup"
+                            Orientation="Horizontal"
+                            Spacing="6"
+                            VerticalAlignment="Center" />
+                        <ComboBox
+                            x:Name="CaptionBackBox"
+                            Width="112"
+                            FontSize="12"
+                            SelectionChanged="CaptionStyle_Changed" />
+                        <ComboBox
+                            x:Name="CaptionAlignBox"
+                            Width="96"
+                            FontSize="12"
+                            SelectionChanged="CaptionStyle_Changed" />
                     </StackPanel>
                 </StackPanel>
 
