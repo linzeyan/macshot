@@ -1,14 +1,13 @@
 using Macshot.Windows.Core.Input;
-using Microsoft.UI.Input;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Automation;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
 using Macshot.Windows.Services;
+using Macshot.Windows.Toolbar;
 using static Macshot.Windows.Services.Localization;
 
 using Windows.System;
-using Windows.UI.Core;
 
 namespace Macshot.Windows;
 
@@ -80,10 +79,16 @@ public sealed partial class HotkeyBox : UserControl
     }
 
     /// <summary>
-    /// The binding as text, in the form the settings file holds. Round trips through
-    /// <see cref="HotkeyBinding"/> so what is shown is what was stored, including a
-    /// hand-written file's spelling being normalized to macshot's.
+    /// What this shortcut is bound to, as text, in the form the settings file holds.
+    /// Round trips through <see cref="HotkeyBinding"/> so what is shown is what was
+    /// stored, including a hand-written file's spelling being normalized to macshot's.
     /// </summary>
+    /// <remarks>
+    /// More than one chord, separated by <see cref="HotkeyBinding.ListSeparator"/>, for
+    /// the rows that can hold more than one — Redo ships answering to both Ctrl+Shift+Z
+    /// and Ctrl+Y. Recording always replaces the whole reading with the single chord
+    /// pressed, which is what macshot's <c>setShortcut</c> does.
+    /// </remarks>
     public string Binding
     {
         get => _binding;
@@ -138,7 +143,7 @@ public sealed partial class HotkeyBox : UserControl
             return;
         }
 
-        var candidate = new HotkeyBinding(HeldModifiers(), (uint)e.Key);
+        var candidate = new HotkeyBinding(ShortcutKey.Held(), (uint)e.Key);
 
         if (!candidate.IsValid)
         {
@@ -177,13 +182,15 @@ public sealed partial class HotkeyBox : UserControl
 
     /// <remarks>
     /// Blank is macshot's <c>None</c> rather than an error: six of its shortcuts ship
-    /// that way and any of them can be put back that way.
+    /// that way and any of them can be put back that way. A reading that will not parse
+    /// as a whole says so rather than showing the half of it that did — see
+    /// <see cref="HotkeyBinding.ParseList"/>.
     /// </remarks>
     private void ShowBinding() =>
         RecordButton.Content = string.IsNullOrEmpty(_binding)
             ? L("None")
-            : HotkeyBinding.TryParse(_binding, out var parsed)
-                ? parsed.ToString()
+            : HotkeyBinding.ParseList(_binding) is { Count: > 0 } chords
+                ? HotkeyBinding.Format(chords)
                 : $"{_binding} (not a shortcut)";
 
     private static bool IsModifier(VirtualKey key) => key
@@ -191,39 +198,4 @@ public sealed partial class HotkeyBox : UserControl
         or VirtualKey.Shift or VirtualKey.LeftShift or VirtualKey.RightShift
         or VirtualKey.Menu or VirtualKey.LeftMenu or VirtualKey.RightMenu
         or VirtualKey.LeftWindows or VirtualKey.RightWindows;
-
-    /// <summary>
-    /// The modifiers actually down right now, read from the keyboard rather than from the
-    /// event: <see cref="KeyRoutedEventArgs"/> carries no modifier state.
-    /// </summary>
-    private static HotkeyModifiers HeldModifiers()
-    {
-        var modifiers = HotkeyModifiers.None;
-        if (IsDown(VirtualKey.Control))
-        {
-            modifiers |= HotkeyModifiers.Control;
-        }
-
-        if (IsDown(VirtualKey.Menu))
-        {
-            modifiers |= HotkeyModifiers.Alt;
-        }
-
-        if (IsDown(VirtualKey.Shift))
-        {
-            modifiers |= HotkeyModifiers.Shift;
-        }
-
-        // Either Windows key, and neither is reported by the combined virtual key the
-        // other three have.
-        if (IsDown(VirtualKey.LeftWindows) || IsDown(VirtualKey.RightWindows))
-        {
-            modifiers |= HotkeyModifiers.Windows;
-        }
-
-        return modifiers;
-    }
-
-    private static bool IsDown(VirtualKey key) =>
-        InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(CoreVirtualKeyStates.Down);
 }

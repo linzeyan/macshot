@@ -155,6 +155,20 @@ public sealed partial class PreferencesWindow : Window
     /// <summary>All twelve again, for the checks that do not care which is which.</summary>
     private readonly List<HotkeyBox> _globalShortcuts = [];
 
+    /// <summary>The recorder on each of Undo's and Redo's rows, by identifier.</summary>
+    private readonly Dictionary<string, HotkeyBox> _editorCommandBoxes = new(StringComparer.Ordinal);
+
+    /// <summary>
+    /// What Undo and Redo currently stand on, in the form the settings file holds.
+    /// </summary>
+    /// <remarks>
+    /// Held here rather than read back off the two rows, because binding a chord to one
+    /// command takes it off the other, and working that out needs both commands' chords
+    /// at once — including the ones neither row has been told to change.
+    /// </remarks>
+    private IReadOnlyDictionary<string, string> _editorCommands =
+        new Dictionary<string, string>(StringComparer.Ordinal);
+
     private readonly ColorChoice _toolbarBackground = new("Background");
     private readonly ColorChoice _toolbarAccent = new("Accent");
     private readonly ColorChoice _toolbarIcon = new("Icon");
@@ -176,6 +190,7 @@ public sealed partial class PreferencesWindow : Window
         ShowPage(Tabs.SelectedItem as ListViewItem);
         BuildToolsPage();
         BuildGlobalShortcutRows();
+        BuildEditorCommandRows();
         BuildShortcutRows();
         BuildUrlSchemeCommands();
         BuildFilenameTokens();
@@ -386,24 +401,11 @@ public sealed partial class PreferencesWindow : Window
     /// macshot's names.
     /// </summary>
     /// <remarks>
-    /// <para>
-    /// Built here rather than written as twelve rows of markup because each row is a
-    /// label, a recorder and two buttons whose behaviour depends on the same default —
-    /// written out, that default would appear twice per row and be free to disagree with
-    /// itself.
-    /// </para>
-    /// <para>
-    /// The label is macshot's own name with a colon added after translating, not before:
-    /// <c>Capture Area</c> is a string macshot ships and <c>Capture Area:</c> is not, so
-    /// keying by the second would give twelve English labels in every other language.
-    /// </para>
+    /// Each row carries its own default so that clearing it and putting it back are the
+    /// same button in every section — see <see cref="ShortcutRow"/>, which draws them.
     /// </remarks>
     private void BuildGlobalShortcutRows()
     {
-        // Cast rather than tested: the style is declared in this window's own markup, and
-        // rows silently losing their column would be a worse failure than not opening.
-        var labelStyle = (Style)((Grid)Content).Resources["RowLabel"];
-
         Add("Capture Area", _captureAreaHotkey, HotkeyBinding.CaptureArea.ToString());
         Add("Capture Screen", _captureAllScreensHotkey, HotkeyBinding.CaptureAllScreens.ToString());
         Add("Record Area", _recordAreaHotkey, HotkeyBinding.RecordArea.ToString());
@@ -419,30 +421,137 @@ public sealed partial class PreferencesWindow : Window
 
         void Add(string label, HotkeyBox box, string fallback)
         {
-            box.Label = L(label);
             box.BindingChanged += Setting_Changed;
-
-            var clear = SmallButton(ClearGlyph, L("None"));
-            clear.Click += (_, _) => box.Assign(string.Empty);
-
-            // Present even where the default is nothing, because a row can be bound and
-            // then wanted back the way it came, and six of these came unbound.
-            var reset = SmallButton(ResetGlyph, L("Reset to default"));
-            reset.Click += (_, _) => box.Assign(fallback);
-
-            var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
-
-            // The row is what the label names, not the box: "None" and "Reset to default"
-            // are the same two words on all twelve rows, and a group name is what tells a
-            // reader which shortcut the pair it has just landed on belongs to.
-            AutomationProperties.SetName(row, L(label));
-            row.Children.Add(new TextBlock { Text = $"{L(label)}:", Style = labelStyle });
-            row.Children.Add(box);
-            row.Children.Add(clear);
-            row.Children.Add(reset);
-
             _globalShortcuts.Add(box);
-            GlobalShortcutRows.Children.Add(row);
+
+            // Assign rather than Binding, because it raises the change that writes the
+            // file — a row cleared with a silent assignment would come back on restart.
+            GlobalShortcutRows.Children.Add(ShortcutRow(
+                label,
+                box,
+                () => box.Assign(string.Empty),
+                () => box.Assign(fallback)));
+        }
+    }
+
+    /// <summary>
+    /// Builds the two rows for Undo and Redo, macshot's only chorded editor commands.
+    /// </summary>
+    /// <remarks>
+    /// The same row as the global shortcuts above, and deliberately the same builder:
+    /// macshot draws both sections identically (<c>SettingsWindowController.swift:1194</c>
+    /// and <c>:1241</c>), and a second copy here would be free to drift into a page where
+    /// two sections that mean the same thing no longer look alike. What differs is what
+    /// the three buttons do — a row here holds a list, so clearing and resetting go
+    /// through the model rather than assigning one binding.
+    /// </remarks>
+    private void BuildEditorCommandRows()
+    {
+        // Composed from the two labels, as macshot composes it: "Undo / Redo" is not a
+        // string macshot ships and keying by it would leave this heading in English in
+        // all forty languages. Shouted here because the page-wide pass that capitalises
+        // the headings has already run by the time this text exists.
+        EditorCommandHeading.Text = $"{L("Undo")} / {L("Redo")}".ToUpper(CultureInfo.CurrentCulture);
+
+        foreach (var command in EditorCommandShortcuts.All)
+        {
+            var box = new HotkeyBox();
+            box.BindingChanged += (_, _) => TakeEditorCommandChord(command, box);
+            _editorCommandBoxes[command.Id] = box;
+
+            EditorCommandRows.Children.Add(ShortcutRow(
+                command.Label,
+                box,
+                () => ChangeEditorCommands(EditorCommandShortcuts.Disable(_editorCommands, command)),
+                () => ChangeEditorCommands(EditorCommandShortcuts.Reset(_editorCommands, command))));
+        }
+    }
+
+    /// <summary>
+    /// One shortcut row: what it does, a recorder holding what it is bound to, and the
+    /// two buttons that take it off and put the default back.
+    /// </summary>
+    /// <remarks>
+    /// Built here rather than written as rows of markup because each row is a label, a
+    /// recorder and two buttons whose behaviour depends on the same default — written
+    /// out, that default would appear twice per row and be free to disagree with itself.
+    /// </remarks>
+    /// <param name="label">
+    /// macshot's own name for the shortcut, untranslated: the colon is added after
+    /// translating, not before, because <c>Capture Area</c> is a string macshot ships and
+    /// <c>Capture Area:</c> is not.
+    /// </param>
+    private StackPanel ShortcutRow(string label, HotkeyBox box, Action clear, Action reset)
+    {
+        // Cast rather than tested: the style is declared in this window's own markup, and
+        // rows silently losing their column would be a worse failure than not opening.
+        var labelStyle = (Style)((Grid)Content).Resources["RowLabel"];
+
+        box.Label = L(label);
+
+        var clearButton = SmallButton(ClearGlyph, L("None"));
+        clearButton.Click += (_, _) => clear();
+
+        // Present even where the default is nothing, because a row can be bound and
+        // then wanted back the way it came, and six of these came unbound.
+        var resetButton = SmallButton(ResetGlyph, L("Reset to default"));
+        resetButton.Click += (_, _) => reset();
+
+        var row = new StackPanel { Orientation = Orientation.Horizontal, Spacing = 8 };
+
+        // The row is what the label names, not the box: "None" and "Reset to default"
+        // are the same two words on every row, and a group name is what tells a reader
+        // which shortcut the pair it has just landed on belongs to.
+        AutomationProperties.SetName(row, L(label));
+        row.Children.Add(new TextBlock { Text = $"{L(label)}:", Style = labelStyle });
+        row.Children.Add(box);
+        row.Children.Add(clearButton);
+        row.Children.Add(resetButton);
+        return row;
+    }
+
+    /// <summary>
+    /// Gives the chord just recorded on a row to that command, and to it alone.
+    /// </summary>
+    /// <remarks>
+    /// The box holds exactly what was pressed, so a chord the other command answered to
+    /// has to be taken off it here — which is the one thing this feature does that the
+    /// global rows do not, and the reason these rows do not go through
+    /// <see cref="HotkeyBox.Assign"/>.
+    /// </remarks>
+    private void TakeEditorCommandChord(EditorCommandShortcut command, HotkeyBox box)
+    {
+        if (HotkeyBinding.TryParse(box.Binding, out var chord))
+        {
+            ChangeEditorCommands(EditorCommandShortcuts.Bind(_editorCommands, command, chord));
+        }
+    }
+
+    /// <summary>Takes a new set of chords, shows it, and writes it.</summary>
+    private void ChangeEditorCommands(IReadOnlyDictionary<string, string> chosen)
+    {
+        _editorCommands = chosen;
+        ShowEditorCommands();
+        Apply();
+    }
+
+    /// <summary>
+    /// Fills both rows from <see cref="_editorCommands"/>.
+    /// </summary>
+    /// <remarks>
+    /// Both, never just the one that changed: taking a chord off Redo to give it to Undo
+    /// leaves Redo's row showing a chord it no longer answers to, which is the settings
+    /// window lying about the keyboard.
+    /// </remarks>
+    private void ShowEditorCommands()
+    {
+        foreach (var command in EditorCommandShortcuts.All)
+        {
+            if (_editorCommandBoxes.TryGetValue(command.Id, out var box))
+            {
+                box.Binding = HotkeyBinding.Format(
+                    EditorCommandShortcuts.ChordsFor(command, _editorCommands));
+            }
         }
     }
 
@@ -1313,6 +1422,9 @@ public sealed partial class PreferencesWindow : Window
         _pinFromClipboardHotkey.Binding = settings.PinFromClipboardHotkey;
         _clearHistoryHotkey.Binding = settings.ClearHistoryHotkey;
 
+        _editorCommands = settings.EditorCommandShortcuts;
+        ShowEditorCommands();
+
         var shown = settings.EnabledTools();
         foreach (var (tool, toggle) in _toolToggles)
         {
@@ -1709,6 +1821,7 @@ public sealed partial class PreferencesWindow : Window
                 .Where(entry => entry.Value.IsChecked != true)
                 .Select(entry => entry.Key)],
             ToolShortcuts = ChosenShortcuts(),
+            EditorCommandShortcuts = Core.Input.EditorCommandShortcuts.Chosen(_editorCommands),
             ShowShortcutsInTooltips = ShortcutTooltipsCheck.IsChecked == true,
             ToolbarBackgroundColor = ToAnnotationColor(_toolbarBackground.Color).ToHex(),
             ToolbarAccentColor = ToAnnotationColor(_toolbarAccent.Color).ToHex(),

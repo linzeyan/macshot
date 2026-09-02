@@ -308,6 +308,20 @@ public sealed record CaptureSettings
         new Dictionary<string, string>();
 
     /// <summary>
+    /// The chords Undo and Redo answer to, by
+    /// <see cref="EditorCommandShortcut.Id"/>. macshot's <c>editorCommandShortcuts.*</c>.
+    /// </summary>
+    /// <remarks>
+    /// The same shape as <see cref="ToolShortcuts"/> and for the same reasons: only what
+    /// the user has changed, a command missing from here keeps macshot's defaults, and one
+    /// present but empty was turned off on purpose. The value holds every chord the
+    /// command answers to, joined by <see cref="HotkeyBinding.ListSeparator"/>, because
+    /// Redo ships answering to two.
+    /// </remarks>
+    public IReadOnlyDictionary<string, string> EditorCommandShortcuts { get; init; } =
+        new Dictionary<string, string>();
+
+    /// <summary>
     /// Whether a button's tooltip also says which key does the same thing. macshot's
     /// <c>showToolShortcutsInTooltips</c>.
     /// </summary>
@@ -1193,6 +1207,45 @@ public sealed record CaptureSettings
         return sane;
     }
 
+    /// <summary>
+    /// The chosen Undo and Redo chords, keeping only what a press could match.
+    /// </summary>
+    /// <remarks>
+    /// Blank is kept, because that is the user having turned the command off. A value that
+    /// is neither blank nor a shortcut is a damaged file instead, and the whole entry is
+    /// dropped so the defaults come back — the same distinction
+    /// <see cref="HotkeyBinding.ParseOptional"/> draws for the global shortcuts, and the
+    /// reason one mistyped chord cannot leave someone with no way to undo.
+    /// </remarks>
+    private IReadOnlyDictionary<string, string> SaneEditorCommandShortcuts()
+    {
+        if (EditorCommandShortcuts.Count == 0)
+        {
+            return EditorCommandShortcuts;
+        }
+
+        var sane = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var command in Input.EditorCommandShortcuts.All)
+        {
+            if (!EditorCommandShortcuts.TryGetValue(command.Id, out var text))
+            {
+                continue;
+            }
+
+            var chords = HotkeyBinding.ParseList(text);
+            if (chords.Count > 0)
+            {
+                sane[command.Id] = HotkeyBinding.Format(chords);
+            }
+            else if (string.IsNullOrWhiteSpace(text))
+            {
+                sane[command.Id] = string.Empty;
+            }
+        }
+
+        return sane;
+    }
+
     private static AnnotationColor Color(string hex, AnnotationColor fallback) =>
         Annotations.AnnotationColor.TryParseHex(hex, out var parsed) ? parsed : fallback;
 
@@ -1790,6 +1843,11 @@ public sealed record CaptureSettings
             // single character could never fire — both would sit in the settings window
             // looking assigned.
             ToolShortcuts = SaneToolShortcuts(),
+
+            // The same treatment for the two chorded ones, with the extra distinction they
+            // need: a command whose stored chords are unreadable gets its defaults back
+            // rather than being left switched off by a typo.
+            EditorCommandShortcuts = SaneEditorCommandShortcuts(),
 
             // Trimmed to the slots the picker has and to the entries it can draw. An
             // empty string is a slot nobody has filled yet and is kept as one, because

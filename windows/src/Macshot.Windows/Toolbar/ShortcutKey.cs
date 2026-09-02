@@ -1,9 +1,13 @@
+using Macshot.Windows.Core.Input;
+using Microsoft.UI.Input;
 using Windows.System;
+using Windows.UI.Core;
 
 namespace Macshot.Windows.Toolbar;
 
 /// <summary>
-/// Turns a key press into the character a single-key shortcut is stored as.
+/// Reads the keyboard the way a shortcut is stored: the character of the key, and the
+/// modifiers held with it.
 /// </summary>
 /// <remarks>
 /// Shared by the two ends of the feature on purpose: the settings window writes what this
@@ -29,4 +33,43 @@ internal static class ShortcutKey
         >= VirtualKey.Number0 and <= VirtualKey.Number9 => ((char)('0' + (key - VirtualKey.Number0))).ToString(),
         _ => string.Empty,
     };
+
+    /// <summary>
+    /// The modifiers down right now.
+    /// </summary>
+    /// <remarks>
+    /// Read from the keyboard rather than from the event, because
+    /// <c>KeyRoutedEventArgs</c> carries no modifier state — which is why every caller
+    /// needs this and why there is only one of it.
+    /// </remarks>
+    public static HotkeyModifiers Held()
+    {
+        var modifiers = HotkeyModifiers.None;
+        if (IsDown(VirtualKey.Control))
+        {
+            modifiers |= HotkeyModifiers.Control;
+        }
+
+        if (IsDown(VirtualKey.Menu))
+        {
+            modifiers |= HotkeyModifiers.Alt;
+        }
+
+        if (IsDown(VirtualKey.Shift))
+        {
+            modifiers |= HotkeyModifiers.Shift;
+        }
+
+        // Either Windows key, and neither is reported by the combined virtual key the
+        // other three have.
+        if (IsDown(VirtualKey.LeftWindows) || IsDown(VirtualKey.RightWindows))
+        {
+            modifiers |= HotkeyModifiers.Windows;
+        }
+
+        return modifiers;
+    }
+
+    private static bool IsDown(VirtualKey key) =>
+        InputKeyboardSource.GetKeyStateForCurrentThread(key).HasFlag(CoreVirtualKeyStates.Down);
 }
