@@ -2,6 +2,7 @@ using System.Runtime.InteropServices.WindowsRuntime;
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
+using Macshot.Windows.Core.Input;
 using Macshot.Windows.Core.Recognition;
 using Macshot.Windows.Rendering;
 using Macshot.Windows.Services;
@@ -1058,7 +1059,27 @@ public sealed partial class EditorWindow : Window
         }
 
         var control = IsDown(VirtualKey.Control);
-        var shift = IsDown(VirtualKey.Shift);
+
+        // Undo and Redo are the two commands the user can move, so they are matched
+        // against what preferences holds rather than written into the switch below.
+        // Ahead of it, because that is where macshot answers them: in
+        // performKeyEquivalent, before keyDown ever runs (OverlayView.swift:9035).
+        if (EditorCommandShortcuts.Find(
+                new HotkeyBinding(ShortcutKey.Held(), (uint)e.Key),
+                _settings.Current.EditorCommandShortcuts) is { } editorCommand)
+        {
+            e.Handled = true;
+            if (editorCommand.Command is EditorCommand.Undo)
+            {
+                Undo();
+            }
+            else
+            {
+                Redo();
+            }
+
+            return;
+        }
 
         switch (e.Key)
         {
@@ -1100,24 +1121,6 @@ public sealed partial class EditorWindow : Window
                     AnnotationCanvas.Render();
                 }
 
-                return;
-
-            case VirtualKey.Z when control:
-                e.Handled = true;
-                if (shift)
-                {
-                    Redo();
-                }
-                else
-                {
-                    Undo();
-                }
-
-                return;
-
-            case VirtualKey.Y when control:
-                e.Handled = true;
-                Redo();
                 return;
 
             case VirtualKey.S when control:

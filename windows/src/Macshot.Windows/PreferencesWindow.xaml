@@ -795,6 +795,17 @@
                         <StackPanel x:Name="GlobalShortcutRows" Spacing="8" />
                     </StackPanel>
 
+                    <!-- Between the global shortcuts and the single-key ones, which is
+                         where macshot puts it (SettingsWindowController.swift:1236) and
+                         where it belongs: these are chords like the ones above, but they
+                         only mean anything while the overlay or the editor is up. The
+                         heading is composed in code from the two labels — "Undo / Redo"
+                         is not a string macshot ships, so it has no translation. -->
+                    <StackPanel Style="{StaticResource Section}">
+                        <TextBlock x:Name="EditorCommandHeading" Style="{StaticResource SectionHeading}" />
+                        <StackPanel x:Name="EditorCommandRows" Spacing="8" />
+                    </StackPanel>
+
                     <StackPanel Style="{StaticResource Section}">
                         <TextBlock Text="Overlay / Editor Shortcuts" Style="{StaticResource SectionHeading}" />
                         <CheckBox

@@ -225,4 +225,50 @@ public sealed class HotkeyBindingTests
     {
         Assert.IsFalse(new HotkeyBinding(HotkeyModifiers.None, 'X').CanBeStored);
     }
+
+    /// <summary>
+    /// Redo answers to two chords, so the settings file and the settings window both have
+    /// to hold more than one in a single value and get exactly those back.
+    /// </summary>
+    [TestMethod]
+    public void ParseList_ReadsBackWhatFormatWrote()
+    {
+        IReadOnlyList<HotkeyBinding> chords =
+        [
+            new(HotkeyModifiers.Control | HotkeyModifiers.Shift, 'Z'),
+            new(HotkeyModifiers.Control, 'Y'),
+        ];
+
+        Assert.AreEqual("Ctrl+Shift+Z / Ctrl+Y", HotkeyBinding.Format(chords));
+        CollectionAssert.AreEqual(
+            chords.ToArray(),
+            HotkeyBinding.ParseList(HotkeyBinding.Format(chords)).ToArray());
+    }
+
+    /// <summary>
+    /// The separator is spaced and a binding never contains a space, so the one key that
+    /// is itself a slash cannot be mistaken for the separator between two chords.
+    /// </summary>
+    [TestMethod]
+    public void ParseList_TellsASlashKeyFromTheSeparator()
+    {
+        var chords = HotkeyBinding.ParseList("Ctrl+/ / Ctrl+Y");
+
+        Assert.AreEqual(2, chords.Count);
+        Assert.AreEqual(0xBFu, chords[0].Key);
+        Assert.AreEqual((uint)'Y', chords[1].Key);
+    }
+
+    /// <summary>
+    /// All or nothing: showing the readable half of a damaged list would present it as the
+    /// user's choice, and the caller could no longer tell it from a list deliberately left
+    /// empty.
+    /// </summary>
+    [TestMethod]
+    public void ParseList_KeepsNothingWhenAnyPartIsNotAShortcut()
+    {
+        Assert.AreEqual(0, HotkeyBinding.ParseList("Ctrl+Z / nonsense").Count);
+        Assert.AreEqual(0, HotkeyBinding.ParseList("").Count);
+        Assert.AreEqual(0, HotkeyBinding.ParseList(null).Count);
+    }
 }

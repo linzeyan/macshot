@@ -2,6 +2,7 @@ using System.Runtime.InteropServices.WindowsRuntime;
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
+using Macshot.Windows.Core.Input;
 using Macshot.Windows.Core.Recognition;
 using Macshot.Windows.Rendering;
 using Macshot.Windows.Services;
@@ -1952,6 +1953,20 @@ public sealed partial class CaptureOverlayWindow : Window
         var control = IsDown(VirtualKey.Control);
         var shift = IsDown(VirtualKey.Shift);
 
+        // Undo and Redo are the two commands the user can move, so they are matched
+        // against what preferences holds rather than written into the switch below.
+        // Ahead of it, because that is where macshot answers them: in
+        // performKeyEquivalent, before keyDown ever runs (OverlayView.swift:9035).
+        if (EditorCommandShortcuts.Find(
+                new HotkeyBinding(ShortcutKey.Held(), (uint)e.Key),
+                _settings.Current.EditorCommandShortcuts) is { } editorCommand)
+        {
+            e.Handled = true;
+            _ = editorCommand.Command is EditorCommand.Undo ? _editor.Undo() : _editor.Redo();
+            RenderAnnotations();
+            return;
+        }
+
         switch (e.Key)
         {
             case VirtualKey.Escape:
@@ -2023,12 +2038,6 @@ public sealed partial class CaptureOverlayWindow : Window
 
                 return;
 
-            case VirtualKey.Z when control:
-                e.Handled = true;
-                _ = shift ? _editor.Redo() : _editor.Undo();
-                RenderAnnotations();
-                return;
-
             case VirtualKey.Tab when !IsAnnotating && _selectionStart is null:
                 // Handled, or Tab would move focus off the overlay's root and the next
                 // key would go somewhere else. Only before a region is chosen: once the
@@ -2050,12 +2059,6 @@ public sealed partial class CaptureOverlayWindow : Window
                 // a notch at a time to find 100% again is the part of a zoom nobody wants.
                 e.Handled = true;
                 ApplyViewport(Viewport.Identity);
-                return;
-
-            case VirtualKey.Y when control:
-                e.Handled = true;
-                _editor.Redo();
-                RenderAnnotations();
                 return;
 
             // Space is bound to Move Selection out of the box, and that binding would win

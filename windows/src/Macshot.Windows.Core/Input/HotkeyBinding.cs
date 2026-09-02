@@ -178,6 +178,56 @@ public sealed record HotkeyBinding(HotkeyModifiers Modifiers, uint Key)
     }
 
     /// <summary>
+    /// What separates the chords of a shortcut that answers to more than one.
+    /// </summary>
+    /// <remarks>
+    /// macshot's own separator (<c>EditorCommandShortcutManager.displayString</c>), used
+    /// for storing as well as for showing: <see cref="ToString"/> never writes a space, so
+    /// <c>Ctrl+/ / Ctrl+Y</c> splits back into exactly the two chords it was written from
+    /// and a person editing the file by hand sees what preferences showed them.
+    /// </remarks>
+    public const string ListSeparator = " / ";
+
+    /// <summary>
+    /// Several bindings as one string, in the order a press is matched against them.
+    /// </summary>
+    public static string Format(IReadOnlyList<HotkeyBinding> bindings) =>
+        string.Join(ListSeparator, bindings);
+
+    /// <summary>
+    /// Reads back what <see cref="Format"/> wrote, or nothing at all when any part of it
+    /// is not a shortcut.
+    /// </summary>
+    /// <remarks>
+    /// All or nothing on purpose. Keeping the readable half of a damaged list would leave
+    /// a shortcut that half works, and the settings window would show the survivors as
+    /// though that were the user's choice; returning nothing lets the caller tell a
+    /// damaged value from a deliberately empty one and hand the defaults back.
+    /// </remarks>
+    public static IReadOnlyList<HotkeyBinding> ParseList(string? text)
+    {
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return [];
+        }
+
+        var bindings = new List<HotkeyBinding>(2);
+        foreach (var part in text.Split(
+            ListSeparator,
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+        {
+            if (!TryParse(part, out var binding))
+            {
+                return [];
+            }
+
+            bindings.Add(binding);
+        }
+
+        return bindings;
+    }
+
+    /// <summary>
     /// Reads a binding written as <c>Ctrl+Shift+X</c>, or returns false when it says
     /// nothing usable.
     /// </summary>
