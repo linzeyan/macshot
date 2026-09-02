@@ -69,5 +69,19 @@ public sealed class VideoEffectLabelsTests
         Assert.AreEqual("Add Zoom", VideoEffectLabels.AddKey(VideoEffectKind.Zoom));
         Assert.AreEqual("Delete Censor", VideoEffectLabels.DeleteKey(VideoEffectKind.Censor));
         Assert.AreEqual("Pixelate", VideoEffectLabels.StyleKey(VideoCensorStyle.Pixelate));
+        Assert.AreEqual("Rounded", VideoEffectLabels.BackgroundKey(VideoTextBackground.Rounded));
+    }
+
+    /// <summary>
+    /// Every caption background has its own word. The picker beside the band is filled from
+    /// this in enum order and read back by position, so two kinds sharing a key would be two
+    /// entries reading the same and one of them unreachable.
+    /// </summary>
+    [TestMethod]
+    public void BackgroundKeys_AreDistinctForEveryKind()
+    {
+        var backgrounds = Enum.GetValues<VideoTextBackground>();
+
+        CollectionAssert.AllItemsAreUnique(backgrounds.Select(VideoEffectLabels.BackgroundKey).ToList());
     }
 }

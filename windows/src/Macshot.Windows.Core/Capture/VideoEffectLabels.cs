@@ -72,6 +72,19 @@ public static class VideoEffectLabels
         _ => "Blur",
     };
 
+    /// <summary>The English key for what sits behind a caption's glyphs.</summary>
+    /// <remarks>
+    /// macshot's three segment titles, <c>VideoTextOptionsPanel.swift:158-160</c>. "Solid"
+    /// is deliberately the same word the censor's own style uses: on the Mac they are one
+    /// string, so a second spelling here would be a second entry to translate.
+    /// </remarks>
+    public static string BackgroundKey(VideoTextBackground background) => background switch
+    {
+        VideoTextBackground.None => "None",
+        VideoTextBackground.Solid => "Solid",
+        _ => "Rounded",
+    };
+
     /// <remarks>
     /// Rounded to a hundredth before the comparison, so a factor that arrived as
     /// 1.9999999 from a slider reads as 2 rather than as 2.00.
