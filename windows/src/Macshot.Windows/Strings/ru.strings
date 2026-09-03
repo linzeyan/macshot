@@ -58,6 +58,7 @@
 "Google Drive not signed in" = "Вход в Google Диск не выполнен";
 "Hide {0}" = "Скрыть «{0}»";
 "History cleared." = "История очищена.";
+"Hold Ctrl, Alt, Shift or Win too • Esc to keep the current one" = "Удерживайте также Ctrl, Alt, Shift или Win • Esc — оставить текущее";
 "Horizontal" = "По горизонтали";
 "How far down the spotlight takes the rest" = "Насколько прожектор затемняет остальное";
 "How far the background picture is softened" = "Насколько размывается фоновое изображение";
@@ -95,6 +96,7 @@
 "Open the download page?" = "Открыть страницу загрузки?";
 "Open the log folder" = "Открыть папку журналов";
 "Outline what is being recorded" = "Обводить записываемую область";
+"Press the shortcut • Esc to keep the current one" = "Нажмите сочетание клавиш • Esc — оставить текущее";
 "QR code copied." = "QR-код скопирован.";
 "Reading text..." = "Распознавание текста…";
 "Redacted {0} • Ctrl+Z to undo" = "Скрыто: {0} • Ctrl+Z — отменить";
@@ -118,6 +120,7 @@
 "Sign-in was not completed." = "Вход не был завершён.";
 "Smaller" = "Мельче";
 "Strikethrough" = "Зачёркнутый";
+"That key cannot be stored • press another • Esc to keep the current one" = "Эту клавишу нельзя сохранить • нажмите другую • Esc — оставить текущее";
 "That page was longer than macshot will capture in one go, so the bottom of it is missing." = "Страница оказалась длиннее, чем macshot снимает за один раз, поэтому её нижняя часть отсутствует.";
 "That region is too short to scroll-capture." = "Эта область слишком короткая для снимка с прокруткой.";
 "That window is too short to scroll-capture." = "Это окно слишком короткое для снимка с прокруткой.";
@@ -156,4 +159,5 @@
 "Zoom in" = "Увеличить";
 "Zoom out" = "Уменьшить";
 "{0:0}% • Scroll to zoom • Middle-drag to pan" = "{0:0}% • Прокрутка — масштаб • Средняя кнопка — панорама";
+"{0} (not a shortcut)" = "{0} (не сочетание клавиш)";
 "{0} chars · {1} words" = "{0} симв. · {1} слов";

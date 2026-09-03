@@ -58,6 +58,7 @@
 "Google Drive not signed in" = "Nicht bei Google Drive angemeldet";
 "Hide {0}" = "{0} ausblenden";
 "History cleared." = "Verlauf gelöscht.";
+"Hold Ctrl, Alt, Shift or Win too • Esc to keep the current one" = "Ctrl, Alt, Shift oder Win zusätzlich halten • Esc behält die aktuelle Zuweisung";
 "Horizontal" = "Horizontal";
 "How far down the spotlight takes the rest" = "Wie stark das Spotlight den Rest abdunkelt";
 "How far the background picture is softened" = "Wie stark das Hintergrundbild weichgezeichnet wird";
@@ -95,6 +96,7 @@
 "Open the download page?" = "Die Download-Seite öffnen?";
 "Open the log folder" = "Protokollordner öffnen";
 "Outline what is being recorded" = "Aufgenommenen Bereich umranden";
+"Press the shortcut • Esc to keep the current one" = "Tastenkombination drücken • Esc behält die aktuelle Zuweisung";
 "QR code copied." = "QR-Code kopiert.";
 "Reading text..." = "Text wird gelesen …";
 "Redacted {0} • Ctrl+Z to undo" = "{0} geschwärzt • Ctrl+Z widerruft";
@@ -118,6 +120,7 @@
 "Sign-in was not completed." = "Die Anmeldung wurde nicht abgeschlossen.";
 "Smaller" = "Kleiner";
 "Strikethrough" = "Durchgestrichen";
+"That key cannot be stored • press another • Esc to keep the current one" = "Diese Taste lässt sich nicht sichern • eine andere drücken • Esc behält die aktuelle Zuweisung";
 "That page was longer than macshot will capture in one go, so the bottom of it is missing." = "Diese Seite war länger, als macshot in einem Durchgang aufnimmt — das untere Ende fehlt.";
 "That region is too short to scroll-capture." = "Dieser Bereich ist zu kurz für eine Scroll-Aufnahme.";
 "That window is too short to scroll-capture." = "Dieses Fenster ist zu kurz für eine Scroll-Aufnahme.";
@@ -156,4 +159,5 @@
 "Zoom in" = "Vergrößern";
 "Zoom out" = "Verkleinern";
 "{0:0}% • Scroll to zoom • Middle-drag to pan" = "{0:0}% • Scrollen zum Zoomen • Mittlere Taste zum Verschieben";
+"{0} (not a shortcut)" = "{0} (keine Tastenkombination)";
 "{0} chars · {1} words" = "{0} Zeichen · {1} Wörter";

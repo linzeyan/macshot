@@ -30,8 +30,6 @@ namespace Macshot.Windows;
 /// </remarks>
 public sealed partial class HotkeyBox : UserControl
 {
-    private const string Prompt = "Press the shortcut • Esc to keep the current one";
-
     private string _binding = string.Empty;
     private bool _recording;
 
@@ -115,7 +113,12 @@ public sealed partial class HotkeyBox : UserControl
     private void Record_Click(object sender, RoutedEventArgs e)
     {
         _recording = true;
-        RecordButton.Content = Prompt;
+
+        // Every string this control puts on the button after construction goes through
+        // L itself. The page-wide pass ran once, in the constructor above, so anything
+        // written here afterwards would arrive in English however the machine is set —
+        // and this button says nothing else for as long as the gesture is open.
+        RecordButton.Content = L("Press the shortcut • Esc to keep the current one");
     }
 
     private void Record_KeyDown(object sender, KeyRoutedEventArgs e)
@@ -149,13 +152,13 @@ public sealed partial class HotkeyBox : UserControl
         {
             // Said while the gesture is still open rather than on Save: the answer is to
             // press it again with a modifier held, and that is worth knowing now.
-            RecordButton.Content = "Hold Ctrl, Alt, Shift or Win too • Esc to keep the current one";
+            RecordButton.Content = L("Hold Ctrl, Alt, Shift or Win too • Esc to keep the current one");
             return;
         }
 
         if (!candidate.CanBeStored)
         {
-            RecordButton.Content = "That key cannot be stored • press another • Esc to keep the current one";
+            RecordButton.Content = L("That key cannot be stored • press another • Esc to keep the current one");
             return;
         }
 
@@ -191,7 +194,7 @@ public sealed partial class HotkeyBox : UserControl
             ? L("None")
             : HotkeyBinding.ParseList(_binding) is { Count: > 0 } chords
                 ? HotkeyBinding.Format(chords)
-                : $"{_binding} (not a shortcut)";
+                : L("{0} (not a shortcut)", _binding);
 
     private static bool IsModifier(VirtualKey key) => key
         is VirtualKey.Control or VirtualKey.LeftControl or VirtualKey.RightControl

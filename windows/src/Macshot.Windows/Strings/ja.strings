@@ -58,6 +58,7 @@
 "Google Drive not signed in" = "Google ドライブにサインインしていません";
 "Hide {0}" = "{0}を非表示";
 "History cleared." = "履歴を消去しました。";
+"Hold Ctrl, Alt, Shift or Win too • Esc to keep the current one" = "Ctrl、Alt、Shift、Win のいずれかも押しながら • Esc で現在の設定のまま";
 "Horizontal" = "水平";
 "How far down the spotlight takes the rest" = "スポットライトが周囲をどれだけ暗くするか";
 "How far the background picture is softened" = "背景画像をどれだけぼかすか";
@@ -95,6 +96,7 @@
 "Open the download page?" = "ダウンロードページを開きますか？";
 "Open the log folder" = "ログフォルダを開く";
 "Outline what is being recorded" = "録画中の範囲を枠で示す";
+"Press the shortcut • Esc to keep the current one" = "ショートカットを押してください • Esc で現在の設定のまま";
 "QR code copied." = "QR コードをコピーしました。";
 "Reading text..." = "テキストを認識中…";
 "Redacted {0} • Ctrl+Z to undo" = "{0} 件を伏せました • Ctrl+Z で取り消し";
@@ -118,6 +120,7 @@
 "Sign-in was not completed." = "サインインは完了しませんでした。";
 "Smaller" = "小さく";
 "Strikethrough" = "取り消し線";
+"That key cannot be stored • press another • Esc to keep the current one" = "そのキーは保存できません • 別のキーを押してください • Esc で現在の設定のまま";
 "That page was longer than macshot will capture in one go, so the bottom of it is missing." = "このページは macshot が一度に取り込める長さを超えたため、下端が欠けています。";
 "That region is too short to scroll-capture." = "その領域はスクロールキャプチャには短すぎます。";
 "That window is too short to scroll-capture." = "そのウインドウはスクロールキャプチャには短すぎます。";
@@ -156,4 +159,5 @@
 "Zoom in" = "拡大";
 "Zoom out" = "縮小";
 "{0:0}% • Scroll to zoom • Middle-drag to pan" = "{0:0}% • スクロールでズーム • 中ボタンドラッグでパン";
+"{0} (not a shortcut)" = "{0}（ショートカットではありません）";
 "{0} chars · {1} words" = "{0} 文字 · {1} 単語";
