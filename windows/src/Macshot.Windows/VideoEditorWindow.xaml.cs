@@ -1787,10 +1787,17 @@ public sealed partial class VideoEditorWindow : Window
 
     // The rectangle on the picture
 
+    /// <remarks>
+    /// Gated on the export rather than the source, which is what the band above it is gated
+    /// on. Asking a different question left the rectangle drawn over the picture after a
+    /// recording's format was switched to GIF: the band it belongs to had gone, so there
+    /// was nothing left to move it with, deselect it with or delete it with, and a frame
+    /// sitting on the video with no way to reach it reads as the editor having jammed.
+    /// </remarks>
     private void ShowRectOverlay() =>
         RectOverlay.Visibility =
             (_selected?.Kind is VideoEffectKind.Zoom or VideoEffectKind.Censor or VideoEffectKind.Text)
-            && !SourceIsGif
+            && !ExportsGif
                 ? Visibility.Visible
                 : Visibility.Collapsed;
 
