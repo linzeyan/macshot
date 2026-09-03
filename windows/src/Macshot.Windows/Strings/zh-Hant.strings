@@ -58,6 +58,7 @@
 "Google Drive not signed in" = "尚未登入 Google 雲端硬碟";
 "Hide {0}" = "隱藏{0}";
 "History cleared." = "已清除記錄。";
+"Hold Ctrl, Alt, Shift or Win too • Esc to keep the current one" = "同時按住 Ctrl、Alt、Shift 或 Win • Esc 保留目前的設定";
 "Horizontal" = "水平";
 "How far down the spotlight takes the rest" = "聚光燈將其餘部分壓暗的程度";
 "How far the background picture is softened" = "背景圖片的柔化程度";
@@ -95,6 +96,7 @@
 "Open the download page?" = "要開啟下載頁面嗎？";
 "Open the log folder" = "開啟記錄檔案夾";
 "Outline what is being recorded" = "為正在錄製的範圍加上外框";
+"Press the shortcut • Esc to keep the current one" = "按下快捷鍵 • Esc 保留目前的設定";
 "QR code copied." = "已拷貝 QR 碼。";
 "Reading text..." = "正在辨識文字…";
 "Redacted {0} • Ctrl+Z to undo" = "已遮蔽 {0} 處 • Ctrl+Z 還原";
@@ -118,6 +120,7 @@
 "Sign-in was not completed." = "登入未完成。";
 "Smaller" = "縮小";
 "Strikethrough" = "刪除線";
+"That key cannot be stored • press another • Esc to keep the current one" = "該按鍵無法儲存 • 請按其他按鍵 • Esc 保留目前的設定";
 "That page was longer than macshot will capture in one go, so the bottom of it is missing." = "該頁面超過 macshot 單次能擷取的長度，因此底部缺失。";
 "That region is too short to scroll-capture." = "該範圍太短，無法捲動擷取。";
 "That window is too short to scroll-capture." = "該視窗太短，無法捲動擷取。";
@@ -156,4 +159,5 @@
 "Zoom in" = "放大";
 "Zoom out" = "縮小";
 "{0:0}% • Scroll to zoom • Middle-drag to pan" = "{0:0}% • 捲動以縮放 • 中鍵拖移以平移";
+"{0} (not a shortcut)" = "{0}（不是快捷鍵）";
 "{0} chars · {1} words" = "{0} 個字元 · {1} 個字詞";

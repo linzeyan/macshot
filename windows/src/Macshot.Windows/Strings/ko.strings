@@ -58,6 +58,7 @@
 "Google Drive not signed in" = "Google 드라이브에 로그인하지 않았습니다";
 "Hide {0}" = "{0} 숨기기";
 "History cleared." = "기록을 지웠습니다.";
+"Hold Ctrl, Alt, Shift or Win too • Esc to keep the current one" = "Ctrl, Alt, Shift 또는 Win도 함께 누르세요 • Esc로 현재 설정 유지";
 "Horizontal" = "가로";
 "How far down the spotlight takes the rest" = "스포트라이트가 나머지를 얼마나 어둡게 할지";
 "How far the background picture is softened" = "배경 이미지를 얼마나 흐리게 할지";
@@ -95,6 +96,7 @@
 "Open the download page?" = "다운로드 페이지를 열까요?";
 "Open the log folder" = "로그 폴더 열기";
 "Outline what is being recorded" = "녹화 중인 영역을 테두리로 표시";
+"Press the shortcut • Esc to keep the current one" = "단축키를 누르세요 • Esc로 현재 설정 유지";
 "QR code copied." = "QR 코드를 복사했습니다.";
 "Reading text..." = "텍스트 인식 중…";
 "Redacted {0} • Ctrl+Z to undo" = "{0}개를 가렸습니다 • Ctrl+Z로 실행 취소";
@@ -118,6 +120,7 @@
 "Sign-in was not completed." = "로그인이 완료되지 않았습니다.";
 "Smaller" = "작게";
 "Strikethrough" = "취소선";
+"That key cannot be stored • press another • Esc to keep the current one" = "그 키는 저장할 수 없습니다 • 다른 키를 누르세요 • Esc로 현재 설정 유지";
 "That page was longer than macshot will capture in one go, so the bottom of it is missing." = "이 페이지는 macshot이 한 번에 캡처하는 길이를 넘어서 아래쪽이 빠졌습니다.";
 "That region is too short to scroll-capture." = "그 영역은 스크롤 캡처를 하기에 너무 짧습니다.";
 "That window is too short to scroll-capture." = "그 창은 스크롤 캡처를 하기에 너무 짧습니다.";
@@ -156,4 +159,5 @@
 "Zoom in" = "확대";
 "Zoom out" = "축소";
 "{0:0}% • Scroll to zoom • Middle-drag to pan" = "{0:0}% • 스크롤로 확대·축소 • 가운데 버튼 드래그로 이동";
+"{0} (not a shortcut)" = "{0}(단축키가 아님)";
 "{0} chars · {1} words" = "{0}자 · {1}단어";
