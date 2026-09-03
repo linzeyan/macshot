@@ -97,25 +97,57 @@ public sealed class ToolbarActionsTests
             "redact is macshot's autoRedact and belongs to the action strip, not this one");
     }
 
+    /// <summary>
+    /// Nothing in the overlay can show the gradient frame — it is bigger than the region —
+    /// and the Adjust popover is closed most of the time, so for those two the tinted icon
+    /// is the only thing that says the switch is on.
+    /// </summary>
     [TestMethod]
     public void TheSwitchesSayWhetherTheyAreOn()
     {
-        // Nothing in the overlay can show the gradient frame — it is bigger than the
-        // region — so for that one the lit button is the only thing that says so. Invert
-        // is previewed, and still lights, because a switch whose button looks the same
-        // both ways reads as a button that did nothing the second time.
-        Assert.IsFalse(Item(ToolbarActions.Tools(AnnotationTool.Arrow), ToolbarCommand.Beautify).IsSelected);
-        Assert.IsFalse(Item(ToolbarActions.Tools(AnnotationTool.Arrow), ToolbarCommand.InvertColors).IsSelected);
-        Assert.IsFalse(Item(ToolbarActions.Tools(AnnotationTool.Arrow), ToolbarCommand.Adjust).IsSelected);
+        var off = ToolbarActions.Tools(AnnotationTool.Arrow);
+        Assert.IsNull(Item(off, ToolbarCommand.Beautify).Tint);
+        Assert.IsNull(Item(off, ToolbarCommand.Adjust).Tint);
 
-        var on = ToolbarActions.Tools(
-            AnnotationTool.Arrow, null, beautified: true, inverted: true, adjusted: true);
-        Assert.IsTrue(Item(on, ToolbarCommand.Beautify).IsSelected);
-        Assert.IsTrue(Item(on, ToolbarCommand.InvertColors).IsSelected);
-        Assert.IsTrue(Item(on, ToolbarCommand.Adjust).IsSelected);
+        var on = ToolbarActions.Tools(AnnotationTool.Arrow, null, beautified: true, adjusted: true);
+        Assert.AreEqual(ToolbarActions.Lit, Item(on, ToolbarCommand.Beautify).Tint);
+        Assert.AreEqual(ToolbarActions.Lit, Item(on, ToolbarCommand.Adjust).Tint);
+
+        // The tint, not the filled square: they are two different states on macshot's own
+        // button and only one of them survives the theme's accent colour being changed to
+        // something that means nothing.
+        Assert.IsFalse(Item(on, ToolbarCommand.Beautify).IsSelected);
+        Assert.IsFalse(Item(on, ToolbarCommand.Adjust).IsSelected);
 
         static ToolbarItem Item(IReadOnlyList<ToolbarItem> items, ToolbarCommand command) =>
             items.Single(item => item.Command == command);
+    }
+
+    /// <summary>
+    /// Invert shows nothing at all, and that is macshot's answer rather than an omission
+    /// (<c>ToolbarDefinitions.swift:184</c>): the turn is applied to the picture on screen,
+    /// so the picture is what says the button worked. A state added here would be a state
+    /// the two products disagree about.
+    /// </summary>
+    [TestMethod]
+    public void InvertSaysNothingAboutItselfBecauseThePictureSaysItInstead()
+    {
+        var item = ToolbarActions.Tools(AnnotationTool.Arrow, null, beautified: true, adjusted: true)
+            .Single(candidate => candidate.Command == ToolbarCommand.InvertColors);
+
+        Assert.IsNull(item.Tint);
+        Assert.IsFalse(item.IsSelected);
+    }
+
+    /// <summary>
+    /// macshot's <c>NSColor(calibratedRed: 1.0, green: 0.8, blue: 0.2)</c>, which is the
+    /// one colour on the strip that is not the user's to choose — an on switch has to stay
+    /// legible against every toolbar theme.
+    /// </summary>
+    [TestMethod]
+    public void TheLitColourIsMacshotSOwnGold()
+    {
+        Assert.AreEqual(new AnnotationColor(255, 204, 51), ToolbarActions.Lit);
     }
 
     [TestMethod]

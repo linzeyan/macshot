@@ -588,8 +588,6 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// </summary>
     private bool _loadingFrame;
 
-    private bool _inverted;
-
     public AnnotationToolbarView()
     {
         _optionsContent = new StackPanel
@@ -723,24 +721,6 @@ public sealed partial class AnnotationToolbarView : UserControl
             }
 
             _beautified = value;
-            RefreshStrips();
-        }
-    }
-
-    /// <summary>
-    /// Whether the capture's colours are turned, which lights the Invert button.
-    /// </summary>
-    public bool Inverted
-    {
-        get => _inverted;
-        set
-        {
-            if (_inverted == value)
-            {
-                return;
-            }
-
-            _inverted = value;
             RefreshStrips();
         }
     }
@@ -1892,7 +1872,6 @@ public sealed partial class AnnotationToolbarView : UserControl
             editor.Tool,
             _settings?.Current.EnabledTools(),
             _beautified,
-            _inverted,
             !_effectsPicker.Options.IsIdentity,
             hidden)));
         // The offline build has neither a translator nor an uploader compiled into it, so

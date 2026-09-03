@@ -8,6 +8,10 @@ using Microsoft.UI.Xaml.Media;
 using Microsoft.UI.Xaml.Shapes;
 using static Macshot.Windows.Services.Localization;
 
+// The same alias ToolbarIcons takes, and for the same reason: the implicit usings bring
+// in System.IO, where a bare Path is a file path. This file only means the shape.
+using Path = Microsoft.UI.Xaml.Shapes.Path;
+
 using Windows.Foundation;
 using Windows.UI;
 
@@ -233,7 +237,46 @@ internal sealed partial class ToolbarButton : UserControl
                 : _isHovered
                     ? ToolbarPalette.HoverBrush
                     : ToolbarPalette.TransparentBrush;
+
+        Tint(Item.Tint is { } tint ? ToUiColor(tint) : ToolbarPalette.Icon);
     }
+
+    /// <summary>
+    /// Draws the icon in <paramref name="color"/>, keeping each part's own transparency:
+    /// an icon built from several strokes says which of them is the faint one by its
+    /// alpha, and repainting them all flat would lose that.
+    /// </summary>
+    /// <remarks>
+    /// Here rather than where the face is built, because <see cref="Update"/> only builds
+    /// a new face when the command or the tool changes — a switch coming on changes
+    /// neither, so it is the icon already standing that has to be recoloured. The brushes
+    /// are safe to write to: <see cref="ToolbarPalette.IconBrush"/> makes a fresh one for
+    /// every path, so no two icons share one.
+    /// </remarks>
+    private void Tint(Color color)
+    {
+        if (_content.Children[FaceIndex] is not Canvas face)
+        {
+            return;
+        }
+
+        foreach (var path in face.Children.OfType<Path>())
+        {
+            Recolor(path.Stroke);
+            Recolor(path.Fill);
+        }
+
+        void Recolor(Brush? brush)
+        {
+            if (brush is SolidColorBrush solid)
+            {
+                solid.Color = Color.FromArgb(solid.Color.A, color.R, color.G, color.B);
+            }
+        }
+    }
+
+    private static Color ToUiColor(AnnotationColor color) =>
+        Color.FromArgb(color.Alpha, color.Red, color.Green, color.Blue);
 
     /// <summary>
     /// Which buttons that are not tools carry a menu: Save offers the way of saving that
