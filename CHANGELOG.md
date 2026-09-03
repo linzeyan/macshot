@@ -3,7 +3,7 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
-## [Unreleased]
+## [0.7.0] - 2026-09-04
 
 ### Added
 
