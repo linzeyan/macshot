@@ -186,11 +186,30 @@ public sealed class VideoTrimTests
     [TestMethod]
     public void Format_LeavesTheHoursOutUntilThereAreSome()
     {
-        Assert.AreEqual("0:00", VideoTrim.Format(0));
-        Assert.AreEqual("0:07", VideoTrim.Format(7.9));
-        Assert.AreEqual("1:05", VideoTrim.Format(65));
-        Assert.AreEqual("1:00:00", VideoTrim.Format(3600));
-        Assert.AreEqual("2:03:04", VideoTrim.Format(7384));
+        Assert.AreEqual("0:00.0", VideoTrim.Format(0));
+        Assert.AreEqual("0:07.9", VideoTrim.Format(7.9));
+        Assert.AreEqual("1:05.0", VideoTrim.Format(65));
+        Assert.AreEqual("1:00:00.0", VideoTrim.Format(3600));
+        Assert.AreEqual("2:03:04.0", VideoTrim.Format(7384));
+    }
+
+    /// <summary>
+    /// The tenth is the unit the timeline is dragged in — <see cref="VideoTrim.MinimumSeconds"/>
+    /// is one — so a reading that cannot show it cannot say where a handle has been put.
+    /// Both cases are the ones macshot's own fix names
+    /// (<c>VideoEditorWindowController.swift:1291</c>): a tenths digit taken on its own
+    /// truncates rather than rounds, and carries nowhere.
+    /// </summary>
+    [TestMethod]
+    public void Format_ReadsTheTenthTheHandlesMoveIn()
+    {
+        // 2.3 is held as 2.2999…, so truncating the fraction reads a tenth low.
+        Assert.AreEqual("0:02.3", VideoTrim.Format(2.3));
+
+        // And a fraction that has reached the next second has to take the second with it.
+        Assert.AreEqual("0:02.0", VideoTrim.Format(1.999));
+        Assert.AreEqual("1:00.0", VideoTrim.Format(59.99));
+        Assert.AreEqual("1:00:00.0", VideoTrim.Format(3599.99));
     }
 
     [TestMethod]
@@ -198,7 +217,7 @@ public sealed class VideoTrimTests
     {
         // The playhead is asked to draw itself before the duration is known, and a
         // reading of NaN would be the only thing on screen.
-        Assert.AreEqual("0:00", VideoTrim.Format(double.NaN));
-        Assert.AreEqual("0:00", VideoTrim.Format(-1));
+        Assert.AreEqual("0:00.0", VideoTrim.Format(double.NaN));
+        Assert.AreEqual("0:00.0", VideoTrim.Format(-1));
     }
 }

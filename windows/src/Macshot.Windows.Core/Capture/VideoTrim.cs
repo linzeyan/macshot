@@ -51,13 +51,21 @@ public readonly record struct VideoTrim(double Start, double End)
     public double Clamp(double seconds) => Math.Clamp(seconds, Start, Math.Max(Start, End));
 
     /// <summary>
-    /// A moment as the timeline writes it: minutes and seconds, and hours only when
-    /// there are any.
+    /// A moment as the timeline writes it: minutes, seconds and tenths, with hours only
+    /// when there are any.
     /// </summary>
     /// <remarks>
-    /// macshot's <c>formatTime</c>. Hours are left out below an hour rather than shown as
-    /// 00, because almost every recording is under a minute and a leading 00: is two
-    /// characters of noise on every one of them.
+    /// <para>
+    /// macshot's <c>formatTime</c>, tenths included: a trim handle moves in tenths and its
+    /// floor is a tenth, so a reading that stops at whole seconds cannot say what the
+    /// handle is doing for nine of every ten positions it can hold.
+    /// </para>
+    /// <para>
+    /// Hours are left out below an hour rather than shown as 00, because almost every
+    /// recording is under a minute and a leading 00: is two characters of noise on every
+    /// one of them. macshot has no hour at all and counts on past 60 minutes, which reads
+    /// worse the one time it happens.
+    /// </para>
     /// </remarks>
     public static string Format(double seconds)
     {
@@ -66,13 +74,18 @@ public readonly record struct VideoTrim(double Start, double End)
             seconds = 0;
         }
 
-        var whole = (int)seconds;
-        var hours = whole / 3600;
-        var minutes = whole % 3600 / 60;
-        var rest = whole % 60;
+        // Every field off one rounded total, which is macshot's own fix
+        // (VideoEditorWindowController.swift:1291). Deriving the tenths on their own as
+        // (seconds - floor(seconds)) * 10 truncates 2.3 — held as 2.2999… — to ".2", and
+        // carries nowhere, so 1.999 read 0:01.9 rather than 0:02.0.
+        var tenths = (long)Math.Round(seconds * 10, MidpointRounding.AwayFromZero);
+        var hours = tenths / 36_000;
+        var minutes = tenths / 600 % 60;
+        var rest = tenths / 10 % 60;
+        var fraction = tenths % 10;
 
         return hours > 0
-            ? string.Format(CultureInfo.InvariantCulture, "{0}:{1:00}:{2:00}", hours, minutes, rest)
-            : string.Format(CultureInfo.InvariantCulture, "{0}:{1:00}", minutes, rest);
+            ? string.Format(CultureInfo.InvariantCulture, "{0}:{1:00}:{2:00}.{3}", hours, minutes, rest, fraction)
+            : string.Format(CultureInfo.InvariantCulture, "{0}:{1:00}.{2}", minutes, rest, fraction);
     }
 }
