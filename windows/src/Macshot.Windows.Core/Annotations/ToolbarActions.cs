@@ -155,12 +155,19 @@ public enum ToolbarCommand
 /// user who has turned the hint off. Carried on the item rather than looked up when the
 /// tooltip is built, so that the strips stay the one place that knows about settings.
 /// </param>
+/// <param name="Tint">
+/// What colour to draw the icon, or null for the toolbar's own. macshot's
+/// <c>tintColor</c>: the second way a button says it is on, and a quieter one than
+/// <paramref name="IsSelected"/>'s filled square — the switches that change the picture
+/// use it, the ones that change a mode use the square.
+/// </param>
 public readonly record struct ToolbarItem(
     ToolbarCommand Command,
     string Tooltip,
     AnnotationTool? Tool = null,
     bool IsSelected = false,
-    string Shortcut = "");
+    string Shortcut = "",
+    AnnotationColor? Tint = null);
 
 /// <summary>
 /// Which buttons each strip carries, and in what order.
@@ -182,6 +189,13 @@ public readonly record struct ToolbarItem(
 /// </remarks>
 public static class ToolbarActions
 {
+    /// <summary>
+    /// The colour macshot draws a picture-changing switch in while it is on:
+    /// <c>NSColor(calibratedRed: 1.0, green: 0.8, blue: 0.2)</c>
+    /// (<c>ToolbarDefinitions.swift:155</c>, <c>:194</c>).
+    /// </summary>
+    public static AnnotationColor Lit { get; } = new(255, 204, 51);
+
     /// <summary>
     /// The tools, in the order macshot shows them. The pointer tool is deliberately
     /// absent: a click grabs a mark whatever tool is in hand, so a button for it would
@@ -214,18 +228,14 @@ public static class ToolbarActions
     /// Which tools the user has kept, or null for all of them.
     /// </param>
     /// <param name="beautified">
-    /// Whether the capture is already set to be framed, which lights the Beautify button
-    /// the way macshot tints its own.
-    /// </param>
-    /// <param name="inverted">
-    /// Whether the capture's colours are already turned, which lights that button for
-    /// the same reason: both are switches, and a switch that does not show its state is
-    /// a button that appears to do nothing the second time it is pressed.
+    /// Whether the capture is already set to be framed, which tints the Beautify button
+    /// gold the way macshot tints its own. Nothing in the overlay can show the frame — it
+    /// is bigger than the region — so the button is the only thing that says so.
     /// </param>
     /// <param name="adjusted">
-    /// Whether the Adjust controls are asking for anything. Lit for the same reason
-    /// again: the popover is closed most of the time, and this is the only sign that
-    /// what is on show has been altered.
+    /// Whether the Adjust controls are asking for anything, which tints that button for
+    /// the same reason: the popover is closed most of the time, and this is the only sign
+    /// that what is on show has been altered.
     /// </param>
     /// <param name="hiddenActions">
     /// The identifiers of the buttons after the tools that the user has taken off — see
@@ -235,7 +245,6 @@ public static class ToolbarActions
         AnnotationTool selected,
         IReadOnlyCollection<AnnotationTool>? enabled = null,
         bool beautified = false,
-        bool inverted = false,
         bool adjusted = false,
         IReadOnlyCollection<string>? hiddenActions = null)
     {
@@ -263,9 +272,13 @@ public static class ToolbarActions
         // Then the actions that change the picture rather than draw on it, in macshot's
         // order: invert, adjust, beautify, remove background. Redact is not among them —
         // macshot keeps it on the action strip, and it has moved there.
-        Offer(new ToolbarItem(ToolbarCommand.InvertColors, "Invert Colors", IsSelected: inverted));
-        Offer(new ToolbarItem(ToolbarCommand.Adjust, "Adjust", IsSelected: adjusted));
-        Offer(new ToolbarItem(ToolbarCommand.Beautify, "Beautify", IsSelected: beautified));
+        // Invert carries no sign of being on, which is macshot's own answer
+        // (ToolbarDefinitions.swift:184) and not an oversight: the turn is applied to the
+        // picture on screen, so the picture itself is what says the button worked. The
+        // other two change something the overlay cannot show, and are tinted instead.
+        Offer(new ToolbarItem(ToolbarCommand.InvertColors, "Invert Colors"));
+        Offer(new ToolbarItem(ToolbarCommand.Adjust, "Adjust", Tint: adjusted ? Lit : null));
+        Offer(new ToolbarItem(ToolbarCommand.Beautify, "Beautify", Tint: beautified ? Lit : null));
         Offer(new ToolbarItem(ToolbarCommand.RemoveBackground, "Remove Background"));
 
         return items;

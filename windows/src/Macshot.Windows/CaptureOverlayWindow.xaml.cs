@@ -2683,7 +2683,6 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         _inverted = !_inverted;
-        AnnotationToolbar.Inverted = _inverted;
         AnnotationCanvas.Present(PixelsFor(region), region, _placement);
     }
 
