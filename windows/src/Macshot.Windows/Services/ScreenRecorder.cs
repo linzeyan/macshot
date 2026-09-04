@@ -1,3 +1,4 @@
+using System.Buffers;
 using System.Diagnostics;
 using System.Runtime.InteropServices.WindowsRuntime;
 using System.Text;
@@ -86,7 +87,12 @@ public sealed class ScreenRecorder : IDisposable
     /// encoder falls behind by a fraction of a second rather than by a backlog it
     /// then plays back as slow motion.
     /// </summary>
-    private const int BufferCount = 3;
+    /// <remarks>
+    /// Four rather than three because <see cref="Mp4Frames"/> keeps the last frame
+    /// alive to hand over again while the screen is still, and a frame that is being
+    /// held is one the pool cannot recycle.
+    /// </remarks>
+    private const int BufferCount = 4;
 
     /// <summary>
     /// Frames waiting to be encoded. Deliberately shallow, for the same reason: what
@@ -249,10 +255,10 @@ public sealed class ScreenRecorder : IDisposable
         var sourceHeight = follow?.Height ?? crop?.Height ?? size.Height;
 
         var plan = RecordingPlan.Resolve(sourceWidth, sourceHeight, frameRate);
-        var kept = 0;
 
         using var frames = new FrameStream(Device(), item, plan.FrameInterval, cancellation);
         using var held = Holding(frames);
+        using var video = new Mp4Frames(frames, crop, follow, plan.FrameInterval);
 
         // Null when nothing was asked for, and also when nothing could be opened — a
         // machine with no microphone records without one rather than not at all.
@@ -277,56 +283,19 @@ public sealed class ScreenRecorder : IDisposable
             var deferral = request.GetDeferral();
             try
             {
-                if (track is not null && request.StreamDescriptor is AudioStreamDescriptor)
-                {
-                    request.Sample = await track.NextSampleAsync(frames, cancellation);
-                    return;
-                }
-
-                if (await frames.NextAsync() is not { } timed)
-                {
-                    // No sample is how a MediaStreamSource says the stream is over,
-                    // which is what finishes the file.
-                    request.Sample = null;
-                    return;
-                }
-
-                kept++;
-
-                if (follow is { } area)
-                {
-                    // Through main memory for the same reason a crop is, and for one
-                    // more: the window may not be the size it was, and only a fitted
-                    // buffer is still the size the stream was told.
-                    request.Sample = MediaStreamSample.CreateFromBuffer(
-                        await FitToBufferAsync(timed.Frame, area),
-                        timed.Timestamp);
-                    return;
-                }
-
-                if (crop is { } cropper)
-                {
-                    // A copy rather than the texture: the encoder is being handed a
-                    // rectangle that does not exist on the GPU. The frame is finished
-                    // with the moment the pixels are in memory.
-                    request.Sample = MediaStreamSample.CreateFromBuffer(
-                        await CropToBufferAsync(timed.Frame, cropper),
-                        timed.Timestamp);
-                    return;
-                }
-
-                var sample = MediaStreamSample.CreateFromDirect3D11Surface(timed.Frame.Surface, timed.Timestamp);
-
-                // The frame owns the texture the sample points at, so it stays alive
-                // until the encoder says it is done with it.
-                sample.Processed += (_, _) => timed.Frame.Dispose();
-                request.Sample = sample;
+                request.Sample = track is not null && request.StreamDescriptor is AudioStreamDescriptor
+                    ? await track.NextSampleAsync(frames, cancellation)
+                    : await video.NextAsync(request);
             }
-            catch (Exception)
+            catch (Exception exception)
             {
                 // Ending the stream is the only useful answer here: throwing out of a
                 // deferred sample request tears the process down instead, and the
-                // partial recording is still worth writing.
+                // partial recording is still worth writing. The reason is kept rather
+                // than dropped, because without it the only thing that reaches the user
+                // is that the sink processed no samples — which is the symptom of every
+                // failure on this path and the cause of none of them.
+                video.Fail(exception);
                 request.Sample = null;
             }
             finally
@@ -344,18 +313,42 @@ public sealed class ScreenRecorder : IDisposable
 
         if (!prepared.CanTranscode)
         {
+            output.Dispose();
+            Discard(path);
             throw new InvalidOperationException(
                 $"Windows cannot record to MP4 on this machine: {prepared.FailureReason}.");
         }
 
-        await prepared.TranscodeAsync();
+        try
+        {
+            await prepared.TranscodeAsync();
+        }
+        catch (Exception exception)
+        {
+            // Closed before the file is removed, because it is still open for writing
+            // here. A failed recording must not be left on disk: a nought-byte file in
+            // the pictures folder is indistinguishable from one that worked until it is
+            // opened, and the panel has already said where it went.
+            output.Dispose();
+            Discard(path);
+
+            throw new InvalidOperationException(
+                $"Windows would not finish the recording: {(video.Failure ?? exception).Message}"
+                    + $" ({video.Kept} frames captured, {video.Repeated} repeated while the screen"
+                    + $" was still, {frames.Dropped} dropped, over {frames.Elapsed:mm\\:ss})",
+                video.Failure ?? exception);
+        }
 
         // Closed here rather than left to the using below, because closing is what finishes
         // the files each source was kept in — until then they carry the length they were
         // opened with, which is none, and the result would name a pair nothing can read.
         track?.Dispose();
 
-        return new RecordingResult(path, frames.Elapsed, kept, frames.Dropped, track?.SeparateTracks);
+        DiagnosticLog.Verbose(
+            $"recorded {video.Kept} frames ({video.Repeated} repeated, {frames.Dropped} dropped)"
+                + $" over {frames.Elapsed:mm\\:ss}");
+
+        return new RecordingResult(path, frames.Elapsed, video.Kept, frames.Dropped, track?.SeparateTracks);
     }
 
     /// <summary>
@@ -558,16 +551,45 @@ public sealed class ScreenRecorder : IDisposable
                 throw new InvalidOperationException("The display changed size under the recording.");
             }
 
-            var pixels = new byte[checked(bitmap.PixelWidth * bitmap.PixelHeight * 4)];
-            bitmap.CopyToBuffer(pixels.AsBuffer());
+            var length = checked(bitmap.PixelWidth * bitmap.PixelHeight * 4);
+            var pixels = ArrayPool<byte>.Shared.Rent(length);
+            try
+            {
+                bitmap.CopyToBuffer(pixels.AsBuffer(0, length));
+                return CutOut(bitmap.PixelWidth, bitmap.PixelHeight, pixels, length, crop);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(pixels);
+            }
+        }
+    }
 
-            var (_, _, cropped) = FrameTransforms.Crop(
-                bitmap.PixelWidth,
-                bitmap.PixelHeight,
-                pixels,
-                crop.AsRegion);
+    /// <summary>
+    /// The crop, as the buffer the encoder reads, out of a whole frame already in memory.
+    /// </summary>
+    /// <remarks>
+    /// Split out of the method above because it is where the spans are: a
+    /// <see cref="Span{T}"/> cannot be held across an <c>await</c>, and nothing here has
+    /// one to wait for.
+    /// </remarks>
+    private static IBuffer CutOut(int frameWidth, int frameHeight, byte[] pixels, int length, RecordedArea crop)
+    {
+        var cropped = ArrayPool<byte>.Shared.Rent(checked(crop.Width * crop.Height * 4));
+        try
+        {
+            FrameTransforms.CropInto(
+                frameWidth,
+                frameHeight,
+                pixels.AsSpan(0, length),
+                crop.AsRegion,
+                cropped.AsSpan(0, crop.Width * crop.Height * 4));
 
-            return AsEncoderBuffer(crop.Width, crop.Height, cropped);
+            return AsEncoderBuffer(crop.Width, crop.Height, cropped.AsSpan(0, crop.Width * crop.Height * 4));
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(cropped);
         }
     }
 
@@ -588,13 +610,48 @@ public sealed class ScreenRecorder : IDisposable
             var content = frame.ContentSize;
             using var bitmap = await SoftwareBitmap.CreateCopyFromSurfaceAsync(frame.Surface);
 
-            var pixels = new byte[checked(bitmap.PixelWidth * bitmap.PixelHeight * 4)];
-            bitmap.CopyToBuffer(pixels.AsBuffer());
+            var length = checked(bitmap.PixelWidth * bitmap.PixelHeight * 4);
+            var pixels = ArrayPool<byte>.Shared.Rent(length);
+            try
+            {
+                bitmap.CopyToBuffer(pixels.AsBuffer(0, length));
+                return FitIn(bitmap.PixelWidth, bitmap.PixelHeight, pixels, length, content, area);
+            }
+            finally
+            {
+                ArrayPool<byte>.Shared.Return(pixels);
+            }
+        }
+    }
 
-            return AsEncoderBuffer(
-                area.Width,
-                area.Height,
-                area.Fit(bitmap.PixelWidth, bitmap.PixelHeight, pixels, content.Width, content.Height));
+    /// <summary>
+    /// The pinned rectangle, as the buffer the encoder reads, out of a whole frame already
+    /// in memory. Split out for the reason <see cref="CutOut"/> is.
+    /// </summary>
+    private static IBuffer FitIn(
+        int frameWidth,
+        int frameHeight,
+        byte[] pixels,
+        int length,
+        SizeInt32 content,
+        WindowRecordingArea area)
+    {
+        var fitted = ArrayPool<byte>.Shared.Rent(checked(area.Width * area.Height * 4));
+        try
+        {
+            area.FitInto(
+                frameWidth,
+                frameHeight,
+                pixels.AsSpan(0, length),
+                content.Width,
+                content.Height,
+                fitted.AsSpan(0, area.Width * area.Height * 4));
+
+            return AsEncoderBuffer(area.Width, area.Height, fitted.AsSpan(0, area.Width * area.Height * 4));
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(fitted);
         }
     }
 
@@ -616,7 +673,7 @@ public sealed class ScreenRecorder : IDisposable
     /// thing that can be seen to work, and it costs one pass over a buffer that has
     /// already been copied twice by the time it gets here.
     /// </remarks>
-    private static IBuffer AsEncoderBuffer(int width, int height, byte[] topDownPixels) =>
+    private static IBuffer AsEncoderBuffer(int width, int height, ReadOnlySpan<byte> topDownPixels) =>
         FrameTransforms.FlipVertical(width, height, topDownPixels).AsBuffer();
 
     /// <summary>
@@ -728,6 +785,26 @@ public sealed class ScreenRecorder : IDisposable
     }
 
     /// <summary>
+    /// Removes the file a failed recording was being written to.
+    /// </summary>
+    /// <remarks>
+    /// Best effort: the caller is already on its way out with the reason the recording
+    /// failed, and replacing that with "and the file could not be deleted either" would
+    /// report the smaller of the two problems.
+    /// </remarks>
+    private static void Discard(string path)
+    {
+        try
+        {
+            File.Delete(path);
+        }
+        catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
+        {
+            DiagnosticLog.Write($"Could not remove the failed recording at '{path}': {exception.Message}");
+        }
+    }
+
+    /// <summary>
     /// The part of a display a recording keeps, in that display's own pixels.
     /// </summary>
     /// <remarks>
@@ -768,6 +845,204 @@ public sealed class ScreenRecorder : IDisposable
                     owner._running = null;
                 }
             }
+        }
+    }
+
+    /// <summary>
+    /// Turns a recording's frames into the samples the MP4 encoder asks for, and answers
+    /// a request that arrives while the screen is standing still.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The compositor delivers a frame when the content changes and at no other time, so
+    /// a recording of a window nobody is touching can go a minute without one. A sample
+    /// request cannot be left waiting for that. Holding a deferral open is only supported
+    /// while the app keeps saying so — <c>ReportSampleProgress</c>, roughly twice a second
+    /// — and a request held silently across a still screen is one the pipeline gives up
+    /// on. The recording then ends having delivered nothing, which is what
+    /// <c>MF_E_SINK_NO_SAMPLES_PROCESSED</c> and a nought-byte file were: a window or a
+    /// region that had not changed in the seconds after recording started.
+    /// </para>
+    /// <para>
+    /// So a still screen is answered with the frame before it, timestamped now. That is
+    /// also the only way the file comes out the length it was recorded for — a minute of a
+    /// motionless window is a minute of video, not two frames a minute apart — and it
+    /// costs the encoder almost nothing, because a frame identical to the last one is what
+    /// interframe compression is for.
+    /// </para>
+    /// </remarks>
+    private sealed class Mp4Frames(
+        FrameStream frames,
+        RecordedArea? crop,
+        WindowRecordingArea? follow,
+        TimeSpan interval) : IDisposable
+    {
+        /// <summary>
+        /// The last sample's pixels, for the buffer paths. An <see cref="IBuffer"/> is
+        /// read-only to everything downstream, so handing the same one over again is free.
+        /// </summary>
+        private IBuffer? _repeatable;
+
+        /// <summary>
+        /// The last sample's texture, for the path that hands surfaces straight to the
+        /// encoder. Held rather than disposed when the encoder is finished with it,
+        /// because that is what makes it repeatable; it goes when the next frame takes
+        /// its place, or when the recording ends.
+        /// </summary>
+        private Direct3D11CaptureFrame? _held;
+
+        /// <summary>
+        /// When the last sample handed over was taken, so that a repeat is only ever
+        /// given a timestamp later than it.
+        /// </summary>
+        /// <remarks>
+        /// The encoder is entitled to samples in increasing order and this is the one
+        /// place two could arrive out of it. It is also what a held recording does with
+        /// no further handling: pausing stops the clock, so every repeat during a pause
+        /// asks for a timestamp that is not later than the last, is refused, and becomes
+        /// a progress report instead — which is exactly the absence a pause is meant to
+        /// leave in the file.
+        /// </remarks>
+        private TimeSpan _delivered = TimeSpan.MinValue;
+
+        /// <summary>Frames the recording took from the compositor.</summary>
+        public int Kept { get; private set; }
+
+        /// <summary>Frames sent again because the screen had not changed.</summary>
+        public int Repeated { get; private set; }
+
+        /// <summary>What went wrong first, or null. See <see cref="Fail"/>.</summary>
+        public Exception? Failure { get; private set; }
+
+        /// <summary>
+        /// The sample for <paramref name="request"/>, or null once the recording has
+        /// stopped and everything captured has been handed over.
+        /// </summary>
+        public async Task<MediaStreamSample?> NextAsync(MediaStreamSourceSampleRequest request)
+        {
+            while (true)
+            {
+                if (await frames.NextAsync(interval) is { } timed)
+                {
+                    Kept++;
+                    return await KeepAsync(timed);
+                }
+
+                if (frames.IsFinished)
+                {
+                    // No sample is how a MediaStreamSource is told the stream is over,
+                    // which is what finishes the file.
+                    return null;
+                }
+
+                if (Repeat() is { } again)
+                {
+                    return again;
+                }
+
+                // Nothing to send: either the compositor has not delivered its first
+                // frame yet, or the recording is being held. Saying so every frame is
+                // what keeps the request alive across it — the documented interval is
+                // every 500ms, and this is well inside that.
+                request.ReportSampleProgress(0);
+            }
+        }
+
+        /// <summary>
+        /// Records why a sample could not be made. The first one is kept rather than the
+        /// last: everything after the first failure is a consequence of it.
+        /// </summary>
+        public void Fail(Exception exception) => Failure ??= exception;
+
+        public void Dispose()
+        {
+            _held?.Dispose();
+            _held = null;
+        }
+
+        private async Task<MediaStreamSample> KeepAsync(TimedFrame timed)
+        {
+            if (follow is { } area)
+            {
+                // Through main memory for the same reason a crop is, and for one more:
+                // the window may not be the size it was, and only a fitted buffer is
+                // still the size the stream was told.
+                return Remember(await FitToBufferAsync(timed.Frame, area), timed.Timestamp);
+            }
+
+            if (crop is { } cropper)
+            {
+                // A copy rather than the texture: the encoder is being handed a rectangle
+                // that does not exist on the GPU. The frame is finished with the moment
+                // the pixels are in memory.
+                return Remember(await CropToBufferAsync(timed.Frame, cropper), timed.Timestamp);
+            }
+
+            _repeatable = null;
+            _held?.Dispose();
+            _held = timed.Frame;
+
+            return Surface(timed.Frame, timed.Timestamp);
+        }
+
+        private MediaStreamSample Remember(IBuffer buffer, TimeSpan timestamp)
+        {
+            _held?.Dispose();
+            _held = null;
+            _repeatable = buffer;
+
+            return Sample(buffer, timestamp);
+        }
+
+        /// <summary>
+        /// The last frame again, at now — or null when now is not later than the sample
+        /// already handed over, which is the caller's cue to wait rather than send.
+        /// </summary>
+        private MediaStreamSample? Repeat()
+        {
+            var at = frames.Elapsed;
+            if (at <= _delivered)
+            {
+                return null;
+            }
+
+            if (_repeatable is { } buffer)
+            {
+                Repeated++;
+                return Sample(buffer, at);
+            }
+
+            if (_held is { } frame)
+            {
+                Repeated++;
+                return Surface(frame, at);
+            }
+
+            return null;
+        }
+
+        /// <remarks>
+        /// The duration is set for the reason the audio track has always set its own: an
+        /// uncompressed sample without one leaves the encoder to work it out from the
+        /// sample after, and the last sample of a recording has none. The picture had
+        /// never set it.
+        /// </remarks>
+        private MediaStreamSample Sample(IBuffer buffer, TimeSpan timestamp)
+        {
+            _delivered = timestamp;
+
+            var sample = MediaStreamSample.CreateFromBuffer(buffer, timestamp);
+            sample.Duration = interval;
+            return sample;
+        }
+
+        private MediaStreamSample Surface(Direct3D11CaptureFrame frame, TimeSpan timestamp)
+        {
+            _delivered = timestamp;
+
+            var sample = MediaStreamSample.CreateFromDirect3D11Surface(frame.Surface, timestamp);
+            sample.Duration = interval;
+            return sample;
         }
     }
 
@@ -877,6 +1152,11 @@ public sealed class ScreenRecorder : IDisposable
         }
 
         /// <summary>
+        /// Whether the recording has stopped and everything it captured has been taken.
+        /// </summary>
+        public bool IsFinished => _frames.Reader.Completion.IsCompleted;
+
+        /// <summary>
         /// The next frame, or null once the recording has stopped and the queue has
         /// been emptied. The caller owns the frame it is given.
         /// </summary>
@@ -891,6 +1171,41 @@ public sealed class ScreenRecorder : IDisposable
             }
 
             return null;
+        }
+
+        /// <summary>
+        /// The next frame, or null when none arrived within <paramref name="wait"/>
+        /// <em>and</em> null once the recording is over — <see cref="IsFinished"/> tells
+        /// the two apart. The caller owns the frame it is given.
+        /// </summary>
+        /// <remarks>
+        /// A still screen produces no frames at all, so the MP4 path cannot wait for one
+        /// indefinitely; see <see cref="Mp4Frames"/>. The GIF path can, and uses the
+        /// overload above: a GIF says how long each frame was on screen, so a motionless
+        /// stretch is one frame with a long delay rather than a run of identical ones.
+        /// </remarks>
+        public async Task<TimedFrame?> NextAsync(TimeSpan wait)
+        {
+            // Tried before anything is allocated, because a recording of something that
+            // is moving — which is most of them — has a frame ready every time.
+            if (_frames.Reader.TryRead(out var ready))
+            {
+                return ready;
+            }
+
+            using var timeout = new CancellationTokenSource(wait);
+            try
+            {
+                return await _frames.Reader.ReadAsync(timeout.Token);
+            }
+            catch (OperationCanceledException)
+            {
+                return null;
+            }
+            catch (ChannelClosedException)
+            {
+                return null;
+            }
         }
 
         public void Dispose()

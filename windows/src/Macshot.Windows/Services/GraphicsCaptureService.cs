@@ -52,6 +52,17 @@ public sealed class GraphicsCaptureService : IDisposable
     /// <summary>D3D11_CREATE_DEVICE_BGRA_SUPPORT, which the WinRT interop requires.</summary>
     private const uint BgraSupport = 0x20;
 
+    /// <summary><c>D3D11_CREATE_DEVICE_VIDEO_SUPPORT</c>.</summary>
+    private const uint VideoSupport = 0x800;
+
+    /// <summary>
+    /// What the device is created with. BGRA because that is the format every capture
+    /// arrives in, and video support because a recording hands this device's textures to
+    /// Media Foundation's H.264 encoder — a device made without it can be refused by the
+    /// video processor the pipeline puts in front of that encoder.
+    /// </summary>
+    private const uint DeviceFlags = BgraSupport | VideoSupport;
+
     private const uint SdkVersion = 7;
 
     private static readonly Guid DxgiDeviceId = new("54ec77fa-1377-44e6-8c32-88fd5f44c84c");
@@ -64,6 +75,9 @@ public sealed class GraphicsCaptureService : IDisposable
 
     /// <summary>IID of <c>IGraphicsCaptureItem</c>, the interface the interop hands back.</summary>
     private static readonly Guid CaptureItemId = new("79c3f95b-31f7-4ec2-a464-632ef5d30760");
+
+    /// <summary>IID of <c>ID3D10Multithread</c>, which a D3D11 device also answers to.</summary>
+    private static readonly Guid MultithreadId = new("9b7e4e00-342c-4106-a19f-4f2704f689f0");
 
     private IDirect3DDevice? _device;
     private bool _disposed;
@@ -243,6 +257,46 @@ public sealed class GraphicsCaptureService : IDisposable
     }
 
     /// <summary>
+    /// Makes the device safe to touch from more than one thread, which is what a
+    /// recording does with it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The frame pool's callback runs on the compositor's thread while Media Foundation
+    /// reads the same device's textures on its own, and a D3D11 device is not thread-safe
+    /// unless it is asked to be. Nothing enforces it: an unprotected device works until
+    /// two threads meet inside it, which is the shape of a recording that fails on one
+    /// machine and not another. A screenshot never needed it — one capture, one thread —
+    /// so it was never set.
+    /// </para>
+    /// <para>
+    /// Through the vtable for the reason <see cref="CreateCaptureItem"/> gives.
+    /// <c>SetMultithreadProtected</c> is the third method after IUnknown's three, and it
+    /// answers the setting it replaced rather than an <c>HRESULT</c>, so there is nothing
+    /// to check. A device that does not offer the interface is left as it was.
+    /// </para>
+    /// </remarks>
+    private static void ProtectAcrossThreads(nint device)
+    {
+        var multithreadId = MultithreadId;
+        if (Marshal.QueryInterface(device, in multithreadId, out var multithread) < 0)
+        {
+            return;
+        }
+
+        try
+        {
+            var vtable = Marshal.ReadIntPtr(multithread);
+            var method = Marshal.ReadIntPtr(vtable, 5 * IntPtr.Size);
+            Marshal.GetDelegateForFunctionPointer<SetMultithreadProtected>(method)(multithread, 1);
+        }
+        finally
+        {
+            Marshal.Release(multithread);
+        }
+    }
+
+    /// <summary>
     /// The <c>GraphicsCaptureItem</c> activation factory, already narrowed to the interop
     /// interface. Caller releases.
     /// </summary>
@@ -333,7 +387,7 @@ public sealed class GraphicsCaptureService : IDisposable
             IntPtr.Zero,
             DriverTypeHardware,
             IntPtr.Zero,
-            BgraSupport,
+            DeviceFlags,
             IntPtr.Zero,
             0,
             SdkVersion,
@@ -349,7 +403,7 @@ public sealed class GraphicsCaptureService : IDisposable
                 IntPtr.Zero,
                 DriverTypeWarp,
                 IntPtr.Zero,
-                BgraSupport,
+                DeviceFlags,
                 IntPtr.Zero,
                 0,
                 SdkVersion,
@@ -359,6 +413,8 @@ public sealed class GraphicsCaptureService : IDisposable
         }
 
         Marshal.ThrowExceptionForHR(result);
+
+        ProtectAcrossThreads(d3dDevice);
 
         try
         {
@@ -417,6 +473,13 @@ public sealed class GraphicsCaptureService : IDisposable
     /// </summary>
     [UnmanagedFunctionPointer(CallingConvention.StdCall)]
     private delegate int CreateCaptureItemForHandle(IntPtr self, IntPtr handle, in Guid iid, out IntPtr item);
+
+    /// <summary>
+    /// <c>ID3D10Multithread::SetMultithreadProtected</c>, which answers the setting it
+    /// replaced rather than an <c>HRESULT</c>.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    private delegate int SetMultithreadProtected(IntPtr self, int protect);
 
     [DllImport("combase.dll", ExactSpelling = true)]
     private static extern int WindowsCreateString(
