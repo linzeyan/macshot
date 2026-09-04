@@ -202,28 +202,75 @@ public static class FrameTransforms
         ReadOnlySpan<byte> bgraPixels,
         CaptureRegion region)
     {
-        Validate(width, height, bgraPixels);
+        var (croppedWidth, croppedHeight) = CropSize(width, height, region);
+        var output = new byte[checked(croppedWidth * croppedHeight * 4)];
+        CropInto(width, height, bgraPixels, region, output);
+        return (croppedWidth, croppedHeight, output);
+    }
+
+    /// <summary>
+    /// The size <see cref="Crop"/> would produce, so a caller can have the buffer ready
+    /// before the pixels are.
+    /// </summary>
+    public static (int Width, int Height) CropSize(int width, int height, CaptureRegion region)
+    {
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(width);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(height);
 
         var left = Math.Clamp((int)Math.Floor(region.X), 0, width);
         var top = Math.Clamp((int)Math.Floor(region.Y), 0, height);
         var right = Math.Clamp((int)Math.Ceiling(region.Right), left, width);
         var bottom = Math.Clamp((int)Math.Ceiling(region.Bottom), top, height);
 
-        var croppedWidth = right - left;
-        var croppedHeight = bottom - top;
-        if (croppedWidth <= 0 || croppedHeight <= 0)
+        if (right - left <= 0 || bottom - top <= 0)
         {
             throw new ArgumentException("The crop region does not overlap the frame.", nameof(region));
         }
 
-        var output = new byte[checked(croppedWidth * croppedHeight * 4)];
-        for (var row = 0; row < croppedHeight; row++)
+        return (right - left, bottom - top);
+    }
+
+    /// <summary>
+    /// <see cref="Crop"/> into a buffer the caller already has, rather than into one of
+    /// its own.
+    /// </summary>
+    /// <remarks>
+    /// For the callers that run once per frame of a recording. A crop the size of a 1080p
+    /// display is eight megabytes, which is past the large object heap's threshold by two
+    /// orders of magnitude; thirty of those a second is a recording that spends its time
+    /// collecting rather than encoding. With this the buffer can come from a pool and be
+    /// given back when the frame has been handed over.
+    /// </remarks>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="destination"/> is not exactly the size of the crop. Silently
+    /// filling part of a buffer would hand the encoder a frame with the last one's pixels
+    /// still in the rest of it.
+    /// </exception>
+    public static void CropInto(
+        int width,
+        int height,
+        ReadOnlySpan<byte> bgraPixels,
+        CaptureRegion region,
+        Span<byte> destination)
+    {
+        Validate(width, height, bgraPixels);
+
+        var (croppedWidth, croppedHeight) = CropSize(width, height, region);
+        if (destination.Length != checked(croppedWidth * croppedHeight * 4))
         {
-            var from = ((top + row) * width + left) * 4;
-            bgraPixels.Slice(from, croppedWidth * 4).CopyTo(output.AsSpan(row * croppedWidth * 4));
+            throw new ArgumentException(
+                $"A {croppedWidth}x{croppedHeight} crop needs {croppedWidth * croppedHeight * 4} bytes.",
+                nameof(destination));
         }
 
-        return (croppedWidth, croppedHeight, output);
+        var left = Math.Clamp((int)Math.Floor(region.X), 0, width);
+        var top = Math.Clamp((int)Math.Floor(region.Y), 0, height);
+
+        for (var row = 0; row < croppedHeight; row++)
+        {
+            var from = (((top + row) * width) + left) * 4;
+            bgraPixels.Slice(from, croppedWidth * 4).CopyTo(destination[(row * croppedWidth * 4)..]);
+        }
     }
 
     /// <summary>

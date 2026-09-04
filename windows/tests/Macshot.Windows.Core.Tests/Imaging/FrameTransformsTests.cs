@@ -154,6 +154,53 @@ public sealed class FrameTransformsTests
             () => FrameTransforms.Crop(8, 8, Numbered(8, 8), new CaptureRegion(20, 20, 4, 4)));
     }
 
+    /// <summary>
+    /// A recording crops every frame, and a buffer it can reuse is the difference between
+    /// a few pooled allocations and eight megabytes a frame going to the large object
+    /// heap. It only helps if it produces the same pixels as the allocating one.
+    /// </summary>
+    [TestMethod]
+    public void CropInto_WritesWhatCropWouldHaveAllocated()
+    {
+        var region = new CaptureRegion(2, 3, 4, 2);
+        var (width, height, expected) = FrameTransforms.Crop(8, 8, Numbered(8, 8), region);
+
+        var destination = new byte[width * height * 4];
+        FrameTransforms.CropInto(8, 8, Numbered(8, 8), region, destination);
+
+        CollectionAssert.AreEqual(expected, destination);
+    }
+
+    /// <summary>
+    /// The size has to be answerable before the pixels are, or the caller cannot have the
+    /// buffer ready to crop into.
+    /// </summary>
+    [TestMethod]
+    public void CropSize_AnswersWhatCropWouldProduce()
+    {
+        var region = new CaptureRegion(6, 6, 40, 40);
+        var (width, height, _) = FrameTransforms.Crop(8, 8, Numbered(8, 8), region);
+
+        Assert.AreEqual((width, height), FrameTransforms.CropSize(8, 8, region));
+    }
+
+    /// <summary>
+    /// A pooled buffer arrives holding the last frame's pixels. Filling only part of one
+    /// and handing it to the encoder would put a band of the previous frame down the side
+    /// of this one, so a destination of the wrong size is refused rather than partly used.
+    /// </summary>
+    [TestMethod]
+    public void CropInto_RefusesABufferThatIsNotTheCropsSize()
+    {
+        Assert.ThrowsException<ArgumentException>(
+            () => FrameTransforms.CropInto(
+                8,
+                8,
+                Numbered(8, 8),
+                new CaptureRegion(2, 3, 4, 2),
+                new byte[4 * 2 * 4 - 4]));
+    }
+
     [TestMethod]
     public void FlipPoint_PutsAnAnnotationWhereItsPixelsWent()
     {

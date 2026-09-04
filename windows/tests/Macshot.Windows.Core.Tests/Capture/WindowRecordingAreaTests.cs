@@ -136,4 +136,42 @@ public sealed class WindowRecordingAreaTests
 
         Assert.ThrowsException<ArgumentException>(() => area.Fit(4, 4, new byte[16], 4, 4));
     }
+
+    /// <summary>
+    /// A window recording fits every frame, so the buffer it fits into comes from a pool.
+    /// A pooled buffer arrives holding the last frame, and the band a shrunken window
+    /// leaves behind is defined to be empty — so this has to clear what it is given
+    /// rather than only write where the window is.
+    /// </summary>
+    [TestMethod]
+    public void FitInto_ClearsTheBandRatherThanLeavingTheLastFrameInIt()
+    {
+        var area = new WindowRecordingArea(0, 0, 4, 2);
+        var frame = new byte[4 * 2 * 4];
+        Array.Fill(frame, (byte)0xEE);
+
+        var destination = new byte[4 * 2 * 4];
+        Array.Fill(destination, (byte)0x77);
+
+        area.FitInto(4, 2, frame, 2, 1, destination);
+
+        Assert.AreEqual(0xEE, destination[0]);
+        Assert.AreEqual(0xEE, destination[4]);
+        Assert.AreEqual(0, destination[8]);
+        Assert.AreEqual(0, destination[16]);
+    }
+
+    /// <summary>
+    /// Same reason as <see cref="FitInto_ClearsTheBandRatherThanLeavingTheLastFrameInIt"/>:
+    /// a destination of the wrong size would leave part of the previous frame in the
+    /// sample handed to the encoder.
+    /// </summary>
+    [TestMethod]
+    public void FitInto_RefusesABufferThatIsNotTheRecordedSize()
+    {
+        var area = new WindowRecordingArea(0, 0, 2, 2);
+
+        Assert.ThrowsException<ArgumentException>(
+            () => area.FitInto(4, 4, new byte[4 * 4 * 4], 4, 4, new byte[8]));
+    }
 }

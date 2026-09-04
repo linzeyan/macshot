@@ -95,6 +95,29 @@ public readonly record struct WindowRecordingArea(int Left, int Top, int Width, 
         int contentWidth,
         int contentHeight)
     {
+        var output = new byte[checked(Width * Height * 4)];
+        FitInto(frameWidth, frameHeight, bgraPixels, contentWidth, contentHeight, output);
+        return output;
+    }
+
+    /// <summary>
+    /// <see cref="Fit"/> into a buffer the caller already has, rather than into one of its
+    /// own — see <see cref="Imaging.FrameTransforms.CropInto"/> for why a recording wants
+    /// that.
+    /// </summary>
+    /// <remarks>
+    /// The destination is cleared first rather than only where nothing is written. A
+    /// pooled buffer arrives holding whatever the last frame left in it, so the band beside
+    /// a shrunken window would show that frame instead of the emptiness this promises.
+    /// </remarks>
+    public void FitInto(
+        int frameWidth,
+        int frameHeight,
+        ReadOnlySpan<byte> bgraPixels,
+        int contentWidth,
+        int contentHeight,
+        Span<byte> destination)
+    {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(frameWidth);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(frameHeight);
         ArgumentOutOfRangeException.ThrowIfNegative(Left);
@@ -109,23 +132,28 @@ public readonly record struct WindowRecordingArea(int Left, int Top, int Width, 
                 nameof(bgraPixels));
         }
 
-        var output = new byte[checked(Width * Height * 4)];
+        if (destination.Length != checked(Width * Height * 4))
+        {
+            throw new ArgumentException(
+                $"A {Width}x{Height} window recording needs {Width * Height * 4} bytes.",
+                nameof(destination));
+        }
+
+        destination.Clear();
 
         var right = Math.Min(Left + Width, Math.Min(contentWidth, frameWidth));
         var bottom = Math.Min(Top + Height, Math.Min(contentHeight, frameHeight));
         var kept = right - Left;
         if (kept <= 0 || bottom <= Top)
         {
-            return output;
+            return;
         }
 
         for (var row = Top; row < bottom; row++)
         {
             var from = ((row * frameWidth) + Left) * 4;
-            bgraPixels.Slice(from, kept * 4).CopyTo(output.AsSpan((row - Top) * Width * 4));
+            bgraPixels.Slice(from, kept * 4).CopyTo(destination[((row - Top) * Width * 4)..]);
         }
-
-        return output;
     }
 
     /// <summary>
