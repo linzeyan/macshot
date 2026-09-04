@@ -88,8 +88,11 @@ public sealed partial class EditorWindow : Window
     /// interleave confusingly because an operation empties one of them.
     /// The frame is not one of these. It is a layer the delivered pixels are taken through,
     /// so it is taken back off by turning it off rather than by undoing it.
+    /// A list rather than a stack because the oldest end is trimmed as well as the newest
+    /// pushed — <see cref="ImageUndoBudget"/> says what it may weigh, and why it has to be
+    /// asked here when macOS never asks.
     /// </remarks>
-    private readonly Stack<(CapturedFrame Frame, Annotation[] Annotations)> _imageUndo = new();
+    private readonly List<(CapturedFrame Frame, Annotation[] Annotations)> _imageUndo = [];
 
     private CapturedFrame _frame;
 
@@ -1192,10 +1195,13 @@ public sealed partial class EditorWindow : Window
             return;
         }
 
-        if (!_imageUndo.TryPop(out var previous))
+        if (_imageUndo.Count == 0)
         {
             return;
         }
+
+        var previous = _imageUndo[^1];
+        _imageUndo.RemoveAt(_imageUndo.Count - 1);
 
         _frame = previous.Frame;
         _editor.Document.Reset(previous.Annotations);
@@ -1412,7 +1418,7 @@ public sealed partial class EditorWindow : Window
             var flattened = AnnotationCanvas.ToFrame() ?? _frame;
             var result = operation(flattened);
 
-            _imageUndo.Push((_frame, [.. _editor.Document.Annotations]));
+            Remember();
             _frame = result;
             _editor.Document.Reset();
             Present();
@@ -1425,6 +1431,27 @@ public sealed partial class EditorWindow : Window
         {
             HintText.Text = exception.Message;
         }
+    }
+
+    /// <summary>
+    /// Keeps the image as it is now, so the operation about to replace it can be undone,
+    /// and lets go of however much of the older history that pushes over the budget.
+    /// </summary>
+    private void Remember()
+    {
+        _imageUndo.Add((_frame, [.. _editor.Document.Annotations]));
+
+        var dropped = ImageUndoBudget.OldestToDrop(
+            [.. _imageUndo.Select(step => step.Frame.BgraPixels.LongLength)]);
+
+        if (dropped == 0)
+        {
+            return;
+        }
+
+        _imageUndo.RemoveRange(0, dropped);
+        DiagnosticLog.Verbose(
+            $"let go of {dropped} image undo step(s): the history was over {ImageUndoBudget.Bytes / (1024 * 1024)}MB");
     }
 
     /// <remarks>
