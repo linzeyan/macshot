@@ -3,6 +3,36 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.0] - 2026-09-05
+
+### Added
+
+- **macshot installs its own updates.** The Check for Updates item used to open the
+  downloads page and leave the rest to the user. It now asks once, fetches the right build
+  for this installation — the matching architecture, and the offline build for an offline
+  one — shows how far the download has got, puts it in place of the running one and starts
+  it again. Where it cannot, it says why and still opens the page: an MSIX is Windows's to
+  replace, and a macshot in Program Files would need administrator rights that a
+  notification-area app has no business asking for.
+
+### Fixed
+
+- **A recording could end with a warning and a file of nothing in it.** macshot asked
+  Windows for a video sample and then waited silently for the screen to change; Windows
+  gives a still screen no frames at all, so the wait had no end and the encoder gave up
+  having written nothing. Measured on a quiet desktop, nine sample requests in ten arrived
+  with nothing new to show. A still screen now repeats the frame it is still showing,
+  which is what a recording of it is, and a recording that does fail says what went wrong
+  and takes the empty file with it rather than leaving it to be found later.
+- **Recording held three copies of every frame** where one will do, and each was newly
+  allocated — a minute of 30fps was eighteen hundred allocations of the size of the screen.
+- **Editing a large capture grew without limit.** Every crop, flip or rotate kept the
+  whole picture it replaced so it could be undone, and nothing ever let one go: a dozen
+  operations on a 4K screenshot was most of a gigabyte the app would not give back. The
+  history is now held to a memory budget rather than to no limit — six hundred steps at an
+  ordinary capture size, fifteen at 4K, and never fewer than the one that would be undone
+  next.
+
 ## [0.7.0] - 2026-09-04
 
 ### Added
