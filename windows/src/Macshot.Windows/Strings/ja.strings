@@ -43,6 +43,8 @@
 "Dark" = "ダーク";
 "Diagnostics" = "診断";
 "Downloaded model" = "ダウンロードしたモデル";
+"Downloading macshot %@..." = "macshot %@ をダウンロード中…";
+"Downloading macshot %@... %d%%" = "macshot %@ をダウンロード中… %d%%";
 "Drag the part to keep • Esc to stop cropping" = "残す部分をドラッグ • Esc でトリミング終了";
 "Draw the capture as a window, or on its own" = "キャプチャをウインドウとして描くか、単体で描くか";
 "Draw to annotate • Ctrl+Z undo • Ctrl+S save • Ctrl+C copy" = "描いて注釈 • Ctrl+Z 取り消し • Ctrl+S 保存 • Ctrl+C コピー";
@@ -71,9 +73,11 @@
 "How the region is covered" = "領域の覆い方";
 "How the shape is filled" = "図形の塗りつぶし方";
 "imgbb cannot take videos — choose another provider in Settings" = "imgbb は動画に対応していません — 「設定」で別のサービスを選んでください";
+"Install it and restart macshot?" = "インストールして macshot を再起動しますか？";
 "Keystrokes:" = "キー入力:";
 "Larger" = "大きく";
 "Light" = "ライト";
+"macshot cannot write to its own folder, so it cannot update itself." = "macshot は自身のフォルダーに書き込めないため、自動で更新できません。";
 "macshot could not bring that window forward to scroll it." = "macshot はスクロールのためにそのウインドウを前面に出せませんでした。";
 "macshot could not bring that window forward." = "macshot はそのウインドウを前面に出せませんでした。";
 "macshot could not open '{0}': {1}" = "macshot は「{0}」を開けませんでした：{1}";
@@ -81,6 +85,7 @@
 "macshot could not open that recording: {0}" = "macshot はその収録を開けませんでした：{0}";
 "macshot has no capture called '{0}' in its history." = "macshot の履歴に「{0}」というキャプチャはありません。";
 "macshot is already running. Its icon is in the notification area, at the right-hand end of the taskbar." = "macshot はすでに実行中です。アイコンはタスクバー右端の通知領域にあります。";
+"macshot was installed from a package, so Windows installs its updates." = "macshot はパッケージからインストールされているため、更新は Windows が行います。";
 "macshot's own icon" = "macshot 自身のアイコン";
 "Move the region with the pointer • Click to place it • Esc to leave it" = "ポインタで範囲を移動 • クリックで確定 • Esc でそのまま";
 "No captures yet. Every capture macshot saves appears here." = "まだ取り込みがありません。macshot が保存した取り込みはすべてここに表示されます。";
@@ -105,6 +110,7 @@
 "Remove Background needs a Copilot+ PC and an installed build of macshot." = "「背景を削除」には Copilot+ PC と、インストール済みの macshot が必要です。";
 "Remove Background:" = "背景を削除:";
 "Removing background..." = "背景を削除中…";
+"Restarting macshot..." = "macshot を再起動しています…";
 "S3 error ({0}): {1}" = "S3 エラー（{0}）：{1}";
 "S3 not configured — check Settings" = "S3 が未設定です — 「設定」を確認してください";
 "Saved" = "保存しました";
@@ -127,8 +133,10 @@
 "The background removal model could not be downloaded. Check the connection and try again." = "背景を削除するモデルをダウンロードできませんでした。接続を確認して、もう一度お試しください。";
 "The background removal model could not be prepared." = "背景削除モデルを準備できませんでした。";
 "The background removal model that arrived was not the expected file, so it was discarded." = "届いた背景削除モデルが想定したファイルではなかったため、破棄しました。";
+"The downloaded macshot would not start." = "ダウンロードした macshot を起動できませんでした。";
 "The translation failed." = "翻訳に失敗しました。";
 "The translation service did not answer in time." = "翻訳サービスから時間内に応答がありませんでした。";
+"The update could not be installed." = "アップデートをインストールできませんでした。";
 "There is no text to translate." = "翻訳するテキストがありません。";
 "There is no window behind that region to scroll" = "その範囲の後ろにスクロールできるウインドウがありません";
 "Took {0}" = "{0} を取得";

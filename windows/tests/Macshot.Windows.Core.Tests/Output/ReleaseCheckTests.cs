@@ -216,8 +216,147 @@ public sealed class ReleaseCheckTests
         Assert.AreEqual("v3.9.0", releases[0].Tag);
         Assert.IsFalse(releases[0].PreRelease);
         Assert.AreEqual(2, releases[0].Assets.Count);
-        Assert.AreEqual("Macshot-Windows-3.9.0.msi", releases[0].Assets[0]);
+        Assert.AreEqual("Macshot-Windows-3.9.0.msi", releases[0].Assets[0].Name);
     }
+
+    /// <summary>
+    /// The name alone was enough while the answer was "open the download page". It is not
+    /// enough to fetch one, and the two extra fields have to survive the parse or an
+    /// update can be offered and then not downloaded.
+    /// </summary>
+    [TestMethod]
+    public void AnAssetCarriesWhereToFetchItAndHowLargeItShouldBe()
+    {
+        const string Json = """
+        [
+          {
+            "tag_name": "v1.0.0",
+            "html_url": "https://example.invalid/1",
+            "assets": [
+              {
+                "name": "macshot-1.0.0-win-x64.zip",
+                "browser_download_url": "https://example.invalid/macshot-1.0.0-win-x64.zip",
+                "size": 164823552
+              }
+            ]
+          }
+        ]
+        """;
+
+        var asset = ReleaseCheck.Parse(Json)[0].Assets[0];
+
+        Assert.AreEqual("https://example.invalid/macshot-1.0.0-win-x64.zip", asset.Url);
+        Assert.AreEqual(164823552, asset.Size);
+    }
+
+    /// <summary>
+    /// An older release, or one attached by hand, may carry no download URL. Offering it
+    /// would start a download of nothing, so it is not a file this build can install.
+    /// </summary>
+    [TestMethod]
+    public void AnAssetWithNowhereToFetchItFromIsNotDownloadable()
+    {
+        var release = new ReleaseListing(
+            "v1.0.0",
+            false,
+            Page,
+            [new ReleaseAsset("macshot-1.0.0-win-x64.zip", string.Empty, 0)]);
+
+        Assert.IsNull(ReleaseCheck.Download(release, offline: false, "x64"));
+    }
+
+    /// <summary>
+    /// Architecture had nowhere to be expressed while the answer was a page to open, and
+    /// every release carries both — so without this an arm64 machine downloads the x64
+    /// build and runs the rest of its life under emulation.
+    /// </summary>
+    [TestMethod]
+    public void TheDownloadIsTheBuildForThisMachinesArchitecture()
+    {
+        var release = Downloadable("v1.0.0");
+
+        Assert.AreEqual(
+            "macshot-1.0.0-win-arm64.zip",
+            ReleaseCheck.Download(release, offline: false, "arm64")?.Name);
+
+        Assert.AreEqual(
+            "macshot-1.0.0-win-x64.zip",
+            ReleaseCheck.Download(release, offline: false, "x64")?.Name);
+
+        Assert.AreEqual(
+            "macshot-Offline-1.0.0-win-arm64.zip",
+            ReleaseCheck.Download(release, offline: true, "arm64")?.Name);
+    }
+
+    /// <summary>
+    /// "arm64" ends in "64". A contains-test for the running architecture would hand an
+    /// arm64 machine the x64 build and call it an exact match, which is the failure this
+    /// pins.
+    /// </summary>
+    [TestMethod]
+    public void ArmIsNotMistakenForIntel()
+    {
+        var armOnly = new ReleaseListing(
+            "v1.0.0",
+            false,
+            Page,
+            [Asset("macshot-1.0.0-win-arm64.zip")]);
+
+        Assert.IsNull(ReleaseCheck.Download(armOnly, offline: false, "x64"));
+    }
+
+    /// <summary>
+    /// x64 runs on arm64 Windows under emulation and arm64 does not run on x64 at all, so
+    /// a release missing this machine's own build is still worth taking on an arm64
+    /// machine and is nothing on an x64 one.
+    /// </summary>
+    [TestMethod]
+    public void AnArmMachineFallsBackToTheIntelBuildRatherThanToNothing()
+    {
+        var intelOnly = new ReleaseListing(
+            "v1.0.0",
+            false,
+            Page,
+            [Asset("macshot-1.0.0-win-x64.zip")]);
+
+        Assert.AreEqual(
+            "macshot-1.0.0-win-x64.zip",
+            ReleaseCheck.Download(intelOnly, offline: false, "arm64")?.Name);
+    }
+
+    /// <summary>
+    /// The MSIX is an installer Windows runs, not a folder macshot can copy over itself,
+    /// and no release carries a signed one. Downloading it would leave the user with a
+    /// file they cannot install.
+    /// </summary>
+    [TestMethod]
+    public void TheInstallerIsNotWhatGetsDownloaded()
+    {
+        var release = new ReleaseListing(
+            "v1.0.0",
+            false,
+            Page,
+            [Asset("macshot-1.0.0-win-x64.msix"), Asset("macshot-1.0.0-win-x64.zip")]);
+
+        Assert.AreEqual(
+            "macshot-1.0.0-win-x64.zip",
+            ReleaseCheck.Download(release, offline: false, "x64")?.Name);
+    }
+
+    private static ReleaseListing Downloadable(string tag) =>
+        new(
+            tag,
+            false,
+            Page,
+            [
+                Asset("macshot-1.0.0-win-x64.zip"),
+                Asset("macshot-1.0.0-win-arm64.zip"),
+                Asset("macshot-Offline-1.0.0-win-x64.zip"),
+                Asset("macshot-Offline-1.0.0-win-arm64.zip"),
+                Asset("MacShot.dmg"),
+            ]);
+
+    private static ReleaseAsset Asset(string name) => new(name, $"{Page}/{name}", 1024);
 
     /// <summary>
     /// An answer that is not a release list — a rate-limit object, an error page, a
@@ -234,5 +373,5 @@ public sealed class ReleaseCheckTests
     }
 
     private static ReleaseListing Release(string tag, string[] assets, bool preRelease = false) =>
-        new(tag, preRelease, Page, assets);
+        new(tag, preRelease, Page, [.. assets.Select(name => new ReleaseAsset(name, $"{Page}/{name}", 0))]);
 }

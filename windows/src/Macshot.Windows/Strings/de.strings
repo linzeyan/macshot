@@ -43,6 +43,8 @@
 "Dark" = "Dunkel";
 "Diagnostics" = "Diagnose";
 "Downloaded model" = "Heruntergeladenes Modell";
+"Downloading macshot %@..." = "macshot %@ wird geladen …";
+"Downloading macshot %@... %d%%" = "macshot %@ wird geladen … %d%%";
 "Drag the part to keep • Esc to stop cropping" = "Den zu behaltenden Teil ziehen • Esc beendet das Zuschneiden";
 "Draw the capture as a window, or on its own" = "Die Aufnahme als Fenster oder für sich allein zeichnen";
 "Draw to annotate • Ctrl+Z undo • Ctrl+S save • Ctrl+C copy" = "Zeichnen zum Annotieren • Ctrl+Z widerrufen • Ctrl+S sichern • Ctrl+C kopieren";
@@ -71,9 +73,11 @@
 "How the region is covered" = "Wie der Bereich abgedeckt wird";
 "How the shape is filled" = "Wie die Form gefüllt wird";
 "imgbb cannot take videos — choose another provider in Settings" = "imgbb nimmt keine Videos – wählen Sie in den Einstellungen einen anderen Anbieter";
+"Install it and restart macshot?" = "Installieren und macshot neu starten?";
 "Keystrokes:" = "Tastenanschläge:";
 "Larger" = "Größer";
 "Light" = "Hell";
+"macshot cannot write to its own folder, so it cannot update itself." = "macshot kann nicht in seinen eigenen Ordner schreiben und sich daher nicht selbst aktualisieren.";
 "macshot could not bring that window forward to scroll it." = "macshot konnte dieses Fenster nicht in den Vordergrund holen, um darin zu scrollen.";
 "macshot could not bring that window forward." = "macshot konnte dieses Fenster nicht in den Vordergrund holen.";
 "macshot could not open '{0}': {1}" = "macshot konnte „{0}“ nicht öffnen: {1}";
@@ -81,6 +85,7 @@
 "macshot could not open that recording: {0}" = "macshot konnte diese Aufnahme nicht öffnen: {0}";
 "macshot has no capture called '{0}' in its history." = "macshot hat in seinem Verlauf keine Aufnahme namens „{0}“.";
 "macshot is already running. Its icon is in the notification area, at the right-hand end of the taskbar." = "macshot läuft bereits. Sein Symbol befindet sich im Infobereich am rechten Ende der Taskleiste.";
+"macshot was installed from a package, so Windows installs its updates." = "macshot wurde aus einem Paket installiert, daher installiert Windows seine Updates.";
 "macshot's own icon" = "macshots eigenes Symbol";
 "Move the region with the pointer • Click to place it • Esc to leave it" = "Bereich mit dem Zeiger bewegen • Klicken zum Ablegen • Esc lässt ihn, wo er ist";
 "No captures yet. Every capture macshot saves appears here." = "Noch keine Aufnahmen. Jede Aufnahme, die macshot sichert, erscheint hier.";
@@ -105,6 +110,7 @@
 "Remove Background needs a Copilot+ PC and an installed build of macshot." = "„Hintergrund entfernen“ braucht einen Copilot+ PC und eine installierte macshot-Version.";
 "Remove Background:" = "Hintergrund entfernen:";
 "Removing background..." = "Hintergrund wird entfernt …";
+"Restarting macshot..." = "macshot wird neu gestartet …";
 "S3 error ({0}): {1}" = "S3-Fehler ({0}): {1}";
 "S3 not configured — check Settings" = "S3 nicht konfiguriert – siehe Einstellungen";
 "Saved" = "Gesichert";
@@ -127,8 +133,10 @@
 "The background removal model could not be downloaded. Check the connection and try again." = "Das Modell zum Entfernen des Hintergrunds konnte nicht geladen werden. Prüfe die Verbindung und versuche es erneut.";
 "The background removal model could not be prepared." = "Das Modell zum Entfernen des Hintergrunds konnte nicht vorbereitet werden.";
 "The background removal model that arrived was not the expected file, so it was discarded." = "Das empfangene Modell zum Entfernen des Hintergrunds war nicht die erwartete Datei und wurde verworfen.";
+"The downloaded macshot would not start." = "Das geladene macshot ließ sich nicht starten.";
 "The translation failed." = "Die Übersetzung ist fehlgeschlagen.";
 "The translation service did not answer in time." = "Der Übersetzungsdienst hat nicht rechtzeitig geantwortet.";
+"The update could not be installed." = "Das Update konnte nicht installiert werden.";
 "There is no text to translate." = "Es gibt keinen Text zum Übersetzen.";
 "There is no window behind that region to scroll" = "Hinter diesem Bereich ist kein Fenster zum Scrollen";
 "Took {0}" = "{0} übernommen";

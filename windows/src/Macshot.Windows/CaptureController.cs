@@ -346,6 +346,13 @@ public sealed class CaptureController : IDisposable
             _dispatcher.TryEnqueue(() => Run(startupCommand));
         }
 
+        // Whatever an update left behind. This is the first process that can remove it —
+        // the folder the new build was copied out of cannot be deleted by the process
+        // running from it, so the copy has to outlive the copier. Nothing depends on it
+        // succeeding: a start that races the applier's last moments simply sweeps up on
+        // the next one.
+        UpdateInstaller.ClearStaging();
+
         // macshot checks on its own as well as on request, which is what the setting on
         // the General page says. Queued like everything else here rather than awaited, so
         // a slow or hanging network cannot delay the tray icon appearing: the first thing
@@ -1695,14 +1702,32 @@ public sealed class CaptureController : IDisposable
                 return;
             }
 
-            var page = update.PageUrl.Length > 0 ? update.PageUrl : UpdateService.ReleasesPage;
-            if (Message.Ask(
-                _messageWindow.Handle,
-                $"{L("A new version of macshot is available.")}{Environment.NewLine}{Environment.NewLine}"
-                    + $"{update.Tag}{Environment.NewLine}{Environment.NewLine}"
-                    + L("Open the download page?")))
+            // What this installation can do about it, which is not the same question as
+            // whether there is one. An MSIX is Windows's to replace and a folder under
+            // Program Files needs rights macshot does not have — both are sent to the page
+            // rather than offered an install that would fail halfway through.
+            var blocker = UpdateInstaller.Blocker();
+            var download = blocker is UpdateBlocker.None
+                ? ReleaseCheck.Download(update, BuildVariant.IsOffline, UpdateService.Architecture)
+                : null;
+
+            var announcement = $"{L("A new version of macshot is available.")}{Environment.NewLine}"
+                + $"{Environment.NewLine}{update.Tag}{Environment.NewLine}{Environment.NewLine}";
+
+            if (download is not { } asset)
             {
-                OpenWithShell(page);
+                var page = update.PageUrl.Length > 0 ? update.PageUrl : UpdateService.ReleasesPage;
+                if (Message.Ask(_messageWindow.Handle, announcement + WhyNotInstalled(blocker)))
+                {
+                    OpenWithShell(page);
+                }
+
+                return;
+            }
+
+            if (Message.Ask(_messageWindow.Handle, announcement + L("Install it and restart macshot?")))
+            {
+                await InstallUpdateAsync(update.Tag, asset);
             }
         }
         catch (Exception exception)
@@ -1719,6 +1744,98 @@ public sealed class CaptureController : IDisposable
             }
         }
     }
+
+    /// <summary>
+    /// What to say instead of offering the install, when this installation cannot replace
+    /// itself.
+    /// </summary>
+    /// <remarks>
+    /// The reason is given rather than left out. "Open the download page?" with no
+    /// explanation reads as macshot not having got round to installing updates, when in
+    /// fact it is a deliberate refusal — and the user with an MSIX would keep downloading
+    /// zips over a package that will not use them.
+    /// </remarks>
+    private static string WhyNotInstalled(UpdateBlocker blocker) => blocker switch
+    {
+        UpdateBlocker.Packaged =>
+            L("macshot was installed from a package, so Windows installs its updates.")
+                + Environment.NewLine + Environment.NewLine + L("Open the download page?"),
+        UpdateBlocker.ReadOnly =>
+            L("macshot cannot write to its own folder, so it cannot update itself.")
+                + Environment.NewLine + Environment.NewLine + L("Open the download page?"),
+        _ => L("Open the download page?"),
+    };
+
+    /// <summary>
+    /// Fetches the update, puts it where it can be applied from, and hands over to it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// This method's success is the process ending. The downloaded build is started with a
+    /// handover and is waiting for this one to quit before it replaces anything, so
+    /// returning normally here would leave two macshots — one of them blocked forever.
+    /// </para>
+    /// <para>
+    /// A failure anywhere leaves the installed macshot untouched: nothing outside the
+    /// staging folder is written until <see cref="UpdateApplier"/> runs, and it only runs
+    /// once the download has been unpacked and found to contain an executable.
+    /// </para>
+    /// </remarks>
+    private async Task InstallUpdateAsync(string tag, ReleaseAsset asset)
+    {
+        var panel = new UpdateWindow();
+        panel.ShowStarting(Downloading(tag, null));
+
+        try
+        {
+            // Progress<T> posts to the context it was made on, which is this one — so the
+            // panel is written to from the dispatcher while the download runs on a thread
+            // pool thread.
+            var payload = await UpdateInstaller.StageAsync(
+                tag,
+                asset,
+                new Progress<double>(fraction => panel.ShowProgress(Downloading(tag, fraction), fraction)),
+                CancellationToken.None);
+
+            panel.ShowRestarting(L("Restarting macshot..."));
+
+            if (!UpdateInstaller.HandOver(payload))
+            {
+                throw new InvalidOperationException(L("The downloaded macshot would not start."));
+            }
+
+            DiagnosticLog.Write($"handed {tag} over to the downloaded build; quitting");
+
+            // Long enough for the panel's last line to be painted, and no longer: the
+            // build just started is waiting on this process to end before it can replace
+            // anything.
+            await Task.Delay(TimeSpan.FromMilliseconds(400));
+
+            Dispose();
+            Application.Current.Exit();
+        }
+        catch (Exception exception)
+        {
+            panel.Dismiss();
+
+            // The download is the only thing that was written, and it is no use to anyone
+            // now. Left behind it would be a hundred and fifty megabytes nobody can
+            // account for.
+            UpdateInstaller.ClearStaging();
+
+            DiagnosticLog.Write($"The update to {tag} was not installed: {exception.Message}");
+            FailureReport.Notice(
+                _messageWindow.Handle,
+                L("The update could not be installed.") + Environment.NewLine + exception.Message);
+        }
+    }
+
+    private static string Downloading(string tag, double? fraction) =>
+        fraction is { } done
+            ? L("Downloading macshot %@... %d%%")
+                .Replace("%@", tag, StringComparison.Ordinal)
+                .Replace("%d%%", ((int)Math.Round(done * 100)) + "%", StringComparison.Ordinal)
+            : L("Downloading macshot %@...").Replace("%@", tag, StringComparison.Ordinal);
 
     private static void OpenWithShell(string path)
     {

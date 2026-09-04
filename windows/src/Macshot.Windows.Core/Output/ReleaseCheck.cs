@@ -4,6 +4,21 @@ using System.Text.Json;
 namespace Macshot.Windows.Core.Output;
 
 /// <summary>
+/// One file attached to a release.
+/// </summary>
+/// <param name="Name">
+/// Its file name, which is the whole of what decides whether this build may install it.
+/// See <see cref="ReleaseCheck.IsWindowsAsset"/>.
+/// </param>
+/// <param name="Url">Where to fetch it. Empty for a release read before this was parsed.</param>
+/// <param name="Size">
+/// How many bytes it should turn out to be, or zero when GitHub did not say. Checked after
+/// a download: a connection cut halfway leaves a file that unzips to a broken install, and
+/// the length is the one thing that catches it without a hash.
+/// </param>
+public readonly record struct ReleaseAsset(string Name, string Url, long Size);
+
+/// <summary>
 /// One published release, reduced to the four things a check needs to know about it.
 /// </summary>
 /// <param name="Tag">The tag it was cut from, which is where its version comes from.</param>
@@ -13,15 +28,15 @@ namespace Macshot.Windows.Core.Output;
 /// </param>
 /// <param name="PageUrl">The release's own page, which is where the user is sent.</param>
 /// <param name="Assets">
-/// What is attached to it, by file name. A release with no Windows build in it is not an
-/// update to this product, however new its version is — the Mac releases in the same
-/// repository are exactly that, and offering one would send a Windows user a .dmg.
+/// What is attached to it. A release with no Windows build in it is not an update to this
+/// product, however new its version is — the Mac releases in the same repository are
+/// exactly that, and offering one would send a Windows user a .dmg.
 /// </param>
 public readonly record struct ReleaseListing(
     string Tag,
     bool PreRelease,
     string PageUrl,
-    IReadOnlyList<string> Assets);
+    IReadOnlyList<ReleaseAsset> Assets);
 
 /// <summary>
 /// A version that can be compared with another, read out of a tag.
@@ -186,7 +201,7 @@ public static class ReleaseCheck
                     continue;
                 }
 
-                var assets = new List<string>();
+                var assets = new List<ReleaseAsset>();
                 if (element.TryGetProperty("assets", out var attached)
                     && attached.ValueKind == JsonValueKind.Array)
                 {
@@ -194,7 +209,10 @@ public static class ReleaseCheck
                     {
                         if (Text(asset, "name") is { Length: > 0 } name)
                         {
-                            assets.Add(name);
+                            assets.Add(new ReleaseAsset(
+                                name,
+                                Text(asset, "browser_download_url") ?? string.Empty,
+                                Number(asset, "size")));
                         }
                     }
                 }
@@ -216,6 +234,13 @@ public static class ReleaseCheck
 
         static bool Flag(JsonElement element, string name) =>
             element.TryGetProperty(name, out var value) && value.ValueKind == JsonValueKind.True;
+
+        static long Number(JsonElement element, string name) =>
+            element.TryGetProperty(name, out var value)
+                && value.ValueKind == JsonValueKind.Number
+                && value.TryGetInt64(out var size)
+                    ? size
+                    : 0;
     }
 
     /// <summary>
@@ -244,6 +269,68 @@ public static class ReleaseCheck
 
         return name.Contains("offline", StringComparison.OrdinalIgnoreCase) == offline;
     }
+
+    /// <summary>
+    /// The one file from <paramref name="release"/> that this build should download, or
+    /// null when it carries none it could install.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A zip and nothing else. The MSIX beside it is an installer Windows runs, not
+    /// something macshot can unpack over itself, and it needs a signature that no release
+    /// carries yet — offering it here would download a file that cannot be installed.
+    /// </para>
+    /// <para>
+    /// Architecture is part of the answer, and until there was something to download it
+    /// was nowhere: <see cref="IsWindowsAsset"/> answers whether a release has anything
+    /// for this variant at all, and every release has both architectures, so an arm64
+    /// machine and an x64 one have always been offered the same list. An exact match is
+    /// preferred and x64 is the fallback, because x64 runs on arm64 Windows under
+    /// emulation while the reverse does not run at all — a machine whose own build is
+    /// missing from a release is better off with the slow one than with none.
+    /// </para>
+    /// </remarks>
+    /// <param name="architecture">
+    /// What the running process is, spelled as the release names spell it: <c>x64</c> or
+    /// <c>arm64</c>.
+    /// </param>
+    public static ReleaseAsset? Download(ReleaseListing release, bool offline, string architecture)
+    {
+        ReleaseAsset? fallback = null;
+
+        foreach (var asset in release.Assets)
+        {
+            if (!IsWindowsAsset(asset.Name, offline)
+                || !asset.Name.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+                || asset.Url.Length == 0)
+            {
+                continue;
+            }
+
+            if (IsArchitecture(asset.Name, architecture))
+            {
+                return asset;
+            }
+
+            if (IsArchitecture(asset.Name, "x64"))
+            {
+                fallback = asset;
+            }
+        }
+
+        return fallback;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="name"/> names a build for <paramref name="architecture"/>.
+    /// </summary>
+    /// <remarks>
+    /// Bounded on both sides rather than searched for, because "arm64" ends in "64" and a
+    /// contains-test for "x64" against <c>macshot-1.0.0-win-arm64.zip</c> is the kind of
+    /// near miss that would only be found by an arm64 machine downloading the wrong build.
+    /// </remarks>
+    private static bool IsArchitecture(string name, string architecture) =>
+        name.Contains($"-{architecture}.", StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// The release to offer, or null when this build is already the newest there is.
@@ -286,7 +373,7 @@ public static class ReleaseCheck
                 continue;
             }
 
-            if (!release.Assets.Any(asset => IsWindowsAsset(asset, offline)))
+            if (!release.Assets.Any(asset => IsWindowsAsset(asset.Name, offline)))
             {
                 continue;
             }

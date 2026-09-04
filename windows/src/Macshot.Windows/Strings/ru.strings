@@ -43,6 +43,8 @@
 "Dark" = "Тёмная";
 "Diagnostics" = "Диагностика";
 "Downloaded model" = "Загруженная модель";
+"Downloading macshot %@..." = "Загрузка macshot %@…";
+"Downloading macshot %@... %d%%" = "Загрузка macshot %@… %d%%";
 "Drag the part to keep • Esc to stop cropping" = "Выделите часть, которую нужно оставить • Esc — выйти из обрезки";
 "Draw the capture as a window, or on its own" = "Рисовать снимок как окно или сам по себе";
 "Draw to annotate • Ctrl+Z undo • Ctrl+S save • Ctrl+C copy" = "Рисуйте, чтобы аннотировать • Ctrl+Z отменить • Ctrl+S сохранить • Ctrl+C копировать";
@@ -71,9 +73,11 @@
 "How the region is covered" = "Чем закрывается область";
 "How the shape is filled" = "Чем заполняется фигура";
 "imgbb cannot take videos — choose another provider in Settings" = "imgbb не принимает видео — выберите другой сервис в настройках";
+"Install it and restart macshot?" = "Установить и перезапустить macshot?";
 "Keystrokes:" = "Нажатия клавиш:";
 "Larger" = "Крупнее";
 "Light" = "Светлая";
+"macshot cannot write to its own folder, so it cannot update itself." = "macshot не может писать в собственную папку, поэтому не может обновить себя.";
 "macshot could not bring that window forward to scroll it." = "macshot не смог вывести это окно на передний план, чтобы прокрутить его.";
 "macshot could not bring that window forward." = "macshot не смог вывести это окно на передний план.";
 "macshot could not open '{0}': {1}" = "macshot не смог открыть «{0}»: {1}";
@@ -81,6 +85,7 @@
 "macshot could not open that recording: {0}" = "macshot не смог открыть эту запись: {0}";
 "macshot has no capture called '{0}' in its history." = "В истории macshot нет снимка с именем «{0}».";
 "macshot is already running. Its icon is in the notification area, at the right-hand end of the taskbar." = "macshot уже запущен. Его значок находится в области уведомлений, у правого края панели задач.";
+"macshot was installed from a package, so Windows installs its updates." = "macshot установлен из пакета, поэтому обновления устанавливает Windows.";
 "macshot's own icon" = "собственный значок macshot";
 "Move the region with the pointer • Click to place it • Esc to leave it" = "Двигайте область указателем • Щелчок — поставить • Esc — оставить как есть";
 "No captures yet. Every capture macshot saves appears here." = "Снимков пока нет. Каждый снимок, сохранённый macshot, появится здесь.";
@@ -105,6 +110,7 @@
 "Remove Background needs a Copilot+ PC and an installed build of macshot." = "Для «Удалить фон» нужен Copilot+ PC и установленная сборка macshot.";
 "Remove Background:" = "Удалить фон:";
 "Removing background..." = "Удаление фона…";
+"Restarting macshot..." = "Перезапуск macshot…";
 "S3 error ({0}): {1}" = "Ошибка S3 ({0}): {1}";
 "S3 not configured — check Settings" = "S3 не настроен — проверьте настройки";
 "Saved" = "Сохранено";
@@ -127,8 +133,10 @@
 "The background removal model could not be downloaded. Check the connection and try again." = "Не удалось загрузить модель удаления фона. Проверьте подключение и повторите попытку.";
 "The background removal model could not be prepared." = "Не удалось подготовить модель удаления фона.";
 "The background removal model that arrived was not the expected file, so it was discarded." = "Полученная модель удаления фона оказалась не тем файлом и была отброшена.";
+"The downloaded macshot would not start." = "Загруженный macshot не запустился.";
 "The translation failed." = "Не удалось выполнить перевод.";
 "The translation service did not answer in time." = "Служба перевода не ответила вовремя.";
+"The update could not be installed." = "Не удалось установить обновление.";
 "There is no text to translate." = "Нет текста для перевода.";
 "There is no window behind that region to scroll" = "За этой областью нет окна, которое можно прокрутить";
 "Took {0}" = "Взято {0}";

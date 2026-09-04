@@ -43,6 +43,8 @@
 "Dark" = "Oscuro";
 "Diagnostics" = "Diagnóstico";
 "Downloaded model" = "Modelo descargado";
+"Downloading macshot %@..." = "Descargando macshot %@…";
+"Downloading macshot %@... %d%%" = "Descargando macshot %@… %d%%";
 "Drag the part to keep • Esc to stop cropping" = "Arrastra la parte que quieres conservar • Esc para dejar de recortar";
 "Draw the capture as a window, or on its own" = "Dibujar la captura como una ventana o por sí sola";
 "Draw to annotate • Ctrl+Z undo • Ctrl+S save • Ctrl+C copy" = "Dibuja para anotar • Ctrl+Z deshacer • Ctrl+S guardar • Ctrl+C copiar";
@@ -71,9 +73,11 @@
 "How the region is covered" = "Cómo se cubre la región";
 "How the shape is filled" = "Cómo se rellena la forma";
 "imgbb cannot take videos — choose another provider in Settings" = "imgbb no acepta vídeos: elige otro proveedor en Ajustes";
+"Install it and restart macshot?" = "¿Instalarla y reiniciar macshot?";
 "Keystrokes:" = "Pulsaciones de teclas:";
 "Larger" = "Más grande";
 "Light" = "Claro";
+"macshot cannot write to its own folder, so it cannot update itself." = "macshot no puede escribir en su propia carpeta, así que no puede actualizarse solo.";
 "macshot could not bring that window forward to scroll it." = "macshot no ha podido traer esa ventana al frente para desplazarla.";
 "macshot could not bring that window forward." = "macshot no ha podido traer esa ventana al frente.";
 "macshot could not open '{0}': {1}" = "macshot no ha podido abrir «{0}»: {1}";
@@ -81,6 +85,7 @@
 "macshot could not open that recording: {0}" = "macshot no ha podido abrir esa grabación: {0}";
 "macshot has no capture called '{0}' in its history." = "macshot no tiene ninguna captura llamada «{0}» en su historial.";
 "macshot is already running. Its icon is in the notification area, at the right-hand end of the taskbar." = "macshot ya se está ejecutando. Su icono está en el área de notificación, en el extremo derecho de la barra de tareas.";
+"macshot was installed from a package, so Windows installs its updates." = "macshot se instaló desde un paquete, así que Windows instala sus actualizaciones.";
 "macshot's own icon" = "el icono propio de macshot";
 "Move the region with the pointer • Click to place it • Esc to leave it" = "Mueve la región con el puntero • Haz clic para colocarla • Esc para dejarla";
 "No captures yet. Every capture macshot saves appears here." = "Aún no hay capturas. Cada captura que macshot guarda aparece aquí.";
@@ -105,6 +110,7 @@
 "Remove Background needs a Copilot+ PC and an installed build of macshot." = "«Quitar fondo» necesita un PC Copilot+ y una versión instalada de macshot.";
 "Remove Background:" = "Eliminar fondo:";
 "Removing background..." = "Quitando el fondo…";
+"Restarting macshot..." = "Reiniciando macshot…";
 "S3 error ({0}): {1}" = "Error de S3 ({0}): {1}";
 "S3 not configured — check Settings" = "S3 no está configurado: revisa Ajustes";
 "Saved" = "Guardado";
@@ -127,8 +133,10 @@
 "The background removal model could not be downloaded. Check the connection and try again." = "No se pudo descargar el modelo para eliminar el fondo. Comprueba la conexión e inténtalo de nuevo.";
 "The background removal model could not be prepared." = "No se pudo preparar el modelo para quitar el fondo.";
 "The background removal model that arrived was not the expected file, so it was discarded." = "El modelo para eliminar el fondo que llegó no era el archivo esperado, así que se descartó.";
+"The downloaded macshot would not start." = "El macshot descargado no se pudo iniciar.";
 "The translation failed." = "La traducción ha fallado.";
 "The translation service did not answer in time." = "El servicio de traducción no ha respondido a tiempo.";
+"The update could not be installed." = "No se pudo instalar la actualización.";
 "There is no text to translate." = "No hay texto que traducir.";
 "There is no window behind that region to scroll" = "No hay ninguna ventana detrás de esa región para desplazar";
 "Took {0}" = "Se tomó {0}";

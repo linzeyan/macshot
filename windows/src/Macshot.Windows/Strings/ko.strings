@@ -43,6 +43,8 @@
 "Dark" = "다크";
 "Diagnostics" = "진단";
 "Downloaded model" = "다운로드한 모델";
+"Downloading macshot %@..." = "macshot %@ 다운로드 중…";
+"Downloading macshot %@... %d%%" = "macshot %@ 다운로드 중… %d%%";
 "Drag the part to keep • Esc to stop cropping" = "남길 부분을 드래그 • Esc로 자르기 종료";
 "Draw the capture as a window, or on its own" = "캡처를 창처럼 그릴지, 그 자체로 그릴지";
 "Draw to annotate • Ctrl+Z undo • Ctrl+S save • Ctrl+C copy" = "그려서 주석 • Ctrl+Z 실행 취소 • Ctrl+S 저장 • Ctrl+C 복사";
@@ -71,9 +73,11 @@
 "How the region is covered" = "영역을 가리는 방식";
 "How the shape is filled" = "도형을 채우는 방식";
 "imgbb cannot take videos — choose another provider in Settings" = "imgbb는 동영상을 받지 않습니다 — 설정에서 다른 제공자를 고르세요";
+"Install it and restart macshot?" = "설치하고 macshot을 다시 시작할까요?";
 "Keystrokes:" = "키 입력:";
 "Larger" = "크게";
 "Light" = "라이트";
+"macshot cannot write to its own folder, so it cannot update itself." = "macshot이 자체 폴더에 쓸 수 없어 스스로 업데이트할 수 없습니다.";
 "macshot could not bring that window forward to scroll it." = "macshot이 스크롤하기 위해 그 창을 앞으로 가져오지 못했습니다.";
 "macshot could not bring that window forward." = "macshot이 그 창을 앞으로 가져오지 못했습니다.";
 "macshot could not open '{0}': {1}" = "macshot이 '{0}'을(를) 열 수 없습니다: {1}";
@@ -81,6 +85,7 @@
 "macshot could not open that recording: {0}" = "macshot이 해당 녹화를 열 수 없습니다: {0}";
 "macshot has no capture called '{0}' in its history." = "macshot 기록에 '{0}'이라는 캡처가 없습니다.";
 "macshot is already running. Its icon is in the notification area, at the right-hand end of the taskbar." = "macshot이 이미 실행 중입니다. 아이콘은 작업 표시줄 오른쪽 끝의 알림 영역에 있습니다.";
+"macshot was installed from a package, so Windows installs its updates." = "macshot은 패키지로 설치되어 업데이트는 Windows가 설치합니다.";
 "macshot's own icon" = "macshot 자체 아이콘";
 "Move the region with the pointer • Click to place it • Esc to leave it" = "포인터로 영역을 옮기기 • 클릭하면 놓기 • Esc로 그대로 두기";
 "No captures yet. Every capture macshot saves appears here." = "아직 캡처가 없습니다. macshot이 저장한 캡처가 모두 여기에 표시됩니다.";
@@ -105,6 +110,7 @@
 "Remove Background needs a Copilot+ PC and an installed build of macshot." = "‘배경 제거’에는 Copilot+ PC와 설치된 macshot 빌드가 필요합니다.";
 "Remove Background:" = "배경 제거:";
 "Removing background..." = "배경 제거 중…";
+"Restarting macshot..." = "macshot을 다시 시작하는 중…";
 "S3 error ({0}): {1}" = "S3 오류({0}): {1}";
 "S3 not configured — check Settings" = "S3가 설정되지 않았습니다 — 설정을 확인하세요";
 "Saved" = "저장했습니다";
@@ -127,8 +133,10 @@
 "The background removal model could not be downloaded. Check the connection and try again." = "배경 제거 모델을 다운로드할 수 없습니다. 연결을 확인한 후 다시 시도하십시오.";
 "The background removal model could not be prepared." = "배경 제거 모델을 준비하지 못했습니다.";
 "The background removal model that arrived was not the expected file, so it was discarded." = "받은 배경 제거 모델이 예상한 파일이 아니어서 폐기했습니다.";
+"The downloaded macshot would not start." = "다운로드한 macshot을 시작할 수 없습니다.";
 "The translation failed." = "번역에 실패했습니다.";
 "The translation service did not answer in time." = "번역 서비스가 제때 응답하지 않았습니다.";
+"The update could not be installed." = "업데이트를 설치할 수 없습니다.";
 "There is no text to translate." = "번역할 텍스트가 없습니다.";
 "There is no window behind that region to scroll" = "그 영역 뒤에 스크롤할 창이 없습니다";
 "Took {0}" = "{0} 가져옴";

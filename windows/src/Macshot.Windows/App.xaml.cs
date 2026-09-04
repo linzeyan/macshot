@@ -39,6 +39,18 @@ public partial class App : Application
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
+        // First of all, and before the instance lock: this launch is not a macshot being
+        // started, it is the downloaded build being asked to put itself in place of the
+        // installed one. The macshot that asked is still quitting, so it still holds the
+        // lock — claiming it first would turn every update into "macshot is already
+        // running" and leave the download unapplied.
+        if (Core.Output.UpdateHandover.Parse(Environment.GetCommandLineArgs()) is { } handover)
+        {
+            UpdateApplier.Apply(handover);
+            Exit();
+            return;
+        }
+
 #if !OFFLINE
         // Before the instance lock, and before anything else. A launch carrying a Google
         // sign-in redirect is not a second macshot trying to run: it is the shell

@@ -43,6 +43,8 @@
 "Dark" = "Sombre";
 "Diagnostics" = "Diagnostics";
 "Downloaded model" = "Modèle téléchargé";
+"Downloading macshot %@..." = "Téléchargement de macshot %@…";
+"Downloading macshot %@... %d%%" = "Téléchargement de macshot %@… %d%%";
 "Drag the part to keep • Esc to stop cropping" = "Faites glisser la partie à garder • Échap pour arrêter le recadrage";
 "Draw the capture as a window, or on its own" = "Dessiner la capture comme une fenêtre, ou seule";
 "Draw to annotate • Ctrl+Z undo • Ctrl+S save • Ctrl+C copy" = "Dessinez pour annoter • Ctrl+Z annuler • Ctrl+S enregistrer • Ctrl+C copier";
@@ -71,9 +73,11 @@
 "How the region is covered" = "Comment la zone est masquée";
 "How the shape is filled" = "Comment la forme est remplie";
 "imgbb cannot take videos — choose another provider in Settings" = "imgbb n'accepte pas les vidéos — choisissez un autre service dans les réglages";
+"Install it and restart macshot?" = "L'installer et redémarrer macshot ?";
 "Keystrokes:" = "Frappes :";
 "Larger" = "Plus grand";
 "Light" = "Clair";
+"macshot cannot write to its own folder, so it cannot update itself." = "macshot ne peut pas écrire dans son propre dossier, il ne peut donc pas se mettre à jour.";
 "macshot could not bring that window forward to scroll it." = "macshot n'a pas pu mettre cette fenêtre au premier plan pour la faire défiler.";
 "macshot could not bring that window forward." = "macshot n'a pas pu mettre cette fenêtre au premier plan.";
 "macshot could not open '{0}': {1}" = "macshot n'a pas pu ouvrir « {0} » : {1}";
@@ -81,6 +85,7 @@
 "macshot could not open that recording: {0}" = "macshot n'a pas pu ouvrir cet enregistrement : {0}";
 "macshot has no capture called '{0}' in its history." = "macshot n'a aucune capture nommée « {0} » dans son historique.";
 "macshot is already running. Its icon is in the notification area, at the right-hand end of the taskbar." = "macshot est déjà en cours d'exécution. Son icône se trouve dans la zone de notification, à droite de la barre des tâches.";
+"macshot was installed from a package, so Windows installs its updates." = "macshot a été installé depuis un package : c'est Windows qui installe ses mises à jour.";
 "macshot's own icon" = "l'icône de macshot";
 "Move the region with the pointer • Click to place it • Esc to leave it" = "Déplacez la zone avec le pointeur • Cliquez pour la poser • Échap pour la laisser";
 "No captures yet. Every capture macshot saves appears here." = "Aucune capture pour l'instant. Chaque capture enregistrée par macshot apparaît ici.";
@@ -105,6 +110,7 @@
 "Remove Background needs a Copilot+ PC and an installed build of macshot." = "« Supprimer l'arrière-plan » nécessite un PC Copilot+ et une version installée de macshot.";
 "Remove Background:" = "Supprimer l'arrière-plan :";
 "Removing background..." = "Suppression de l'arrière-plan…";
+"Restarting macshot..." = "Redémarrage de macshot…";
 "S3 error ({0}): {1}" = "Erreur S3 ({0}) : {1}";
 "S3 not configured — check Settings" = "S3 n'est pas configuré — vérifiez les réglages";
 "Saved" = "Enregistré";
@@ -127,8 +133,10 @@
 "The background removal model could not be downloaded. Check the connection and try again." = "Le modèle de suppression d'arrière-plan n'a pas pu être téléchargé. Vérifiez la connexion et réessayez.";
 "The background removal model could not be prepared." = "Le modèle de suppression d'arrière-plan n'a pas pu être préparé.";
 "The background removal model that arrived was not the expected file, so it was discarded." = "Le modèle de suppression d'arrière-plan reçu n'était pas le fichier attendu ; il a été écarté.";
+"The downloaded macshot would not start." = "Le macshot téléchargé n'a pas démarré.";
 "The translation failed." = "La traduction a échoué.";
 "The translation service did not answer in time." = "Le service de traduction n'a pas répondu à temps.";
+"The update could not be installed." = "La mise à jour n'a pas pu être installée.";
 "There is no text to translate." = "Il n'y a aucun texte à traduire.";
 "There is no window behind that region to scroll" = "Aucune fenêtre à faire défiler derrière cette zone";
 "Took {0}" = "{0} prise";

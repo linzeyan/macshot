@@ -1,6 +1,8 @@
+using System.Buffers;
 using System.Net.Http;
 using System.Net.Http.Headers;
 using System.Reflection;
+using System.Runtime.InteropServices;
 using Macshot.Windows.Core.Output;
 
 namespace Macshot.Windows.Services;
@@ -11,11 +13,11 @@ namespace Macshot.Windows.Services;
 /// <remarks>
 /// <para>
 /// macOS hands this to Sparkle, which reads an appcast the release workflow writes and
-/// installs what it finds. There is no Sparkle on Windows and — until the distribution
-/// format is settled — no installer for one to run, so this does the half that can be
-/// done today: it reads the releases the project publishes and hands the user the page to
-/// download from. The decisions in it are <see cref="ReleaseCheck"/>'s, and tested there;
-/// this is the request and nothing else.
+/// installs what it finds. There is no Sparkle on Windows, so this is that job done by
+/// hand: read the releases the project publishes, and — when this installation is one
+/// that can replace itself — fetch the right zip for it. The decisions are
+/// <see cref="ReleaseCheck"/>'s and tested there; putting the download in place is
+/// <see cref="UpdateInstaller"/>'s.
 /// </para>
 /// <para>
 /// In the offline build as well. That variant is about captures not leaving the machine,
@@ -46,6 +48,9 @@ internal static class UpdateService
     /// pressed and says nothing is one that gets pressed again.
     /// </summary>
     private static readonly TimeSpan Patience = TimeSpan.FromSeconds(15);
+
+    /// <summary>How much of a download is moved at a time.</summary>
+    private const int ChunkBytes = 64 * 1024;
 
     /// <summary>
     /// One client for the life of the process, as <c>HttpClient</c> wants: a new one per
@@ -107,6 +112,99 @@ internal static class UpdateService
             CurrentVersion,
             beta,
             BuildVariant.IsOffline);
+    }
+
+    /// <summary>
+    /// Which build of Windows this process is, spelled as the release names spell it.
+    /// </summary>
+    /// <remarks>
+    /// The process rather than the machine. An x64 macshot on an arm64 machine is running
+    /// under emulation and must stay x64 — swapping it for the native build mid-update
+    /// would be changing which product is installed, not updating it, and this is not the
+    /// place that decision gets made.
+    /// </remarks>
+    public static string Architecture => RuntimeInformation.ProcessArchitecture switch
+    {
+        System.Runtime.InteropServices.Architecture.Arm64 => "arm64",
+        _ => "x64",
+    };
+
+    /// <summary>
+    /// Fetches <paramref name="asset"/> to <paramref name="path"/>, saying how far it has
+    /// got.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// No deadline, unlike the check: this is a hundred and fifty megabytes and the only
+    /// thing that should end it early is the user or the app quitting.
+    /// </para>
+    /// <para>
+    /// The length is checked at the end. A connection cut partway leaves a zip that is a
+    /// valid file and an invalid archive, and the size GitHub published is the cheapest
+    /// thing that catches it before the archive is unpacked over a working installation.
+    /// </para>
+    /// </remarks>
+    public static async Task DownloadAsync(
+        ReleaseAsset asset,
+        string path,
+        IProgress<double>? progress,
+        CancellationToken token)
+    {
+        using var response = await Client
+            .GetAsync(new Uri(asset.Url), HttpCompletionOption.ResponseHeadersRead, token)
+            .ConfigureAwait(false);
+
+        response.EnsureSuccessStatusCode();
+
+        var expected = response.Content.Headers.ContentLength ?? asset.Size;
+
+        using var source = await response.Content.ReadAsStreamAsync(token).ConfigureAwait(false);
+        using var destination = new FileStream(
+            path,
+            FileMode.Create,
+            FileAccess.Write,
+            FileShare.None,
+            ChunkBytes,
+            useAsync: true);
+
+        var buffer = ArrayPool<byte>.Shared.Rent(ChunkBytes);
+        try
+        {
+            long written = 0;
+            var lastReported = -1;
+
+            int read;
+            while ((read = await source.ReadAsync(buffer, token).ConfigureAwait(false)) > 0)
+            {
+                await destination.WriteAsync(buffer.AsMemory(0, read), token).ConfigureAwait(false);
+                written += read;
+
+                if (progress is null || expected <= 0)
+                {
+                    continue;
+                }
+
+                // Whole percent only. A report per chunk is one marshalled call to the UI
+                // thread every sixty-four kilobytes, which is thousands of them for a file
+                // this size and no more informative for any of it.
+                var percent = (int)(written * 100 / expected);
+                if (percent != lastReported)
+                {
+                    lastReported = percent;
+                    progress.Report(percent / 100.0);
+                }
+            }
+
+            if (expected > 0 && written != expected)
+            {
+                throw new IOException(
+                    $"The download stopped early: {written} bytes of {expected}.");
+            }
+        }
+        finally
+        {
+            ArrayPool<byte>.Shared.Return(buffer);
+        }
     }
 
     private static HttpClient CreateClient()

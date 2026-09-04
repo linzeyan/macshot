@@ -43,6 +43,8 @@
 "Dark" = "深色";
 "Diagnostics" = "診斷";
 "Downloaded model" = "下載的模型";
+"Downloading macshot %@..." = "正在下載 macshot %@…";
+"Downloading macshot %@... %d%%" = "正在下載 macshot %@… %d%%";
 "Drag the part to keep • Esc to stop cropping" = "拖移出要保留的部分 • Esc 停止裁切";
 "Draw the capture as a window, or on its own" = "將擷取畫成視窗，或單獨呈現";
 "Draw to annotate • Ctrl+Z undo • Ctrl+S save • Ctrl+C copy" = "繪製以標註 • Ctrl+Z 還原 • Ctrl+S 儲存 • Ctrl+C 拷貝";
@@ -71,9 +73,11 @@
 "How the region is covered" = "範圍的遮蓋方式";
 "How the shape is filled" = "形狀的填色方式";
 "imgbb cannot take videos — choose another provider in Settings" = "imgbb 無法接受影片 — 請在「設定」中選擇其他服務";
+"Install it and restart macshot?" = "要安裝並重新啟動 macshot 嗎？";
 "Keystrokes:" = "按鍵：";
 "Larger" = "放大";
 "Light" = "淺色";
+"macshot cannot write to its own folder, so it cannot update itself." = "macshot 無法寫入自己的資料夾，因此無法自行更新。";
 "macshot could not bring that window forward to scroll it." = "macshot 無法將該視窗移到前面以進行捲動。";
 "macshot could not bring that window forward." = "macshot 無法將該視窗移到前面。";
 "macshot could not open '{0}': {1}" = "macshot 無法打開「{0}」：{1}";
@@ -81,6 +85,7 @@
 "macshot could not open that recording: {0}" = "macshot 無法打開該錄製：{0}";
 "macshot has no capture called '{0}' in its history." = "macshot 的歷史記錄中沒有名為「{0}」的擷取。";
 "macshot is already running. Its icon is in the notification area, at the right-hand end of the taskbar." = "macshot 已在執行。它的圖像在工作列右端的通知區域。";
+"macshot was installed from a package, so Windows installs its updates." = "macshot 是從封裝安裝的，更新由 Windows 安裝。";
 "macshot's own icon" = "macshot 自己的圖示";
 "Move the region with the pointer • Click to place it • Esc to leave it" = "以指標移動範圍 • 點按以放置 • Esc 保持原位";
 "No captures yet. Every capture macshot saves appears here." = "尚無擷取。macshot 儲存的每一次擷取都會出現在這裡。";
@@ -105,6 +110,7 @@
 "Remove Background needs a Copilot+ PC and an installed build of macshot." = "「移除背景」需要 Copilot+ PC，以及已安裝的 macshot 版本。";
 "Remove Background:" = "移除背景：";
 "Removing background..." = "正在移除背景…";
+"Restarting macshot..." = "正在重新啟動 macshot…";
 "S3 error ({0}): {1}" = "S3 錯誤（{0}）：{1}";
 "S3 not configured — check Settings" = "尚未設定 S3 — 請檢查「設定」";
 "Saved" = "已儲存";
@@ -127,8 +133,10 @@
 "The background removal model could not be downloaded. Check the connection and try again." = "無法下載移除背景的模型。請檢查連線後再試一次。";
 "The background removal model could not be prepared." = "無法準備背景移除模型。";
 "The background removal model that arrived was not the expected file, so it was discarded." = "收到的移除背景模型不是預期的檔案，已捨棄。";
+"The downloaded macshot would not start." = "下載的 macshot 無法啟動。";
 "The translation failed." = "翻譯失敗。";
 "The translation service did not answer in time." = "翻譯服務未能及時回應。";
+"The update could not be installed." = "無法安裝更新。";
 "There is no text to translate." = "沒有可翻譯的文字。";
 "There is no window behind that region to scroll" = "該範圍後方沒有可捲動的視窗";
 "Took {0}" = "已取得 {0}";
