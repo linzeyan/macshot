@@ -705,7 +705,7 @@ public sealed class AnnotationEditor
     /// The anchor is moved rather than the result, which is the whole trick: every branch
     /// below measures from an anchor to the pointer, and the pointer has already moved by
     /// the same amount, so shifting the anchor changes the position and nothing else. It is
-    /// what <c>CaptureOverlayWindow</c> does to the corner a marquee is dragged from.
+    /// what <c>CaptureOverlayView</c> does to the corner a marquee is dragged from.
     /// </remarks>
     private void Reposition(CapturePoint point, EditorModifiers modifiers)
     {

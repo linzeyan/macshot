@@ -213,7 +213,7 @@ hotkeys, drives a capture, and holds the windows that result. There is no main w
 macshot lives in the notification area.
 
 A capture goes: hotkey → `GraphicsCaptureService` grabs every monitor → one
-`CaptureOverlayWindow` per monitor → selection → annotation on `AnnotationCanvasView` →
+`CaptureOverlayView` per monitor → selection → annotation on `AnnotationCanvasView` →
 output. `EditorWindow` is the same canvas without the selection chrome, inside a
 `ScrollViewer`.
 
@@ -286,6 +286,32 @@ and the type-info generator run only there. Each of these cost a CI round trip.
   `MinHeight=32`** — a settings-page shape that puts the label above the box on a short row.
 - **`NumberBox` is a text field first**: it cannot go below the text-control minimum
   height, and its compact spin buttons appear on focus, reflowing the row around it.
+- **Nothing shown once per capture is ever collected**, so **everything expensive it holds
+  has to be dropped by hand.** A closed `Window` is never freed — measured: six closed
+  overlays all alive through a forced full collection — and neither is a `UserControl`
+  swapped out of a live window's `Content`, which is what `CaptureOverlayHost` does. So
+  reusing the shell does not by itself make a capture free; what it saves is the window.
+  What actually moved the number was releasing, at the moment the surface retires, every
+  buffer it owns: the frozen screens (`CaptureOverlayView.ReleasePixels`), the boundary
+  index behind edge snapping (two bytes a pixel, 6.5MB), the four copies of the chosen
+  region inside `RasterAnnotationPreview` (`AnnotationCanvasView.Release`), the shown
+  bitmap (`FramePreview.Release`), and the capture each panel window keeps
+  (`ThumbnailWindow`, `PinWindow`, `EditorWindow`). Measured on the VM over six captures
+  that took the managed heap from +10MB each to +1MB each. **Whatever is left is the
+  element tree itself**, which nothing this app does releases.
+- **An idle tray app never collects, so a capture's rubbish looks exactly like a leak.**
+  The same six captures were +26MB each with no collection and +8MB each with one, all the
+  difference having been garbage the whole time — macshot allocates nothing between
+  captures, so the collector has no reason to run and does not. `CollectWhenIdle` asks for
+  a compacting gen-2 collection once a capture is delivered, cancelled or recorded. That is
+  the one shape of `GC.Collect` that is not a mistake: a known point where tens of
+  megabytes of large-object buffers have just died and the process is about to do nothing.
+  **Measure with a forced collection and without it** — the two answers differ by 3×, and
+  only the second is what the user sees in Task Manager.
+- **`SoftwareBitmapSource` and the `SoftwareBitmap` handed to it are both native memory**
+  the collector cannot see the size of, so nothing ever runs on their account. Dispose the
+  bitmap once `SetBitmapAsync` returns, and the source when the window closes —
+  `FramePreview` does both.
 - **A running macshot blocks the build.** It has no window; the only sign is the tray icon.
   The project kills any running instance before building, or `Stop-Process -Name
   Macshot.Windows -Force`.
@@ -309,6 +335,14 @@ and the type-info generator run only there. Each of these cost a CI round trip.
   `AppFonts.Weigh`, backed by `Core.Localization.ChineseText`), never per interface —
   bolding the whole window because the language is Chinese puts every English label in the
   Chinese weight.
+- **Icons come from `AppFonts.Symbols`, never from a name.** Segoe Fluent Icons ships with
+  Windows 11 and is *absent* from Windows 10, where the same codepoints live in Segoe MDL2
+  Assets — so naming the first left every icon this app builds in code blank there, while
+  the ones XAML builds kept drawing because `FontIcon` defaults to WinUI's
+  `SymbolThemeFontFamily`, which is the same pair. GDI takes one family and has no fallback
+  list, so the notification menu asks `AppFonts.SymbolFace` instead. **A new glyph has to
+  exist in both faces**: check it against `C:\Windows\Fonts\segmdl2.ttf`, which is missing
+  a handful the newer face added — E7AA was one, and was the history item's icon.
 - **Toolbar and popovers are always dark**, whatever the system appearance. Never use
   system-adaptive brushes for text there without checking contrast.
 
@@ -420,6 +454,16 @@ start the macOS pipeline on `main`, and vice versa.
   every export of a recording *with sound* had been throwing unless a speed segment was on
   the band. The mic + system merge and the GIF export are measured there too. What is still
   unmeasured is `ScreenRecorder` itself, which wants a display.
+- **Windows Graphics Capture delivers a frame when the content changes and at no other
+  time.** A recording of a desktop nobody is touching gets *nothing* — the recording panel
+  is held out of the capture with `WDA_EXCLUDEFROMCAPTURE`, so even its ticking clock is
+  not a change. Measured on the VM: a 20-second recording was 47 real frames and 462
+  repeats. `Mp4Frames` answers a still screen by repeating the last frame, and
+  `ScreenRecorder.SeedPixelsAsync` is what gives it one to repeat *before* the first
+  arrives — a session being opened delivers unconditionally, which is why a screenshot
+  always works and a running recording can starve. Without the seed, fifteen still seconds
+  ended in `MF_E_SINK_NO_SAMPLES_PROCESSED` and a deleted file. The recording's log line
+  says `first frame seeded` or `not seeded`.
 - The MSIX installs, launches and captures — measured on the VM with a test certificate.
   What used to stop it was never the container: the capture path called an API a packaged
   app may only use with the `graphicsCaptureProgrammatic` capability, and the manifest

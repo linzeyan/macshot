@@ -3,6 +3,33 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.1] - 2026-09-08
+
+### Fixed
+
+- **Half the icons were blank on Windows 10.** The ones macshot draws itself asked for
+  Segoe Fluent Icons by name, and that font ships with Windows 11 only — on 10 the same
+  symbols live in Segoe MDL2 Assets. The icons the interface builds from markup kept
+  drawing, which is why some appeared and some did not. Every one of them now names both
+  faces, and the history item's icon, which existed in the newer face alone, was changed
+  for one that exists in both.
+- **A recording of a screen that never moved produced no file at all.** 0.8.0 taught a
+  still screen to repeat the frame it is showing, but there has to be a first frame to
+  repeat, and Windows sends none until something changes — so a recording started on a
+  quiet desktop waited for a frame that was not coming and ended with an error and nothing
+  written. macshot now takes the first frame itself, the same way it takes a screenshot,
+  before the recording starts.
+- **Memory grew with every capture and was never given back** — 22MB at startup, 452MB
+  after ten screenshots, and the same climb for recordings. Most of it was never in use:
+  a capture turns tens of megabytes into rubbish at a stroke and macshot then goes back to
+  being an idle tray icon, so nothing ever asked for it to be cleared up. It now asks, once
+  a capture is saved, cancelled or recorded, and lets go by name of everything a finished
+  capture was holding — the frozen screen of each display, the index behind edge snapping,
+  the working copies the drawing surface keeps, and the picture each panel window was
+  showing. Measured over eight captures, the growth per capture is roughly a third of what
+  it was and the working set no longer climbs at all. Some remains: Windows does not
+  reclaim an interface built for one capture, and what is left is that.
+
 ## [0.8.0] - 2026-09-05
 
 ### Added

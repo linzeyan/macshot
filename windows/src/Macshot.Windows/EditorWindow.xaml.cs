@@ -528,7 +528,17 @@ public sealed partial class EditorWindow : Window
             default,
             new CaptureRegion(0, 0, args.NewSize.Width, args.NewSize.Height));
 
-        Closed += (_, _) => AnnotationToolbar.PersistStyle();
+        Closed += (_, _) =>
+        {
+            AnnotationToolbar.PersistStyle();
+
+            // The picture being edited and the four copies of it the canvas works on. A
+            // closed WinUI window is never collected, so an editor left open on a 4K
+            // capture is otherwise 130MB the process never gives back — see
+            // CaptureOverlayHost.
+            AnnotationCanvas.Release();
+            _frame = CapturedFrame.Empty;
+        };
     }
 
     /// <summary>
@@ -940,7 +950,7 @@ public sealed partial class EditorWindow : Window
 
         // The press comes first, the placement second: a sprite tool places its mark only
         // where the click did not land on one already drawn. See the same order in
-        // CaptureOverlayWindow, and macOS's startAnnotation.
+        // CaptureOverlayView, and macOS's startAnnotation.
         if (!grabbed && AnnotationCanvasView.IsPlacedByClick(_editor.Tool))
         {
             AnnotationCanvas.PlaceSprite(at);
@@ -1570,7 +1580,7 @@ public sealed partial class EditorWindow : Window
     /// </summary>
     /// <remarks>
     /// Through the subject model, because Windows has no human-rectangles pass — see
-    /// <c>CaptureOverlayWindow.RedactPeopleAsync</c> for what that costs and why it is
+    /// <c>CaptureOverlayView.RedactPeopleAsync</c> for what that costs and why it is
     /// still the right answer for a redaction.
     /// </remarks>
     private async Task RedactPeopleAsync()
@@ -2060,7 +2070,7 @@ public sealed partial class EditorWindow : Window
     /// Alt from the keyboard rather than from the pointer event: Windows treats it as a
     /// menu key and does not reliably carry it in a pointer event's modifiers. Shift and
     /// Ctrl are not menu keys and do arrive on the event, so they are read from it.
-    /// <c>CaptureOverlayWindow.ToModifiers</c> is the same mapping over the same editor and
+    /// <c>CaptureOverlayView.ToModifiers</c> is the same mapping over the same editor and
     /// has to stay in step with this one.
     /// </remarks>
     private static EditorModifiers ToModifiers(PointerRoutedEventArgs e) =>

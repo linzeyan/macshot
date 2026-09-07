@@ -56,7 +56,14 @@ public sealed partial class WebcamWindow : Window
     {
         InitializeComponent();
         Preview.Source = _frames;
-        Closed += (_, _) => _closed = true;
+        Closed += (_, _) =>
+        {
+            _closed = true;
+
+            // The flag first: a camera frame already on its way to the dispatcher must
+            // find the source closed rather than disposed underneath it.
+            Preview.Release();
+        };
     }
 
     /// <summary>

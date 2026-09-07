@@ -440,7 +440,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         {
             Glyph = "\uE91B",
             FontSize = 14,
-            FontFamily = new FontFamily("Segoe Fluent Icons"),
+            FontFamily = AppFonts.Symbols,
         },
         Width = 28,
         Height = 26,
@@ -2320,7 +2320,7 @@ public sealed partial class AnnotationToolbarView : UserControl
             // 6, because the arrow has 11 points of height to sit in and Fluent's chevrons
             // are drawn with room around them at their nominal size.
             FontSize = 6,
-            FontFamily = new FontFamily("Segoe Fluent Icons"),
+            FontFamily = AppFonts.Symbols,
         },
         Width = 19,
         Height = 11,
@@ -2765,7 +2765,7 @@ public sealed partial class AnnotationToolbarView : UserControl
                 {
                     Glyph = "\uE70D",
                     FontSize = 9,
-                    FontFamily = new FontFamily("Segoe Fluent Icons"),
+                    FontFamily = AppFonts.Symbols,
                     Foreground = ToolbarPalette.IconBrush(0.6),
                     VerticalAlignment = VerticalAlignment.Center,
                 },

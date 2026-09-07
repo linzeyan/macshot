@@ -332,7 +332,13 @@ public sealed class GraphicsCaptureService : IDisposable
     /// and a window differ only in how the item is opened, so everything from the
     /// frame pool down is shared.
     /// </summary>
-    private static async Task<(int Width, int Height, byte[] Pixels)> CaptureItemAsync(
+    /// <remarks>
+    /// Internal because a recording takes one of these before it starts, for the frame it
+    /// otherwise might never be given: a session already running delivers only when the
+    /// content changes, while a session being opened delivers what is there. See
+    /// <see cref="ScreenRecorder"/>.
+    /// </remarks>
+    internal static async Task<(int Width, int Height, byte[] Pixels)> CaptureItemAsync(
         IDirect3DDevice device,
         GraphicsCaptureItem item,
         bool includeCursor = false)

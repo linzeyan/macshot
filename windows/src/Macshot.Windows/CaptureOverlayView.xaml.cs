@@ -36,7 +36,7 @@ namespace Macshot.Windows;
 /// with different DPI cannot map pointer input to pixels correctly. See
 /// <c>docs/windows-port/architecture.md</c>, decision D6.
 /// </summary>
-public sealed partial class CaptureOverlayWindow : Window
+public sealed partial class CaptureOverlayView : UserControl
 {
     /// <summary>
     /// The standing instruction before anything is chosen, with window snap on. Matches
@@ -121,12 +121,23 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </summary>
     private const double DoubleClickSlop = 4;
 
-    private readonly CapturedFrame _desktopFrame;
+    /// <summary>The window this is being shown in, or null before and after.</summary>
+    private CaptureOverlayHost? _host;
+
+    /// <summary>Whether <see cref="Dismiss"/> has already run. It is called twice.</summary>
+    private bool _dismissed;
+
+    /// <summary>
+    /// The frozen desktop this overlay was raised over, and the part of it on this
+    /// display. Not readonly, because a dismissed overlay gives them up — see
+    /// <see cref="ReleasePixels"/>.
+    /// </summary>
+    private CapturedFrame _desktopFrame;
     private readonly MonitorLayout _layout;
     private readonly CaptureMonitor _monitor;
-    private readonly CapturedFrame _monitorFrame;
+    private CapturedFrame _monitorFrame;
     private readonly SettingsStore _settings;
-    private readonly IReadOnlyList<CaptureWindow> _snapCandidates;
+    private IReadOnlyList<CaptureWindow> _snapCandidates;
 
     /// <summary>
     /// Takes one window as its own capture, or answers null when Windows cannot.
@@ -421,7 +432,7 @@ public sealed partial class CaptureOverlayWindow : Window
     /// </remarks>
     private bool _adjustWhenBoundariesLand;
 
-    public CaptureOverlayWindow(
+    public CaptureOverlayView(
         CapturedFrame desktopFrame,
         MonitorLayout layout,
         CaptureMonitor monitor,
@@ -501,11 +512,30 @@ public sealed partial class CaptureOverlayWindow : Window
     /// <summary>True once a region is chosen and the window is accepting annotations.</summary>
     private bool IsAnnotating => _selection is not null;
 
-    public async Task ShowAsync()
+    /// <summary>
+    /// The handle of the window this is being shown in, for anything that opens a dialog.
+    /// </summary>
+    /// <remarks>
+    /// The shell's, not this control's: <c>GetWindowHandle</c> takes something that projects
+    /// as a WinRT window, and handing it a <see cref="UserControl"/> throws
+    /// <c>InvalidCastException</c> at the moment the region is chosen rather than at compile
+    /// time. Zero while there is no shell, which every caller here already means as "no
+    /// owner" — a dialog with no owner is worse than none at all only if it opens behind the
+    /// overlay, and by then there is no overlay.
+    /// </remarks>
+    private nint HostHandle =>
+        _host is { } host ? WinRT.Interop.WindowNative.GetWindowHandle(host) : 0;
+
+    /// <param name="host">
+    /// The window this is shown in, which outlives it: see <see cref="CaptureOverlayHost"/>
+    /// for why the shell is reused and the interface is not.
+    /// </param>
+    public async Task ShowAsync(CaptureOverlayHost host)
     {
-        var source = new SoftwareBitmapSource();
-        await source.SetBitmapAsync(_monitorFrame.ToDisplayBitmap());
-        PreviewImage.Source = source;
+        ArgumentNullException.ThrowIfNull(host);
+
+        _host = host;
+        await PreviewImage.ShowAsync(_monitorFrame);
         BuildGrips();
         WireZoom();
         WireToolbar();
@@ -515,40 +545,7 @@ public sealed partial class CaptureOverlayWindow : Window
         WireCanvas();
         WireFrameAnchor();
 
-        // Covers both finishing and cancelling: the owner closes every overlay either
-        // way, and a colour picked but not used is still the colour the user wants.
-        Closed += (_, _) =>
-        {
-            AnnotationToolbar.PersistStyle();
-
-            // A camera left running behind a closed window is the one failure here
-            // nobody would forgive: the light beside the lens would stay on. An open
-            // microphone is the same failure without the light to give it away.
-            HideWebcamPreview();
-            HideMicMeter();
-
-            // An auto-adjust still waiting on the boundary scan would land here after the
-            // window had gone and redraw a canvas nobody is looking at. Escape during the
-            // scan is exactly how that happens.
-            _adjustWhenBoundariesLand = false;
-        };
-
-        var appWindow = this.GetAppWindow();
-        var presenter = appWindow.MakeChromeless();
-        presenter.IsAlwaysOnTop = true;
-        presenter.IsResizable = false;
-
-        // The client rect, not the window rect: the pointer's origin is the client's
-        // origin, so a frame left round the window is a translation of every capture.
-        // AppWindow positions in physical pixels, so the display's virtual-space bounds
-        // go in unchanged — converting to layout units here would misplace the overlay
-        // on every display that is not at 100%.
-        appWindow.PlaceClient(new RectInt32(
-            (int)_monitor.Bounds.X,
-            (int)_monitor.Bounds.Y,
-            (int)_monitor.Bounds.Width,
-            (int)_monitor.Bounds.Height));
-        this.TakeForeground();
+        host.Present(this, _monitor);
         OverlayRoot.Focus(FocusState.Programmatic);
 
         // Everything is dimmed until something is chosen, which is what says the whole
@@ -568,6 +565,50 @@ public sealed partial class CaptureOverlayWindow : Window
         {
             BuildBoundaryIndex();
         }
+    }
+
+    /// <summary>
+    /// Takes the overlay down, and hands its window back.
+    /// </summary>
+    /// <remarks>
+    /// What a <c>Closed</c> handler used to do. It is not one any more because the window
+    /// is no longer this: the shell outlives every capture and this does not — see
+    /// <see cref="CaptureOverlayHost"/>. Idempotent, because finishing a capture takes
+    /// down this overlay and the owner then takes down all of them.
+    /// </remarks>
+    public void Dismiss()
+    {
+        if (_dismissed)
+        {
+            return;
+        }
+
+        _dismissed = true;
+
+        // Covers both finishing and cancelling: the owner takes every overlay down either
+        // way, and a colour picked but not used is still the colour the user wants.
+        AnnotationToolbar.PersistStyle();
+
+        // A timer left running would go on placing a toolbar nobody can see.
+        _frameAnchor.Stop();
+
+        // A camera left running behind a dismissed overlay is the one failure here nobody
+        // would forgive: the light beside the lens would stay on. An open microphone is
+        // the same failure without the light to give it away.
+        HideWebcamPreview();
+        HideMicMeter();
+
+        // An auto-adjust still waiting on the boundary scan would land here after the
+        // overlay had gone and redraw a canvas nobody is looking at. Escape during the
+        // scan is exactly how that happens.
+        _adjustWhenBoundariesLand = false;
+
+        // One frozen screen per display, held twice over — see FramePreview.
+        PreviewImage.Release();
+        ReleasePixels();
+
+        _host?.Retire(this);
+        _host = null;
     }
 
     /// <summary>
@@ -1351,7 +1392,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         // The row opens one dialog — the frame's background picture — and this window is
         // topmost, so a dialog it does not own would open behind it.
-        AnnotationToolbar.OwnerHandle = WinRT.Interop.WindowNative.GetWindowHandle(this);
+        AnnotationToolbar.OwnerHandle = HostHandle;
         SnapHighlight.Visibility = Visibility.Collapsed;
 
         // The next drag has become this one. Taken away here rather than left to the pill,
@@ -2595,9 +2636,7 @@ public sealed partial class CaptureOverlayWindow : Window
                 // Asked before the overlays come down, so the question is in front of the
                 // capture it is about rather than over whatever was behind it.
                 if (!_settings.Current.UploadConfirm
-                    || Upload.UploadConfirm.Ask(
-                        WinRT.Interop.WindowNative.GetWindowHandle(this),
-                        _settings.Current.UploadProvider))
+                    || Upload.UploadConfirm.Ask(HostHandle, _settings.Current.UploadProvider))
                 {
                     _ = CompleteAsync(CaptureOutcome.Upload);
                 }
@@ -2884,9 +2923,6 @@ public sealed partial class CaptureOverlayWindow : Window
             }
         };
 
-        // A timer left running behind a closed overlay would keep the window alive and
-        // go on placing a toolbar nobody can see.
-        Closed += (_, _) => _frameAnchor.Stop();
     }
 
     /// <summary>
@@ -2912,6 +2948,49 @@ public sealed partial class CaptureOverlayWindow : Window
         // The picker writes the style down before this runs, so the repaint reads the
         // background that was just chosen rather than the one before it.
         ShowFrameFromSettings();
+    }
+
+    /// <summary>
+    /// Lets go of the frozen screen this overlay was holding, once it has closed.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Closing a WinUI window does not free it. Measured on this port: after six captures
+    /// every one of the six closed overlays was still alive through a forced collection,
+    /// and the managed heap had grown by 35MB each time — two frozen screens per overlay,
+    /// at 2038x1588 and four bytes a pixel. That is the whole of why the process went from
+    /// 22MB to 452MB over ten captures, and why cancelling cost as much as capturing.
+    /// </para>
+    /// <para>
+    /// Setting <c>Content</c> to null, which is the usual advice, was tried and changed
+    /// nothing: what is held is the <see cref="Window"/> itself, and that is the
+    /// framework's to release. So the pixels are given up by hand instead, which is the
+    /// one half this app controls.
+    /// </para>
+    /// <para>
+    /// An empty frame rather than null, because everything here reads these fields without
+    /// asking first, and work that lands after the window has gone — an auto-adjust still
+    /// waiting on a boundary scan is how that happens — should draw nothing rather than
+    /// throw in front of the user.
+    /// </para>
+    /// </remarks>
+    private void ReleasePixels()
+    {
+        _desktopFrame = CapturedFrame.Empty;
+        _monitorFrame = CapturedFrame.Empty;
+        _capturedWindow = null;
+        _snapCandidates = [];
+
+        // It was built over the desktop frame and would hold it open on its own.
+        _loupe = null;
+
+        // Two bytes a pixel for the whole display — 6.5MB beside a 2038x1588 desktop, and
+        // the single largest thing an overlay is left holding once the frames are gone.
+        _boundaries = null;
+
+        // The marks and the region under them: another four copies of the chosen area,
+        // which for a full-screen capture is four more screens.
+        AnnotationCanvas.Release();
     }
 
     /// <summary>
@@ -3550,7 +3629,7 @@ public sealed partial class CaptureOverlayWindow : Window
 
         try
         {
-            if (await ClipboardImages.PickAsync(WinRT.Interop.WindowNative.GetWindowHandle(this)) is { } picture)
+            if (await ClipboardImages.PickAsync(HostHandle) is { } picture)
             {
                 AnnotationToolbar.UseStampPicture(picture);
             }
@@ -3666,14 +3745,16 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         await AnnotationCanvas.FlushAsync();
-        if (Completed(CaptureOutcome.SaveAs) is not { } completion)
+        // The shell as well, because the picker hangs off a window and this is no longer
+        // one. Null means the overlay is already down, which is not a case to report.
+        if (Completed(CaptureOutcome.SaveAs) is not { } completion || _host is not { } owner)
         {
             return;
         }
 
         try
         {
-            if (await SavePrompt.WriteAsync(this, completion.Frame, _settings.Current, completion.WindowTitle) is not null)
+            if (await SavePrompt.WriteAsync(owner, completion.Frame, _settings.Current, completion.WindowTitle) is not null)
             {
                 CaptureCompleted?.Invoke(this, completion);
             }
@@ -3701,7 +3782,8 @@ public sealed partial class CaptureOverlayWindow : Window
         }
 
         await AnnotationCanvas.FlushAsync();
-        if (Finished() is not { } finished)
+        // The shell as well, for the reason the save picker needs it.
+        if (Finished() is not { } finished || _host is not { } owner)
         {
             return;
         }
@@ -3709,7 +3791,7 @@ public sealed partial class CaptureOverlayWindow : Window
         try
         {
             await ShareSheet.ShowAsync(
-                this,
+                owner,
                 finished,
                 _settings.Current,
                 () => Cancelled?.Invoke(this, EventArgs.Empty));

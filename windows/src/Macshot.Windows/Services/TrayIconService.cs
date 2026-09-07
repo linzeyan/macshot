@@ -185,8 +185,9 @@ public sealed class TrayIconService : IDisposable
     public event EventHandler? DefaultActionInvoked;
 
     /// <param name="glyph">
-    /// The Segoe Fluent Icons character drawn beside it, or null for none — see
-    /// <see cref="MenuIcons"/>. macshot puts a symbol on every item of its own menu.
+    /// The character drawn beside it, out of <see cref="AppFonts.Symbols"/>, or null for
+    /// none — see <see cref="MenuIcons"/>. macshot puts a symbol on every item of its own
+    /// menu.
     /// </param>
     public void AddMenuItem(int id, string text, string? glyph = null)
     {

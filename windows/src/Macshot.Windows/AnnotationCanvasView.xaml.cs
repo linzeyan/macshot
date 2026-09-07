@@ -180,6 +180,26 @@ public sealed partial class AnnotationCanvasView : UserControl
     public CapturedFrame? ToFrame() => _preview?.ToFrame();
 
     /// <summary>
+    /// Lets go of the capture and everything drawn over it, for a surface that has been
+    /// taken down.
+    /// </summary>
+    /// <remarks>
+    /// Four copies of the chosen region are held while it is being annotated: the frame it
+    /// came in as, the untouched baseline the marks are composited over, the working buffer
+    /// they are composited into, and the bitmap that shows the result. For a full-screen
+    /// capture that is four screens, and the surface itself is not something the framework
+    /// gives back — see <see cref="CaptureOverlayHost"/> — so leaving them attached is
+    /// leaving them for the life of the process.
+    /// </remarks>
+    public void Release()
+    {
+        _preview?.Detach();
+        _preview = null;
+        _source = null;
+        _editor = null;
+    }
+
+    /// <summary>
     /// What is on the canvas — the capture with the marks drawn into it — and where it
     /// sits, or null before anything is being previewed. What the colour sampler reads.
     /// </summary>
@@ -501,11 +521,11 @@ public sealed partial class AnnotationCanvasView : UserControl
 
         row.Children.Add(new FontIcon
         {
-            // Segoe Fluent Icons' bin, the same character the history window's
+            // The icon face's bin, the same character the history window's
             // own delete already uses.
             Glyph = "\uE74D",
             FontSize = 13,
-            FontFamily = new FontFamily("Segoe Fluent Icons"),
+            FontFamily = AppFonts.Symbols,
             Foreground = _pillIcon,
             VerticalAlignment = VerticalAlignment.Center,
         });

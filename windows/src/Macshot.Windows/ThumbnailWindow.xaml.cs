@@ -8,7 +8,6 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Graphics;
 using static Macshot.Windows.Services.Localization;
 
@@ -76,6 +75,18 @@ public sealed partial class ThumbnailWindow : Window
 
         _dismissTimer.Interval = TimeSpan.FromSeconds(_settings.Current.ThumbnailSeconds);
         _dismissTimer.Tick += (_, _) => Close();
+
+        // The panel dismisses itself after a few seconds and one is raised by every
+        // capture, so the copy it is holding has to go with it — see FramePreview.
+        Closed += (_, _) =>
+        {
+            ThumbnailImage.Release();
+
+            // And the capture behind it. A panel is raised for every delivered capture and
+            // WinUI never takes a closed window back, so a full-screen shot left here is
+            // 12MB the process keeps for as long as it runs — see CaptureOverlayHost.
+            _frame = CapturedFrame.Empty;
+        };
     }
 
     /// <summary>Raised with the capture the user wants kept on top.</summary>
@@ -125,9 +136,7 @@ public sealed partial class ThumbnailWindow : Window
     /// </summary>
     public async Task ShowAsync(int stackIndex = 0)
     {
-        var source = new SoftwareBitmapSource();
-        await source.SetBitmapAsync(_frame.ToDisplayBitmap());
-        ThumbnailImage.Source = source;
+        await ThumbnailImage.ShowAsync(_frame);
 
         var appWindow = this.GetAppWindow();
         var presenter = appWindow.MakeChromeless();
@@ -361,9 +370,7 @@ public sealed partial class ThumbnailWindow : Window
         var (width, height, pixels) = FrameTransforms.Apply(turn, _frame.Width, _frame.Height, _frame.BgraPixels);
         _frame = new CapturedFrame(_frame.VirtualX, _frame.VirtualY, width, height, pixels, _frame.HasAlpha);
 
-        var source = new SoftwareBitmapSource();
-        await source.SetBitmapAsync(_frame.ToDisplayBitmap());
-        ThumbnailImage.Source = source;
+        await ThumbnailImage.ShowAsync(_frame);
 
         // The marks go with it, as they do from the history panel: they were placed in
         // the coordinates the pixels used to have.

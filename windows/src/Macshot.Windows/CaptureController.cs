@@ -69,7 +69,13 @@ public sealed class CaptureController : IDisposable
     private const string GlyphStopwatch = "\uE916";
     private const string GlyphVideo = "\uE714";
     private const string GlyphHistory = "\uE81C";
-    private const string GlyphGrid = "\uE7AA";
+    /// <summary>
+    /// The one glyph in this menu that had to move. E7AA is in Segoe Fluent Icons and in
+    /// no earlier face, so on Windows 10 \u2014 where <see cref="AppFonts.Symbols"/> falls back
+    /// to Segoe MDL2 Assets \u2014 the history item drew an empty box. E8A9 is the same grid of
+    /// thumbnails and is in both.
+    /// </summary>
+    private const string GlyphGrid = "\uE8A9";
     private const string GlyphPicture = "\uE8B9";
     private const string GlyphMovies = "\uE8B2";
     private const string GlyphPaste = "\uE77F";
@@ -169,7 +175,8 @@ public sealed class CaptureController : IDisposable
     private readonly MessageWindow _messageWindow;
     private readonly GlobalHotkeyService _hotkeys;
     private readonly TrayIconService _trayIcon;
-    private readonly List<CaptureOverlayWindow> _overlays = [];
+    private readonly List<CaptureOverlayView> _overlays = [];
+
     private readonly List<PinWindow> _pins = [];
     private EditorWindow? _editor;
     private HistoryWindow? _history;
@@ -767,7 +774,7 @@ public sealed class CaptureController : IDisposable
 
         foreach (var monitor in layout.Monitors)
         {
-            var overlay = new CaptureOverlayWindow(
+            var overlay = new CaptureOverlayView(
                 desktopFrame,
                 layout,
                 monitor,
@@ -801,7 +808,7 @@ public sealed class CaptureController : IDisposable
         {
             foreach (var overlay in _overlays)
             {
-                await overlay.ShowAsync();
+                await overlay.ShowAsync(CaptureOverlayHost.For(overlay.Monitor));
             }
         }
         catch
@@ -1056,7 +1063,7 @@ public sealed class CaptureController : IDisposable
 
             _overlays.Remove(overlay);
             Unsubscribe(overlay);
-            overlay.Close();
+            overlay.Dismiss();
         }
     }
 
@@ -1081,6 +1088,7 @@ public sealed class CaptureController : IDisposable
             }
 
             await DeliverAsync(result);
+            CollectWhenIdle();
         }
         catch (Exception exception)
         {
@@ -1216,6 +1224,7 @@ public sealed class CaptureController : IDisposable
         {
             await ShowThumbnailAsync(frame, archived);
         }
+
     }
 
     /// <summary>
@@ -1930,7 +1939,11 @@ public sealed class CaptureController : IDisposable
         _preferences.Activate();
     }
 
-    private void OnCaptureCancelled(object? sender, EventArgs args) => DismissOverlays();
+    private void OnCaptureCancelled(object? sender, EventArgs args)
+    {
+        DismissOverlays();
+        CollectWhenIdle();
+    }
 
     private void DismissOverlays()
     {
@@ -1940,14 +1953,14 @@ public sealed class CaptureController : IDisposable
         foreach (var overlay in overlays)
         {
             Unsubscribe(overlay);
-            overlay.Close();
+            overlay.Dismiss();
         }
 
         // The overlays going away ends any add-capture, whichever way it ended.
         RestorePendingEditor();
     }
 
-    private void Unsubscribe(CaptureOverlayWindow overlay)
+    private void Unsubscribe(CaptureOverlayView overlay)
     {
         overlay.CaptureCompleted -= OnCaptureCompleted;
         overlay.SelectionCommitted -= OnSelectionCommitted;
@@ -2347,6 +2360,8 @@ public sealed class CaptureController : IDisposable
             {
                 _hotkeys.Unregister(HotkeyStopRecording);
             }
+
+            CollectWhenIdle();
         }
     }
 
@@ -2760,6 +2775,35 @@ public sealed class CaptureController : IDisposable
         editor.Activate();
         return editor;
     }
+
+    /// <summary>
+    /// Asks for a collection, now that a capture is over and macshot is going back to
+    /// being idle.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Collecting by hand is normally wrong and here it is not. One capture turns tens of
+    /// megabytes into garbage in a single step — the frozen screen of every display, the
+    /// boundary index behind edge snapping, the four copies of the chosen region the canvas
+    /// works on — and then macshot goes back to a tray icon that allocates nothing at all.
+    /// The collector has no reason to run and does not: measured on the VM, six captures
+    /// left the process 26MB larger each, and the same six with this call left it 8MB
+    /// larger each, all the difference having been garbage the whole time. Somebody
+    /// watching Task Manager cannot tell that apart from a leak, and the report that
+    /// started this could not either.
+    /// </para>
+    /// <para>
+    /// Compacting, because what is freed is nearly all large-object-heap buffers a screen
+    /// at a time, and a hole the size of a 4K screenshot is only usable by another 4K
+    /// screenshot. Posted rather than called straight, because this runs from the overlay's
+    /// own input handler, and what is being collected is still on that stack.
+    /// </para>
+    /// </remarks>
+    private void CollectWhenIdle() => Post(() =>
+    {
+        GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+        return Task.CompletedTask;
+    });
 
     private void Post(Func<Task> action)
     {

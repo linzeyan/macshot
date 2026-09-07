@@ -32,6 +32,13 @@ public sealed class CapturedFrame
         HasAlpha = hasAlpha;
     }
 
+    /// <summary>
+    /// No pixels at all, for a surface that has been closed and is only still in memory
+    /// because the framework has not let go of it. See
+    /// <c>CaptureOverlayView.ReleasePixels</c>.
+    /// </summary>
+    public static CapturedFrame Empty { get; } = new(0, 0, 0, 0, []);
+
     public int VirtualX { get; }
 
     public int VirtualY { get; }

@@ -8,7 +8,6 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
-using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Graphics;
 using Windows.System;
 using WinRT.Interop;
@@ -38,7 +37,7 @@ public sealed partial class PinWindow : Window
     /// <summary>What Windows reports for one notch. A precision touchpad sends less.</summary>
     private const double WheelNotch = 120;
 
-    private readonly CapturedFrame _frame;
+    private CapturedFrame _frame;
     private readonly SettingsStore _settings;
 
     /// <summary>The window at scale 1, which every later size is a multiple of.</summary>
@@ -58,6 +57,17 @@ public sealed partial class PinWindow : Window
 
         EditButton.Child = Glyph(ToolbarCommand.OpenEditor);
         CloseButton.Child = Glyph(ToolbarCommand.Cancel);
+
+        // A pin can sit on the desktop for hours and there can be several — see
+        // FramePreview for what each one is holding.
+        Closed += (_, _) =>
+        {
+            PinImage.Release();
+
+            // And the capture behind it, for the same reason: a closed window is never
+            // collected, so its pixels are held for the life of the process.
+            _frame = CapturedFrame.Empty;
+        };
     }
 
     /// <summary>Raised with the capture the user wants opened in the editor.</summary>
@@ -65,9 +75,7 @@ public sealed partial class PinWindow : Window
 
     public async Task ShowPinnedAsync()
     {
-        var source = new SoftwareBitmapSource();
-        await source.SetBitmapAsync(_frame.ToDisplayBitmap());
-        PinImage.Source = source;
+        await PinImage.ShowAsync(_frame);
 
         var appWindow = this.GetAppWindow();
         var presenter = appWindow.MakeChromeless();

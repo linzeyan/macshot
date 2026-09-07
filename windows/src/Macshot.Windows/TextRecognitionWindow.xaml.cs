@@ -3,7 +3,6 @@ using Macshot.Windows.Services;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
-using Microsoft.UI.Xaml.Media.Imaging;
 using Windows.Graphics;
 using Windows.System;
 using static Macshot.Windows.Services.Localization;
@@ -92,7 +91,13 @@ public sealed partial class TextRecognitionWindow : Window
         var appWindow = this.GetAppWindow();
         appWindow.UseAppIcon();
         Resize(appWindow);
-        Closed += (_, _) => _closing.Cancel();
+        Closed += (_, _) =>
+        {
+            _closing.Cancel();
+
+            // The capture beside the text — see FramePreview.
+            PreviewImage.Release();
+        };
 
         if (source is null)
         {
@@ -136,9 +141,7 @@ public sealed partial class TextRecognitionWindow : Window
     {
         try
         {
-            var bitmap = new SoftwareBitmapSource();
-            await bitmap.SetBitmapAsync(source.ToDisplayBitmap());
-            PreviewImage.Source = bitmap;
+            await PreviewImage.ShowAsync(source);
         }
         catch (Exception exception)
         {

@@ -1,9 +1,9 @@
-<Window
-    x:Class="Macshot.Windows.CaptureOverlayWindow"
+<UserControl
+    x:Class="Macshot.Windows.CaptureOverlayView"
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:Macshot.Windows"
-    Title="Macshot Capture">
+    Background="#FF000000">
     <Grid x:Name="OverlayRoot" Background="#FF000000" KeyDown="OverlayRoot_KeyDown" KeyUp="OverlayRoot_KeyUp">
         <!-- Everything that is the capture, under one transform: the screenshot, the
              marks on it, the marquee and its grips. Zooming and panning move all of it
@@ -162,4 +162,4 @@
              where its children are, so the gaps still reach the surfaces below. -->
         <local:AnnotationToolbarView x:Name="AnnotationToolbar" Visibility="Collapsed" />
     </Grid>
-</Window>
+</UserControl>

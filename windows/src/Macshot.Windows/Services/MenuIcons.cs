@@ -18,10 +18,10 @@ namespace Macshot.Windows.Services;
 /// </para>
 /// <para>
 /// A Win32 menu takes a picture as an <c>HBITMAP</c>, so the glyph has to be rasterized
-/// rather than named. Segoe Fluent Icons is the face: it is the same set the preferences
-/// window's tab strip already draws from, it ships with Windows, and it is drawn on the
-/// same grid at every size — which an icon in a menu needs, because the shell asks for it
-/// at whatever the current DPI makes of 16 points.
+/// rather than named. <see cref="AppFonts.SymbolFace"/> is the face: it is the same set the
+/// preferences window's tab strip already draws from, it ships with Windows, and it is
+/// drawn on the same grid at every size — which an icon in a menu needs, because the shell
+/// asks for it at whatever the current DPI makes of 16 points.
 /// </para>
 /// <para>
 /// Drawn white on black and turned into alpha afterwards rather than drawn in the final
@@ -183,10 +183,11 @@ internal static class MenuIcons
                 AntialiasedQuality,
                 pitchAndFamily: 0,
 
-                // The Windows 11 set, with the set every earlier Windows has behind it.
-                // GDI falls back on its own when the first is not installed, and both
-                // carry these codepoints at the same places.
-                "Segoe Fluent Icons");
+                // Resolved rather than named: GDI takes one family and has no fallback
+                // list, and its font mapper answers a missing one with the nearest text
+                // face instead of failing — which carries none of these codepoints, so
+                // asking for the Windows 11 set by name drew an empty menu on Windows 10.
+                AppFonts.SymbolFace);
 
             var previousFont = SelectObject(canvas, font);
             SetBkMode(canvas, TransparentBackground);

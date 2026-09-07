@@ -44,7 +44,7 @@ namespace Macshot.Windows;
 /// </remarks>
 public sealed partial class PreferencesWindow : Window
 {
-    /// <summary>Segoe Fluent Icons: an X, and a circling arrow — macshot's two.</summary>
+    /// <summary><see cref="AppFonts.Symbols"/>: an X, and a circling arrow — macshot's two.</summary>
     private const string ClearGlyph = "\uE894";
 
     private const string ResetGlyph = "\uE72C";
@@ -642,7 +642,7 @@ public sealed partial class PreferencesWindow : Window
             {
                 Glyph = glyph,
                 FontSize = 12,
-                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontFamily = AppFonts.Symbols,
             },
             Padding = new Thickness(8, 4, 8, 4),
             VerticalAlignment = VerticalAlignment.Center,
@@ -942,7 +942,7 @@ public sealed partial class PreferencesWindow : Window
             {
                 Glyph = glyph,
                 FontSize = 12,
-                FontFamily = new FontFamily("Segoe Fluent Icons"),
+                FontFamily = AppFonts.Symbols,
             },
             IsEnabled = index + by >= 0 && index + by < _menuOrder.Count,
             Padding = new Thickness(6, 2, 6, 2),

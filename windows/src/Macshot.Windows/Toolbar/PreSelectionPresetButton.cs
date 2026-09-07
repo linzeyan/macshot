@@ -54,7 +54,7 @@ internal sealed partial class PreSelectionPresetButton : UserControl
             // controls opening one panel must not look like two different features.
             Glyph = "\uE799",
             FontSize = 14,
-            FontFamily = new FontFamily("Segoe Fluent Icons"),
+            FontFamily = AppFonts.Symbols,
         };
 
         _surface = new Border

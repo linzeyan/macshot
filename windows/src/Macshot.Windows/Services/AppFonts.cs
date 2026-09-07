@@ -61,6 +61,41 @@ internal static class AppFonts
     public static FontFamily Family { get; } =
         new("Segoe UI Variable Text, Microsoft JhengHei UI, Segoe UI");
 
+    /// <summary>The Windows 11 icon face, and the one every earlier Windows has instead.</summary>
+    private const string FluentIcons = "Segoe Fluent Icons";
+
+    private const string LegacyIcons = "Segoe MDL2 Assets";
+
+    /// <summary>
+    /// The face every icon glyph macshot draws comes from.
+    /// </summary>
+    /// <remarks>
+    /// Both names, because Segoe Fluent Icons ships with Windows 11 and is simply absent
+    /// from Windows 10, where the same codepoints live in Segoe MDL2 Assets. Naming only
+    /// the first left every <see cref="FontIcon"/> this app builds in code blank on
+    /// Windows 10 — the gear's reset arrow, the chevrons, the toolbar's own symbols —
+    /// while the ones declared in XAML kept drawing, because those default to WinUI's
+    /// <c>SymbolThemeFontFamily</c>, which is this same pair. That resource is not read
+    /// here for the reason <see cref="SymbolFace"/> exists: the notification menu draws
+    /// through GDI, which cannot see a XAML resource, and both halves have to agree.
+    /// </remarks>
+    public static FontFamily Symbols { get; } = new($"{FluentIcons}, {LegacyIcons}");
+
+    /// <summary>
+    /// The single icon family a GDI caller should name: the first of <see cref="Symbols"/>
+    /// this machine actually has.
+    /// </summary>
+    /// <remarks>
+    /// GDI takes one name and has no fallback list. Asked for a family that is not
+    /// installed, its font mapper substitutes the nearest text face rather than failing,
+    /// and that face carries none of these codepoints — so the menu drew empty squares on
+    /// Windows 10 instead of falling back. The choice is made here instead, once.
+    /// </remarks>
+    public static string SymbolFace { get; } =
+        InstalledFonts.Families().Contains(FluentIcons, StringComparer.OrdinalIgnoreCase)
+            ? FluentIcons
+            : LegacyIcons;
+
     /// <summary>
     /// The tracking for the language in use, in thousandths of an em: a hair for Chinese
     /// and none for anything else.

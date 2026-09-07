@@ -78,7 +78,7 @@ internal sealed partial class ResolutionBox : UserControl
         {
             Glyph = "\uE799",
             FontSize = 14,
-            FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe Fluent Icons"),
+            FontFamily = AppFonts.Symbols,
         },
         Foreground = ToolbarPalette.IconBrush(),
         VerticalAlignment = VerticalAlignment.Center,

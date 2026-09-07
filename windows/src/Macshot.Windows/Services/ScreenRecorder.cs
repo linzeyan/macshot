@@ -256,9 +256,13 @@ public sealed class ScreenRecorder : IDisposable
 
         var plan = RecordingPlan.Resolve(sourceWidth, sourceHeight, frameRate);
 
+        // Before the recording's own session exists, so the two are never open at once,
+        // and because this is the frame the recording may otherwise never be given.
+        var seed = SeedBuffer(await SeedPixelsAsync(item), crop, follow);
+
         using var frames = new FrameStream(Device(), item, plan.FrameInterval, cancellation);
         using var held = Holding(frames);
-        using var video = new Mp4Frames(frames, crop, follow, plan.FrameInterval);
+        using var video = new Mp4Frames(frames, crop, follow, plan.FrameInterval, seed);
 
         // Null when nothing was asked for, and also when nothing could be opened — a
         // machine with no microphone records without one rather than not at all.
@@ -335,7 +339,8 @@ public sealed class ScreenRecorder : IDisposable
             throw new InvalidOperationException(
                 $"Windows would not finish the recording: {(video.Failure ?? exception).Message}"
                     + $" ({video.Kept} frames captured, {video.Repeated} repeated while the screen"
-                    + $" was still, {frames.Dropped} dropped, over {frames.Elapsed:mm\\:ss})",
+                    + $" was still, {frames.Dropped} dropped, first frame"
+                    + $" {(seed is null ? "not seeded" : "seeded")}, over {frames.Elapsed:mm\\:ss})",
                 video.Failure ?? exception);
         }
 
@@ -345,7 +350,8 @@ public sealed class ScreenRecorder : IDisposable
         track?.Dispose();
 
         DiagnosticLog.Verbose(
-            $"recorded {video.Kept} frames ({video.Repeated} repeated, {frames.Dropped} dropped)"
+            $"recorded {video.Kept} frames ({video.Repeated} repeated, {frames.Dropped} dropped,"
+                + $" first frame {(seed is null ? "not seeded" : "seeded")})"
                 + $" over {frames.Elapsed:mm\\:ss}");
 
         return new RecordingResult(path, frames.Elapsed, video.Kept, frames.Dropped, track?.SeparateTracks);
@@ -378,6 +384,10 @@ public sealed class ScreenRecorder : IDisposable
 
         var timing = new GifFrameTiming();
 
+        // For the same reason the MP4 path takes one, and before the recording's own
+        // session exists: see SeedPixelsAsync.
+        var seed = SeedGifFrame(await SeedPixelsAsync(item), plan, crop, follow);
+
         using var frames = new FrameStream(Device(), item, plan.FrameInterval, cancellation);
         using var held = Holding(frames);
         using var output = await OpenForWritingAsync(path);
@@ -387,7 +397,7 @@ public sealed class ScreenRecorder : IDisposable
 
         frames.Start();
 
-        GifFrame? previous = null;
+        var previous = seed;
         var written = 0;
 
         while (written < GifRecordingPlan.MaximumFrames && await frames.NextAsync() is { } timed)
@@ -420,6 +430,109 @@ public sealed class ScreenRecorder : IDisposable
     }
 
     private IDirect3DDevice Device() => _device ??= GraphicsCaptureService.CreateDirect3DDevice();
+
+    /// <summary>
+    /// What the item looks like at the moment recording starts, or null when it could not
+    /// be taken.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// A running capture session delivers a frame when the content changes and at no other
+    /// time. <see cref="Mp4Frames"/> answers a still screen with the frame before it, which
+    /// is no answer at all until a first frame has arrived — and nothing guarantees one
+    /// does. The recording panel is held out of the capture with
+    /// <c>WDA_EXCLUDEFROMCAPTURE</c>, so its own ticking clock is not a change; the region
+    /// border is drawn once and then stands still. A person who starts a recording and
+    /// then keeps their hands off the desk therefore changes nothing at all, the encoder
+    /// is handed no sample for the whole recording, the sink ends with
+    /// <c>MF_E_SINK_NO_SAMPLES_PROCESSED</c>, and <see cref="Discard"/> removes the file.
+    /// Fifteen seconds of a still desktop produced no recording and no error anyone could
+    /// act on — only "0 frames captured, 0 repeated".
+    /// </para>
+    /// <para>
+    /// Opening a session is the thing that delivers unconditionally: it hands over what is
+    /// there rather than waiting for it to change, which is how every screenshot is taken.
+    /// So one is opened here for a single frame, before the recording's own session
+    /// exists, and that frame is what the recording repeats until the screen moves.
+    /// </para>
+    /// <para>
+    /// Best effort. A seed that cannot be taken leaves the recording exactly as it was, so
+    /// this can only help; it is worth a line in the log rather than a failure.
+    /// </para>
+    /// </remarks>
+    private async Task<(int Width, int Height, byte[] Pixels)?> SeedPixelsAsync(GraphicsCaptureItem item)
+    {
+        try
+        {
+            // With the pointer, as the recording itself is taken: a first frame missing
+            // the cursor that every later frame carries would flicker at the cut.
+            return await GraphicsCaptureService.CaptureItemAsync(Device(), item, includeCursor: true);
+        }
+        catch (Exception exception)
+        {
+            DiagnosticLog.Write($"Could not take the recording's first frame in advance: {exception.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The seed as the buffer the MP4 encoder reads, sized to what the stream was told.
+    /// </summary>
+    private static IBuffer? SeedBuffer(
+        (int Width, int Height, byte[] Pixels)? seed,
+        RecordedArea? crop,
+        WindowRecordingArea? follow)
+    {
+        if (seed is not { } taken)
+        {
+            return null;
+        }
+
+        var (width, height, pixels) = taken;
+
+        // The content size is the whole frame: nothing resized under a session that lived
+        // for one frame.
+        return follow is { } area
+            ? FitIn(width, height, pixels, pixels.Length, new SizeInt32 { Width = width, Height = height }, area)
+            : crop is { } cropper
+                ? CutOut(width, height, pixels, pixels.Length, cropper)
+                : AsEncoderBuffer(width, height, pixels);
+    }
+
+    /// <summary>
+    /// The seed as the GIF's first frame, at time zero.
+    /// </summary>
+    /// <remarks>
+    /// A GIF says how long each frame was on screen, so a recording of something that
+    /// never moves is correctly one frame with a long delay — which is what this makes it,
+    /// where before it was the "stopped before Windows delivered a frame" failure.
+    /// </remarks>
+    private static GifFrame? SeedGifFrame(
+        (int Width, int Height, byte[] Pixels)? seed,
+        GifRecordingPlan plan,
+        RecordedArea? crop,
+        WindowRecordingArea? follow)
+    {
+        if (seed is not { } taken)
+        {
+            return null;
+        }
+
+        var (width, height, pixels) = taken;
+
+        if (follow is { } area)
+        {
+            pixels = area.Fit(width, height, pixels, width, height);
+            width = area.Width;
+            height = area.Height;
+        }
+        else if (crop is { } cropper)
+        {
+            (width, height, pixels) = FrameTransforms.Crop(width, height, pixels, cropper.AsRegion);
+        }
+
+        return new GifFrame(FrameScaler.Downscale(pixels, width, height, plan.Width, plan.Height), TimeSpan.Zero);
+    }
 
     /// <summary>
     /// Describes the frames as they are handed over: uncompressed BGRA, the size of
@@ -870,18 +983,32 @@ public sealed class ScreenRecorder : IDisposable
     /// costs the encoder almost nothing, because a frame identical to the last one is what
     /// interframe compression is for.
     /// </para>
+    /// <para>
+    /// "The frame before it" needs one to exist. Before the first arrives there is none,
+    /// and that is the same failure over again — the one a desktop nobody is touching
+    /// actually hits, because the panel is held out of the capture and so its clock is not
+    /// a change either. So the recording starts already holding a frame it did not wait
+    /// for: see <see cref="SeedPixelsAsync"/>.
+    /// </para>
     /// </remarks>
     private sealed class Mp4Frames(
         FrameStream frames,
         RecordedArea? crop,
         WindowRecordingArea? follow,
-        TimeSpan interval) : IDisposable
+        TimeSpan interval,
+        IBuffer? seed) : IDisposable
     {
         /// <summary>
         /// The last sample's pixels, for the buffer paths. An <see cref="IBuffer"/> is
         /// read-only to everything downstream, so handing the same one over again is free.
         /// </summary>
-        private IBuffer? _repeatable;
+        /// <remarks>
+        /// It starts as the seed <see cref="SeedPixelsAsync"/> took, which is what a
+        /// recording repeats until the screen first moves — including the case where it
+        /// never does. Even the full-screen path, which otherwise hands surfaces straight
+        /// to the encoder, begins on a buffer: the first real frame replaces it.
+        /// </remarks>
+        private IBuffer? _repeatable = seed;
 
         /// <summary>
         /// The last sample's texture, for the path that hands surfaces straight to the
