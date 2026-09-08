@@ -349,10 +349,26 @@ public sealed class ScreenRecorder : IDisposable
         // opened with, which is none, and the result would name a pair nothing can read.
         track?.Dispose();
 
-        DiagnosticLog.Verbose(
+        // Written whether or not tracing is on, unlike the rest of a recording's steps.
+        // This one line is the only thing that says what a finished recording actually
+        // contains, and the question it answers — why is my recording a still image —
+        // cannot be asked until after the recording that would have to have been traced.
+        // A recording is a deliberate act minutes apart, so one line costs nothing.
+        DiagnosticLog.Write(
             $"recorded {video.Kept} frames ({video.Repeated} repeated, {frames.Dropped} dropped,"
                 + $" first frame {(seed is null ? "not seeded" : "seeded")})"
                 + $" over {frames.Elapsed:mm\\:ss}");
+
+        // Nothing was captured but the seed, so the file is one still picture however long
+        // it runs. Windows Graphics Capture delivers on change and nothing else, so this is
+        // either a screen that genuinely did not move or a display that never delivered —
+        // and the two are indistinguishable from the file, which is why it is said here.
+        if (video.Kept == 0)
+        {
+            DiagnosticLog.Write(
+                "the display delivered no frames at all: the recording is the single frame it"
+                    + " started from, repeated for its whole length");
+        }
 
         return new RecordingResult(path, frames.Elapsed, video.Kept, frames.Dropped, track?.SeparateTracks);
     }
