@@ -538,6 +538,10 @@ public sealed partial class EditorWindow : Window
             // CaptureOverlayHost.
             AnnotationCanvas.Release();
             _frame = CapturedFrame.Empty;
+
+            // The hold timer is the dispatcher queue's, and its handler is what would keep
+            // this window — which WinUI never collects anyway — reachable from the thread.
+            _hold.Release();
         };
     }
 

@@ -2,6 +2,8 @@ using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
 using Microsoft.UI.Dispatching;
 
+using Windows.Foundation;
+
 namespace Macshot.Windows;
 
 /// <summary>
@@ -28,6 +30,12 @@ internal sealed class PressHold
     private readonly Action _redraw;
     private readonly DispatcherQueueTimer _timer;
 
+    /// <summary>
+    /// Kept so it can be taken off again, which a lambda handed straight to <c>Tick</c>
+    /// could not be. See <see cref="Release"/> for why that matters.
+    /// </summary>
+    private readonly TypedEventHandler<DispatcherQueueTimer, object> _tick;
+
     private CapturePoint _from;
     private EditorModifiers _modifiers;
 
@@ -46,7 +54,25 @@ internal sealed class PressHold
         _timer = queue.CreateTimer();
         _timer.Interval = AnnotationEditor.HoldToSelect;
         _timer.IsRepeating = false;
-        _timer.Tick += (_, _) => Expired();
+        _tick = (_, _) => Expired();
+        _timer.Tick += _tick;
+    }
+
+    /// <summary>
+    /// Lets the dispatcher go of this, and of the surface behind it.
+    /// </summary>
+    /// <remarks>
+    /// The timer is the dispatcher queue's, not this object's: <c>CreateTimer</c> is asked
+    /// of a queue that lives as long as the thread does. Its <c>Tick</c> holds this, this
+    /// holds the redraw, and the redraw is a method on the surface that made it — so a
+    /// surface that has been taken down is still reachable from the thread it ran on, with
+    /// its whole interface behind it, for as long as macshot is open. Stopping the timer
+    /// does not break that chain; taking the handler off does.
+    /// </remarks>
+    public void Release()
+    {
+        _timer.Stop();
+        _timer.Tick -= _tick;
     }
 
     /// <summary>

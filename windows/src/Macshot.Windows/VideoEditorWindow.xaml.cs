@@ -21,6 +21,7 @@ using static Macshot.Windows.Services.Localization;
 // Imported rather than written out at each use site: inside namespace Macshot.Windows
 // the name "Windows" binds to Macshot.Windows, so a qualified StorageFile resolves to
 // Macshot.Windows.Storage.StorageFile and does not compile.
+using Windows.Foundation;
 using Windows.ApplicationModel.DataTransfer;
 using Windows.Graphics;
 using Windows.Graphics.Imaging;
@@ -189,6 +190,16 @@ public sealed partial class VideoEditorWindow : Window
     private readonly string _path;
     private readonly DispatcherQueueTimer _ticker;
 
+    /// <summary>
+    /// Kept so it can be taken off again. A queue timer belongs to the thread's
+    /// dispatcher, not to whoever asked for it, so its handler is a path from the
+    /// thread to this — and stopping the timer does not break that path. Measured on
+    /// the capture overlay: every one ever raised stayed alive until the handler came
+    /// off, with its whole interface behind it.
+    /// </summary>
+    private readonly TypedEventHandler<DispatcherQueueTimer, object> _tick;
+
+
     /// <summary>Everything on the band. See <see cref="VideoEffects"/>.</summary>
     private readonly VideoEffects _effects = new();
 
@@ -351,7 +362,8 @@ public sealed partial class VideoEditorWindow : Window
 
         _ticker = DispatcherQueue.CreateTimer();
         _ticker.Interval = TickInterval;
-        _ticker.Tick += (_, _) => FollowPlayhead();
+        _tick = (_, _) => FollowPlayhead();
+        _ticker.Tick += _tick;
 
         Closed += (_, _) => Teardown();
     }
@@ -2484,6 +2496,9 @@ public sealed partial class VideoEditorWindow : Window
     {
         RememberCaptionStyle();
         _ticker.Stop();
+
+        // Not merely stopped: see the field.
+        _ticker.Tick -= _tick;
         Player.SetMediaPlayer(null);
 
         // Disposed rather than left to the finalizer: the player holds the file open, and

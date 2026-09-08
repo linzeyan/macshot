@@ -3,6 +3,20 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.2] - 2026-09-08
+
+### Fixed
+
+- **Memory no longer climbs with every capture.** 0.8.1 cut the growth down; this finds
+  what was actually causing it. Two timers were holding on to interfaces that had already
+  been taken off screen — the one behind the pencil's hold-to-select, which belongs to the
+  thread rather than to the overlay that asked for it, and the one that dismisses the
+  floating panel, which went on trying to close a panel that was already closed for the
+  rest of the session. Between them they kept every overlay and every panel macshot had
+  ever raised, with everything drawn in them. Measured over ten captures on the same
+  machine as the report: memory settles after the first capture and stays there, against
+  22MB growing to 452MB before.
+
 ## [0.8.1] - 2026-09-08
 
 ### Fixed

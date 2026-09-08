@@ -5,6 +5,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media;
+using Windows.Foundation;
 using Windows.Graphics;
 using Windows.UI;
 using WinRT.Interop;
@@ -87,6 +88,17 @@ public sealed partial class RecordingHudWindow : Window
 
     private bool _closed;
 
+    /// <summary>
+    /// Kept so it can be taken off again. A queue timer belongs to the thread's
+    /// dispatcher, not to whoever asked for it, so its handler is a path from the
+    /// thread to this — and stopping the timer does not break that path. Measured on
+    /// the capture overlay: every one ever raised stayed alive until the handler came
+    /// off, with its whole interface behind it.
+    /// </summary>
+    private readonly TypedEventHandler<DispatcherQueueTimer, object> _tick;
+
+    private readonly TypedEventHandler<DispatcherQueueTimer, object> _lingered;
+
     private double _scale = 1;
     private DateTimeOffset _started;
 
@@ -107,12 +119,14 @@ public sealed partial class RecordingHudWindow : Window
 
         _ticker = DispatcherQueue.CreateTimer();
         _ticker.Interval = TimeSpan.FromSeconds(1);
-        _ticker.Tick += (_, _) => ElapsedText.Text = Format(Elapsed);
+        _tick = (_, _) => ElapsedText.Text = Format(Elapsed);
+        _ticker.Tick += _tick;
 
         _linger = DispatcherQueue.CreateTimer();
         _linger.Interval = SavedLinger;
         _linger.IsRepeating = false;
-        _linger.Tick += (_, _) => Dismiss();
+        _lingered = (_, _) => Dismiss();
+        _linger.Tick += _lingered;
 
         // Closed from anywhere else — a recording that failed, the app going down — must
         // leave no timer pointing at a window that no longer exists.
@@ -121,6 +135,10 @@ public sealed partial class RecordingHudWindow : Window
             _closed = true;
             _ticker.Stop();
             _linger.Stop();
+
+            // Not merely stopped: see the fields.
+            _ticker.Tick -= _tick;
+            _linger.Tick -= _lingered;
         };
     }
 

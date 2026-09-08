@@ -286,19 +286,33 @@ and the type-info generator run only there. Each of these cost a CI round trip.
   `MinHeight=32`** — a settings-page shape that puts the label above the box on a short row.
 - **`NumberBox` is a text field first**: it cannot go below the text-control minimum
   height, and its compact spin buttons appear on focus, reflowing the row around it.
-- **Nothing shown once per capture is ever collected**, so **everything expensive it holds
-  has to be dropped by hand.** A closed `Window` is never freed — measured: six closed
-  overlays all alive through a forced full collection — and neither is a `UserControl`
-  swapped out of a live window's `Content`, which is what `CaptureOverlayHost` does. So
-  reusing the shell does not by itself make a capture free; what it saves is the window.
-  What actually moved the number was releasing, at the moment the surface retires, every
-  buffer it owns: the frozen screens (`CaptureOverlayView.ReleasePixels`), the boundary
-  index behind edge snapping (two bytes a pixel, 6.5MB), the four copies of the chosen
-  region inside `RasterAnnotationPreview` (`AnnotationCanvasView.Release`), the shown
-  bitmap (`FramePreview.Release`), and the capture each panel window keeps
-  (`ThumbnailWindow`, `PinWindow`, `EditorWindow`). Measured on the VM over six captures
-  that took the managed heap from +10MB each to +1MB each. **Whatever is left is the
-  element tree itself**, which nothing this app does releases.
+- **A timer keeps its whole interface alive, and stopping it does not help.** This was the
+  leak, and it read as "WinUI never collects anything shown once per capture" for a long
+  time before it read as a timer. Two shapes, both fatal:
+  - **`DispatcherQueue.CreateTimer()` belongs to the thread, not to the caller.** Its
+    `Tick` handler is a path from a queue that lives forever to whatever the lambda closed
+    over. `PressHold` handed it `CaptureOverlayView.RenderAnnotations`, so **every overlay
+    ever raised stayed alive**, toolbar and canvas and all. `Tick -= …` on teardown is the
+    fix, which means keeping the handler in a field rather than writing a lambda inline.
+  - **A `DispatcherTimer` that repeats is rooted while it runs**, and `Close()` does not
+    stop it. `ThumbnailWindow`'s dismissal timer went on firing `Close` on a closed window
+    for the rest of the session, holding one panel per capture: 8MB each.
+
+  Both were found by measuring, not reading — `WeakReference` on each overlay, printed
+  after a forced collection, said `1/5` once the first was fixed and `5/5` before. Search
+  for `CreateTimer` and `DispatcherTimer` before believing any other explanation.
+- **Everything expensive a surface holds should still be dropped by hand**, because a
+  surface *is* held for as long as its capture is being worked on and the buffers are the
+  bulk of it: the frozen screens (`CaptureOverlayView.ReleasePixels`), the boundary index
+  behind edge snapping (two bytes a pixel, 6.5MB), the four copies of the chosen region
+  inside `RasterAnnotationPreview` (`AnnotationCanvasView.Release`), the shown bitmap
+  (`FramePreview.Release`), and the capture each panel window keeps (`ThumbnailWindow`,
+  `PinWindow`, `EditorWindow`). That took the managed heap from +10MB a capture to +1MB.
+- **`CaptureOverlayHost` reuses one window per display** rather than opening one per
+  capture. Worth keeping — a window is the expensive half and there is no reason to build
+  it twice — but it was not what fixed the growth, and the note that said it was flat from
+  the second capture on was measuring a run where `{ESC}` never reached the overlay and
+  only one capture had happened.
 - **An idle tray app never collects, so a capture's rubbish looks exactly like a leak.**
   The same six captures were +26MB each with no collection and +8MB each with one, all the
   difference having been garbage the whole time — macshot allocates nothing between

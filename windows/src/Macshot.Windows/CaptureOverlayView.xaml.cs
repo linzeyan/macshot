@@ -592,6 +592,10 @@ public sealed partial class CaptureOverlayView : UserControl
         // A timer left running would go on placing a toolbar nobody can see.
         _frameAnchor.Stop();
 
+        // The one timer this does not own: it belongs to the thread's dispatcher queue, and
+        // until its handler comes off, the queue can still reach this surface.
+        _hold.Release();
+
         // A camera left running behind a dismissed overlay is the one failure here nobody
         // would forgive: the light beside the lens would stay on. An open microphone is
         // the same failure without the light to give it away.

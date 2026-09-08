@@ -2,6 +2,8 @@ using System.Runtime.InteropServices;
 using Macshot.Windows.Core.Capture;
 using Microsoft.UI.Dispatching;
 
+using Windows.Foundation;
+
 namespace Macshot.Windows.Services;
 
 /// <summary>
@@ -43,6 +45,16 @@ internal sealed class ClickHighlightOverlay : IDisposable
     private readonly Ring?[] _rings = new Ring?[MostAtOnce];
     private readonly DispatcherQueueTimer? _timer;
 
+    /// <summary>
+    /// Kept so it can be taken off again. A queue timer belongs to the thread's
+    /// dispatcher, not to whoever asked for it, so its handler is a path from the
+    /// thread to this — and stopping the timer does not break that path. Measured on
+    /// the capture overlay: every one ever raised stayed alive until the handler came
+    /// off, with its whole interface behind it.
+    /// </summary>
+    private readonly TypedEventHandler<DispatcherQueueTimer, object>? _tick;
+
+
     // Held in a field for the hook's whole life: a collected delegate would be called
     // from inside the message pump and take the process down somewhere unrelated.
     private readonly HookProc _onMouse;
@@ -66,7 +78,8 @@ internal sealed class ClickHighlightOverlay : IDisposable
         if (_timer is not null)
         {
             _timer.Interval = TimeSpan.FromMilliseconds(TickMilliseconds);
-            _timer.Tick += (_, _) => Advance();
+            _tick = (_, _) => Advance();
+            _timer.Tick += _tick;
         }
     }
 
@@ -103,6 +116,12 @@ internal sealed class ClickHighlightOverlay : IDisposable
 
         _disposed = true;
         _timer?.Stop();
+
+        // Not merely stopped: see the field.
+        if (_timer is not null && _tick is not null)
+        {
+            _timer.Tick -= _tick;
+        }
 
         if (_hook != IntPtr.Zero)
         {

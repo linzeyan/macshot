@@ -80,11 +80,15 @@ public sealed partial class ThumbnailWindow : Window
         // capture, so the copy it is holding has to go with it — see FramePreview.
         Closed += (_, _) =>
         {
+            // The timer repeats, and closing is what its own Tick does — so left running it
+            // would go on calling Close on a closed window every few seconds for the rest of
+            // the session, and the framework would hold the whole panel open to do it. One
+            // panel per capture: measured on the VM, this alone was 8MB a capture.
+            _dismissTimer.Stop();
+
             ThumbnailImage.Release();
 
-            // And the capture behind it. A panel is raised for every delivered capture and
-            // WinUI never takes a closed window back, so a full-screen shot left here is
-            // 12MB the process keeps for as long as it runs — see CaptureOverlayHost.
+            // And the capture behind it — see FramePreview.
             _frame = CapturedFrame.Empty;
         };
     }

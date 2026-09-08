@@ -6,6 +6,7 @@ using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Input;
 using Microsoft.UI.Xaml.Media.Imaging;
+using Windows.Foundation;
 using Windows.Graphics;
 using WinRT.Interop;
 
@@ -57,6 +58,16 @@ public sealed partial class UploadToastWindow : Window
 
     private readonly DispatcherQueueTimer _dismiss;
 
+    /// <summary>
+    /// Kept so it can be taken off again. A queue timer belongs to the thread's
+    /// dispatcher, not to whoever asked for it, so its handler is a path from the
+    /// thread to this — and stopping the timer does not break that path. Measured on
+    /// the capture overlay: every one ever raised stayed alive until the handler came
+    /// off, with its whole interface behind it.
+    /// </summary>
+    private readonly TypedEventHandler<DispatcherQueueTimer, object> _tick;
+
+
     private double _scale = 1;
     private string? _link;
     private bool _closed;
@@ -68,7 +79,8 @@ public sealed partial class UploadToastWindow : Window
 
         _dismiss = DispatcherQueue.CreateTimer();
         _dismiss.IsRepeating = false;
-        _dismiss.Tick += (_, _) => Dismiss();
+        _tick = (_, _) => Dismiss();
+        _dismiss.Tick += _tick;
     }
 
     /// <summary>Puts the panel up with a first line, and starts the spinner.</summary>
@@ -155,6 +167,9 @@ public sealed partial class UploadToastWindow : Window
 
         _closed = true;
         _dismiss.Stop();
+
+        // Not merely stopped: see the field.
+        _dismiss.Tick -= _tick;
         Close();
     }
 

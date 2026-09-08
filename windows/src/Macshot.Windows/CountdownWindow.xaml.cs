@@ -3,6 +3,7 @@ using System.Runtime.InteropServices;
 using Macshot.Windows.Services;
 using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
+using Windows.Foundation;
 using Windows.Graphics;
 using WinRT.Interop;
 
@@ -58,6 +59,16 @@ public sealed partial class CountdownWindow : Window
         new(TaskCreationOptions.RunContinuationsAsynchronously);
 
     private readonly DispatcherQueueTimer _ticker;
+
+    /// <summary>
+    /// Kept so it can be taken off again. A queue timer belongs to the thread's
+    /// dispatcher, not to whoever asked for it, so its handler is a path from the
+    /// thread to this — and stopping the timer does not break that path. Measured on
+    /// the capture overlay: every one ever raised stayed alive until the handler came
+    /// off, with its whole interface behind it.
+    /// </summary>
+    private readonly TypedEventHandler<DispatcherQueueTimer, object> _tick;
+
     private int _remaining;
 
     public CountdownWindow()
@@ -69,7 +80,8 @@ public sealed partial class CountdownWindow : Window
 
         _ticker = DispatcherQueue.CreateTimer();
         _ticker.Interval = TimeSpan.FromSeconds(1);
-        _ticker.Tick += (_, _) => Tick();
+        _tick = (_, _) => Tick();
+        _ticker.Tick += _tick;
 
         // Closed from the shell rather than by the countdown ending is a cancellation:
         // waiting on a window that no longer exists would never return.
@@ -113,6 +125,9 @@ public sealed partial class CountdownWindow : Window
         finally
         {
             _ticker.Stop();
+
+            // Not merely stopped: see the field.
+            _ticker.Tick -= _tick;
             Close();
         }
     }
