@@ -478,6 +478,17 @@ start the macOS pipeline on `main`, and vice versa.
   always works and a running recording can starve. Without the seed, fifteen still seconds
   ended in `MF_E_SINK_NO_SAMPLES_PROCESSED` and a deleted file. The recording's log line
   says `first frame seeded` or `not seeded`.
+- **A recording that keeps *nothing at all* is a broken session, not a still screen** —
+  a still screen still gives up its opening frame. One Windows 10 machine reported fifteen
+  seconds of `0 frames, 0 dropped` with screenshots working, which the seed turned from no
+  file into one frame repeated. `RetakeCadence` (Core, so it is tested) decides when to
+  give up waiting; `ScreenRecorder.Retakes` then takes frames the way a screenshot is
+  taken, ten a second, until the compositor delivers one of its own. **A one-shot capture
+  opened while the recording's own session is live does work** — measured, 109 frames over
+  18 seconds at ~92ms each, on the same capture item the recording holds — which is the
+  whole premise and was worth checking rather than assuming. Those 92ms are spent inside
+  the encoder's sample request, so it halves the sample rate while it runs and is fenced
+  behind `kept == 0`. The log says how many were `taken by hand`.
 - The MSIX installs, launches and captures — measured on the VM with a test certificate.
   What used to stop it was never the container: the capture path called an API a packaged
   app may only use with the `graphicsCaptureProgrammatic` capability, and the manifest

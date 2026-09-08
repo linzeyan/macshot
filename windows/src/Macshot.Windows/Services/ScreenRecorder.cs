@@ -262,7 +262,13 @@ public sealed class ScreenRecorder : IDisposable
 
         using var frames = new FrameStream(Device(), item, plan.FrameInterval, cancellation);
         using var held = Holding(frames);
-        using var video = new Mp4Frames(frames, crop, follow, plan.FrameInterval, seed);
+        using var video = new Mp4Frames(
+            frames,
+            crop,
+            follow,
+            plan.FrameInterval,
+            seed,
+            () => RetakeAsync(item, crop, follow));
 
         // Null when nothing was asked for, and also when nothing could be opened — a
         // machine with no microphone records without one rather than not at all.
@@ -339,8 +345,9 @@ public sealed class ScreenRecorder : IDisposable
             throw new InvalidOperationException(
                 $"Windows would not finish the recording: {(video.Failure ?? exception).Message}"
                     + $" ({video.Kept} frames captured, {video.Repeated} repeated while the screen"
-                    + $" was still, {frames.Dropped} dropped, first frame"
-                    + $" {(seed is null ? "not seeded" : "seeded")}, over {frames.Elapsed:mm\\:ss})",
+                    + $" was still, {video.Retaken} taken by hand, {frames.Dropped} dropped, first"
+                    + $" frame {(seed is null ? "not seeded" : "seeded")},"
+                    + $" over {frames.Elapsed:mm\\:ss})",
                 video.Failure ?? exception);
         }
 
@@ -355,19 +362,24 @@ public sealed class ScreenRecorder : IDisposable
         // cannot be asked until after the recording that would have to have been traced.
         // A recording is a deliberate act minutes apart, so one line costs nothing.
         DiagnosticLog.Write(
-            $"recorded {video.Kept} frames ({video.Repeated} repeated, {frames.Dropped} dropped,"
-                + $" first frame {(seed is null ? "not seeded" : "seeded")})"
-                + $" over {frames.Elapsed:mm\\:ss}");
+            $"recorded {video.Kept} frames ({video.Repeated} repeated, {video.Retaken} taken by"
+                + $" hand, {frames.Dropped} dropped, first frame"
+                + $" {(seed is null ? "not seeded" : "seeded")}) over {frames.Elapsed:mm\\:ss}");
 
-        // Nothing was captured but the seed, so the file is one still picture however long
-        // it runs. Windows Graphics Capture delivers on change and nothing else, so this is
-        // either a screen that genuinely did not move or a display that never delivered —
-        // and the two are indistinguishable from the file, which is why it is said here.
+        // The compositor delivered nothing at all, which on a recording longer than a second
+        // is a capture session that is not working rather than a screen that did not move:
+        // opening a session delivers a frame whether anything changed or not. Said here
+        // because it cannot be told from the file, and because it is the one condition under
+        // which the by-hand path above is what produced the recording.
         if (video.Kept == 0)
         {
             DiagnosticLog.Write(
-                "the display delivered no frames at all: the recording is the single frame it"
-                    + " started from, repeated for its whole length");
+                video.Retaken > 0
+                    ? $"the display delivered no frames at all: the recording is {video.Retaken}"
+                        + " frames taken one session at a time instead"
+                    : "the display delivered no frames at all and none could be taken by hand:"
+                        + " the recording is the single frame it started from, repeated for its"
+                        + " whole length");
         }
 
         return new RecordingResult(path, frames.Elapsed, video.Kept, frames.Dropped, track?.SeparateTracks);
@@ -415,10 +427,38 @@ public sealed class ScreenRecorder : IDisposable
 
         var previous = seed;
         var written = 0;
+        var kept = 0;
+        var retakes = new Retakes(frames);
 
-        while (written < GifRecordingPlan.MaximumFrames && await frames.NextAsync() is { } timed)
+        while (written < GifRecordingPlan.MaximumFrames)
         {
-            var current = await ToGifFrameAsync(timed, plan, crop, follow);
+            GifFrame current;
+
+            if (await frames.NextAsync(plan.FrameInterval) is { } timed)
+            {
+                kept++;
+                current = await ToGifFrameAsync(timed, plan, crop, follow);
+            }
+            else if (frames.IsFinished)
+            {
+                break;
+            }
+            else if (await retakes.TakeAsync(
+                kept,
+                () => RetakeGifFrameAsync(item, plan, crop, follow, frames.Elapsed)) is { } byHand)
+            {
+                // The compositor has delivered nothing at all and this recording would
+                // otherwise be the seed alone: see Retakes.
+                current = byHand;
+            }
+            else
+            {
+                // Nothing arrived within a frame's worth of waiting, which is what a still
+                // screen looks like. A GIF says how long each frame was shown, so waiting
+                // is the whole of the answer — the delay on the frame already held grows.
+                continue;
+            }
+
             if (previous is not null)
             {
                 await WriteGifFrameAsync(encoder, previous, timing.Next(current.Timestamp - previous.Timestamp), written, plan);
@@ -487,6 +527,59 @@ public sealed class ScreenRecorder : IDisposable
         catch (Exception exception)
         {
             DiagnosticLog.Write($"Could not take the recording's first frame in advance: {exception.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The seed taken again mid-recording, for a recording whose own session never delivers
+    /// a frame. <see cref="Retakes"/> is what decides whether one of these is wanted.
+    /// </summary>
+    private async Task<IBuffer?> RetakeAsync(
+        GraphicsCaptureItem item,
+        RecordedArea? crop,
+        WindowRecordingArea? follow)
+    {
+        try
+        {
+            return SeedBuffer(
+                await GraphicsCaptureService.CaptureItemAsync(Device(), item, includeCursor: true),
+                crop,
+                follow);
+        }
+        catch (Exception)
+        {
+            // Silent, unlike the seed's own failure: this runs several times a second, and
+            // what it managed is counted in the line the recording ends with. A failed
+            // retake leaves the previous frame in place, which is what the recording would
+            // have had anyway.
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The same again for the GIF path, stamped with the moment it was taken rather than
+    /// with the start of the recording.
+    /// </summary>
+    private async Task<GifFrame?> RetakeGifFrameAsync(
+        GraphicsCaptureItem item,
+        GifRecordingPlan plan,
+        RecordedArea? crop,
+        WindowRecordingArea? follow,
+        TimeSpan at)
+    {
+        try
+        {
+            return SeedGifFrame(
+                await GraphicsCaptureService.CaptureItemAsync(Device(), item, includeCursor: true),
+                plan,
+                crop,
+                follow) is { } frame
+                ? frame with { Timestamp = at }
+                : null;
+        }
+        catch (Exception)
+        {
             return null;
         }
     }
@@ -978,6 +1071,51 @@ public sealed class ScreenRecorder : IDisposable
     }
 
     /// <summary>
+    /// The fallback for a recording whose capture session never delivers a frame: frames
+    /// taken one whole session at a time, the way a screenshot is taken.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// <see cref="RetakeCadence"/> holds the reasoning about <em>when</em>; this is the part
+    /// that needs a capture. Both recording paths use it, because both otherwise end as one
+    /// still picture on a machine whose compositor never delivers.
+    /// </para>
+    /// <para>
+    /// A one-shot session opened <em>while the recording's own is running</em> does deliver,
+    /// which is not obvious and is the whole premise: measured on the VM, 109 frames taken
+    /// this way over an 18-second recording, about 92ms each. It is opened on the same
+    /// capture item the recording already holds — also measured rather than assumed.
+    /// </para>
+    /// </remarks>
+    private sealed class Retakes(FrameStream frames)
+    {
+        private readonly RetakeCadence _cadence = new();
+
+        /// <summary>Frames this produced. Zero wherever recording works at all.</summary>
+        public int Count => _cadence.Taken;
+
+        /// <summary>
+        /// One frame by hand, or null — because the compositor is working, because it is not
+        /// yet time for another, or because the capture itself failed.
+        /// </summary>
+        /// <param name="kept">Frames the compositor has delivered so far.</param>
+        /// <param name="take">Takes one frame, by whatever the caller's path calls a frame.</param>
+        public async Task<T?> TakeAsync<T>(int kept, Func<Task<T?>> take)
+            where T : class
+        {
+            if (!_cadence.ShouldTake(kept, frames.Elapsed, frames.IsPaused))
+            {
+                return null;
+            }
+
+            var frame = await take();
+            _cadence.Record(frame is not null);
+
+            return frame;
+        }
+    }
+
+    /// <summary>
     /// Turns a recording's frames into the samples the MP4 encoder asks for, and answers
     /// a request that arrives while the screen is standing still.
     /// </summary>
@@ -1006,14 +1144,22 @@ public sealed class ScreenRecorder : IDisposable
     /// a change either. So the recording starts already holding a frame it did not wait
     /// for: see <see cref="SeedPixelsAsync"/>.
     /// </para>
+    /// <para>
+    /// All of which assumes the compositor delivers <em>something</em> eventually. Where it
+    /// never does, repeating is the whole recording, and <see cref="Retakes"/> is what stops
+    /// that being a video of one photograph.
+    /// </para>
     /// </remarks>
     private sealed class Mp4Frames(
         FrameStream frames,
         RecordedArea? crop,
         WindowRecordingArea? follow,
         TimeSpan interval,
-        IBuffer? seed) : IDisposable
+        IBuffer? seed,
+        Func<Task<IBuffer?>> retake) : IDisposable
     {
+        private readonly Retakes _retakes = new(frames);
+
         /// <summary>
         /// The last sample's pixels, for the buffer paths. An <see cref="IBuffer"/> is
         /// read-only to everything downstream, so handing the same one over again is free.
@@ -1054,6 +1200,12 @@ public sealed class ScreenRecorder : IDisposable
         /// <summary>Frames sent again because the screen had not changed.</summary>
         public int Repeated { get; private set; }
 
+        /// <summary>
+        /// Frames taken by hand because the compositor delivered none. Zero on every
+        /// machine where recording works at all: see <see cref="Retakes"/>.
+        /// </summary>
+        public int Retaken => _retakes.Count;
+
         /// <summary>What went wrong first, or null. See <see cref="Fail"/>.</summary>
         public Exception? Failure { get; private set; }
 
@@ -1076,6 +1228,13 @@ public sealed class ScreenRecorder : IDisposable
                     // No sample is how a MediaStreamSource is told the stream is over,
                     // which is what finishes the file.
                     return null;
+                }
+
+                // A recording the compositor has abandoned repeats one frame for its whole
+                // length unless something else refreshes what is being repeated.
+                if (await _retakes.TakeAsync(Kept, retake) is { } byHand)
+                {
+                    _repeatable = byHand;
                 }
 
                 if (Repeat() is { } again)
@@ -1300,32 +1459,18 @@ public sealed class ScreenRecorder : IDisposable
         public bool IsFinished => _frames.Reader.Completion.IsCompleted;
 
         /// <summary>
-        /// The next frame, or null once the recording has stopped and the queue has
-        /// been emptied. The caller owns the frame it is given.
-        /// </summary>
-        public async Task<TimedFrame?> NextAsync()
-        {
-            while (await _frames.Reader.WaitToReadAsync())
-            {
-                if (_frames.Reader.TryRead(out var frame))
-                {
-                    return frame;
-                }
-            }
-
-            return null;
-        }
-
-        /// <summary>
         /// The next frame, or null when none arrived within <paramref name="wait"/>
         /// <em>and</em> null once the recording is over — <see cref="IsFinished"/> tells
         /// the two apart. The caller owns the frame it is given.
         /// </summary>
         /// <remarks>
-        /// A still screen produces no frames at all, so the MP4 path cannot wait for one
-        /// indefinitely; see <see cref="Mp4Frames"/>. The GIF path can, and uses the
-        /// overload above: a GIF says how long each frame was on screen, so a motionless
-        /// stretch is one frame with a long delay rather than a run of identical ones.
+        /// Neither path can wait for a frame indefinitely. The MP4 one owes the encoder a
+        /// sample whether or not the screen moved (see <see cref="Mp4Frames"/>); the GIF one
+        /// owes nothing — a GIF says how long each frame was on screen, so a motionless
+        /// stretch is one frame with a long delay rather than a run of identical ones — but
+        /// it still has to come up for air often enough to notice that the compositor has
+        /// delivered nothing at all and start taking frames itself (see
+        /// <see cref="Retakes"/>).
         /// </remarks>
         public async Task<TimedFrame?> NextAsync(TimeSpan wait)
         {

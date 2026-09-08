@@ -3,6 +3,22 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.3] - 2026-09-08
+
+### Fixed
+
+- **A recording could come out as a single still picture, however long it ran.** Windows
+  sends a recording a new frame when something on screen changes and at no other time, and
+  on at least one machine it sent none at all — fifteen seconds of recording, not one
+  frame — while ordinary screenshots on the same machine were fine. 0.8.1 taught macshot to
+  start every recording holding a frame of its own, which turned that from no file into a
+  file of that one frame repeated a thousand times: honest, and still not a recording.
+  macshot now notices. A second into a recording it has been given nothing for, it starts
+  taking frames itself, the way it takes a screenshot, until Windows delivers one of its
+  own — after which it stops, because a recording that is working never needs this. GIF
+  recordings had the same failure and are fixed the same way, and the line the log ends
+  with says how many frames were taken this way.
+
 ## [0.8.2] - 2026-09-08
 
 ### Fixed
