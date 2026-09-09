@@ -3,8 +3,16 @@
     xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
     xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
     xmlns:local="using:Macshot.Windows"
-    Background="#FF000000">
-    <Grid x:Name="OverlayRoot" Background="#FF000000" KeyDown="OverlayRoot_KeyDown" KeyUp="OverlayRoot_KeyUp">
+    Background="#FF000000"
+    KeyDown="Overlay_KeyDown"
+    KeyUp="Overlay_KeyUp">
+    <!-- The keys are handled on the UserControl, not on the grid inside it. A routed key
+         event starts at whatever holds focus, or at the window's content root when nothing
+         does, and bubbles upward — so a handler on a child of the content root never runs
+         for the second case. This was a Window until 0.8.1, where the grid was the content
+         root and did receive them; afterwards Escape and Enter reached nothing at all.
+         IsTabStop is what lets the grid be focused back to when a text field gives it up. -->
+    <Grid x:Name="OverlayRoot" Background="#FF000000" IsTabStop="True">
         <!-- Everything that is the capture, under one transform: the screenshot, the
              marks on it, the marquee and its grips. Zooming and panning move all of it
              together, and taking pointer positions relative to anything inside here gives

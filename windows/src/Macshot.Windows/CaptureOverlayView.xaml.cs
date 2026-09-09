@@ -546,7 +546,9 @@ public sealed partial class CaptureOverlayView : UserControl
         WireFrameAnchor();
 
         host.Present(this, _monitor);
-        OverlayRoot.Focus(FocusState.Programmatic);
+        // Once it is in the tree, not here: the view has no XamlRoot until the shell has
+        // laid it out, and Focus on an element without one answers false and does nothing.
+        OverlayRoot.Loaded += TakeKeyboardFocus;
 
         // Everything is dimmed until something is chosen, which is what says the whole
         // screen is the thing being captured from.
@@ -1984,7 +1986,21 @@ public sealed partial class CaptureOverlayView : UserControl
             MonitorBounds));
     }
 
-    private void OverlayRoot_KeyDown(object sender, KeyRoutedEventArgs e)
+    /// <summary>
+    /// Gives the overlay the keyboard once the shell has it on screen.
+    /// </summary>
+    /// <remarks>
+    /// Not for the sake of the key handlers — those are on the content root and run without
+    /// anyone holding focus — but so that the focus a text field gives back has somewhere to
+    /// go, and so that nothing left focused in the reused shell can swallow what is typed.
+    /// </remarks>
+    private void TakeKeyboardFocus(object sender, RoutedEventArgs e)
+    {
+        OverlayRoot.Loaded -= TakeKeyboardFocus;
+        OverlayRoot.Focus(FocusState.Programmatic);
+    }
+
+    private void Overlay_KeyDown(object sender, KeyRoutedEventArgs e)
     {
         // While the entry box has focus the keyboard is its: Delete edits the text
         // instead of deleting an annotation, and Ctrl+Z takes back typing. Enter and
@@ -4143,7 +4159,7 @@ public sealed partial class CaptureOverlayView : UserControl
         return true;
     }
 
-    private void OverlayRoot_KeyUp(object sender, KeyRoutedEventArgs e)
+    private void Overlay_KeyUp(object sender, KeyRoutedEventArgs e)
     {
         if (_autoSpanVertical is null
             || e.Key is not (VirtualKey.Number1 or VirtualKey.NumberPad1

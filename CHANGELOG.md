@@ -3,6 +3,24 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.4] - 2026-09-09
+
+### Fixed
+
+- **No key did anything on the capture overlay.** Escape would not cancel a capture, Enter
+  would not finish one, and the arrow keys would not nudge a selection — the only way out
+  was the ✕ on the action column. The overlay never took the keyboard when it opened, and
+  its key handlers were attached to something that could not be given it, so every key
+  went nowhere. This arrived in 0.8.1, where the overlay stopped being a window of its own,
+  and anyone who updated from 0.8.0 met it on the first capture.
+- **A recording lost its first seconds on a machine where frames cannot be taken by hand.**
+  0.8.3 taught macshot to take frames itself where Windows delivers none, and where that
+  does not work either — one Windows 10 machine — each of the three attempts it makes
+  before giving up held the recording up for two seconds. Measured on the report: 966
+  frames written where the frame rate called for 1800. It now takes them alongside the
+  recording rather than in the middle of it, which costs a recording that needs the
+  fallback nothing, and no longer halves the frame rate of one that uses it successfully.
+
 ## [0.8.3] - 2026-09-08
 
 ### Fixed

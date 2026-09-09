@@ -428,7 +428,9 @@ public sealed class ScreenRecorder : IDisposable
         var previous = seed;
         var written = 0;
         var kept = 0;
-        var retakes = new Retakes(frames);
+        var retakes = new Retakes<GifFrame>(
+            frames,
+            () => RetakeGifFrameAsync(item, plan, crop, follow, frames.Elapsed));
 
         while (written < GifRecordingPlan.MaximumFrames)
         {
@@ -443,9 +445,7 @@ public sealed class ScreenRecorder : IDisposable
             {
                 break;
             }
-            else if (await retakes.TakeAsync(
-                kept,
-                () => RetakeGifFrameAsync(item, plan, crop, follow, frames.Elapsed)) is { } byHand)
+            else if (retakes.Poll(kept) is { } byHand)
             {
                 // The compositor has delivered nothing at all and this recording would
                 // otherwise be the seed alone: see Retakes.
@@ -1081,37 +1081,73 @@ public sealed class ScreenRecorder : IDisposable
     /// still picture on a machine whose compositor never delivers.
     /// </para>
     /// <para>
-    /// A one-shot session opened <em>while the recording's own is running</em> does deliver,
-    /// which is not obvious and is the whole premise: measured on the VM, 109 frames taken
-    /// this way over an 18-second recording, about 92ms each. It is opened on the same
-    /// capture item the recording already holds — also measured rather than assumed.
+    /// Whether it works is the machine's answer, not ours. On the VM a one-shot session
+    /// opened while the recording's own is running delivers in about 92ms — 109 frames over
+    /// an 18-second recording. On the Windows 10 machine this was written for it delivers
+    /// nothing at all, every attempt sitting out
+    /// <see cref="GraphicsCaptureService"/>'s two-second frame timeout.
+    /// </para>
+    /// <para>
+    /// Which is why nothing here is awaited by the caller. The first version was, and on
+    /// that machine the three attempts it makes before giving up cost the recording six
+    /// seconds of sampling — the encoder was handed 966 samples where the frame rate called
+    /// for 1800, because the loop that answers it was inside a capture that was never going
+    /// to return. Started and collected later, a doomed retake costs the recording nothing
+    /// and a working one no longer halves its sample rate either.
     /// </para>
     /// </remarks>
-    private sealed class Retakes(FrameStream frames)
+    private sealed class Retakes<T>(FrameStream frames, Func<Task<T?>> take)
+        where T : class
     {
         private readonly RetakeCadence _cadence = new();
+
+        /// <summary>The capture in flight, or null when there is none.</summary>
+        private Task<T?>? _running;
 
         /// <summary>Frames this produced. Zero wherever recording works at all.</summary>
         public int Count => _cadence.Taken;
 
         /// <summary>
-        /// One frame by hand, or null — because the compositor is working, because it is not
-        /// yet time for another, or because the capture itself failed.
+        /// The frame an earlier call started, if it has arrived, and starts the next one.
+        /// Answers null far more often than not: the compositor is working, it is not yet
+        /// time, or the one in flight has not finished.
         /// </summary>
         /// <param name="kept">Frames the compositor has delivered so far.</param>
-        /// <param name="take">Takes one frame, by whatever the caller's path calls a frame.</param>
-        public async Task<T?> TakeAsync<T>(int kept, Func<Task<T?>> take)
-            where T : class
+        public T? Poll(int kept)
         {
-            if (!_cadence.ShouldTake(kept, frames.Elapsed, frames.IsPaused))
+            if (_running is not { IsCompleted: true } finished)
             {
+                if (_running is null)
+                {
+                    Begin(kept);
+                }
+
                 return null;
             }
 
-            var frame = await take();
+            _running = null;
+
+            var frame = finished.IsCompletedSuccessfully ? finished.Result : null;
+            if (!finished.IsCompletedSuccessfully)
+            {
+                // Read so that it is not raised again on the finalizer thread. The captures
+                // handed in here catch their own failures, so this is the case that does not
+                // happen rather than the one that does.
+                _ = finished.Exception;
+            }
+
             _cadence.Record(frame is not null);
+            Begin(kept);
 
             return frame;
+        }
+
+        private void Begin(int kept)
+        {
+            if (_cadence.ShouldTake(kept, frames.Elapsed, frames.IsPaused))
+            {
+                _running = take();
+            }
         }
     }
 
@@ -1158,7 +1194,7 @@ public sealed class ScreenRecorder : IDisposable
         IBuffer? seed,
         Func<Task<IBuffer?>> retake) : IDisposable
     {
-        private readonly Retakes _retakes = new(frames);
+        private readonly Retakes<IBuffer> _retakes = new(frames, retake);
 
         /// <summary>
         /// The last sample's pixels, for the buffer paths. An <see cref="IBuffer"/> is
@@ -1231,8 +1267,9 @@ public sealed class ScreenRecorder : IDisposable
                 }
 
                 // A recording the compositor has abandoned repeats one frame for its whole
-                // length unless something else refreshes what is being repeated.
-                if (await _retakes.TakeAsync(Kept, retake) is { } byHand)
+                // length unless something else refreshes what is being repeated. Not awaited:
+                // see Retakes.
+                if (_retakes.Poll(Kept) is { } byHand)
                 {
                     _repeatable = byHand;
                 }
