@@ -169,9 +169,17 @@ public sealed class ScreenRecorder : IDisposable
         ObjectDisposedException.ThrowIf(_disposed, this);
 
         var item = GraphicsCaptureService.OpenDisplay(monitorHandle);
+
+        // A screen copy, not another capture session. The machine that needs a frame taken
+        // by hand is one whose compositor is not delivering them, and on the two that have
+        // reported this a second session does not deliver either. GDI is a different
+        // subsystem, it is what a screenshot already falls back to, and it owes nothing to
+        // whatever is wrong with the capture path. See Retakes.
+        var byHand = () => Task.FromResult(ScreenCopy(monitorHandle, item.Size));
+
         return format == RecordingFormat.Gif
-            ? RecordGifAsync(item, path, region, null, frameRate ?? GifRecordingPlan.DefaultFrameRate, cancellation)
-            : RecordMp4Async(item, path, region, null, frameRate ?? RecordingPlan.DefaultFrameRate, audio, cancellation);
+            ? RecordGifAsync(item, byHand, path, region, null, frameRate ?? GifRecordingPlan.DefaultFrameRate, cancellation)
+            : RecordMp4Async(item, byHand, path, region, null, frameRate ?? RecordingPlan.DefaultFrameRate, audio, cancellation);
     }
 
     /// <summary>
@@ -219,9 +227,15 @@ public sealed class ScreenRecorder : IDisposable
             ? WindowRecordingArea.Resolve(windowRect, visible, size.Width, size.Height)
             : WindowRecordingArea.Resolve(default, default, size.Width, size.Height);
 
+        // Still a capture session here, unlike a display's: a window recording holds only
+        // that window's tree, and a copy off the screen would carry whatever is in front of
+        // it. Wrong pixels are worse than a still picture.
+        Func<Task<(int Width, int Height, byte[] Pixels)?>> byHand =
+            async () => await GraphicsCaptureService.CaptureItemAsync(Device(), item, includeCursor: true);
+
         return format == RecordingFormat.Gif
-            ? RecordGifAsync(item, path, null, follow, frameRate ?? GifRecordingPlan.DefaultFrameRate, cancellation)
-            : RecordMp4Async(item, path, null, follow, frameRate ?? RecordingPlan.DefaultFrameRate, audio, cancellation);
+            ? RecordGifAsync(item, byHand, path, null, follow, frameRate ?? GifRecordingPlan.DefaultFrameRate, cancellation)
+            : RecordMp4Async(item, byHand, path, null, follow, frameRate ?? RecordingPlan.DefaultFrameRate, audio, cancellation);
     }
 
     public void Dispose()
@@ -238,6 +252,7 @@ public sealed class ScreenRecorder : IDisposable
 
     private async Task<RecordingResult> RecordMp4Async(
         GraphicsCaptureItem item,
+        Func<Task<(int Width, int Height, byte[] Pixels)?>> byHand,
         string path,
         CaptureRegion? region,
         WindowRecordingArea? follow,
@@ -268,7 +283,7 @@ public sealed class ScreenRecorder : IDisposable
             follow,
             plan.FrameInterval,
             seed,
-            () => RetakeAsync(item, crop, follow));
+            () => RetakeAsync(byHand, crop, follow));
 
         // Null when nothing was asked for, and also when nothing could be opened — a
         // machine with no microphone records without one rather than not at all.
@@ -345,7 +360,8 @@ public sealed class ScreenRecorder : IDisposable
             throw new InvalidOperationException(
                 $"Windows would not finish the recording: {(video.Failure ?? exception).Message}"
                     + $" ({video.Kept} frames captured, {video.Repeated} repeated while the screen"
-                    + $" was still, {video.Retaken} taken by hand, {frames.Dropped} dropped, first"
+                    + $" was still, {video.Retaken} taken by hand, {frames.Arrivals} arrivals,"
+                    + $" {frames.Dropped} dropped, first"
                     + $" frame {(seed is null ? "not seeded" : "seeded")},"
                     + $" over {frames.Elapsed:mm\\:ss})",
                 video.Failure ?? exception);
@@ -362,9 +378,10 @@ public sealed class ScreenRecorder : IDisposable
         // cannot be asked until after the recording that would have to have been traced.
         // A recording is a deliberate act minutes apart, so one line costs nothing.
         DiagnosticLog.Write(
-            $"recorded {video.Kept} frames ({video.Repeated} repeated, {video.Retaken} taken by"
-                + $" hand, {frames.Dropped} dropped, first frame"
-                + $" {(seed is null ? "not seeded" : "seeded")}) over {frames.Elapsed:mm\\:ss}");
+            $"recorded {video.Kept} frames from {frames.Arrivals} arrivals ({frames.Empty} empty),"
+                + $" {video.Repeated} repeated, {video.Retaken} taken by hand, {frames.Dropped}"
+                + $" dropped, first frame {(seed is null ? "not seeded" : "seeded")},"
+                + $" over {frames.Elapsed:mm\\:ss}");
 
         // The compositor delivered nothing at all, which on a recording longer than a second
         // is a capture session that is not working rather than a screen that did not move:
@@ -374,12 +391,17 @@ public sealed class ScreenRecorder : IDisposable
         if (video.Kept == 0)
         {
             DiagnosticLog.Write(
+                frames.Arrivals == 0
+                    ? "the compositor never signalled a frame: nothing was wrong with collecting"
+                        + " them, there were none"
+                    : $"the compositor signalled {frames.Arrivals} times with nothing to collect:"
+                        + " the frames were announced and then were not there");
+
+            DiagnosticLog.Write(
                 video.Retaken > 0
-                    ? $"the display delivered no frames at all: the recording is {video.Retaken}"
-                        + " frames taken one session at a time instead"
-                    : "the display delivered no frames at all and none could be taken by hand:"
-                        + " the recording is the single frame it started from, repeated for its"
-                        + " whole length");
+                    ? $"the recording is {video.Retaken} frames copied off the screen instead"
+                    : "and none could be taken off the screen either: the recording is the single"
+                        + " frame it started from, repeated for its whole length");
         }
 
         return new RecordingResult(path, frames.Elapsed, video.Kept, frames.Dropped, track?.SeparateTracks);
@@ -397,6 +419,7 @@ public sealed class ScreenRecorder : IDisposable
     /// </remarks>
     private async Task<RecordingResult> RecordGifAsync(
         GraphicsCaptureItem item,
+        Func<Task<(int Width, int Height, byte[] Pixels)?>> byHand,
         string path,
         CaptureRegion? region,
         WindowRecordingArea? follow,
@@ -430,7 +453,7 @@ public sealed class ScreenRecorder : IDisposable
         var kept = 0;
         var retakes = new Retakes<GifFrame>(
             frames,
-            () => RetakeGifFrameAsync(item, plan, crop, follow, frames.Elapsed));
+            () => RetakeGifFrameAsync(byHand, plan, crop, follow, frames.Elapsed));
 
         while (written < GifRecordingPlan.MaximumFrames)
         {
@@ -445,11 +468,11 @@ public sealed class ScreenRecorder : IDisposable
             {
                 break;
             }
-            else if (retakes.Poll(kept) is { } byHand)
+            else if (retakes.Poll(kept) is { } copied)
             {
                 // The compositor has delivered nothing at all and this recording would
                 // otherwise be the seed alone: see Retakes.
-                current = byHand;
+                current = copied;
             }
             else
             {
@@ -535,24 +558,23 @@ public sealed class ScreenRecorder : IDisposable
     /// The seed taken again mid-recording, for a recording whose own session never delivers
     /// a frame. <see cref="Retakes"/> is what decides whether one of these is wanted.
     /// </summary>
-    private async Task<IBuffer?> RetakeAsync(
-        GraphicsCaptureItem item,
+    private static async Task<IBuffer?> RetakeAsync(
+        Func<Task<(int Width, int Height, byte[] Pixels)?>> byHand,
         RecordedArea? crop,
         WindowRecordingArea? follow)
     {
         try
         {
-            return SeedBuffer(
-                await GraphicsCaptureService.CaptureItemAsync(Device(), item, includeCursor: true),
-                crop,
-                follow);
+            return SeedBuffer(await byHand(), crop, follow);
         }
-        catch (Exception)
+        catch (Exception exception)
         {
-            // Silent, unlike the seed's own failure: this runs several times a second, and
-            // what it managed is counted in the line the recording ends with. A failed
-            // retake leaves the previous frame in place, which is what the recording would
-            // have had anyway.
+            // Traced rather than written: this runs several times a second, and the count
+            // that matters is in the line the recording ends with. A failed retake leaves
+            // the previous frame in place, which is what the recording would have had
+            // anyway.
+            DiagnosticLog.Verbose(
+                $"a frame taken by hand failed: {exception.GetType().Name}: {exception.Message}");
             return null;
         }
     }
@@ -561,8 +583,8 @@ public sealed class ScreenRecorder : IDisposable
     /// The same again for the GIF path, stamped with the moment it was taken rather than
     /// with the start of the recording.
     /// </summary>
-    private async Task<GifFrame?> RetakeGifFrameAsync(
-        GraphicsCaptureItem item,
+    private static async Task<GifFrame?> RetakeGifFrameAsync(
+        Func<Task<(int Width, int Height, byte[] Pixels)?>> byHand,
         GifRecordingPlan plan,
         RecordedArea? crop,
         WindowRecordingArea? follow,
@@ -570,18 +592,96 @@ public sealed class ScreenRecorder : IDisposable
     {
         try
         {
-            return SeedGifFrame(
-                await GraphicsCaptureService.CaptureItemAsync(Device(), item, includeCursor: true),
-                plan,
-                crop,
-                follow) is { } frame
+            return SeedGifFrame(await byHand(), plan, crop, follow) is { } frame
                 ? frame with { Timestamp = at }
                 : null;
         }
-        catch (Exception)
+        catch (Exception exception)
         {
+            DiagnosticLog.Verbose(
+                $"a GIF frame taken by hand failed: {exception.GetType().Name}: {exception.Message}");
             return null;
         }
+    }
+
+    /// <summary>
+    /// One display's pixels copied straight off the screen, the size the capture item
+    /// reports, or null when the two disagree.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The size check is not defensive tidiness: everything downstream — the crop, the
+    /// stride the encoder was promised — is in the item's pixels, so a copy that came out a
+    /// different size would be written as a torn picture rather than refused. They differ
+    /// only if the display changed mode mid-recording, and one still frame is the better
+    /// answer to that.
+    /// </para>
+    /// <para>
+    /// It copies the whole virtual desktop and cuts the display out, because that is what
+    /// <see cref="NativeScreenCaptureService"/> offers and what the screenshot fallback
+    /// already does. That is a few megabytes a frame at ten frames a second — costly, and
+    /// only ever paid where the alternative is a recording of one still picture.
+    /// </para>
+    /// </remarks>
+    private static (int Width, int Height, byte[] Pixels)? ScreenCopy(nint monitorHandle, SizeInt32 size)
+    {
+        try
+        {
+            if (MonitorBounds(monitorHandle) is not { } bounds)
+            {
+                DiagnosticLog.Verbose("a frame taken by hand failed: the display is no longer attached");
+                return null;
+            }
+
+            var desktop = new NativeScreenCaptureService().CaptureVirtualDesktop(includeCursor: true);
+            var cut = NativeScreenCaptureService.Crop(
+                desktop,
+                new CaptureRegion(
+                    bounds.X - desktop.VirtualX,
+                    bounds.Y - desktop.VirtualY,
+                    bounds.Width,
+                    bounds.Height));
+
+            if (cut.Width != size.Width || cut.Height != size.Height)
+            {
+                DiagnosticLog.Verbose(
+                    $"a frame taken by hand was {cut.Width}x{cut.Height}, not the"
+                        + $" {size.Width}x{size.Height} the recording is being written at");
+                return null;
+            }
+
+            return (cut.Width, cut.Height, cut.BgraPixels);
+        }
+        catch (Exception exception)
+        {
+            DiagnosticLog.Verbose(
+                $"a frame taken by hand failed: {exception.GetType().Name}: {exception.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>Where <paramref name="monitorHandle"/> sits in virtual-screen pixels.</summary>
+    private static CaptureRegion? MonitorBounds(nint monitorHandle)
+    {
+        var displays = MonitorEnumerator.Enumerate();
+
+        foreach (var (deviceName, handle) in displays.Handles)
+        {
+            if (handle != monitorHandle)
+            {
+                continue;
+            }
+
+            foreach (var monitor in displays.Layout.Monitors)
+            {
+                if (monitor.DeviceName == deviceName)
+                {
+                    return monitor.Bounds;
+                }
+            }
+        }
+
+        return null;
     }
 
     /// <summary>
@@ -1404,6 +1504,10 @@ public sealed class ScreenRecorder : IDisposable
         private readonly Channel<TimedFrame> _frames;
         private readonly FrameCadence _cadence;
         private readonly Stopwatch _clock = new();
+
+        // Written from the pool's own thread, read from the recording's.
+        private int _arrivals;
+        private int _empty;
         private readonly CancellationTokenRegistration _stopping;
 
         /// <summary>Written from the UI thread, read on the compositor's.</summary>
@@ -1435,6 +1539,10 @@ public sealed class ScreenRecorder : IDisposable
 
             _session = _pool.CreateCaptureSession(item);
 
+            DiagnosticLog.Verbose(
+                $"capture session opened on {item.Size.Width}x{item.Size.Height},"
+                    + $" {BufferCount} buffers, a frame every {interval.TotalMilliseconds:0}ms");
+
             // Unlike a screenshot, which is almost never wanted with a pointer in it:
             // a recording of someone demonstrating something without the pointer is
             // missing the thing being demonstrated.
@@ -1443,7 +1551,11 @@ public sealed class ScreenRecorder : IDisposable
             // A window that closes, or a display that is unplugged, ends the recording
             // with what it has rather than hanging on an item that will never deliver
             // another frame.
-            item.Closed += (_, _) => _frames.Writer.TryComplete();
+            item.Closed += (_, _) =>
+            {
+                DiagnosticLog.Verbose("the capture item closed; the recording ends with what it has");
+                _frames.Writer.TryComplete();
+            };
             _stopping = cancellation.Register(() => _frames.Writer.TryComplete());
         }
 
@@ -1453,11 +1565,18 @@ public sealed class ScreenRecorder : IDisposable
         /// <summary>Whether the recording is being held. Read by the audio track.</summary>
         public bool IsPaused => _paused;
 
+        /// <summary>How many times the compositor said a frame was ready.</summary>
+        public int Arrivals => _arrivals;
+
+        /// <summary>How many of those had nothing to collect. See OnFrameArrived.</summary>
+        public int Empty => _empty;
+
         /// <summary>Frames the rate did not call for.</summary>
         public int Dropped => _cadence.Dropped;
 
         public void Start()
         {
+            DiagnosticLog.Verbose("capture started");
             _clock.Restart();
             _session.StartCapture();
         }
@@ -1552,12 +1671,25 @@ public sealed class ScreenRecorder : IDisposable
 
         private void OnFrameArrived(Direct3D11CaptureFramePool sender, object args)
         {
+            // Counted before anything can go wrong with it. A recording that ends with no
+            // frames and none dropped used to be two different faults wearing the same
+            // face — a compositor that never signalled, and one that signalled with nothing
+            // to collect — and there was no way to tell them apart from the log.
+            var arrival = Interlocked.Increment(ref _arrivals);
+
             if (sender.TryGetNextFrame() is not { } frame)
             {
+                Interlocked.Increment(ref _empty);
                 return;
             }
 
             var elapsed = _clock.Elapsed;
+
+            if (arrival == 1)
+            {
+                DiagnosticLog.Verbose($"the compositor's first frame arrived at {elapsed:mm\\:ss\\.fff}");
+            }
+
             if (_paused || !_cadence.ShouldKeep(elapsed) || !_frames.Writer.TryWrite(new TimedFrame(frame, elapsed)))
             {
                 frame.Dispose();

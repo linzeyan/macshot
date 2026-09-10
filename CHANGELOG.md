@@ -3,6 +3,28 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.5] - 2026-09-10
+
+### Fixed
+
+- **A recording of a screen Windows never reports as changing is now copied off the screen
+  instead.** 0.8.3 taught macshot to take frames itself where Windows delivers none, but it
+  took them the same way Windows was already failing to — a second capture session — which
+  works on machines that did not need it and delivered nothing on the one that did. It now
+  copies the screen directly, which is what a screenshot already falls back to and owes
+  nothing to whatever is wrong with the capture path. Measured against the frames Windows
+  did deliver, in the same file, the two are pixel for pixel identical. Recording a single
+  *window* is unchanged and still asks Windows, because a copy off the screen would carry
+  whatever happens to be in front of that window.
+
+### Changed
+
+- **A recording says far more about what it caught.** The log now records the capture
+  session opening and its size, when the first frame arrived, how many times Windows
+  announced a frame, and how many of those announcements had nothing behind them — which
+  were previously indistinguishable, both ending as `0 frames, 0 dropped`. A recording that
+  caught nothing now says which of the two happened.
+
 ## [0.8.4] - 2026-09-09
 
 ### Fixed

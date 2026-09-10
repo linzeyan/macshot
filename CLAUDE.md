@@ -489,6 +489,20 @@ start the macOS pipeline on `main`, and vice versa.
   whole premise and was worth checking rather than assuming. Those 92ms are spent inside
   the encoder's sample request, so it halves the sample rate while it runs and is fenced
   behind `kept == 0`. The log says how many were `taken by hand`.
+
+  **That fallback is a GDI screen copy, not another capture session.** It was a one-shot
+  WGC capture first, which works on the Win11 VM and delivers *nothing* on the Win10 VDI
+  that reported this — so the fix helped only where it was not needed.
+  `NativeScreenCaptureService` owes nothing to whatever is wrong with the capture path, and
+  measured against the compositor's own frames in the same file, 174 of 200 consecutive
+  frame differences were exactly zero: the pixels are identical. A **window** recording
+  still uses the WGC one-shot, because a copy off the screen would carry whatever is in
+  front of the window.
+- **`0 frames, 0 dropped` used to be two faults wearing one face.** `OnFrameArrived`
+  returns silently when `TryGetNextFrame()` gives nothing, so a compositor that never
+  signalled and one that signalled with nothing to collect logged the same line. The
+  summary now reads `N frames from M arrivals (K empty)`, and a recording that kept nothing
+  says which of the two it was.
 - The MSIX installs, launches and captures — measured on the VM with a test certificate.
   What used to stop it was never the container: the capture path called an API a packaged
   app may only use with the `graphicsCaptureProgrammatic` capability, and the manifest
