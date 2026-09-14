@@ -7,8 +7,9 @@ namespace Macshot.Windows.Core.Capture;
 /// <remarks>
 /// <para>
 /// Windows Graphics Capture hands a session a frame the moment it opens, so a recording
-/// that has kept nothing at all a second in is not looking at a still screen — a still
-/// screen still gives up its opening frame — but at a session that is not working. One
+/// that has kept nothing at all once <see cref="StarvedAfter"/> has passed is not looking
+/// at a still screen — a still screen still gives up its opening frame — but at a session
+/// that is not working. One
 /// Windows 10 machine reported exactly that: fifteen seconds of <c>0 frames, 0 dropped</c>
 /// while screenshots on the same machine were fine, which produced a file of one frame
 /// repeated a thousand times.
@@ -25,12 +26,26 @@ namespace Macshot.Windows.Core.Capture;
 public sealed class RetakeCadence
 {
     /// <summary>
-    /// How long the compositor is given to deliver its first frame. A working session has
-    /// answered long before this; the margin is generous because the cost of being wrong is
-    /// asymmetric — a second of stillness at the head of a recording, against taking frames
-    /// by hand on a machine that was about to deliver them properly.
+    /// How long the compositor is given to deliver its first frame.
     /// </summary>
-    public static readonly TimeSpan StarvedAfter = TimeSpan.FromSeconds(1);
+    /// <remarks>
+    /// <para>
+    /// A working session answers in well under a tenth of a second: measured across three
+    /// VM recordings, the first frame arrived at 55, 65 and 73ms. This is four times the
+    /// slowest of those, which leaves a loaded machine room without making the wait itself
+    /// the defect.
+    /// </para>
+    /// <para>
+    /// It was a whole second while a retake meant opening a second capture session, which
+    /// could sit out a two-second frame timeout — being early was expensive, so the margin
+    /// was generous. A retake is a screen copy now, measured against the compositor's own
+    /// frames as pixel for pixel identical, so being early costs one cheap copy of a frame
+    /// that looks the same and stops for good at the first real one. The asymmetry ran the
+    /// other way: on the machine this exists for, the wait was a visibly frozen second at
+    /// the head of every recording.
+    /// </para>
+    /// </remarks>
+    public static readonly TimeSpan StarvedAfter = TimeSpan.FromMilliseconds(300);
 
     /// <summary>
     /// The fastest the by-hand path may run. Ten a second is coarse for a recording and

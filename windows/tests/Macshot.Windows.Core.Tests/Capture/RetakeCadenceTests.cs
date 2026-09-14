@@ -17,6 +17,25 @@ public sealed class RetakeCadenceTests
     }
 
     [TestMethod]
+    public void StarvedAfter_ClearsAWorkingSessionsFirstFrameWithoutFreezingTheHeadOfTheFile()
+    {
+        // Both bounds are the point of the number, and nothing else here can fail if it
+        // moves — every other test asks about the grace in terms of itself.
+        //
+        // Too short and a healthy recording starts copying the screen before its own
+        // session has said anything: measured across three VM recordings, the compositor's
+        // first frame arrived at 55, 65 and 73ms. Too long and the machine this exists for
+        // opens every recording with a visibly frozen still, which at a whole second is
+        // what was reported.
+        Assert.IsTrue(
+            RetakeCadence.StarvedAfter >= TimeSpan.FromMilliseconds(220),
+            "a loaded machine needs room past the ~73ms a working session was measured at");
+        Assert.IsTrue(
+            RetakeCadence.StarvedAfter <= TimeSpan.FromMilliseconds(400),
+            "past this the wait reads as a stall rather than as the recording starting");
+    }
+
+    [TestMethod]
     public void ShouldTake_WaitsOutTheGraceRatherThanRacingASessionThatIsAboutToWork()
     {
         var cadence = new RetakeCadence();

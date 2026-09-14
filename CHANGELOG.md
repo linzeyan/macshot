@@ -3,6 +3,19 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.8] - 2026-09-14
+
+### Changed
+
+- **A recording on a machine that Windows sends no frames to starts moving in a third of a
+  second rather than a whole one.** macshot waits before taking frames itself, so that a
+  recording about to work properly is never interrupted by one that is only slow to start —
+  and a working session has been measured answering within a tenth of a second, so the wait
+  was far longer than it needed to be. It was set while taking a frame by hand meant asking
+  Windows a second time, which was expensive and could hang; it is a copy of the screen
+  now, which costs almost nothing and has been measured as identical to what Windows sends.
+  The first second of every such recording was a frozen picture.
+
 ## [0.8.7] - 2026-09-14
 
 ### Fixed
