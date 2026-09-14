@@ -49,8 +49,16 @@ public sealed partial class PreferencesWindow : Window
 
     private const string ResetGlyph = "\uE72C";
 
-    /// <summary>The macOS settings window's content size, which this one is.</summary>
-    private const double WidthDips = 620;
+    /// <summary>
+    /// The macOS settings window's content size, widened for the tab strip this one draws.
+    /// </summary>
+    /// <remarks>
+    /// macOS is 620 x 520 and fits its seven tabs in it with 16pt icons. These are 24pt
+    /// with a 12pt label beneath, and measured on the VM the seven come to 616 — inside
+    /// 620 with nothing to spare, which is how About came to be off the right edge in the
+    /// first place. The height is macOS's untouched; only the width has a strip to hold.
+    /// </remarks>
+    private const double WidthDips = 660;
 
     private const double HeightDips = 520;
 

@@ -3,6 +3,17 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.7] - 2026-09-14
+
+### Fixed
+
+- **About was off the right edge of the settings window and could only be reached by
+  resizing it.** The seven tabs came to more than the window was wide, and a row of tabs
+  that does not fit scrolls rather than shrinking, so the last one sat outside the window
+  with nothing to say it was there. Each tab was carrying spacing it was never meant to
+  have, and the window is now a little wider than the Mac's as well, because these tabs are
+  drawn larger than the Mac draws its own.
+
 ## [0.8.6] - 2026-09-14
 
 ### Fixed

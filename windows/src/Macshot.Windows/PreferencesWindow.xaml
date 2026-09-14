@@ -138,7 +138,16 @@
              NSToolbar in preference style, which is what macshot's settings window has.
              A ListView rather than a NavigationView because the label belongs under the
              icon and NavigationView's top mode puts it beside — and because selection,
-             keyboard traversal and narration are the ListView's job, not this window's. -->
+             keyboard traversal and narration are the ListView's job, not this window's.
+
+             Every item carries Padding="0", so a tab is the 72 its panel declares and
+             nothing more. WinUI's ListViewItem adds 12 either side, which made the seven
+             tabs 672 wide inside a 620-wide window — and a ListView scrolls rather than
+             shrinks, so About was pushed off the right edge and could only be reached by
+             resizing the window. macOS fits the same seven in the same 620, so the strip
+             was what was wrong rather than the window. Set here rather than through an
+             implicit style: an implicit ListViewItem style replaces the default outright,
+             template and selection visual included. -->
         <ListView
             x:Name="Tabs"
             AutomationProperties.Name="Macshot Settings"
@@ -152,7 +161,7 @@
                 </ItemsPanelTemplate>
             </ListView.ItemsPanel>
 
-            <ListViewItem Tag="general" IsSelected="True">
+            <ListViewItem Tag="general" Padding="0" IsSelected="True">
                 <StackPanel Width="72" Padding="0,4">
                     <!-- gearshape -->
                     <Canvas Style="{StaticResource TabIconBox}">
@@ -163,7 +172,7 @@
                     <TextBlock Text="General" FontSize="12" HorizontalAlignment="Center" Margin="0,4,0,0" />
                 </StackPanel>
             </ListViewItem>
-            <ListViewItem Tag="capture">
+            <ListViewItem Tag="capture" Padding="0">
                 <StackPanel Width="72" Padding="0,4">
                     <!-- camera.viewfinder -->
                     <Canvas Style="{StaticResource TabIconBox}">
@@ -174,7 +183,7 @@
                     <TextBlock Text="Capture" FontSize="12" HorizontalAlignment="Center" Margin="0,4,0,0" />
                 </StackPanel>
             </ListViewItem>
-            <ListViewItem Tag="shortcuts">
+            <ListViewItem Tag="shortcuts" Padding="0">
                 <StackPanel Width="72" Padding="0,4">
                     <!-- keyboard -->
                     <Canvas Style="{StaticResource TabIconBox}">
@@ -185,7 +194,7 @@
                     <TextBlock Text="Shortcuts" FontSize="12" HorizontalAlignment="Center" Margin="0,4,0,0" />
                 </StackPanel>
             </ListViewItem>
-            <ListViewItem Tag="tools">
+            <ListViewItem Tag="tools" Padding="0">
                 <StackPanel Width="72" Padding="0,4">
                     <!-- paintbrush -->
                     <Canvas Style="{StaticResource TabIconBox}">
@@ -196,7 +205,7 @@
                     <TextBlock Text="Tools" FontSize="12" HorizontalAlignment="Center" Margin="0,4,0,0" />
                 </StackPanel>
             </ListViewItem>
-            <ListViewItem Tag="recording">
+            <ListViewItem Tag="recording" Padding="0">
                 <StackPanel Width="72" Padding="0,4">
                     <!-- record.circle -->
                     <Canvas Style="{StaticResource TabIconBox}">
@@ -213,7 +222,7 @@
             <!-- macshot's sixth tab, in macshot's place: after Recording and before
                  About. Collapsed in the offline build, which has nothing to upload
                  with. -->
-            <ListViewItem x:Name="UploadsTab" Tag="uploads">
+            <ListViewItem x:Name="UploadsTab" Tag="uploads" Padding="0">
                 <StackPanel Width="72" Padding="0,4">
                     <!-- icloud.and.arrow.up -->
                     <Canvas Style="{StaticResource TabIconBox}">
@@ -224,7 +233,7 @@
                     <TextBlock Text="Uploads" FontSize="12" HorizontalAlignment="Center" Margin="0,4,0,0" />
                 </StackPanel>
             </ListViewItem>
-            <ListViewItem Tag="about">
+            <ListViewItem Tag="about" Padding="0">
                 <StackPanel Width="72" Padding="0,4">
                     <!-- info.circle -->
                     <Canvas Style="{StaticResource TabIconBox}">
