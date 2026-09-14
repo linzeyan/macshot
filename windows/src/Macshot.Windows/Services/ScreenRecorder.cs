@@ -469,6 +469,7 @@ public sealed class ScreenRecorder : IDisposable
         var kept = 0;
         var retakes = new Retakes<GifFrame>(
             frames,
+            plan.FrameInterval,
             () => RetakeGifFrameAsync(byHand, plan, crop, follow, frames.Elapsed));
 
         while (written < GifRecordingPlan.MaximumFrames)
@@ -1218,10 +1219,10 @@ public sealed class ScreenRecorder : IDisposable
     /// working one does not halve its sample rate.
     /// </para>
     /// </remarks>
-    private sealed class Retakes<T>(FrameStream frames, Func<Task<T?>> take)
+    private sealed class Retakes<T>(FrameStream frames, TimeSpan frameInterval, Func<Task<T?>> take)
         where T : class
     {
-        private readonly RetakeCadence _cadence = new();
+        private readonly RetakeCadence _cadence = new(frameInterval);
 
         /// <summary>The capture in flight, or null when there is none.</summary>
         private Task<T?>? _running;
@@ -1316,7 +1317,7 @@ public sealed class ScreenRecorder : IDisposable
         IBuffer? seed,
         Func<Task<IBuffer?>> retake) : IDisposable
     {
-        private readonly Retakes<IBuffer> _retakes = new(frames, retake);
+        private readonly Retakes<IBuffer> _retakes = new(frames, interval, retake);
 
         /// <summary>
         /// The last sample's pixels, for the buffer paths. An <see cref="IBuffer"/> is

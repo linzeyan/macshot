@@ -3,6 +3,18 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.9] - 2026-09-14
+
+### Changed
+
+- **A recording on a machine Windows sends no frames to follows the frame rate it was asked
+  for, instead of ten a second whatever was chosen.** Where macshot has to take the frames
+  itself it was doing so at a fixed rate, so a recording set to 120 and one set to 10 came
+  out the same. It now takes them as often as the file can hold one, up to thirty a second —
+  past which a copy of the screen costs more than it shows, because copying one is itself
+  slower than a frame at those rates. Measured on a recording given nothing by Windows:
+  19.5 frames a second against 9.1.
+
 ## [0.8.8] - 2026-09-14
 
 ### Changed

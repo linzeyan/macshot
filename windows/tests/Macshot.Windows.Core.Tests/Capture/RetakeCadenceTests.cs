@@ -7,13 +7,21 @@ public sealed class RetakeCadenceTests
 {
     private static readonly TimeSpan PastTheGrace = RetakeCadence.StarvedAfter + TimeSpan.FromSeconds(1);
 
+    /// <summary>
+    /// A 10fps recording, so the cadence runs at the file's own rate and these read as they
+    /// did when the interval was a constant 100ms.
+    /// </summary>
+    private static readonly TimeSpan SlowEnoughToBeItsOwnRate = TimeSpan.FromMilliseconds(100);
+
+    private static RetakeCadence Cadence() => new(SlowEnoughToBeItsOwnRate);
+
     [TestMethod]
     public void ShouldTake_SaysYesOnceTheGraceHasPassedWithNothingDelivered()
     {
         // The first version read `elapsed - TimeSpan.MinValue`, which overflows rather than
         // answering — every recording threw a second after it started, and the counter this
         // was diagnosed by stayed at zero, so it read as "the fallback never engages".
-        Assert.IsTrue(new RetakeCadence().ShouldTake(kept: 0, PastTheGrace, paused: false));
+        Assert.IsTrue(Cadence().ShouldTake(kept: 0, PastTheGrace, paused: false));
     }
 
     [TestMethod]
@@ -36,9 +44,30 @@ public sealed class RetakeCadenceTests
     }
 
     [TestMethod]
+    public void Interval_TakesTheRecordingsOwnRateWhereTheFileCannotHoldFramesAnyFaster()
+    {
+        // A 10fps recording has nowhere to put a frame more often than every 100ms, so a
+        // screen copied faster than that is a screen copied for nothing.
+        Assert.AreEqual(TimeSpan.FromMilliseconds(100), new RetakeCadence(TimeSpan.FromMilliseconds(100)).Interval);
+    }
+
+    [TestMethod]
+    public void Interval_StopsAtWhatAScreenCopyCostsRatherThanChasingTheFrameRate()
+    {
+        // 120fps asks for a frame every 8ms and a screen copy was measured at 41ms for the
+        // BitBlt alone, so chasing the rate would saturate a thread and allocate a screen
+        // per copy to no visible end. This is the guard on that, and it is why the interval
+        // is the recording's rate rather than a constant: before, a 120fps recording and a
+        // 10fps one both got ten frames a second.
+        Assert.AreEqual(
+            RetakeCadence.FastestUseful,
+            new RetakeCadence(TimeSpan.FromMilliseconds(8)).Interval);
+    }
+
+    [TestMethod]
     public void ShouldTake_WaitsOutTheGraceRatherThanRacingASessionThatIsAboutToWork()
     {
-        var cadence = new RetakeCadence();
+        var cadence = Cadence();
 
         Assert.IsFalse(cadence.ShouldTake(kept: 0, TimeSpan.Zero, paused: false));
         Assert.IsFalse(
@@ -51,7 +80,7 @@ public sealed class RetakeCadenceTests
         // The point of the guard: this is a fallback for a session that never works, not a
         // second capture path for a screen that has merely stopped moving. Repeating the
         // last frame is the right answer to stillness and costs nothing.
-        Assert.IsFalse(new RetakeCadence().ShouldTake(kept: 1, PastTheGrace, paused: false));
+        Assert.IsFalse(Cadence().ShouldTake(kept: 1, PastTheGrace, paused: false));
     }
 
     [TestMethod]
@@ -59,22 +88,22 @@ public sealed class RetakeCadenceTests
     {
         // A pause is meant to leave an absence in the file. Filling it with frames taken by
         // hand would put the held seconds back into the recording.
-        Assert.IsFalse(new RetakeCadence().ShouldTake(kept: 0, PastTheGrace, paused: true));
+        Assert.IsFalse(Cadence().ShouldTake(kept: 0, PastTheGrace, paused: true));
     }
 
     [TestMethod]
     public void ShouldTake_HoldsToItsIntervalSoOneCaptureDoesNotStarveTheEncoder()
     {
-        var cadence = new RetakeCadence();
+        var cadence = Cadence();
 
         Assert.IsTrue(cadence.ShouldTake(kept: 0, PastTheGrace, paused: false));
         cadence.Record(took: true);
 
         Assert.IsFalse(
-            cadence.ShouldTake(kept: 0, PastTheGrace + RetakeCadence.Interval - TimeSpan.FromMilliseconds(1), false),
-            "each of these costs a whole capture session inside the encoder's sample request");
+            cadence.ShouldTake(kept: 0, PastTheGrace + SlowEnoughToBeItsOwnRate - TimeSpan.FromMilliseconds(1), false),
+            "each of these copies the whole screen, at a measured 45ms and a screen's worth of memory");
 
-        Assert.IsTrue(cadence.ShouldTake(kept: 0, PastTheGrace + RetakeCadence.Interval, paused: false));
+        Assert.IsTrue(cadence.ShouldTake(kept: 0, PastTheGrace + SlowEnoughToBeItsOwnRate, paused: false));
     }
 
     [TestMethod]
@@ -82,14 +111,14 @@ public sealed class RetakeCadenceTests
     {
         // Every failed attempt pays the capture timeout, so a machine where this cannot work
         // is left with the still image it was going to have rather than a stalled encoder.
-        var cadence = new RetakeCadence();
+        var cadence = Cadence();
         var at = PastTheGrace;
 
         for (var attempt = 0; attempt < RetakeCadence.Attempts; attempt++)
         {
             Assert.IsTrue(cadence.ShouldTake(kept: 0, at, paused: false));
             cadence.Record(took: false);
-            at += RetakeCadence.Interval;
+            at += SlowEnoughToBeItsOwnRate;
         }
 
         Assert.IsFalse(cadence.ShouldTake(kept: 0, at, paused: false));
@@ -102,14 +131,14 @@ public sealed class RetakeCadenceTests
         // A recording is minutes long and a capture can fail for reasons that pass — a
         // display mode change, a moment of contention. Counting those towards a permanent
         // retirement would retire it on a machine where it works.
-        var cadence = new RetakeCadence();
+        var cadence = Cadence();
         var at = PastTheGrace;
 
         for (var round = 0; round < RetakeCadence.Attempts * 3; round++)
         {
             Assert.IsTrue(cadence.ShouldTake(kept: 0, at, paused: false));
             cadence.Record(took: round % 2 == 0);
-            at += RetakeCadence.Interval;
+            at += SlowEnoughToBeItsOwnRate;
         }
     }
 }
