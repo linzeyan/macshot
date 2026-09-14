@@ -170,12 +170,17 @@ public sealed class ScreenRecorder : IDisposable
 
         var item = GraphicsCaptureService.OpenDisplay(monitorHandle);
 
-        // A screen copy, not another capture session. The machine that needs a frame taken
-        // by hand is one whose compositor is not delivering them, and on the two that have
-        // reported this a second session does not deliver either. GDI is a different
-        // subsystem, it is what a screenshot already falls back to, and it owes nothing to
-        // whatever is wrong with the capture path. See Retakes.
-        var byHand = () => Task.FromResult(ScreenCopy(monitorHandle, item.Size));
+        // Read now, on the thread that opened the item, rather than inside the closure
+        // below. A retake runs on whichever thread the encoder asks for a sample on, and a
+        // GraphicsCaptureItem is not agile on every Windows: the machine this fallback
+        // exists for answered all three attempts with RPC_E_WRONG_THREAD and retired it
+        // without once reaching the screen copy.
+        var size = item.Size;
+
+        // A screen copy, not another capture session. The compositor is what is failing on
+        // the machine that needs this, GDI is a different subsystem, it is what a screenshot
+        // already falls back to, and nothing in it is bound to a thread. See Retakes.
+        var byHand = () => Task.FromResult(ScreenCopy(monitorHandle, size));
 
         return format == RecordingFormat.Gif
             ? RecordGifAsync(item, byHand, path, region, null, frameRate ?? GifRecordingPlan.DefaultFrameRate, cancellation)
@@ -230,8 +235,19 @@ public sealed class ScreenRecorder : IDisposable
         // Still a capture session here, unlike a display's: a window recording holds only
         // that window's tree, and a copy off the screen would carry whatever is in front of
         // it. Wrong pixels are worse than a still picture.
+        //
+        // On its own item, opened where the retake runs rather than shared with the
+        // recording, for the reason RecordDisplayAsync gives. Kept once opened: every thread
+        // the encoder raises a sample request on shares one apartment, and opening an item
+        // ten times a second would cost more than the capture it is for. The device is not
+        // in the same position — it is made multithread-protected on purpose and handed to
+        // a frame pool created free-threaded, which is the API's own way of saying so.
+        GraphicsCaptureItem? ours = null;
         Func<Task<(int Width, int Height, byte[] Pixels)?>> byHand =
-            async () => await GraphicsCaptureService.CaptureItemAsync(Device(), item, includeCursor: true);
+            async () => await GraphicsCaptureService.CaptureItemAsync(
+                Device(),
+                ours ??= GraphicsCaptureService.OpenWindow(window.Id),
+                includeCursor: true);
 
         return format == RecordingFormat.Gif
             ? RecordGifAsync(item, byHand, path, null, follow, frameRate ?? GifRecordingPlan.DefaultFrameRate, cancellation)
@@ -573,8 +589,13 @@ public sealed class ScreenRecorder : IDisposable
             // that matters is in the line the recording ends with. A failed retake leaves
             // the previous frame in place, which is what the recording would have had
             // anyway.
+            //
+            // With the code, because the message is in the machine's own language and a
+            // report of one arrived in Chinese: 0x8001010E named the fault in a way that
+            // "應用程式所呼叫了整理給不同執行緒的介面" needed translating to.
             DiagnosticLog.Verbose(
-                $"a frame taken by hand failed: {exception.GetType().Name}: {exception.Message}");
+                $"a frame taken by hand failed: {exception.GetType().Name}"
+                    + $" 0x{exception.HResult:X8}: {exception.Message}");
             return null;
         }
     }
@@ -599,7 +620,8 @@ public sealed class ScreenRecorder : IDisposable
         catch (Exception exception)
         {
             DiagnosticLog.Verbose(
-                $"a GIF frame taken by hand failed: {exception.GetType().Name}: {exception.Message}");
+                $"a GIF frame taken by hand failed: {exception.GetType().Name}"
+                    + $" 0x{exception.HResult:X8}: {exception.Message}");
             return null;
         }
     }
@@ -1183,17 +1205,17 @@ public sealed class ScreenRecorder : IDisposable
     /// <para>
     /// Whether it works is the machine's answer, not ours. On the VM a one-shot session
     /// opened while the recording's own is running delivers in about 92ms — 109 frames over
-    /// an 18-second recording. On the Windows 10 machine this was written for it delivers
-    /// nothing at all, every attempt sitting out
-    /// <see cref="GraphicsCaptureService"/>'s two-second frame timeout.
+    /// an 18-second recording. On the Windows 10 machine this was written for, the first two
+    /// versions of it never ran at all: both took their frame through the recording's own
+    /// capture item, from the thread the encoder asks for samples on, and that item is not
+    /// agile there. Three <c>RPC_E_WRONG_THREAD</c> in a fifth of a second retired the
+    /// fallback, and reported identically to a platform that had refused.
     /// </para>
     /// <para>
-    /// Which is why nothing here is awaited by the caller. The first version was, and on
-    /// that machine the three attempts it makes before giving up cost the recording six
-    /// seconds of sampling — the encoder was handed 966 samples where the frame rate called
-    /// for 1800, because the loop that answers it was inside a capture that was never going
-    /// to return. Started and collected later, a doomed retake costs the recording nothing
-    /// and a working one no longer halves its sample rate either.
+    /// Nothing here is awaited by the caller: a capture costs a whole session, and one that
+    /// is going to time out would spend two seconds of the encoder's own loop doing it.
+    /// Started and collected later, a doomed retake costs the recording nothing and a
+    /// working one does not halve its sample rate.
     /// </para>
     /// </remarks>
     private sealed class Retakes<T>(FrameStream frames, Func<Task<T?>> take)

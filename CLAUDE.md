@@ -485,19 +485,26 @@ start the macOS pipeline on `main`, and vice versa.
   give up waiting; `ScreenRecorder.Retakes` then takes frames the way a screenshot is
   taken, ten a second, until the compositor delivers one of its own. **A one-shot capture
   opened while the recording's own session is live does work** — measured, 109 frames over
-  18 seconds at ~92ms each, on the same capture item the recording holds — which is the
-  whole premise and was worth checking rather than assuming. Those 92ms are spent inside
-  the encoder's sample request, so it halves the sample rate while it runs and is fenced
+  18 seconds at ~92ms each — which is the whole premise and was worth checking rather than
+  assuming. It costs a whole session, so it is started rather than awaited and is fenced
   behind `kept == 0`. The log says how many were `taken by hand`.
 
-  **That fallback is a GDI screen copy, not another capture session.** It was a one-shot
-  WGC capture first, which works on the Win11 VM and delivers *nothing* on the Win10 VDI
-  that reported this — so the fix helped only where it was not needed.
-  `NativeScreenCaptureService` owes nothing to whatever is wrong with the capture path, and
-  measured against the compositor's own frames in the same file, 174 of 200 consecutive
-  frame differences were exactly zero: the pixels are identical. A **window** recording
-  still uses the WGC one-shot, because a copy off the screen would carry whatever is in
-  front of the window.
+  **A retake must touch nothing the recording opened.** It runs on whichever thread the
+  encoder asks for a sample on, and a `GraphicsCaptureItem` is not agile on every Windows:
+  the first two versions reached for the recording's own item — one for `item.Size` alone —
+  and on the machine the fallback exists for, all three attempts died on
+  `RPC_E_WRONG_THREAD` before touching a capture API. Three logs read as a platform refusing
+  and were a threading bug. A display's retake now takes its size in advance and copies the
+  screen with `NativeScreenCaptureService`, which is GDI and thread-free; a **window**'s
+  opens a capture item of its own, because a copy off the screen would carry whatever is in
+  front of the window. The screen copy is not a compromise: measured against the
+  compositor's own frames in the same file, 174 of 200 consecutive frame differences were
+  exactly zero.
+
+  Two things about that fallback are still unmeasured **anywhere but a Win11 VM**, because
+  the VM's compositor works and its pointer never reaches the overlay: whether GDI copies a
+  VDI's screen at all, and the window path, which cannot be started without snapping a
+  window by hand.
 - **`0 frames, 0 dropped` used to be two faults wearing one face.** `OnFrameArrived`
   returns silently when `TryGetNextFrame()` gives nothing, so a compositor that never
   signalled and one that signalled with nothing to collect logged the same line. The

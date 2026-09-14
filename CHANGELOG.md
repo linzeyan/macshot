@@ -3,6 +3,26 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.6] - 2026-09-14
+
+### Fixed
+
+- **The fallback for a recording that comes out as one still picture had never once run on
+  the machine it was written for.** 0.8.3 added it and 0.8.5 changed how it takes a frame,
+  and on that machine neither got as far as taking one: both asked the recording's own
+  capture handle a question first, from the thread that writes the video rather than the one
+  that opened the recording, and Windows refuses that there. All three attempts failed
+  within a fifth of a second, the fallback retired itself, and the log said only that no
+  frame had been taken — which reads exactly like a machine that cannot take one. A
+  recording now asks nothing of its own capture while taking a frame by hand, so the screen
+  copy 0.8.5 added is finally what runs.
+
+### Changed
+
+- **A failed attempt to take a frame by hand records the error's number, not only its
+  text.** The text is in the language the machine is running in, and the report that found
+  the fault above arrived in Chinese, where the number would have named it on sight.
+
 ## [0.8.5] - 2026-09-10
 
 ### Fixed
