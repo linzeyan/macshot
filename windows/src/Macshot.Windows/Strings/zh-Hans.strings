@@ -77,6 +77,8 @@
 "Keystrokes:" = "按键：";
 "Larger" = "放大";
 "Light" = "浅色";
+"macshot cannot use the camera" = "macshot 无法使用摄像头";
+"macshot cannot use the microphone" = "macshot 无法使用麦克风";
 "macshot cannot write to its own folder, so it cannot update itself." = "macshot 无法写入自己的文件夹，因此无法自行更新。";
 "macshot could not bring that window forward to scroll it." = "macshot 无法将该窗口移到前面以进行滚动。";
 "macshot could not bring that window forward." = "macshot 无法将该窗口移到前面。";
@@ -158,6 +160,8 @@
 "Which edge the label's lines hang from" = "文字各行对齐的边";
 "Windows AI (Copilot+ PC)" = "Windows AI（Copilot+ PC）";
 "Windows icon files (.ico) only. Pick one that stays legible on both a light and a dark taskbar — unlike macOS, Windows draws the file as it is rather than recolouring it. A file it cannot read falls back to macshot's icon." = "仅限 Windows 图标文件（.ico）。请挑选在浅色与深色任务栏上都清晰可辨的图标 — 与 macOS 不同，Windows 会照原样绘制该文件，而不会替它重新着色。无法读取的文件会退回 macshot 自己的图标。";
+"Windows is blocking access to it, either for every desktop app or for macshot alone. This recording will have no camera in it, and the setting has been turned off." = "Windows 阻止了访问权限，可能是针对所有桌面应用，也可能只针对 macshot。本次录制不会有摄像头画面，该设置已关闭。";
+"Windows is blocking access to it, either for every desktop app or for macshot alone. This recording will have no microphone in it, and the setting has been turned off." = "Windows 阻止了访问权限，可能是针对所有桌面应用，也可能只针对 macshot。本次录制不会有麦克风声音，该设置已关闭。";
 "Windows would not capture that window." = "Windows 不允许截取该窗口。";
 "Windows would not give macshot these shortcuts, so they are not active: {0}. Another program may already own them. The notification-area menu still works." = "Windows 未将这些快捷键给 macshot，因此它们未生效：{0}。可能已被其他程序占用。通知区域的菜单仍可使用。";
 "Windows would not let macshot change its startup entry." = "Windows 不允许 macshot 更改其开机启动项。";

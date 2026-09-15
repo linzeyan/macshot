@@ -77,6 +77,8 @@
 "Keystrokes:" = "Teclas digitadas:";
 "Larger" = "Maior";
 "Light" = "Claro";
+"macshot cannot use the camera" = "O macshot não pode usar a câmera";
+"macshot cannot use the microphone" = "O macshot não pode usar o microfone";
 "macshot cannot write to its own folder, so it cannot update itself." = "O macshot não pode gravar na própria pasta, então não consegue se atualizar.";
 "macshot could not bring that window forward to scroll it." = "O macshot não conseguiu trazer aquela janela para a frente para rolá-la.";
 "macshot could not bring that window forward." = "O macshot não conseguiu trazer aquela janela para a frente.";
@@ -158,6 +160,8 @@
 "Which edge the label's lines hang from" = "De qual borda as linhas do texto se alinham";
 "Windows AI (Copilot+ PC)" = "Windows AI (Copilot+ PC)";
 "Windows icon files (.ico) only. Pick one that stays legible on both a light and a dark taskbar — unlike macOS, Windows draws the file as it is rather than recolouring it. A file it cannot read falls back to macshot's icon." = "Somente arquivos de ícone do Windows (.ico). Escolha um que continue legível em uma barra de tarefas clara e em uma escura — ao contrário do macOS, o Windows desenha o arquivo como ele é, sem recolori-lo. Um arquivo ilegível volta para o ícone do macshot.";
+"Windows is blocking access to it, either for every desktop app or for macshot alone. This recording will have no camera in it, and the setting has been turned off." = "O Windows está bloqueando o acesso, seja para todos os aplicativos de área de trabalho ou apenas para o macshot. Esta gravação não terá câmera, e a configuração foi desativada.";
+"Windows is blocking access to it, either for every desktop app or for macshot alone. This recording will have no microphone in it, and the setting has been turned off." = "O Windows está bloqueando o acesso, seja para todos os aplicativos de área de trabalho ou apenas para o macshot. Esta gravação não terá microfone, e a configuração foi desativada.";
 "Windows would not capture that window." = "O Windows não permitiu capturar aquela janela.";
 "Windows would not give macshot these shortcuts, so they are not active: {0}. Another program may already own them. The notification-area menu still works." = "O Windows não concedeu estes atalhos ao macshot, então eles não estão ativos: {0}. Outro programa pode já usá-los. O menu da área de notificação continua funcionando.";
 "Windows would not let macshot change its startup entry." = "O Windows não deixou o macshot alterar sua entrada de inicialização.";

@@ -3,6 +3,36 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.10] - 2026-09-15
+
+### Added
+
+- **A recording that Windows will not give the microphone or the camera to now says so, and
+  offers to open the page where it is turned back on.** Both were silent: a recording made
+  without sound because a privacy setting was off looked exactly like one made on a machine
+  with no microphone in it, and neither said anything at all. macshot now tells the two
+  apart, names which one it was, turns the setting off so the next recording does not stop
+  for it again, and offers a button that opens Windows' own microphone or camera privacy
+  page. A machine that simply has no such device is still left alone — there is nothing to
+  turn on and nothing worth interrupting anyone for.
+- **The log says why a recording has no sound.** Five different failures — no endpoint, a
+  refusal, a format the device would not take — all wrote nothing at all. Each now writes a
+  line naming what failed, with the code Windows answered, and marks a refusal as such.
+
+### Fixed
+
+- **Every box macshot asks a question with now appears in front, and in the middle of the
+  screen.** They were being raised in the top-left corner, behind whatever was already
+  there: macshot has no main window, so it had nothing on screen to carry one forward and
+  nothing on the taskbar to find one behind. A recording that stopped to ask about the
+  microphone waited on an answer to a question showing only a corner of its title bar. This
+  affected every alert raised from the notification area, including the update prompt.
+
+### Note
+
+- Screen capture itself needs no permission on Windows, unlike macOS, so nothing asks for
+  one. The microphone and the camera are the only two things a recording can be refused.
+
 ## [0.8.9] - 2026-09-14
 
 ### Changed

@@ -52,6 +52,20 @@ internal static class Alert
     private const uint PositionRelativeToWindow = 0x1000;
 
     /// <summary>
+    /// TDN_CREATED. The one notification this needs: the box exists and has not been shown
+    /// yet, which is the moment it can still be put in front of what it has to be read over.
+    /// </summary>
+    private const uint DialogCreated = 0;
+
+    private const nint Topmost = -1;
+
+    private const uint NoSize = 0x0001;
+
+    private const uint NoMove = 0x0002;
+
+    private const uint NoActivate = 0x0010;
+
+    /// <summary>
     /// The id of the first button; the rest follow it. They must miss the common ones
     /// (IDOK through IDCONTINUE, 1-11): <see cref="AllowDialogCancellation"/> reports Esc
     /// and the close box as IDCANCEL, so an id that collided with 2 would make dismissal
@@ -121,6 +135,7 @@ internal static class Alert
     {
         var owned = new List<nint>(labels.Length + 3);
         var buttons = nint.Zero;
+        var raise = new TaskDialogCallback(Raise);
 
         try
         {
@@ -146,7 +161,7 @@ internal static class Alert
             {
                 Size = (uint)Marshal.SizeOf<TaskDialogConfig>(),
                 Parent = owner,
-                Flags = AllowDialogCancellation | PositionRelativeToWindow,
+                Flags = AllowDialogCancellation | (Positions(owner) ? PositionRelativeToWindow : 0),
                 WindowTitle = Allocate(owned, "macshot"),
                 MainIcon = TaskDialogIcon(icon),
                 MainInstruction = instruction is null ? nint.Zero : Allocate(owned, instruction),
@@ -156,6 +171,8 @@ internal static class Alert
 
                 // macOS's first button is its default, in every alert macshot raises.
                 DefaultButton = FirstButtonId,
+
+                Callback = Marshal.GetFunctionPointerForDelegate(raise),
             };
 
             var result = TaskDialogIndirect(in config, out var pressed, nint.Zero, nint.Zero);
@@ -165,6 +182,10 @@ internal static class Alert
                 config.Parent = nint.Zero;
                 result = TaskDialogIndirect(in config, out pressed, nint.Zero, nint.Zero);
             }
+
+            // The delegate must outlive the call it is invoked from, and nothing else here
+            // refers to it — the struct holds a bare pointer the collector cannot see.
+            GC.KeepAlive(raise);
 
             if (result < 0)
             {
@@ -190,6 +211,40 @@ internal static class Alert
             }
         }
     }
+
+    /// <summary>
+    /// Puts the box in front of whatever it has to be read over, as it is created.
+    /// </summary>
+    /// <remarks>
+    /// macshot has no main window, so it has nothing of its own on screen to carry a box
+    /// forward and nothing on the taskbar to find one behind. Raised from the tray, the box
+    /// is created wherever the z-order happens to put it: measured on the VM, a recording
+    /// that had stopped to ask about the microphone was waiting behind a terminal, with a
+    /// corner of its title bar the only thing showing. Made topmost rather than only
+    /// activated, because <c>SetForegroundWindow</c> is refused outright when the last input
+    /// went to another process — which is exactly when a box is easiest to lose.
+    /// </remarks>
+    private static int Raise(nint dialog, uint notification, nint word, nint value, nint data)
+    {
+        if (notification == DialogCreated)
+        {
+            SetWindowPos(dialog, Topmost, 0, 0, 0, 0, NoMove | NoSize | NoActivate);
+            SetForegroundWindow(dialog);
+        }
+
+        return 0;
+    }
+
+    /// <summary>
+    /// Whether <paramref name="owner"/> is a window a box can be centred on.
+    /// </summary>
+    /// <remarks>
+    /// macshot raises most of these from the message-only window that takes the hotkeys,
+    /// and that window has no position. TDF_POSITION_RELATIVE_TO_WINDOW then centres the box
+    /// on an empty rectangle at 0,0 — the top-left corner of the screen — rather than on the
+    /// screen, which is where every alert raised from the tray had been appearing.
+    /// </remarks>
+    private static bool Positions(nint owner) => owner != nint.Zero && IsWindowVisible(owner);
 
     /// <summary>The shell's own box, for a process that cannot raise a task dialog.</summary>
     /// <remarks>
@@ -262,6 +317,27 @@ internal static class Alert
     /// translation because any language's label may contain an ampersand of its own.
     /// </summary>
     private static string Literal(string label) => label.Replace("&", "&&");
+
+    /// <summary>
+    /// TASKDIALOGCALLBACK. Stdcall by name rather than by default, because the default is
+    /// Winapi and this has to keep meaning the same thing if it is ever read on a platform
+    /// where those two differ.
+    /// </summary>
+    [UnmanagedFunctionPointer(CallingConvention.StdCall)]
+    private delegate int TaskDialogCallback(nint dialog, uint notification, nint word, nint value, nint data);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetWindowPos(
+        nint window, nint after, int x, int y, int width, int height, uint flags);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool SetForegroundWindow(nint window);
+
+    [DllImport("user32.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool IsWindowVisible(nint window);
 
     [DllImport("comctl32.dll", ExactSpelling = true)]
     private static extern int TaskDialogIndirect(

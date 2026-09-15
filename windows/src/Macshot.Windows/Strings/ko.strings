@@ -77,6 +77,8 @@
 "Keystrokes:" = "키 입력:";
 "Larger" = "크게";
 "Light" = "라이트";
+"macshot cannot use the camera" = "macshot에서 카메라를 사용할 수 없습니다";
+"macshot cannot use the microphone" = "macshot에서 마이크를 사용할 수 없습니다";
 "macshot cannot write to its own folder, so it cannot update itself." = "macshot이 자체 폴더에 쓸 수 없어 스스로 업데이트할 수 없습니다.";
 "macshot could not bring that window forward to scroll it." = "macshot이 스크롤하기 위해 그 창을 앞으로 가져오지 못했습니다.";
 "macshot could not bring that window forward." = "macshot이 그 창을 앞으로 가져오지 못했습니다.";
@@ -158,6 +160,8 @@
 "Which edge the label's lines hang from" = "텍스트의 줄을 어느 쪽에 맞출지";
 "Windows AI (Copilot+ PC)" = "Windows AI(Copilot+ PC)";
 "Windows icon files (.ico) only. Pick one that stays legible on both a light and a dark taskbar — unlike macOS, Windows draws the file as it is rather than recolouring it. A file it cannot read falls back to macshot's icon." = "Windows 아이콘 파일(.ico)만 사용할 수 있습니다. 밝은 작업 표시줄과 어두운 작업 표시줄 모두에서 잘 보이는 것을 고르십시오. macOS와 달리 Windows는 파일을 다시 칠하지 않고 그대로 그립니다. 읽을 수 없는 파일은 macshot 아이콘으로 대체됩니다.";
+"Windows is blocking access to it, either for every desktop app or for macshot alone. This recording will have no camera in it, and the setting has been turned off." = "Windows가 액세스를 차단하고 있습니다. 모든 데스크톱 앱이 대상이거나 macshot만 대상일 수 있습니다. 이번 녹화에는 카메라가 포함되지 않으며 설정이 해제되었습니다.";
+"Windows is blocking access to it, either for every desktop app or for macshot alone. This recording will have no microphone in it, and the setting has been turned off." = "Windows가 액세스를 차단하고 있습니다. 모든 데스크톱 앱이 대상이거나 macshot만 대상일 수 있습니다. 이번 녹화에는 마이크가 포함되지 않으며 설정이 해제되었습니다.";
 "Windows would not capture that window." = "Windows가 그 창의 캡처를 허용하지 않았습니다.";
 "Windows would not give macshot these shortcuts, so they are not active: {0}. Another program may already own them. The notification-area menu still works." = "Windows가 이 단축키를 macshot에 허용하지 않아 사용할 수 없습니다: {0}. 다른 프로그램이 이미 사용 중일 수 있습니다. 알림 영역 메뉴는 계속 사용할 수 있습니다.";
 "Windows would not let macshot change its startup entry." = "Windows가 macshot의 시작 프로그램 항목 변경을 허용하지 않았습니다.";

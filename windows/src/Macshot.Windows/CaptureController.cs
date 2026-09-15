@@ -2262,8 +2262,21 @@ public sealed class CaptureController : IDisposable
 
             if (webcam is null)
             {
-                // No camera, or Windows says no. Closed rather than left showing a black
-                // circle over the recording, and the recording goes ahead without it.
+                // No camera, or Windows says no — which used to be the same event. Only the
+                // refusal has anything the user can act on, so only it stops to say so.
+                if (bubble.Access == DeviceAccess.Blocked)
+                {
+                    _settings.Save(_settings.Current with { RecordWebcam = false });
+
+                    OfferThePrivacyPage(
+                        GuardedDevice.Camera,
+                        L("macshot cannot use the camera"),
+                        L("Windows is blocking access to it, either for every desktop app or for macshot alone. "
+                            + "This recording will have no camera in it, and the setting has been turned off."));
+                }
+
+                // Closed rather than left showing a black circle over the recording, and
+                // the recording goes ahead without it.
                 await bubble.StopAsync();
             }
         }
@@ -2287,10 +2300,10 @@ public sealed class CaptureController : IDisposable
         // answer macshot gives.
         var audio = format == RecordingFormat.Gif
             ? default
-            : new RecordingAudio(
+            : AudioWindowsAllows(new RecordingAudio(
                 _settings.Current.RecordSystemAudio,
                 _settings.Current.RecordMicAudio,
-                _settings.Current.MicrophoneDeviceId);
+                _settings.Current.MicrophoneDeviceId));
 
         try
         {
@@ -2426,6 +2439,87 @@ public sealed class CaptureController : IDisposable
     /// (<c>AppDelegate.swift:2597</c>). Both other paths return the recording untouched, so
     /// nothing here can stand between the user and a recording they have just made.
     /// </remarks>
+    /// <summary>
+    /// The sound the recording will actually get, having asked Windows first.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Asked before the recording rather than discovered halfway through it. macOS reads
+    /// the microphone's authorization status and turns its own setting off when it is
+    /// denied (<c>RecordingEngine.swift:88</c>); it can, because the system put the request
+    /// to the user on its behalf and the user knows what they answered. Windows offers an
+    /// unpackaged desktop app neither — it cannot ask, and it cannot read the answer — so
+    /// the only way to find out is to open the device, and the only way anyone learns a
+    /// switch is off is if macshot says so.
+    /// </para>
+    /// <para>
+    /// The setting is turned off with it, as macOS does, so the next recording does not
+    /// stop to ask again and the switch in preferences shows what happened.
+    /// </para>
+    /// </remarks>
+    private RecordingAudio AudioWindowsAllows(RecordingAudio wanted)
+    {
+        // System audio is not asked about: a loopback stream is opened on the speakers,
+        // which no privacy setting covers, so the only way it fails is a machine with
+        // nothing to play through — and there is no page to send anyone to for that.
+        if (!wanted.Microphone
+            || AudioEndpoint.Check(AudioSource.Microphone, wanted.MicrophoneDeviceId) != DeviceAccess.Blocked)
+        {
+            return wanted;
+        }
+
+        _settings.Save(_settings.Current with { RecordMicAudio = false });
+
+        OfferThePrivacyPage(
+            GuardedDevice.Microphone,
+            L("macshot cannot use the microphone"),
+            L("Windows is blocking access to it, either for every desktop app or for macshot alone. "
+                + "This recording will have no microphone in it, and the setting has been turned off."));
+
+        return wanted with { Microphone = false };
+    }
+
+    /// <summary>
+    /// Says a device is blocked and offers to open the page its switch is on.
+    /// </summary>
+    /// <remarks>
+    /// The page rather than instructions: the switch is two levels down in Settings, it
+    /// moved between Windows 10 and 11, and a user who has to find it from a description is
+    /// being asked to do the part macshot can do for them.
+    /// </remarks>
+    private void OfferThePrivacyPage(GuardedDevice device, string instruction, string content)
+    {
+        var page = DevicePrivacy.PageFor(device);
+        DiagnosticLog.Write($"{instruction}; offering {page}");
+
+        // Owned by the same window every other box in macshot is owned by. There is no main
+        // window to own it instead, and an unowned box is one the shell will not raise —
+        // on a tray app that means a recording waiting on an answer nobody can see.
+        if (Alert.Show(
+                _messageWindow.Handle,
+                instruction,
+                content,
+                Alert.Icon.Warning,
+                L("Open Settings"),
+                L("Continue")) != 0)
+        {
+            return;
+        }
+
+        try
+        {
+            using (Process.Start(new ProcessStartInfo(page) { UseShellExecute = true }))
+            {
+            }
+        }
+        catch (Exception exception)
+        {
+            // A shell that will not open ms-settings: leaves the user where they were,
+            // which is why the message says what is wrong rather than only where to go.
+            DiagnosticLog.Write($"Could not open {page}: {exception.Message}");
+        }
+    }
+
     private async Task<string> BalancedRecordingAsync(RecordingResult result)
     {
         if (result.AudioTracks is not { } tracks)

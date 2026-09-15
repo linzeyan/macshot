@@ -77,6 +77,8 @@
 "Keystrokes:" = "Нажатия клавиш:";
 "Larger" = "Крупнее";
 "Light" = "Светлая";
+"macshot cannot use the camera" = "macshot не может использовать камеру";
+"macshot cannot use the microphone" = "macshot не может использовать микрофон";
 "macshot cannot write to its own folder, so it cannot update itself." = "macshot не может писать в собственную папку, поэтому не может обновить себя.";
 "macshot could not bring that window forward to scroll it." = "macshot не смог вывести это окно на передний план, чтобы прокрутить его.";
 "macshot could not bring that window forward." = "macshot не смог вывести это окно на передний план.";
@@ -158,6 +160,8 @@
 "Which edge the label's lines hang from" = "К какому краю прижаты строки текста";
 "Windows AI (Copilot+ PC)" = "Windows AI (Copilot+ PC)";
 "Windows icon files (.ico) only. Pick one that stays legible on both a light and a dark taskbar — unlike macOS, Windows draws the file as it is rather than recolouring it. A file it cannot read falls back to macshot's icon." = "Только файлы значков Windows (.ico). Выберите такой, который остаётся разборчивым и на светлой, и на тёмной панели задач: в отличие от macOS, Windows рисует файл как есть, не перекрашивая его. Нечитаемый файл заменяется значком macshot.";
+"Windows is blocking access to it, either for every desktop app or for macshot alone. This recording will have no camera in it, and the setting has been turned off." = "Windows блокирует доступ — либо для всех классических приложений, либо только для macshot. В этой записи не будет камеры, а настройка отключена.";
+"Windows is blocking access to it, either for every desktop app or for macshot alone. This recording will have no microphone in it, and the setting has been turned off." = "Windows блокирует доступ — либо для всех классических приложений, либо только для macshot. В этой записи не будет микрофона, а настройка отключена.";
 "Windows would not capture that window." = "Windows отказалась снимать это окно.";
 "Windows would not give macshot these shortcuts, so they are not active: {0}. Another program may already own them. The notification-area menu still works." = "Windows не предоставила macshot эти сочетания клавиш, поэтому они не действуют: {0}. Возможно, они уже заняты другой программой. Меню в области уведомлений по-прежнему работает.";
 "Windows would not let macshot change its startup entry." = "Windows не позволила macshot изменить запись автозапуска.";

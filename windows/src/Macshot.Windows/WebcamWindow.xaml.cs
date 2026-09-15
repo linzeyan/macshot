@@ -114,6 +114,14 @@ public sealed partial class WebcamWindow : Window
         return await StartAsync(cameraId);
     }
 
+    /// <summary>
+    /// Why the camera is not in the recording, for the caller that has to say so. Windows
+    /// answers its camera privacy setting with an <see cref="UnauthorizedAccessException"/>
+    /// and answers nothing else that way, so a refusal is the one failure here that has
+    /// something the user can do about it.
+    /// </summary>
+    internal DeviceAccess Access { get; private set; } = DeviceAccess.Opened;
+
     private async Task<bool> StartAsync(string? cameraId)
     {
         try
@@ -122,6 +130,7 @@ public sealed partial class WebcamWindow : Window
             if (source is null)
             {
                 DiagnosticLog.Write("No camera to put in the recording.");
+                Access = DeviceAccess.Missing;
                 return false;
             }
 
@@ -131,6 +140,7 @@ public sealed partial class WebcamWindow : Window
             if (await reader.StartAsync() is not MediaFrameReaderStartStatus.Success)
             {
                 DiagnosticLog.Write("The camera would not start.");
+                Access = DeviceAccess.Unusable;
                 return false;
             }
 
@@ -142,11 +152,13 @@ public sealed partial class WebcamWindow : Window
             // Windows' camera privacy setting. Reported rather than thrown: the recording
             // is still worth making without the camera in it.
             DiagnosticLog.Write("Camera access is turned off for this machine or for macshot.");
+            Access = DeviceAccess.Blocked;
             return false;
         }
         catch (Exception exception)
         {
             DiagnosticLog.Write($"Could not start the camera: {exception.Message}");
+            Access = DeviceAccess.Unusable;
             return false;
         }
     }

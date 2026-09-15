@@ -114,6 +114,24 @@ internal sealed class AudioEndpoint : IDisposable
     }
 
     /// <summary>
+    /// Says why a source is not in the recording, and answers null for the caller.
+    /// </summary>
+    /// <remarks>
+    /// Written rather than traced: the consequence is a recording with no sound in it, and
+    /// nothing else anywhere says why. Every one of these was a bare <c>return null</c>,
+    /// which made five different faults — no device, a refusal, a format the endpoint would
+    /// not take — one silent event.
+    /// </remarks>
+    private static AudioEndpoint? Refused(AudioSource source, DeviceAccess access, string what, int code)
+    {
+        var name = source == AudioSource.System ? "system audio" : "the microphone";
+        DiagnosticLog.Write(
+            $"{name} is not in this recording: {what} (0x{code:X8}"
+                + (access == DeviceAccess.Blocked ? ", which is Windows refusing access" : string.Empty) + ")");
+        return null;
+    }
+
+    /// <summary>
     /// Opens an endpoint for <paramref name="source"/>, or null when the machine has none
     /// or refuses the format.
     /// </summary>
@@ -128,9 +146,34 @@ internal sealed class AudioEndpoint : IDisposable
     /// machine, and a recording that fails outright because nothing is plugged in would
     /// be worse than one without sound.
     /// </remarks>
-    public static AudioEndpoint? Open(AudioSource source, string? deviceId)
+    public static AudioEndpoint? Open(AudioSource source, string? deviceId) =>
+        Open(source, deviceId, out _);
+
+    /// <summary>
+    /// Whether <paramref name="source"/> could be recorded, without recording it.
+    /// </summary>
+    /// <remarks>
+    /// Opening it and letting it go is the only way to ask: Windows offers an unpackaged
+    /// desktop app no way to read its own microphone permission, and no way to request it.
+    /// Cheap enough to pay before a recording — an activate and an initialize — and the
+    /// alternative is finding out once the recording is already silent.
+    /// </remarks>
+    public static DeviceAccess Check(AudioSource source, string? deviceId)
+    {
+        using var endpoint = Open(source, deviceId, out var access);
+        return access;
+    }
+
+    /// <param name="access">
+    /// Why, when the answer is null. A refusal is the one worth telling the user about, and
+    /// it is <c>E_ACCESSDENIED</c> — indistinguishable from any other refusal except by the
+    /// code, which is why this is reported rather than folded into the null.
+    /// </param>
+    /// <inheritdoc cref="Open(AudioSource, string?)"/>
+    public static AudioEndpoint? Open(AudioSource source, string? deviceId, out DeviceAccess access)
     {
         nint format = 0;
+        access = DeviceAccess.Unusable;
         try
         {
             var enumerator = (IMMDeviceEnumerator)new MMDeviceEnumerator();
@@ -152,51 +195,61 @@ internal sealed class AudioEndpoint : IDisposable
             // unplugged since the last recording must not be why this one is silent.
             if (device is null)
             {
-                if (enumerator.GetDefaultAudioEndpoint(flow, ConsoleRole, out var fallback) != 0
-                    || fallback is null)
+                var found = enumerator.GetDefaultAudioEndpoint(flow, ConsoleRole, out var fallback);
+                if (found != 0 || fallback is null)
                 {
-                    return null;
+                    return Refused(source, access = DevicePrivacy.FromHResult(found), "there is no such device", found);
                 }
 
                 device = fallback;
             }
 
             var audioClientId = typeof(IAudioClient).GUID;
-            if (device.Activate(ref audioClientId, 1 /* CLSCTX_INPROC_SERVER */, 0, out var activated) != 0
-                || activated is not IAudioClient client)
+            var activation = device.Activate(ref audioClientId, 1 /* CLSCTX_INPROC_SERVER */, 0, out var activated);
+            if (activation != 0 || activated is not IAudioClient client)
             {
-                return null;
+                return Refused(
+                    source, access = DevicePrivacy.FromHResult(activation), "it would not open", activation);
             }
 
             format = WaveFormat();
             var flags = StreamFlagsAutoConvertPcm | StreamFlagsSrcDefaultQuality
                 | (source == AudioSource.System ? StreamFlagsLoopback : 0);
 
-            if (client.Initialize(SharedMode, flags, BufferDuration, 0, format, 0) != 0)
+            // Where the privacy setting lands: activating the device is allowed, and it is
+            // the stream that Windows refuses.
+            var initialized = client.Initialize(SharedMode, flags, BufferDuration, 0, format, 0);
+            if (initialized != 0)
             {
-                return null;
+                return Refused(
+                    source,
+                    access = DevicePrivacy.FromHResult(initialized),
+                    "Windows would not open a stream on it",
+                    initialized);
             }
 
             var captureClientId = typeof(IAudioCaptureClient).GUID;
-            if (client.GetService(ref captureClientId, out var service) != 0
-                || service is not IAudioCaptureClient capture)
+            var served = client.GetService(ref captureClientId, out var service);
+            if (served != 0 || service is not IAudioCaptureClient capture)
             {
-                return null;
+                return Refused(source, access = DevicePrivacy.FromHResult(served), "it gave no capture client", served);
             }
 
             var endpoint = new AudioEndpoint(client, capture, format);
             format = 0;
+            access = DeviceAccess.Opened;
             return endpoint;
         }
-        catch (COMException)
+        catch (COMException exception)
         {
             // An endpoint that cannot be opened is a recording without that source in
             // it, which is the same answer as not having asked for it.
-            return null;
+            return Refused(
+                source, access = DevicePrivacy.FromHResult(exception.HResult), exception.Message, exception.HResult);
         }
-        catch (InvalidCastException)
+        catch (InvalidCastException exception)
         {
-            return null;
+            return Refused(source, access = DeviceAccess.Unusable, exception.Message, exception.HResult);
         }
         finally
         {

@@ -77,6 +77,8 @@
 "Keystrokes:" = "キー入力:";
 "Larger" = "大きく";
 "Light" = "ライト";
+"macshot cannot use the camera" = "macshot はカメラを使用できません";
+"macshot cannot use the microphone" = "macshot はマイクを使用できません";
 "macshot cannot write to its own folder, so it cannot update itself." = "macshot は自身のフォルダーに書き込めないため、自動で更新できません。";
 "macshot could not bring that window forward to scroll it." = "macshot はスクロールのためにそのウインドウを前面に出せませんでした。";
 "macshot could not bring that window forward." = "macshot はそのウインドウを前面に出せませんでした。";
@@ -158,6 +160,8 @@
 "Which edge the label's lines hang from" = "テキストの行をどの端に揃えるか";
 "Windows AI (Copilot+ PC)" = "Windows AI（Copilot+ PC）";
 "Windows icon files (.ico) only. Pick one that stays legible on both a light and a dark taskbar — unlike macOS, Windows draws the file as it is rather than recolouring it. A file it cannot read falls back to macshot's icon." = "Windows のアイコンファイル（.ico）のみです。明るいタスクバーでも暗いタスクバーでも読めるものを選んでください。macOS と違い、Windows はファイルを塗り替えずそのまま描画します。読めないファイルの場合は macshot のアイコンに戻ります。";
+"Windows is blocking access to it, either for every desktop app or for macshot alone. This recording will have no camera in it, and the setting has been turned off." = "Windows がアクセスをブロックしています。すべてのデスクトップアプリが対象か、macshot だけが対象です。この録画にカメラは入らず、設定はオフになりました。";
+"Windows is blocking access to it, either for every desktop app or for macshot alone. This recording will have no microphone in it, and the setting has been turned off." = "Windows がアクセスをブロックしています。すべてのデスクトップアプリが対象か、macshot だけが対象です。この録画にマイクは入らず、設定はオフになりました。";
 "Windows would not capture that window." = "Windows はそのウインドウをキャプチャできませんでした。";
 "Windows would not give macshot these shortcuts, so they are not active: {0}. Another program may already own them. The notification-area menu still works." = "Windows がこれらのショートカットを macshot に割り当てなかったため、有効になっていません：{0}。ほかのプログラムがすでに使用している可能性があります。通知領域のメニューは引き続き利用できます。";
 "Windows would not let macshot change its startup entry." = "Windows が macshot のスタートアップ登録の変更を許可しませんでした。";

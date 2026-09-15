@@ -77,6 +77,8 @@
 "Keystrokes:" = "Tastenanschläge:";
 "Larger" = "Größer";
 "Light" = "Hell";
+"macshot cannot use the camera" = "macshot kann die Kamera nicht verwenden";
+"macshot cannot use the microphone" = "macshot kann das Mikrofon nicht verwenden";
 "macshot cannot write to its own folder, so it cannot update itself." = "macshot kann nicht in seinen eigenen Ordner schreiben und sich daher nicht selbst aktualisieren.";
 "macshot could not bring that window forward to scroll it." = "macshot konnte dieses Fenster nicht in den Vordergrund holen, um darin zu scrollen.";
 "macshot could not bring that window forward." = "macshot konnte dieses Fenster nicht in den Vordergrund holen.";
@@ -158,6 +160,8 @@
 "Which edge the label's lines hang from" = "An welcher Kante die Zeilen des Textfelds ausgerichtet sind";
 "Windows AI (Copilot+ PC)" = "Windows AI (Copilot+ PC)";
 "Windows icon files (.ico) only. Pick one that stays legible on both a light and a dark taskbar — unlike macOS, Windows draws the file as it is rather than recolouring it. A file it cannot read falls back to macshot's icon." = "Nur Windows-Symboldateien (.ico). Wähle eine, die auf heller wie dunkler Taskleiste lesbar bleibt — anders als macOS zeichnet Windows die Datei, wie sie ist, statt sie umzufärben. Eine unlesbare Datei fällt auf macshots Symbol zurück.";
+"Windows is blocking access to it, either for every desktop app or for macshot alone. This recording will have no camera in it, and the setting has been turned off." = "Windows blockiert den Zugriff – entweder für alle Desktop-Apps oder nur für macshot. Diese Aufnahme enthält keine Kamera, und die Einstellung wurde deaktiviert.";
+"Windows is blocking access to it, either for every desktop app or for macshot alone. This recording will have no microphone in it, and the setting has been turned off." = "Windows blockiert den Zugriff – entweder für alle Desktop-Apps oder nur für macshot. Diese Aufnahme enthält kein Mikrofon, und die Einstellung wurde deaktiviert.";
 "Windows would not capture that window." = "Windows hat die Aufnahme dieses Fensters verweigert.";
 "Windows would not give macshot these shortcuts, so they are not active: {0}. Another program may already own them. The notification-area menu still works." = "Windows hat macshot diese Kurzbefehle verweigert, daher sind sie nicht aktiv: {0}. Möglicherweise gehören sie bereits einem anderen Programm. Das Menü im Infobereich funktioniert weiterhin.";
 "Windows would not let macshot change its startup entry." = "Windows hat macshot nicht erlaubt, seinen Autostart-Eintrag zu ändern.";
