@@ -3,6 +3,22 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.11] - 2026-09-16
+
+### Changed
+
+- **A region recording on a machine Windows sends no frames to moves noticeably more.**
+  Where macshot has to take the frames itself, it was copying the whole screen and cutting
+  the region out afterwards — three times the work for the same frame, several times a
+  second, and the copy was what limited how often a frame could be taken at all. It copies
+  only the rectangle being recorded now. Measured on an 864x744 recording: the copy fell
+  from 40.8ms to 22.0ms and the recording rose from 11.4 frames a second to 15.9. A
+  full-screen recording has nothing to trim and is unchanged.
+
+  Asking for the frames faster was measured too, and is not the answer: at an 8ms cadence
+  instead of 33ms the recording got *fewer* frames, 13.5 a second, and each copy got slower.
+  Copies started closer together only get in each other's way.
+
 ## [0.8.10] - 2026-09-15
 
 ### Added

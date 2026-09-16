@@ -26,13 +26,38 @@ public sealed class NativeScreenCaptureService
     /// </param>
     public CapturedFrame CaptureVirtualDesktop(bool includeCursor = false)
     {
-        var virtualX = GetSystemMetrics(SmXVirtualScreen);
-        var virtualY = GetSystemMetrics(SmYVirtualScreen);
         var width = GetSystemMetrics(SmCxVirtualScreen);
         var height = GetSystemMetrics(SmCyVirtualScreen);
         if (width <= 0 || height <= 0)
         {
             throw new InvalidOperationException("Windows did not report an available display.");
+        }
+
+        return CaptureRectangle(
+            GetSystemMetrics(SmXVirtualScreen),
+            GetSystemMetrics(SmYVirtualScreen),
+            width,
+            height,
+            includeCursor);
+    }
+
+    /// <summary>
+    /// Copies one rectangle of the screen, in virtual-desktop coordinates.
+    /// </summary>
+    /// <remarks>
+    /// A <c>BitBlt</c> costs partly what it moves, so a recording that has to take its own
+    /// frames several times a second asks for the region it is recording rather than for the
+    /// whole desktop to throw most of away. Measured on the VM over 700 copies: 864x744 is
+    /// 22.0ms at the median where 2038x1588 is 40.8ms. Not the fifth the pixel count would
+    /// suggest — around 17ms of it is fixed, being the device contexts and the bitmap, which
+    /// are built and destroyed per copy.
+    /// </remarks>
+    public CapturedFrame CaptureRectangle(int x, int y, int width, int height, bool includeCursor = false)
+    {
+        if (width <= 0 || height <= 0)
+        {
+            throw new ArgumentOutOfRangeException(
+                nameof(width), $"{width}x{height} is not a rectangle that can be copied.");
         }
 
         var screenDc = GetDC(IntPtr.Zero);
@@ -65,19 +90,19 @@ public sealed class NativeScreenCaptureService
                 throw new InvalidOperationException("Unable to select the screen capture bitmap.");
             }
 
-            if (!BitBlt(memoryDc, 0, 0, width, height, screenDc, virtualX, virtualY, Srccopy | CaptureBlt))
+            if (!BitBlt(memoryDc, 0, 0, width, height, screenDc, x, y, Srccopy | CaptureBlt))
             {
                 throw new InvalidOperationException("Windows rejected the screen capture request.");
             }
 
             if (includeCursor)
             {
-                DrawCursor(memoryDc, virtualX, virtualY);
+                DrawCursor(memoryDc, x, y);
             }
 
             var bytes = new byte[checked(width * height * 4)];
             Marshal.Copy(pixels, bytes, 0, bytes.Length);
-            return new CapturedFrame(virtualX, virtualY, width, height, bytes);
+            return new CapturedFrame(x, y, width, height, bytes);
         }
         finally
         {

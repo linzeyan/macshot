@@ -177,14 +177,19 @@ public sealed class ScreenRecorder : IDisposable
         // without once reaching the screen copy.
         var size = item.Size;
 
+        // Resolved here rather than inside the recording, because the copy below has to blit
+        // the region and nothing else: the whole screen would be several times the pixels for
+        // the same frame. See ScreenCopy.
+        var crop = CropperOrNull(size, region);
+
         // A screen copy, not another capture session. The compositor is what is failing on
         // the machine that needs this, GDI is a different subsystem, it is what a screenshot
         // already falls back to, and nothing in it is bound to a thread. See Retakes.
-        var byHand = () => Task.FromResult(ScreenCopy(monitorHandle, size));
+        var byHand = () => Task.FromResult(ScreenCopy(monitorHandle, size, crop));
 
         return format == RecordingFormat.Gif
-            ? RecordGifAsync(item, byHand, path, region, null, frameRate ?? GifRecordingPlan.DefaultFrameRate, cancellation)
-            : RecordMp4Async(item, byHand, path, region, null, frameRate ?? RecordingPlan.DefaultFrameRate, audio, cancellation);
+            ? RecordGifAsync(item, byHand, path, crop, null, frameRate ?? GifRecordingPlan.DefaultFrameRate, cancellation)
+            : RecordMp4Async(item, byHand, path, crop, null, frameRate ?? RecordingPlan.DefaultFrameRate, audio, cancellation);
     }
 
     /// <summary>
@@ -249,6 +254,8 @@ public sealed class ScreenRecorder : IDisposable
                 ours ??= GraphicsCaptureService.OpenWindow(window.Id),
                 includeCursor: true);
 
+        // No crop: a window recording is trimmed by follow, which is the window's own
+        // rectangle and moves with it, rather than by a fixed one cut out of a display.
         return format == RecordingFormat.Gif
             ? RecordGifAsync(item, byHand, path, null, follow, frameRate ?? GifRecordingPlan.DefaultFrameRate, cancellation)
             : RecordMp4Async(item, byHand, path, null, follow, frameRate ?? RecordingPlan.DefaultFrameRate, audio, cancellation);
@@ -270,14 +277,13 @@ public sealed class ScreenRecorder : IDisposable
         GraphicsCaptureItem item,
         Func<Task<(int Width, int Height, byte[] Pixels)?>> byHand,
         string path,
-        CaptureRegion? region,
+        RecordedArea? crop,
         WindowRecordingArea? follow,
         int frameRate,
         RecordingAudio audio,
         CancellationToken cancellation)
     {
         var size = item.Size;
-        var crop = CropperOrNull(size, region);
 
         // What each sample holds, which is what the stream has to be told and what the
         // profile is resolved from. The three cases are the whole item, a fixed rectangle
@@ -299,7 +305,7 @@ public sealed class ScreenRecorder : IDisposable
             follow,
             plan.FrameInterval,
             seed,
-            () => RetakeAsync(byHand, crop, follow));
+            () => RetakeAsync(byHand, follow));
 
         // Null when nothing was asked for, and also when nothing could be opened — a
         // machine with no microphone records without one rather than not at all.
@@ -437,13 +443,12 @@ public sealed class ScreenRecorder : IDisposable
         GraphicsCaptureItem item,
         Func<Task<(int Width, int Height, byte[] Pixels)?>> byHand,
         string path,
-        CaptureRegion? region,
+        RecordedArea? crop,
         WindowRecordingArea? follow,
         int frameRate,
         CancellationToken cancellation)
     {
         var size = item.Size;
-        var crop = CropperOrNull(size, region);
         var plan = GifRecordingPlan.Resolve(
             follow?.Width ?? crop?.Width ?? size.Width,
             follow?.Height ?? crop?.Height ?? size.Height,
@@ -470,7 +475,7 @@ public sealed class ScreenRecorder : IDisposable
         var retakes = new Retakes<GifFrame>(
             frames,
             plan.FrameInterval,
-            () => RetakeGifFrameAsync(byHand, plan, crop, follow, frames.Elapsed));
+            () => RetakeGifFrameAsync(byHand, plan, follow, frames.Elapsed));
 
         while (written < GifRecordingPlan.MaximumFrames)
         {
@@ -575,14 +580,19 @@ public sealed class ScreenRecorder : IDisposable
     /// The seed taken again mid-recording, for a recording whose own session never delivers
     /// a frame. <see cref="Retakes"/> is what decides whether one of these is wanted.
     /// </summary>
+    /// <remarks>
+    /// No crop, unlike the seed: a retake hands back the rectangle the recording wants
+    /// already. A display's copies only that rectangle off the screen — cutting it out
+    /// afterwards is what used to make the copy cost several times what the frame is worth —
+    /// and a window's is the window's own item, which <paramref name="follow"/> trims.
+    /// </remarks>
     private static async Task<IBuffer?> RetakeAsync(
         Func<Task<(int Width, int Height, byte[] Pixels)?>> byHand,
-        RecordedArea? crop,
         WindowRecordingArea? follow)
     {
         try
         {
-            return SeedBuffer(await byHand(), crop, follow);
+            return SeedBuffer(await byHand(), crop: null, follow);
         }
         catch (Exception exception)
         {
@@ -608,13 +618,12 @@ public sealed class ScreenRecorder : IDisposable
     private static async Task<GifFrame?> RetakeGifFrameAsync(
         Func<Task<(int Width, int Height, byte[] Pixels)?>> byHand,
         GifRecordingPlan plan,
-        RecordedArea? crop,
         WindowRecordingArea? follow,
         TimeSpan at)
     {
         try
         {
-            return SeedGifFrame(await byHand(), plan, crop, follow) is { } frame
+            return SeedGifFrame(await byHand(), plan, crop: null, follow) is { } frame
                 ? frame with { Timestamp = at }
                 : null;
         }
@@ -628,25 +637,38 @@ public sealed class ScreenRecorder : IDisposable
     }
 
     /// <summary>
-    /// One display's pixels copied straight off the screen, the size the capture item
-    /// reports, or null when the two disagree.
+    /// The pixels the recording wants, copied straight off the screen — the display, or the
+    /// rectangle of it being recorded — or null when what came back is the wrong size.
     /// </summary>
     /// <remarks>
     /// <para>
-    /// The size check is not defensive tidiness: everything downstream — the crop, the
-    /// stride the encoder was promised — is in the item's pixels, so a copy that came out a
-    /// different size would be written as a torn picture rather than refused. They differ
-    /// only if the display changed mode mid-recording, and one still frame is the better
-    /// answer to that.
+    /// The size check is not defensive tidiness: everything downstream — the stride the
+    /// encoder was promised — is in the item's pixels, so a frame of a different shape would
+    /// be written as a torn picture rather than refused. The display can only change shape by
+    /// changing mode mid-recording, and one still frame is the better answer to that. It is
+    /// checked against the display rather than against what came back, because a blit is
+    /// given the rectangle it is to fill and returns that size whether or not the screen
+    /// still reaches it — off the edge it reads black, which is a torn picture that no
+    /// comparison downstream would catch.
     /// </para>
     /// <para>
-    /// It copies the whole virtual desktop and cuts the display out, because that is what
-    /// <see cref="NativeScreenCaptureService"/> offers and what the screenshot fallback
-    /// already does. That is a few megabytes a frame at ten frames a second — costly, and
-    /// only ever paid where the alternative is a recording of one still picture.
+    /// <paramref name="crop"/> is applied by the blit rather than after it, which is the
+    /// whole of why it is passed this far down. The first version copied the entire virtual
+    /// desktop and cut the region out of it afterwards, so a region recording paid for the
+    /// whole screen three times over — one blit, one crop to the display, one crop to the
+    /// region — several times a second. Measured on the VM, a 864x744 recording: the copy
+    /// went from 40.8ms to 22.0ms at the median and the recording from 11.4 frames a second
+    /// taken by hand to 15.9.
+    /// </para>
+    /// <para>
+    /// What is left is not the cadence. Asking for them faster was measured and is worse:
+    /// dropping <see cref="RetakeCadence.FastestUseful"/> from 33ms to 8ms gave 13.5 frames a
+    /// second, not more, and pushed the median copy to 23.9ms and the ninth decile from
+    /// 35.3ms to 49.8ms — copies started closer together only get in each other's way.
     /// </para>
     /// </remarks>
-    private static (int Width, int Height, byte[] Pixels)? ScreenCopy(nint monitorHandle, SizeInt32 size)
+    private static (int Width, int Height, byte[] Pixels)? ScreenCopy(
+        nint monitorHandle, SizeInt32 size, RecordedArea? crop)
     {
         try
         {
@@ -656,22 +678,22 @@ public sealed class ScreenRecorder : IDisposable
                 return null;
             }
 
-            var desktop = new NativeScreenCaptureService().CaptureVirtualDesktop(includeCursor: true);
-            var cut = NativeScreenCaptureService.Crop(
-                desktop,
-                new CaptureRegion(
-                    bounds.X - desktop.VirtualX,
-                    bounds.Y - desktop.VirtualY,
-                    bounds.Width,
-                    bounds.Height));
-
-            if (cut.Width != size.Width || cut.Height != size.Height)
+            if (bounds.Width != size.Width || bounds.Height != size.Height)
             {
                 DiagnosticLog.Verbose(
-                    $"a frame taken by hand was {cut.Width}x{cut.Height}, not the"
-                        + $" {size.Width}x{size.Height} the recording is being written at");
+                    $"a frame taken by hand was skipped: the display is now {bounds.Width}x{bounds.Height},"
+                        + $" not the {size.Width}x{size.Height} the recording is being written at");
                 return null;
             }
+
+            // The crop is in the item's pixels, which start at the display's top-left corner;
+            // the blit is in the virtual desktop's, which start wherever the display sits.
+            var cut = new NativeScreenCaptureService().CaptureRectangle(
+                (int)bounds.X + (crop?.Left ?? 0),
+                (int)bounds.Y + (crop?.Top ?? 0),
+                crop?.Width ?? size.Width,
+                crop?.Height ?? size.Height,
+                includeCursor: true);
 
             return (cut.Width, cut.Height, cut.BgraPixels);
         }
