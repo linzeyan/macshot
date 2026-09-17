@@ -3,6 +3,26 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.12] - 2026-09-17
+
+### Fixed
+
+- **A recording on a machine Windows sends no frames to no longer takes hundreds of
+  megabytes of memory with it.** Where macshot has to take the frames itself, each frame
+  was two fresh buffers the size of the picture — 12.9MB apiece on a full 2038x1588
+  display, twenty times a second — and no amount of collecting kept up. A minute of
+  recording left macshot holding close to a gigabyte, and it was still holding it long
+  after the recording had stopped. It now reuses the same handful of buffers for a whole
+  recording, and takes each frame straight into the one it hands the encoder rather than
+  building the frame twice. The same minute now settles at 175MB where it was 845-994MB,
+  and the whole recording is six buffers rather than a thousand. A region recording gains
+  the same thing in proportion to its size.
+
+  Asking the collector to work harder was tried first and measured worse, not better: a
+  compacting large-object collection after each recording settled at 2691MB, having grown
+  *after* the recording stopped. The buffers had to stop being made, not be cleared up
+  faster.
+
 ## [0.8.11] - 2026-09-16
 
 ### Changed
