@@ -2892,6 +2892,17 @@ public sealed class CaptureController : IDisposable
     /// screenshot. Posted rather than called straight, because this runs from the overlay's
     /// own input handler, and what is being collected is still on that stack.
     /// </para>
+    /// <para>
+    /// The flag does <em>not</em> reach the large object heap — that needs
+    /// <c>GCSettings.LargeObjectHeapCompactionMode</c> — and asking for it there was
+    /// measured and is worse, not better. A starved full-screen recording that churns a
+    /// frame of heap per frame settles at 845-994MB over three runs as this stands; the
+    /// same recording with LOH compaction asked for settled at 2691MB and stayed there,
+    /// having climbed <em>after</em> the recording stopped, which is this call running.
+    /// Compacting a heap that size evidently costs more address space than it returns.
+    /// Whatever fixes that recording, it is not here: it is the frame of large-object heap
+    /// it allocates per frame, which nothing at this end can collect its way out of.
+    /// </para>
     /// </remarks>
     private void CollectWhenIdle() => Post(() =>
     {
