@@ -185,11 +185,28 @@ public sealed class ScreenRecorder : IDisposable
         // A screen copy, not another capture session. The compositor is what is failing on
         // the machine that needs this, GDI is a different subsystem, it is what a screenshot
         // already falls back to, and nothing in it is bound to a thread. See Retakes.
-        var byHand = () => Task.FromResult(ScreenCopy(monitorHandle, size, crop));
-
+        //
+        // One each, rather than one shared: the MP4 path takes its frame straight into the
+        // buffer the encoder will read and gives that buffer back afterwards, and a GIF
+        // frame is pixels the recording keeps. See ScreenCopyInto.
         return format == RecordingFormat.Gif
-            ? RecordGifAsync(item, byHand, path, crop, null, frameRate ?? GifRecordingPlan.DefaultFrameRate, cancellation)
-            : RecordMp4Async(item, byHand, path, crop, null, frameRate ?? RecordingPlan.DefaultFrameRate, audio, cancellation);
+            ? RecordGifAsync(
+                item,
+                () => Task.FromResult(ScreenCopy(monitorHandle, size, crop)),
+                path,
+                crop,
+                null,
+                frameRate ?? GifRecordingPlan.DefaultFrameRate,
+                cancellation)
+            : RecordMp4Async(
+                item,
+                buffers => Task.FromResult(ScreenCopyInto(buffers, monitorHandle, size, crop)),
+                path,
+                crop,
+                null,
+                frameRate ?? RecordingPlan.DefaultFrameRate,
+                audio,
+                cancellation);
     }
 
     /// <summary>
@@ -258,7 +275,15 @@ public sealed class ScreenRecorder : IDisposable
         // rectangle and moves with it, rather than by a fixed one cut out of a display.
         return format == RecordingFormat.Gif
             ? RecordGifAsync(item, byHand, path, null, follow, frameRate ?? GifRecordingPlan.DefaultFrameRate, cancellation)
-            : RecordMp4Async(item, byHand, path, null, follow, frameRate ?? RecordingPlan.DefaultFrameRate, audio, cancellation);
+            : RecordMp4Async(
+                item,
+                buffers => RetakeAsync(buffers, byHand, follow),
+                path,
+                null,
+                follow,
+                frameRate ?? RecordingPlan.DefaultFrameRate,
+                audio,
+                cancellation);
     }
 
     public void Dispose()
@@ -275,7 +300,7 @@ public sealed class ScreenRecorder : IDisposable
 
     private async Task<RecordingResult> RecordMp4Async(
         GraphicsCaptureItem item,
-        Func<Task<(int Width, int Height, byte[] Pixels)?>> byHand,
+        Func<FrameBuffers, Task<LentBuffer?>> retake,
         string path,
         RecordedArea? crop,
         WindowRecordingArea? follow,
@@ -310,7 +335,7 @@ public sealed class ScreenRecorder : IDisposable
             follow,
             plan.FrameInterval,
             seed,
-            () => RetakeAsync(buffers, byHand, follow));
+            () => retake(buffers));
 
         // Null when nothing was asked for, and also when nothing could be opened — a
         // machine with no microphone records without one rather than not at all.
@@ -583,14 +608,14 @@ public sealed class ScreenRecorder : IDisposable
     }
 
     /// <summary>
-    /// The seed taken again mid-recording, for a recording whose own session never delivers
-    /// a frame. <see cref="Retakes"/> is what decides whether one of these is wanted.
+    /// The seed taken again mid-recording, for a <em>window</em> recording whose own session
+    /// never delivers a frame. <see cref="Retakes"/> decides whether one of these is wanted;
+    /// a display's goes through <see cref="ScreenCopyInto"/> instead.
     /// </summary>
     /// <remarks>
     /// No crop, unlike the seed: a retake hands back the rectangle the recording wants
-    /// already. A display's copies only that rectangle off the screen — cutting it out
-    /// afterwards is what used to make the copy cost several times what the frame is worth —
-    /// and a window's is the window's own item, which <paramref name="follow"/> trims.
+    /// already, a window's being the window's own item, which <paramref name="follow"/>
+    /// trims.
     /// </remarks>
     private static async Task<LentBuffer?> RetakeAsync(
         FrameBuffers buffers,
@@ -644,8 +669,8 @@ public sealed class ScreenRecorder : IDisposable
     }
 
     /// <summary>
-    /// The pixels the recording wants, copied straight off the screen — the display, or the
-    /// rectangle of it being recorded — or null when what came back is the wrong size.
+    /// Which rectangle of the virtual desktop a by-hand frame of this recording is, or null
+    /// when the display has gone or is no longer the shape the recording was opened at.
     /// </summary>
     /// <remarks>
     /// <para>
@@ -674,33 +699,85 @@ public sealed class ScreenRecorder : IDisposable
     /// 35.3ms to 49.8ms — copies started closer together only get in each other's way.
     /// </para>
     /// </remarks>
+    private static (int X, int Y, int Width, int Height)? CopyRectangle(
+        nint monitorHandle, SizeInt32 size, RecordedArea? crop)
+    {
+        if (MonitorBounds(monitorHandle) is not { } bounds)
+        {
+            DiagnosticLog.Verbose("a frame taken by hand failed: the display is no longer attached");
+            return null;
+        }
+
+        if (bounds.Width != size.Width || bounds.Height != size.Height)
+        {
+            DiagnosticLog.Verbose(
+                $"a frame taken by hand was skipped: the display is now {bounds.Width}x{bounds.Height},"
+                    + $" not the {size.Width}x{size.Height} the recording is being written at");
+            return null;
+        }
+
+        // The crop is in the item's pixels, which start at the display's top-left corner;
+        // the blit is in the virtual desktop's, which start wherever the display sits.
+        return (
+            (int)bounds.X + (crop?.Left ?? 0),
+            (int)bounds.Y + (crop?.Top ?? 0),
+            crop?.Width ?? size.Width,
+            crop?.Height ?? size.Height);
+    }
+
+    /// <summary>
+    /// A display's by-hand frame as the buffer the MP4 encoder reads, taken straight into
+    /// the pool's buffer and in the order the encoder wants it.
+    /// </summary>
+    /// <remarks>
+    /// Where <see cref="ScreenCopy"/> allocates a frame, copies the screen into it and then
+    /// flips it into a second one, this does none of the three: GDI is asked for a bottom-up
+    /// bitmap and copies it into the buffer the sample will be made from. That is the whole
+    /// of a retake's allocation gone, and a starved recording takes twenty a second. The GIF
+    /// path still goes the other way round, because a GIF frame is kept as its own pixels
+    /// rather than handed to an encoder and released.
+    /// </remarks>
+    private static LentBuffer? ScreenCopyInto(
+        FrameBuffers buffers, nint monitorHandle, SizeInt32 size, RecordedArea? crop)
+    {
+        try
+        {
+            if (CopyRectangle(monitorHandle, size, crop) is not { } at)
+            {
+                return null;
+            }
+
+            var screen = new NativeScreenCaptureService();
+            return buffers.Lend(
+                at.Width,
+                at.Height,
+                destination => screen.CaptureRectangleBottomUp(
+                    at.X, at.Y, at.Width, at.Height, includeCursor: true, destination));
+        }
+        catch (Exception exception)
+        {
+            DiagnosticLog.Verbose(
+                $"a frame taken by hand failed: {exception.GetType().Name}"
+                    + $" 0x{exception.HResult:X8}: {exception.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The same frame as pixels the caller keeps, for the GIF path.
+    /// </summary>
     private static (int Width, int Height, byte[] Pixels)? ScreenCopy(
         nint monitorHandle, SizeInt32 size, RecordedArea? crop)
     {
         try
         {
-            if (MonitorBounds(monitorHandle) is not { } bounds)
+            if (CopyRectangle(monitorHandle, size, crop) is not { } at)
             {
-                DiagnosticLog.Verbose("a frame taken by hand failed: the display is no longer attached");
                 return null;
             }
 
-            if (bounds.Width != size.Width || bounds.Height != size.Height)
-            {
-                DiagnosticLog.Verbose(
-                    $"a frame taken by hand was skipped: the display is now {bounds.Width}x{bounds.Height},"
-                        + $" not the {size.Width}x{size.Height} the recording is being written at");
-                return null;
-            }
-
-            // The crop is in the item's pixels, which start at the display's top-left corner;
-            // the blit is in the virtual desktop's, which start wherever the display sits.
             var cut = new NativeScreenCaptureService().CaptureRectangle(
-                (int)bounds.X + (crop?.Left ?? 0),
-                (int)bounds.Y + (crop?.Top ?? 0),
-                crop?.Width ?? size.Width,
-                crop?.Height ?? size.Height,
-                includeCursor: true);
+                at.X, at.Y, at.Width, at.Height, includeCursor: true);
 
             return (cut.Width, cut.Height, cut.BgraPixels);
         }
@@ -1121,6 +1198,27 @@ public sealed class ScreenRecorder : IDisposable
             var pixels = Rent(length);
 
             FrameTransforms.FlipVerticalInto(width, height, topDownPixels, pixels.AsSpan(0, length));
+
+            return new LentBuffer(this, pixels, pixels.AsBuffer(0, length));
+        }
+
+        /// <summary>
+        /// A buffer for <paramref name="fill"/> to write, already in the order the encoder
+        /// reads, so that nothing has to exist in the other order first.
+        /// </summary>
+        /// <remarks>
+        /// The by-hand path's copy comes out of GDI and can be asked for bottom-up, so it
+        /// can be written where the encoder will read it and be neither allocated nor
+        /// flipped. That is the second frame of large object heap a starved recording used
+        /// to spend per frame; the first was the flip's answer, which is what this pool is
+        /// for. See <c>NativeScreenCaptureService.CaptureRectangleBottomUp</c>.
+        /// </remarks>
+        public LentBuffer Lend(int width, int height, Action<byte[]> fill)
+        {
+            var length = checked(width * height * 4);
+            var pixels = Rent(length);
+
+            fill(pixels);
 
             return new LentBuffer(this, pixels, pixels.AsBuffer(0, length));
         }

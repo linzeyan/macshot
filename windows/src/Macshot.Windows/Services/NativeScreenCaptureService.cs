@@ -54,6 +54,39 @@ public sealed class NativeScreenCaptureService
     /// </remarks>
     public CapturedFrame CaptureRectangle(int x, int y, int width, int height, bool includeCursor = false)
     {
+        var bytes = new byte[checked(width * height * 4)];
+        Blit(x, y, width, height, includeCursor, topDown: true, bytes);
+        return new CapturedFrame(x, y, width, height, bytes);
+    }
+
+    /// <summary>
+    /// The same copy, into a buffer the caller already has, with the bottom row first.
+    /// </summary>
+    /// <remarks>
+    /// Both differences are for the recording's by-hand path, which takes one of these
+    /// several times a second and hands it to the encoder. Media Foundation reads an
+    /// uncompressed RGB type from the bottom row up, and a DIB is bottom-up unless it is
+    /// asked not to be, so asking GDI for the order the encoder wants costs nothing and
+    /// saves a whole pass over the frame. Writing into the caller's buffer is what lets
+    /// that buffer be pooled: a frame of a 2038x1588 display is 12.9MB, which is a large
+    /// object, and one per frame recorded is what a starved recording's memory was.
+    /// </remarks>
+    public void CaptureRectangleBottomUp(
+        int x, int y, int width, int height, bool includeCursor, byte[] destination)
+    {
+        ArgumentNullException.ThrowIfNull(destination);
+
+        if (destination.Length != checked(width * height * 4))
+        {
+            throw new ArgumentException(
+                $"A {width}x{height} copy needs {width * height * 4} bytes.", nameof(destination));
+        }
+
+        Blit(x, y, width, height, includeCursor, topDown: false, destination);
+    }
+
+    private void Blit(int x, int y, int width, int height, bool includeCursor, bool topDown, byte[] destination)
+    {
         if (width <= 0 || height <= 0)
         {
             throw new ArgumentOutOfRangeException(
@@ -77,7 +110,7 @@ public sealed class NativeScreenCaptureService
                 throw new InvalidOperationException("Unable to create an in-memory device context.");
             }
 
-            var bitmapInfo = BitmapInfo.CreateTopDown32Bit(width, height);
+            var bitmapInfo = BitmapInfo.Create32Bit(width, height, topDown);
             bitmap = CreateDIBSection(screenDc, ref bitmapInfo, DibRgbColors, out var pixels, IntPtr.Zero, 0);
             if (bitmap == IntPtr.Zero || pixels == IntPtr.Zero)
             {
@@ -100,9 +133,7 @@ public sealed class NativeScreenCaptureService
                 DrawCursor(memoryDc, x, y);
             }
 
-            var bytes = new byte[checked(width * height * 4)];
-            Marshal.Copy(pixels, bytes, 0, bytes.Length);
-            return new CapturedFrame(x, y, width, height, bytes);
+            Marshal.Copy(pixels, destination, 0, checked(width * height * 4));
         }
         finally
         {
@@ -332,7 +363,12 @@ public sealed class NativeScreenCaptureService
         public BitmapInfoHeader Header;
         public RgbQuad Colors;
 
-        public static BitmapInfo CreateTopDown32Bit(int width, int height)
+        /// <param name="topDown">
+        /// Whether the first row in memory is the top of the picture. A DIB is bottom-up
+        /// by convention, which a negative height is how to opt out of; the screenshot
+        /// paths want the top row first and the recording's encoder wants the bottom.
+        /// </param>
+        public static BitmapInfo Create32Bit(int width, int height, bool topDown)
         {
             return new BitmapInfo
             {
@@ -340,7 +376,7 @@ public sealed class NativeScreenCaptureService
                 {
                     Size = (uint)Marshal.SizeOf<BitmapInfoHeader>(),
                     Width = width,
-                    Height = -height,
+                    Height = topDown ? -height : height,
                     Planes = 1,
                     BitCount = 32,
                     Compression = BiRgb,
