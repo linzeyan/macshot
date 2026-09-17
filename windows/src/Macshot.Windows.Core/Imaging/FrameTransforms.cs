@@ -59,16 +59,43 @@ public static class FrameTransforms
     /// <summary>Mirrors the frame top to bottom.</summary>
     public static byte[] FlipVertical(int width, int height, ReadOnlySpan<byte> bgraPixels)
     {
+        var output = new byte[bgraPixels.Length];
+        FlipVerticalInto(width, height, bgraPixels, output);
+        return output;
+    }
+
+    /// <summary>The same flip, into a buffer the caller owns.</summary>
+    /// <remarks>
+    /// Separate from <see cref="FlipVertical"/> for the reason <see cref="CropInto"/> is
+    /// separate from <see cref="Crop"/>, and more urgently: this one is on the path of
+    /// <em>every</em> frame a recording hands the encoder, so allocating the answer means
+    /// a frame of large object heap per frame recorded. A recording whose compositor never
+    /// delivers takes frames itself several times a second and repeats them in between,
+    /// which measured just under a gigabyte of private bytes over a starved minute.
+    /// </remarks>
+    /// <exception cref="ArgumentException">
+    /// <paramref name="destination"/> is not exactly the size of the frame — the same
+    /// refusal <see cref="CropInto"/> makes, for the same reason.
+    /// </exception>
+    public static void FlipVerticalInto(
+        int width,
+        int height,
+        ReadOnlySpan<byte> bgraPixels,
+        Span<byte> destination)
+    {
         Validate(width, height, bgraPixels);
 
-        var output = new byte[bgraPixels.Length];
+        if (destination.Length != bgraPixels.Length)
+        {
+            throw new ArgumentException(
+                $"A {width}x{height} frame needs {bgraPixels.Length} bytes.", nameof(destination));
+        }
+
         var stride = width * 4;
         for (var row = 0; row < height; row++)
         {
-            bgraPixels.Slice(row * stride, stride).CopyTo(output.AsSpan((height - 1 - row) * stride, stride));
+            bgraPixels.Slice(row * stride, stride).CopyTo(destination[((height - 1 - row) * stride)..]);
         }
-
-        return output;
     }
 
     /// <summary>

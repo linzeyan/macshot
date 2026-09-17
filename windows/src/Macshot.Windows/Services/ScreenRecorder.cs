@@ -293,19 +293,24 @@ public sealed class ScreenRecorder : IDisposable
 
         var plan = RecordingPlan.Resolve(sourceWidth, sourceHeight, frameRate);
 
+        // One recording's worth, because every frame of one recording is the same size and
+        // buffers outliving the recording that sized them would be held for nothing.
+        var buffers = new FrameBuffers();
+
         // Before the recording's own session exists, so the two are never open at once,
         // and because this is the frame the recording may otherwise never be given.
-        var seed = SeedBuffer(await SeedPixelsAsync(item), crop, follow);
+        var seed = SeedBuffer(buffers, await SeedPixelsAsync(item), crop, follow);
 
         using var frames = new FrameStream(Device(), item, plan.FrameInterval, cancellation);
         using var held = Holding(frames);
         using var video = new Mp4Frames(
+            buffers,
             frames,
             crop,
             follow,
             plan.FrameInterval,
             seed,
-            () => RetakeAsync(byHand, follow));
+            () => RetakeAsync(buffers, byHand, follow));
 
         // Null when nothing was asked for, and also when nothing could be opened — a
         // machine with no microphone records without one rather than not at all.
@@ -403,6 +408,7 @@ public sealed class ScreenRecorder : IDisposable
             $"recorded {video.Kept} frames from {frames.Arrivals} arrivals ({frames.Empty} empty),"
                 + $" {video.Repeated} repeated, {video.Retaken} taken by hand, {frames.Dropped}"
                 + $" dropped, first frame {(seed is null ? "not seeded" : "seeded")},"
+                + $" {buffers.Allocated} buffers for {buffers.Lent} frames,"
                 + $" over {frames.Elapsed:mm\\:ss}");
 
         // The compositor delivered nothing at all, which on a recording longer than a second
@@ -586,13 +592,14 @@ public sealed class ScreenRecorder : IDisposable
     /// afterwards is what used to make the copy cost several times what the frame is worth —
     /// and a window's is the window's own item, which <paramref name="follow"/> trims.
     /// </remarks>
-    private static async Task<IBuffer?> RetakeAsync(
+    private static async Task<LentBuffer?> RetakeAsync(
+        FrameBuffers buffers,
         Func<Task<(int Width, int Height, byte[] Pixels)?>> byHand,
         WindowRecordingArea? follow)
     {
         try
         {
-            return SeedBuffer(await byHand(), crop: null, follow);
+            return SeedBuffer(buffers, await byHand(), crop: null, follow);
         }
         catch (Exception exception)
         {
@@ -732,7 +739,8 @@ public sealed class ScreenRecorder : IDisposable
     /// <summary>
     /// The seed as the buffer the MP4 encoder reads, sized to what the stream was told.
     /// </summary>
-    private static IBuffer? SeedBuffer(
+    private static LentBuffer? SeedBuffer(
+        FrameBuffers buffers,
         (int Width, int Height, byte[] Pixels)? seed,
         RecordedArea? crop,
         WindowRecordingArea? follow)
@@ -747,10 +755,17 @@ public sealed class ScreenRecorder : IDisposable
         // The content size is the whole frame: nothing resized under a session that lived
         // for one frame.
         return follow is { } area
-            ? FitIn(width, height, pixels, pixels.Length, new SizeInt32 { Width = width, Height = height }, area)
+            ? FitIn(
+                buffers,
+                width,
+                height,
+                pixels,
+                pixels.Length,
+                new SizeInt32 { Width = width, Height = height },
+                area)
             : crop is { } cropper
-                ? CutOut(width, height, pixels, pixels.Length, cropper)
-                : AsEncoderBuffer(width, height, pixels);
+                ? CutOut(buffers, width, height, pixels, pixels.Length, cropper)
+                : buffers.Lend(width, height, pixels);
     }
 
     /// <summary>
@@ -907,7 +922,8 @@ public sealed class ScreenRecorder : IDisposable
     /// once and cannot take a smaller sample; the caller turns the refusal into the end
     /// of the file, which keeps what was recorded up to that point.
     /// </remarks>
-    private static async Task<IBuffer> CropToBufferAsync(Direct3D11CaptureFrame frame, RecordedArea crop)
+    private static async Task<LentBuffer> CropToBufferAsync(
+        FrameBuffers buffers, Direct3D11CaptureFrame frame, RecordedArea crop)
     {
         using (frame)
         {
@@ -923,7 +939,7 @@ public sealed class ScreenRecorder : IDisposable
             try
             {
                 bitmap.CopyToBuffer(pixels.AsBuffer(0, length));
-                return CutOut(bitmap.PixelWidth, bitmap.PixelHeight, pixels, length, crop);
+                return CutOut(buffers, bitmap.PixelWidth, bitmap.PixelHeight, pixels, length, crop);
             }
             finally
             {
@@ -940,7 +956,8 @@ public sealed class ScreenRecorder : IDisposable
     /// <see cref="Span{T}"/> cannot be held across an <c>await</c>, and nothing here has
     /// one to wait for.
     /// </remarks>
-    private static IBuffer CutOut(int frameWidth, int frameHeight, byte[] pixels, int length, RecordedArea crop)
+    private static LentBuffer CutOut(
+        FrameBuffers buffers, int frameWidth, int frameHeight, byte[] pixels, int length, RecordedArea crop)
     {
         var cropped = ArrayPool<byte>.Shared.Rent(checked(crop.Width * crop.Height * 4));
         try
@@ -952,7 +969,7 @@ public sealed class ScreenRecorder : IDisposable
                 crop.AsRegion,
                 cropped.AsSpan(0, crop.Width * crop.Height * 4));
 
-            return AsEncoderBuffer(crop.Width, crop.Height, cropped.AsSpan(0, crop.Width * crop.Height * 4));
+            return buffers.Lend(crop.Width, crop.Height, cropped.AsSpan(0, crop.Width * crop.Height * 4));
         }
         finally
         {
@@ -970,7 +987,8 @@ public sealed class ScreenRecorder : IDisposable
     /// moment the window is resized, and reading the difference as pixels would keep the
     /// picture from before the resize in every frame after it.
     /// </remarks>
-    private static async Task<IBuffer> FitToBufferAsync(Direct3D11CaptureFrame frame, WindowRecordingArea area)
+    private static async Task<LentBuffer> FitToBufferAsync(
+        FrameBuffers buffers, Direct3D11CaptureFrame frame, WindowRecordingArea area)
     {
         using (frame)
         {
@@ -982,7 +1000,7 @@ public sealed class ScreenRecorder : IDisposable
             try
             {
                 bitmap.CopyToBuffer(pixels.AsBuffer(0, length));
-                return FitIn(bitmap.PixelWidth, bitmap.PixelHeight, pixels, length, content, area);
+                return FitIn(buffers, bitmap.PixelWidth, bitmap.PixelHeight, pixels, length, content, area);
             }
             finally
             {
@@ -995,7 +1013,8 @@ public sealed class ScreenRecorder : IDisposable
     /// The pinned rectangle, as the buffer the encoder reads, out of a whole frame already
     /// in memory. Split out for the reason <see cref="CutOut"/> is.
     /// </summary>
-    private static IBuffer FitIn(
+    private static LentBuffer FitIn(
+        FrameBuffers buffers,
         int frameWidth,
         int frameHeight,
         byte[] pixels,
@@ -1014,7 +1033,7 @@ public sealed class ScreenRecorder : IDisposable
                 content.Height,
                 fitted.AsSpan(0, area.Width * area.Height * 4));
 
-            return AsEncoderBuffer(area.Width, area.Height, fitted.AsSpan(0, area.Width * area.Height * 4));
+            return buffers.Lend(area.Width, area.Height, fitted.AsSpan(0, area.Width * area.Height * 4));
         }
         finally
         {
@@ -1023,25 +1042,162 @@ public sealed class ScreenRecorder : IDisposable
     }
 
     /// <summary>
-    /// Turns a top-down BGRA frame into the buffer the encoder reads, which is bottom-up.
+    /// The buffers a recording hands the encoder, lent out and taken back rather than
+    /// allocated one per frame.
     /// </summary>
     /// <remarks>
-    /// Media Foundation reads an uncompressed RGB type from the bottom row up, and a
-    /// <see cref="SoftwareBitmap"/> copied down from a capture surface is top-down, so
-    /// every recording that went through main memory — a crop, and a followed window —
-    /// came out upside down. A full-screen one did not: handing over the Direct3D texture
-    /// instead carries its orientation with it.
-    ///
-    /// Declaring a negative <c>MF_MT_DEFAULT_STRIDE</c> on the stream is what the format
-    /// offers for saying "this one is top-down", and it was tried first. It changed
-    /// nothing — the properties bag on <see cref="VideoEncodingProperties"/> did not reach
-    /// the media type, or did not reach it as the UINT32 the attribute is — and a
-    /// declaration nothing reads is worse than no declaration. Rewriting the rows is the
-    /// thing that can be seen to work, and it costs one pass over a buffer that has
-    /// already been copied twice by the time it gets here.
+    /// <para>
+    /// A frame of a 2038x1588 display is 12.9MB, a hundred and fifty times the 85KB at
+    /// which an allocation goes to the large object heap, so every one of these is a large
+    /// object. A recording whose compositor never delivers takes its own frames several
+    /// times a second and repeats them in between: measured on the VM, a starved minute
+    /// churned about a thousand of them and the process settled at 845-994MB of private
+    /// bytes against a 65MB idle. Nothing at the collector's end reaches that — asking for
+    /// a compacting large object collection measured three times worse, see
+    /// <c>CaptureController.CollectWhenIdle</c>. The only answer is to stop allocating
+    /// them.
+    /// </para>
+    /// <para>
+    /// Every frame of a recording is the same size, so the free list is a stack of arrays
+    /// of the one length this was first asked for. A different length — which nothing on
+    /// this path produces — is allocated and not taken back rather than being made a
+    /// second pool nobody measured.
+    /// </para>
     /// </remarks>
-    private static IBuffer AsEncoderBuffer(int width, int height, ReadOnlySpan<byte> topDownPixels) =>
-        FrameTransforms.FlipVertical(width, height, topDownPixels).AsBuffer();
+    private sealed class FrameBuffers
+    {
+        /// <summary>
+        /// Room for the frame in the encoder, the one being repeated and the one being
+        /// taken, and one spare. Beyond that something is holding samples the pipeline
+        /// said it had finished with, and hoarding would hide it rather than fix it.
+        /// </summary>
+        private const int MostKept = 4;
+
+        private readonly object _gate = new();
+        private readonly Stack<byte[]> _free = new();
+
+        /// <summary>The one length this pool keeps, fixed by the first loan.</summary>
+        private int _length;
+
+        /// <summary>
+        /// How many buffers were actually allocated, against how many frames were lent
+        /// one. Reported at the end of a recording, because the gap between them is the
+        /// difference between a pool that is working and one whose buffers never come
+        /// back, and nothing else tells those two apart from outside. Coming back depends
+        /// on the pipeline raising <see cref="MediaStreamSample.Processed"/>, which is a
+        /// promise made by something that is not this code.
+        /// </summary>
+        public int Allocated { get; private set; }
+
+        /// <inheritdoc cref="Allocated"/>
+        public int Lent { get; private set; }
+
+        /// <summary>
+        /// Turns a top-down BGRA frame into the buffer the encoder reads, which is
+        /// bottom-up.
+        /// </summary>
+        /// <remarks>
+        /// Media Foundation reads an uncompressed RGB type from the bottom row up, and a
+        /// <see cref="SoftwareBitmap"/> copied down from a capture surface is top-down, so
+        /// every recording that went through main memory — a crop, and a followed window —
+        /// came out upside down. A full-screen one did not: handing over the Direct3D
+        /// texture instead carries its orientation with it.
+        ///
+        /// Declaring a negative <c>MF_MT_DEFAULT_STRIDE</c> on the stream is what the
+        /// format offers for saying "this one is top-down", and it was tried first. It
+        /// changed nothing — the properties bag on <see cref="VideoEncodingProperties"/>
+        /// did not reach the media type, or did not reach it as the UINT32 the attribute
+        /// is — and a declaration nothing reads is worse than no declaration. Rewriting
+        /// the rows is the thing that can be seen to work, and it costs one pass over a
+        /// buffer that has already been copied twice by the time it gets here.
+        ///
+        /// The flip and the loan are one step because the flip is the last thing done to
+        /// every frame on every buffer path, which makes this the single place a frame
+        /// becomes something the encoder holds.
+        /// </remarks>
+        public LentBuffer Lend(int width, int height, ReadOnlySpan<byte> topDownPixels)
+        {
+            var length = checked(width * height * 4);
+            var pixels = Rent(length);
+
+            FrameTransforms.FlipVerticalInto(width, height, topDownPixels, pixels.AsSpan(0, length));
+
+            return new LentBuffer(this, pixels, pixels.AsBuffer(0, length));
+        }
+
+        /// <summary>Takes a buffer back once nothing holds it. See <see cref="LentBuffer"/>.</summary>
+        public void Take(byte[] pixels)
+        {
+            lock (_gate)
+            {
+                if (pixels.Length == _length && _free.Count < MostKept)
+                {
+                    _free.Push(pixels);
+                }
+            }
+        }
+
+        private byte[] Rent(int length)
+        {
+            lock (_gate)
+            {
+                Lent++;
+                if (_length == 0)
+                {
+                    _length = length;
+                }
+
+                if (length == _length && _free.TryPop(out var free))
+                {
+                    return free;
+                }
+
+                Allocated++;
+
+                // Exactly the length asked for rather than at least it, because that is
+                // what makes a returned buffer recognisable as this pool's and what lets
+                // the whole array be the IBuffer.
+                return new byte[length];
+            }
+        }
+    }
+
+    /// <summary>
+    /// One frame's pixels on loan from <see cref="FrameBuffers"/>, counted so that the
+    /// buffer goes back only when nothing can still read it.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// Counted rather than owned outright because one buffer backs many samples: a still
+    /// screen is answered by handing the last frame over again, so the buffer under
+    /// <see cref="Mp4Frames"/>'s repeatable frame can be in several samples at once as
+    /// well as in the slot. Reusing it while any of them is still in the pipeline would
+    /// write the next frame over a frame being encoded, which is a tear rather than a
+    /// crash and would not show up until someone watched the file.
+    /// </para>
+    /// <para>
+    /// A loan starts at one, which is the caller's, and is handed on to the slot that
+    /// keeps it. <see cref="MediaStreamSample.Processed"/> is what releases a sample's
+    /// count; a sample the pipeline abandons without raising it simply keeps its buffer
+    /// out of the pool for good, which is what every frame did before this existed.
+    /// </para>
+    /// </remarks>
+    private sealed class LentBuffer(FrameBuffers pool, byte[] pixels, IBuffer buffer)
+    {
+        private int _holders = 1;
+
+        public IBuffer Buffer => buffer;
+
+        public void Hold() => Interlocked.Increment(ref _holders);
+
+        public void Release()
+        {
+            if (Interlocked.Decrement(ref _holders) == 0)
+            {
+                pool.Take(pixels);
+            }
+        }
+    }
 
     /// <summary>
     /// Copies one captured frame down to the CPU, cuts the recorded rectangle out of it
@@ -1332,14 +1488,15 @@ public sealed class ScreenRecorder : IDisposable
     /// </para>
     /// </remarks>
     private sealed class Mp4Frames(
+        FrameBuffers buffers,
         FrameStream frames,
         RecordedArea? crop,
         WindowRecordingArea? follow,
         TimeSpan interval,
-        IBuffer? seed,
-        Func<Task<IBuffer?>> retake) : IDisposable
+        LentBuffer? seed,
+        Func<Task<LentBuffer?>> retake) : IDisposable
     {
-        private readonly Retakes<IBuffer> _retakes = new(frames, interval, retake);
+        private readonly Retakes<LentBuffer> _retakes = new(frames, interval, retake);
 
         /// <summary>
         /// The last sample's pixels, for the buffer paths. An <see cref="IBuffer"/> is
@@ -1350,8 +1507,13 @@ public sealed class ScreenRecorder : IDisposable
         /// recording repeats until the screen first moves — including the case where it
         /// never does. Even the full-screen path, which otherwise hands surfaces straight
         /// to the encoder, begins on a buffer: the first real frame replaces it.
+        ///
+        /// The slot counts as a holder of whatever is in it, so that a buffer being
+        /// repeated is never handed back to the pool underneath the samples repeating it.
+        /// Always replaced through <see cref="Keep"/>, which is what lets go of the one
+        /// before.
         /// </remarks>
-        private IBuffer? _repeatable = seed;
+        private LentBuffer? _repeatable = seed;
 
         /// <summary>
         /// The last sample's texture, for the path that hands surfaces straight to the
@@ -1416,7 +1578,7 @@ public sealed class ScreenRecorder : IDisposable
                 // see Retakes.
                 if (_retakes.Poll(Kept) is { } byHand)
                 {
-                    _repeatable = byHand;
+                    Keep(byHand);
                 }
 
                 if (Repeat() is { } again)
@@ -1442,6 +1604,7 @@ public sealed class ScreenRecorder : IDisposable
         {
             _held?.Dispose();
             _held = null;
+            Keep(null);
         }
 
         private async Task<MediaStreamSample> KeepAsync(TimedFrame timed)
@@ -1451,7 +1614,7 @@ public sealed class ScreenRecorder : IDisposable
                 // Through main memory for the same reason a crop is, and for one more:
                 // the window may not be the size it was, and only a fitted buffer is
                 // still the size the stream was told.
-                return Remember(await FitToBufferAsync(timed.Frame, area), timed.Timestamp);
+                return Remember(await FitToBufferAsync(buffers, timed.Frame, area), timed.Timestamp);
             }
 
             if (crop is { } cropper)
@@ -1459,23 +1622,36 @@ public sealed class ScreenRecorder : IDisposable
                 // A copy rather than the texture: the encoder is being handed a rectangle
                 // that does not exist on the GPU. The frame is finished with the moment
                 // the pixels are in memory.
-                return Remember(await CropToBufferAsync(timed.Frame, cropper), timed.Timestamp);
+                return Remember(await CropToBufferAsync(buffers, timed.Frame, cropper), timed.Timestamp);
             }
 
-            _repeatable = null;
+            Keep(null);
             _held?.Dispose();
             _held = timed.Frame;
 
             return Surface(timed.Frame, timed.Timestamp);
         }
 
-        private MediaStreamSample Remember(IBuffer buffer, TimeSpan timestamp)
+        private MediaStreamSample Remember(LentBuffer buffer, TimeSpan timestamp)
         {
             _held?.Dispose();
             _held = null;
-            _repeatable = buffer;
+            Keep(buffer);
 
             return Sample(buffer, timestamp);
+        }
+
+        /// <summary>
+        /// Puts <paramref name="next"/> in the repeatable slot, letting go of whatever was
+        /// there. The loan handed in is already counted for the slot, so this takes no
+        /// count of its own — what it does is release the one the slot held before, which
+        /// is the last thing standing between a buffer nothing repeats any more and the
+        /// pool.
+        /// </summary>
+        private void Keep(LentBuffer? next)
+        {
+            _repeatable?.Release();
+            _repeatable = next;
         }
 
         /// <summary>
@@ -1510,13 +1686,20 @@ public sealed class ScreenRecorder : IDisposable
         /// uncompressed sample without one leaves the encoder to work it out from the
         /// sample after, and the last sample of a recording has none. The picture had
         /// never set it.
+        ///
+        /// <see cref="MediaStreamSample.Processed"/> is the pipeline saying it has read
+        /// the buffer, and so the only moment at which the pool may write over it. The
+        /// count is taken before the sample exists rather than after, because nothing
+        /// promises the event waits for this method to return.
         /// </remarks>
-        private MediaStreamSample Sample(IBuffer buffer, TimeSpan timestamp)
+        private MediaStreamSample Sample(LentBuffer lent, TimeSpan timestamp)
         {
             _delivered = timestamp;
 
-            var sample = MediaStreamSample.CreateFromBuffer(buffer, timestamp);
+            lent.Hold();
+            var sample = MediaStreamSample.CreateFromBuffer(lent.Buffer, timestamp);
             sample.Duration = interval;
+            sample.Processed += (_, _) => lent.Release();
             return sample;
         }
 

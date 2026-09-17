@@ -201,6 +201,36 @@ public sealed class FrameTransformsTests
                 new byte[4 * 2 * 4 - 4]));
     }
 
+    /// <summary>
+    /// Every frame an MP4 recording hands the encoder is flipped last, so the allocating
+    /// flip is a frame of large object heap per frame recorded — which is what a starved
+    /// recording's near-gigabyte of private bytes was. Pooling only helps if the reused
+    /// buffer comes out holding what the allocated one would have.
+    /// </summary>
+    [TestMethod]
+    public void FlipVerticalInto_WritesWhatFlipVerticalWouldHaveAllocated()
+    {
+        var expected = FrameTransforms.FlipVertical(4, 3, Numbered(4, 3));
+
+        var destination = new byte[4 * 3 * 4];
+        FrameTransforms.FlipVerticalInto(4, 3, Numbered(4, 3), destination);
+
+        CollectionAssert.AreEqual(expected, destination);
+    }
+
+    /// <summary>
+    /// The buffer comes back from a pool still holding an earlier frame, and a flip that
+    /// filled only part of one would send that earlier frame's rows to the encoder as the
+    /// rest of this one. Refusing is how a pool sized wrong is a failed recording rather
+    /// than a corrupt video nobody notices until they watch it.
+    /// </summary>
+    [TestMethod]
+    public void FlipVerticalInto_RefusesABufferThatIsNotTheFramesSize()
+    {
+        Assert.ThrowsException<ArgumentException>(
+            () => FrameTransforms.FlipVerticalInto(4, 3, Numbered(4, 3), new byte[4 * 3 * 4 - 4]));
+    }
+
     [TestMethod]
     public void FlipPoint_PutsAnAnnotationWhereItsPixelsWent()
     {
