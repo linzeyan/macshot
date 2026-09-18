@@ -174,6 +174,20 @@ public sealed class CaptureController : IDisposable
 
     private readonly MessageWindow _messageWindow;
     private readonly GlobalHotkeyService _hotkeys;
+
+    /// <summary>
+    /// What each shortcut id was last asked for, and what it actually got, so that a
+    /// settings change which has nothing to do with shortcuts leaves them alone.
+    /// </summary>
+    /// <remarks>
+    /// Every save arrives here, and most saves are about something else entirely — the
+    /// last selection is written as each capture is delivered, and the capture delay, the
+    /// beautify style and the aspect ratio all write as they are chosen. Rebinding all
+    /// twelve for one of those is a moment in which none of them work, and where Windows
+    /// had refused one it is another copy of the dialog saying so, raised at a capture the
+    /// user has just taken.
+    /// </remarks>
+    private readonly Dictionary<int, (HotkeyBinding? Asked, HotkeyBinding? Took)> _bound = [];
     private readonly TrayIconService _trayIcon;
     private readonly List<CaptureOverlayView> _overlays = [];
 
@@ -659,44 +673,55 @@ public sealed class CaptureController : IDisposable
 
         void Bind(int hotkey, int command, string label, HotkeyBinding? binding, Func<Task> action)
         {
+            // A slot with no menu entry of its own is nothing to name, and asking the menu
+            // to rename an item it does not have would be a silent no-op at best. Named
+            // whether or not anything is rebound below, because the entry carries the
+            // translated label as well as the shortcut and a language change reaches this
+            // method as a settings change like any other.
+            void Name(HotkeyBinding? shown)
+            {
+                if (command != 0)
+                {
+                    _trayIcon.SetMenuItemText(command, shown is null ? label : $"{label}\t{shown}");
+                }
+            }
+
+            // Left alone when it is what was asked for last time. See _bound.
+            if (_bound.TryGetValue(hotkey, out var already) && already.Asked == binding)
+            {
+                Name(already.Took);
+                return;
+            }
+
             // Given back first: re-registering an id Windows still holds fails, which
             // would turn every preferences save into a lost shortcut.
             _hotkeys.Unregister(hotkey);
-
-            // A slot with no menu entry of its own. Nothing to name, and asking the menu
-            // to rename an item it does not have would be a silent no-op at best.
-            var named = command != 0;
 
             if (binding is null)
             {
                 // Half of macshot's shortcuts ship like this, and any of the rest can be
                 // taken off. Nothing to register and nothing to complain about — only a
                 // menu entry that has to stop claiming a shortcut it no longer has.
-                if (named)
-                {
-                    _trayIcon.SetMenuItemText(command, label);
-                }
-
+                _bound[hotkey] = (null, null);
+                Name(null);
                 return;
             }
 
             if (_hotkeys.TryRegister(hotkey, binding, () => Post(action)))
             {
-                if (named)
-                {
-                    _trayIcon.SetMenuItemText(command, $"{label}\t{binding}");
-                }
-
+                _bound[hotkey] = (binding, binding);
+                Name(binding);
                 DiagnosticLog.Verbose($"hotkey {binding} registered for {label}");
             }
             else
             {
-                // Named without a shortcut rather than with one that does nothing.
-                if (named)
-                {
-                    _trayIcon.SetMenuItemText(command, label);
-                }
+                // Remembered as asked for but not taken, so that the next save does not
+                // ask Windows for it again and raise the refusal a second time. Choosing
+                // it again in preferences is a change, and does try again.
+                _bound[hotkey] = (binding, null);
 
+                // Named without a shortcut rather than with one that does nothing.
+                Name(null);
                 refused.Add(binding);
                 DiagnosticLog.Verbose($"hotkey {binding} refused for {label}");
             }
