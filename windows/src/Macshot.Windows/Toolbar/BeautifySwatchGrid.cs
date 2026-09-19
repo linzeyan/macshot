@@ -228,7 +228,7 @@ internal sealed class BeautifySwatchGrid : Grid
     /// grid. Sharp rather than blurred: the swatch says which background is on, and a
     /// blurred thumbnail 28 points across says nothing at all.
     /// </summary>
-    internal static ImageBrush? PaintPicture(BeautifyBackdrop? picture)
+    internal static ImageBrush? PaintPicture(CapturedFrame? picture)
     {
         if (picture is null)
         {
@@ -236,7 +236,7 @@ internal sealed class BeautifySwatchGrid : Grid
         }
 
         var bitmap = new WriteableBitmap(picture.Width, picture.Height);
-        var pixels = picture.PixelsBlurredBy(0);
+        var pixels = picture.BgraPixels;
         using (var stream = bitmap.PixelBuffer.AsStream())
         {
             stream.Write(pixels, 0, pixels.Length);

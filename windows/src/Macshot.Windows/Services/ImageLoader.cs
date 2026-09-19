@@ -52,4 +52,48 @@ public static class ImageLoader
         // thing that reads it back is a pin window deciding where to open.
         return new CapturedFrame(0, 0, bitmap.PixelWidth, bitmap.PixelHeight, pixels);
     }
+
+    /// <summary>
+    /// The same, no larger than <paramref name="within"/> on its longer side.
+    /// </summary>
+    /// <remarks>
+    /// The decoder scales on the way out, so what never existed is the full-sized copy.
+    /// That is the whole difference for anything drawn small: the beautify swatch is forty
+    /// points across and was being painted from a 2038x1588 decode of the user's picture —
+    /// twelve megabytes for a thumbnail, held for as long as macshot ran.
+    /// </remarks>
+    /// <param name="within">The longest side the caller will draw, in pixels.</param>
+    public static async Task<CapturedFrame> LoadAsync(IRandomAccessStream stream, int within)
+    {
+        ArgumentNullException.ThrowIfNull(stream);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(within);
+
+        var decoder = await BitmapDecoder.CreateAsync(stream);
+
+        // Only ever down. A picture already smaller than the caller asked for is left
+        // alone rather than enlarged into a buffer bigger than the file it came from.
+        var scale = Math.Min(
+            1.0,
+            within / (double)Math.Max(decoder.PixelWidth, decoder.PixelHeight));
+
+        var transform = new BitmapTransform
+        {
+            ScaledWidth = (uint)Math.Max(1, Math.Round(decoder.PixelWidth * scale)),
+            ScaledHeight = (uint)Math.Max(1, Math.Round(decoder.PixelHeight * scale)),
+            InterpolationMode = BitmapInterpolationMode.Fant,
+        };
+
+        // The same two as the overload above, spelled out because this overload of
+        // GetSoftwareBitmapAsync has no defaults to fall back on.
+        using var bitmap = await decoder.GetSoftwareBitmapAsync(
+            BitmapPixelFormat.Bgra8,
+            BitmapAlphaMode.Premultiplied,
+            transform,
+            ExifOrientationMode.RespectExifOrientation,
+            ColorManagementMode.ColorManageToSRgb);
+
+        var pixels = new byte[checked(bitmap.PixelWidth * bitmap.PixelHeight * 4)];
+        bitmap.CopyToBuffer(pixels.AsBuffer());
+        return new CapturedFrame(0, 0, bitmap.PixelWidth, bitmap.PixelHeight, pixels);
+    }
 }

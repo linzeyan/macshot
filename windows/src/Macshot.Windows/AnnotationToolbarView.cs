@@ -1557,7 +1557,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         // Painting 48 gradients is not free, so the grid is filled as it opens rather
         // than held ready; the only thing that changes between openings is the ring.
         _frames.Show(settings.Current.ToBeautifyOptions(BeautifyBackgroundStore.Current).StyleIndex);
-        _frames.ShowPicture(BeautifySwatchGrid.PaintPicture(BeautifyBackgroundStore.Current));
+        _frames.ShowPicture(BeautifySwatchGrid.PaintPicture(BeautifyBackgroundStore.Swatch));
 
         if (_frameFlyout is null)
         {
@@ -1579,9 +1579,19 @@ public sealed partial class AnnotationToolbarView : UserControl
         _frameFlyout.ShowAt(anchor);
     }
 
-    private void FramePicked(object? sender, int index)
+    private async void FramePicked(object? sender, int index)
     {
         _frameFlyout?.Hide();
+
+        // The picture is only decoded while it is the background in use, so choosing it
+        // from the grid is one of the two moments it has to be read — the other being
+        // ChooseFrameImageAsync, where a new file has just been stored. Without this the
+        // swatch would ring and the frame behind it would stay a gradient.
+        if (index == BeautifyOptions.CustomBackgroundStyle && BeautifyBackgroundStore.Current is null)
+        {
+            await BeautifyBackgroundStore.RefreshAsync(inUse: true);
+        }
+
         Remember(current => current with { BeautifyStyleIndex = index });
 
         // The whole row rather than only the swatch, because the blur slider comes and
@@ -1628,7 +1638,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         try
         {
             BeautifyBackgroundStore.Keep(file.Path);
-            await BeautifyBackgroundStore.RefreshAsync();
+            await BeautifyBackgroundStore.RefreshAsync(inUse: true);
         }
         catch (Exception exception)
         {
@@ -2965,7 +2975,7 @@ public sealed partial class AnnotationToolbarView : UserControl
 
         _frameSwatch.Background =
             options.StyleIndex == BeautifyOptions.CustomBackgroundStyle
-                ? BeautifySwatchGrid.PaintPicture(options.Backdrop)
+                ? BeautifySwatchGrid.PaintPicture(BeautifyBackgroundStore.Swatch)
                   ?? BeautifySwatchGrid.Paint(0, FrameSwatchExtent)
                 : BeautifySwatchGrid.Paint(options.StyleIndex, FrameSwatchExtent);
     }

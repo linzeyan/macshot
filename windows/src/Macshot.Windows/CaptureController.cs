@@ -357,8 +357,11 @@ public sealed class CaptureController : IDisposable
 
         // Read once, here, rather than by whichever window first needs it: decoding a
         // screen-sized picture is not something to do while a capture overlay is going up,
-        // and every surface that frames a capture reads the same one.
-        Post(BeautifyBackgroundStore.RefreshAsync);
+        // and every surface that frames a capture reads the same one. At full size only
+        // when it is the background actually chosen — a picture stored and then moved away
+        // from cost 12.9MB for the rest of the session, measured.
+        Post(() => BeautifyBackgroundStore.RefreshAsync(
+            _settings.Current.BeautifyStyleIndex == BeautifyOptions.CustomBackgroundStyle));
 
         // Last, and only after everything a command can reach exists. Queued rather than
         // run here, because this is still the constructor: a command that puts overlays

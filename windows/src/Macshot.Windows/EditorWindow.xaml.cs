@@ -691,9 +691,18 @@ public sealed partial class EditorWindow : Window
         var frame = new Button { Content = L("Frame") };
         var frames = new BeautifySwatchGrid();
         var frameFlyout = new Flyout { Placement = FlyoutPlacementMode.Bottom, Content = frames };
-        frames.Picked += (_, index) =>
+        frames.Picked += async (_, index) =>
         {
             frameFlyout.Hide();
+
+            // The picture is decoded only while it is the background in use — see
+            // BeautifyBackgroundStore — so choosing it is where it has to be read. This
+            // grid is the editor's own; the capture overlay's row does the same.
+            if (index == BeautifyOptions.CustomBackgroundStyle && BeautifyBackgroundStore.Current is null)
+            {
+                await BeautifyBackgroundStore.RefreshAsync(inUse: true);
+            }
+
             FrameWith(index);
         };
 

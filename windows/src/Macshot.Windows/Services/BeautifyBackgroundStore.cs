@@ -34,16 +34,43 @@ internal static class BeautifyBackgroundStore
     public static bool Exists => File.Exists(Path);
 
     /// <summary>
+    /// How wide the swatch's copy is decoded, in pixels. The swatch is drawn at 28 points
+    /// and cropped to fill, so this is generous even at 200%.
+    /// </summary>
+    private const int SwatchExtent = 128;
+
+    /// <summary>
     /// The picture as it was last read, for the several places that have to hand it to
-    /// the renderer.
+    /// the renderer — and <c>null</c> whenever it is not the background in use.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Held here rather than passed down from whoever opened the window, because the
     /// alternative is that one call site out of five forgets it and that capture silently
     /// comes out on a gradient. Decoding it per repaint is not an option either: it is a
     /// screen-sized PNG.
+    /// </para>
+    /// <para>
+    /// Only while it is in use, though. This used to be decoded at startup unconditionally,
+    /// which cost 12.9MB of resident memory for the rest of the session on a 2038x1588
+    /// picture — measured on a machine whose <c>beautifyStyleIndex</c> was -1, meaning a
+    /// gradient, meaning the picture was never going to be drawn at all. A background
+    /// chosen once and moved away from is the commonest case there is.
+    /// </para>
     /// </remarks>
     public static BeautifyBackdrop? Current { get; private set; }
+
+    /// <summary>
+    /// A small copy for the swatch that offers the picture, which has to be paintable even
+    /// when the picture is not the background in use.
+    /// </summary>
+    /// <remarks>
+    /// Separate from <see cref="Current"/> rather than taken from it, because the swatch is
+    /// the one thing that outlives the choice. Painting it from the full decode is what
+    /// made opening the frame picker cost a second screen: a <c>WriteableBitmap</c> the size
+    /// of the picture, for twenty-eight points of ring.
+    /// </remarks>
+    public static CapturedFrame? Swatch { get; private set; }
 
     /// <summary>
     /// The same picture undecoded, for archiving beside a capture that was framed on it.
@@ -56,13 +83,20 @@ internal static class BeautifyBackgroundStore
     /// </remarks>
     public static byte[]? CurrentBytes { get; private set; }
 
-    /// <summary>Reads the stored picture into <see cref="Current"/>.</summary>
-    public static async Task RefreshAsync()
+    /// <summary>Reads the stored picture into <see cref="Swatch"/>, and into
+    /// <see cref="Current"/> when it is going to be drawn.</summary>
+    /// <param name="inUse">
+    /// Whether the picture is the chosen background. False reads the file and the swatch
+    /// and stops there, which is every session that has a picture stored and a gradient
+    /// selected.
+    /// </param>
+    public static async Task RefreshAsync(bool inUse)
     {
         var bytes = await ReadAsync();
 
         CurrentBytes = bytes;
-        Current = bytes is null ? null : await DecodeAsync(bytes);
+        Swatch = bytes is null ? null : await DecodeAsync(bytes, SwatchExtent);
+        Current = bytes is null || !inUse ? null : await DecodeAsync(bytes);
     }
 
     /// <summary>
@@ -84,6 +118,23 @@ internal static class BeautifyBackgroundStore
             using var memory = new MemoryStream(bytes, writable: false);
             var frame = await ImageLoader.LoadAsync(memory.AsRandomAccessStream());
             return new BeautifyBackdrop(frame.Width, frame.Height, frame.BgraPixels);
+        }
+        catch (Exception exception)
+        {
+            DiagnosticLog.Write($"The beautify background could not be read: {exception.Message}");
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// The same bytes at swatch size, or null when they are not an image any more.
+    /// </summary>
+    private static async Task<CapturedFrame?> DecodeAsync(byte[] bytes, int within)
+    {
+        try
+        {
+            using var memory = new MemoryStream(bytes, writable: false);
+            return await ImageLoader.LoadAsync(memory.AsRandomAccessStream(), within);
         }
         catch (Exception exception)
         {
