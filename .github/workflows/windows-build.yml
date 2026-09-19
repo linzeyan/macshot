@@ -53,7 +53,20 @@ jobs:
           targets: x86_64-pc-windows-msvc
 
       - run: dotnet build windows/Macshot.Windows.sln --configuration Release --warnaserror
-      - run: dotnet test windows/Macshot.Windows.sln --configuration Release --no-build
+      - run: >
+          dotnet test windows/Macshot.Windows.sln --configuration Release --no-build
+          --logger "trx;LogFileName=test-results.trx" --results-directory test-results
+
+      # The log endpoint returns 403 for this repository, so a red run says only that
+      # something failed — the name of the test that did it was unreachable, and finding
+      # it meant guessing and pushing again. The artifact endpoint is not 403, and a trx
+      # carries every test's name, outcome and stack trace.
+      - name: Keep the test results, whether or not they passed
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: test-results
+          path: test-results/
 
       # Everything above this line was green while every zip ever released was a macshot
       # that could not take a screenshot. Nothing here had ever run publish, and publish
