@@ -320,7 +320,10 @@ public sealed class ScreenRecorder : IDisposable
 
         // One recording's worth, because every frame of one recording is the same size and
         // buffers outliving the recording that sized them would be held for nothing.
-        var buffers = new FrameBuffers();
+        // Declared before the stream and the frames so that it is disposed after them:
+        // whatever is still holding a loan when the recording ends has to give it back
+        // before the pool stops keeping what it is given. See FrameBuffers.Dispose.
+        using var buffers = new FrameBuffers();
 
         // Before the recording's own session exists, so the two are never open at once,
         // and because this is the frame the recording may otherwise never be given.
@@ -1141,7 +1144,7 @@ public sealed class ScreenRecorder : IDisposable
     /// second pool nobody measured.
     /// </para>
     /// </remarks>
-    private sealed class FrameBuffers
+    private sealed class FrameBuffers : IDisposable
     {
         /// <summary>
         /// Room for the frame in the encoder, the one being repeated and the one being
@@ -1155,6 +1158,9 @@ public sealed class ScreenRecorder : IDisposable
 
         /// <summary>The one length this pool keeps, fixed by the first loan.</summary>
         private int _length;
+
+        /// <summary>Whether the recording this belongs to has finished. See <see cref="Dispose"/>.</summary>
+        private bool _closed;
 
         /// <summary>
         /// How many buffers were actually allocated, against how many frames were lent
@@ -1228,10 +1234,34 @@ public sealed class ScreenRecorder : IDisposable
         {
             lock (_gate)
             {
-                if (pixels.Length == _length && _free.Count < MostKept)
+                if (!_closed && pixels.Length == _length && _free.Count < MostKept)
                 {
                     _free.Push(pixels);
                 }
+            }
+        }
+
+        /// <summary>
+        /// Lets go of every buffer at the end of the recording that sized them.
+        /// </summary>
+        /// <remarks>
+        /// Four frames is 52MB on a full display, and a pool that has nothing to lend is
+        /// still reachable for as long as the recording's own objects are — the sample
+        /// request handler holds them, and the pipeline holds that. Measured: a minute of
+        /// recording left 92MB of large object heap alive a minute and a half after it
+        /// finished, being every buffer the pool had allocated, which no collection could
+        /// touch because all of them were still reached from here.
+        ///
+        /// A buffer handed back after this is dropped rather than kept, because a sample
+        /// the pipeline has not finished with outlives the recording and would otherwise
+        /// refill a pool nobody will lend from again.
+        /// </remarks>
+        public void Dispose()
+        {
+            lock (_gate)
+            {
+                _closed = true;
+                _free.Clear();
             }
         }
 
@@ -1496,6 +1526,7 @@ public sealed class ScreenRecorder : IDisposable
     /// </para>
     /// </remarks>
     private sealed class Retakes<T>(FrameStream frames, TimeSpan frameInterval, Func<Task<T?>> take)
+        : IDisposable
         where T : class
     {
         private readonly RetakeCadence _cadence = new(frameInterval);
@@ -1547,6 +1578,27 @@ public sealed class ScreenRecorder : IDisposable
             {
                 _running = take();
             }
+        }
+
+        /// <summary>
+        /// Lets go of the capture in flight and of the one that produced the last frame.
+        /// </summary>
+        /// <remarks>
+        /// A finished <see cref="Task{T}"/> keeps its result, and this one's result is a
+        /// whole frame. Left here after the recording, it is a frame of large object heap
+        /// held for as long as anything can still reach this — which, through the sample
+        /// request handler the pipeline is subscribed to, is longer than the recording.
+        /// </remarks>
+        public void Dispose()
+        {
+            // Read so that a capture that failed after nobody was waiting for it is not
+            // raised again on the finalizer thread.
+            if (_running is { IsCompleted: true, IsCompletedSuccessfully: false } finished)
+            {
+                _ = finished.Exception;
+            }
+
+            _running = null;
         }
     }
 
@@ -1703,6 +1755,7 @@ public sealed class ScreenRecorder : IDisposable
             _held?.Dispose();
             _held = null;
             Keep(null);
+            _retakes.Dispose();
         }
 
         private async Task<MediaStreamSample> KeepAsync(TimedFrame timed)
@@ -1797,7 +1850,17 @@ public sealed class ScreenRecorder : IDisposable
             lent.Hold();
             var sample = MediaStreamSample.CreateFromBuffer(lent.Buffer, timestamp);
             sample.Duration = interval;
-            sample.Processed += (_, _) => lent.Release();
+
+            // Unsubscribed as it fires, so that a sample the pipeline holds on to does not
+            // also hold the loan — and through it a whole frame — by way of this handler.
+            // A recording makes thousands of these.
+            void Done(MediaStreamSample handled, object _)
+            {
+                handled.Processed -= Done;
+                lent.Release();
+            }
+
+            sample.Processed += Done;
             return sample;
         }
 
