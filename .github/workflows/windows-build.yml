@@ -57,10 +57,39 @@ jobs:
           dotnet test windows/Macshot.Windows.sln --configuration Release --no-build
           --logger "trx;LogFileName=test-results.trx" --results-directory test-results
 
-      # The log endpoint returns 403 for this repository, so a red run says only that
-      # something failed — the name of the test that did it was unreachable, and finding
-      # it meant guessing and pushing again. The artifact endpoint is not 403, and a trx
-      # carries every test's name, outcome and stack trace.
+      # The log endpoint returns 403 for this repository and artifact downloads answer
+      # 401, so a red run used to say "Process completed with exit code 1" and nothing
+      # else — the name of the test that failed could not be read from here at all, and
+      # finding it meant guessing and pushing again.
+      #
+      # Annotations are the one channel that answers unauthenticated, and ::error:: is
+      # what writes one. So the trx is turned into an annotation per failed test, which
+      # is the whole point: a red run has to say what broke.
+      - name: Say which tests failed, where the log cannot be read
+        if: always()
+        shell: pwsh
+        run: |
+          $trx = Get-ChildItem test-results -Filter *.trx -Recurse -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+          if (-not $trx) {
+              Write-Output "::error::The test run wrote no trx, so it failed before any test ran."
+              exit 0
+          }
+
+          [xml]$results = Get-Content $trx.FullName
+          $failed = @($results.TestRun.Results.UnitTestResult | Where-Object { $_.outcome -eq 'Failed' })
+          foreach ($test in $failed) {
+              # One line, because an annotation is one line: a stack trace with its
+              # newlines intact is truncated to its first and least useful frame.
+              $why = ($test.Output.ErrorInfo.Message + ' || ' + $test.Output.ErrorInfo.StackTrace) `
+                  -replace '\r?\n', ' ⏎ '
+              Write-Output "::error::$($test.testName): $why"
+          }
+
+          Write-Output "$($failed.Count) test(s) failed."
+
+      # Still kept, for anyone who can authenticate: the trx carries every test rather
+      # than only the ones that failed.
       - name: Keep the test results, whether or not they passed
         if: always()
         uses: actions/upload-artifact@v4
