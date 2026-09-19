@@ -100,6 +100,13 @@ public sealed class GraphicsCaptureService : IDisposable
 
         // One device for every display and every capture: creating one per frame
         // would spend more time initializing D3D than capturing.
+        //
+        // Releasing it between captures was tried, for the ~32MB of native memory the
+        // first capture adds and never gives back, and returned exactly nothing: 151MB
+        // after a capture and 148MB two minutes on, both the same to the megabyte as
+        // keeping it. That memory is d3d11.dll and the software rasterizer a VM falls
+        // back to, loaded once per process, not this object — every COM reference here
+        // is released already. Do not spend a device creation per capture on it again.
         var device = _device ??= CreateDirect3DDevice();
         var composer = new FrameComposer(displays.Layout);
 
