@@ -3,6 +3,40 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.13] - 2026-09-19
+
+### Fixed
+
+- **Every global shortcut was being taken away and registered again on every settings
+  save** — including the save that happens as each capture is delivered, because macshot
+  remembers the region you last chose. For the moment in between, all twelve were dead; if
+  Windows refused one because another program holds it, you were told so again after every
+  single capture. A shortcut is now left alone unless the change was about that shortcut.
+
+- **A screenshot no longer leaves tens of megabytes behind for the rest of the session.**
+  Nothing was leaking — six captures in a row settle at the same size, and a minute later
+  the memory in use is back where it started — but the first capture pushed the process up
+  and it never came back down. Three separate causes, all measured on a 2038x1588 display:
+
+  - On a single display, the capture was being copied a second time to cut out a region
+    that was already the whole picture. 12.9MB per capture, for nothing.
+  - The holes that a capture's large buffers leave behind were never being closed up, so
+    Windows kept 59MB reserved to hold 16MB of actual data. Closing them up after a
+    capture — and only after a capture, never after a recording, where the same request
+    was measured to be three times worse — takes that to 44MB with no holes at all.
+  - The picture chosen as a beautify background was decoded and kept in full for the whole
+    session even when the chosen background was a gradient, and both swatches that offer
+    it were drawn from that full-sized copy rather than a thumbnail.
+
+  Two minutes after a capture, macshot now settles at 148MB where it was 167MB. For anyone
+  who has picked a beautify picture and since gone back to a gradient, idle memory falls
+  from 66MB to 50MB.
+
+  What is left is mostly not macshot's: about 31MB is what Windows' interface layer costs
+  the first time any window is shown — opening the history panel alone costs it — and
+  about 32MB is the graphics and software-rendering libraries, loaded once. Releasing the
+  capture device between captures was tried and returned nothing at all.
+
 ## [0.8.12] - 2026-09-17
 
 ### Fixed
