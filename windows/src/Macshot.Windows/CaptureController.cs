@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Globalization;
+using System.Runtime;
 using System.Runtime.InteropServices;
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
@@ -2399,7 +2400,10 @@ public sealed class CaptureController : IDisposable
                 _hotkeys.Unregister(HotkeyStopRecording);
             }
 
-            CollectWhenIdle();
+            // Not the large object heap: a starved full-screen recording churns a frame
+            // of it per frame, and compacting one that size was measured at 2691MB
+            // against 845-994MB without. See CollectWhenIdle.
+            CollectWhenIdle(compactLargeObjects: false);
         }
     }
 
@@ -2919,18 +2923,42 @@ public sealed class CaptureController : IDisposable
     /// </para>
     /// <para>
     /// The flag does <em>not</em> reach the large object heap — that needs
-    /// <c>GCSettings.LargeObjectHeapCompactionMode</c> — and asking for it there was
-    /// measured and is worse, not better. A starved full-screen recording that churns a
-    /// frame of heap per frame settles at 845-994MB over three runs as this stands; the
-    /// same recording with LOH compaction asked for settled at 2691MB and stayed there,
-    /// having climbed <em>after</em> the recording stopped, which is this call running.
-    /// Compacting a heap that size evidently costs more address space than it returns.
-    /// Whatever fixes that recording, it is not here: it is the frame of large-object heap
-    /// it allocates per frame, which nothing at this end can collect its way out of.
+    /// <c>GCSettings.LargeObjectHeapCompactionMode</c>, which is
+    /// <paramref name="compactLargeObjects"/>. Whether to ask for it is not a matter of
+    /// taste: it was measured twice, on the two paths that reach here, and the answers
+    /// are opposite.
+    /// </para>
+    /// <para>
+    /// After a <em>capture</em> it is the whole point. One capture leaves a screen's worth
+    /// of large-object holes between the few buffers that survive, and nothing reuses them
+    /// because macshot then allocates nothing at all. Measured on the VM at 2038x1588:
+    /// 59MB committed with 36MB of it free becomes 44MB committed with <em>none</em> free,
+    /// and the process settles at 148MB rather than 158MB two minutes after the capture.
+    /// </para>
+    /// <para>
+    /// After a <em>recording</em> it is ruinous, which is why that call site opts out. A
+    /// starved full-screen recording churns a frame of large-object heap per frame and
+    /// settles at 845-994MB over three runs without it; with it the same recording settled
+    /// at 2691MB and stayed there, having climbed <em>after</em> the recording stopped,
+    /// which is this call running. Compacting a heap that size costs more address space
+    /// than it returns. The difference is the size of what is being compacted, so a
+    /// threshold would only guess at what the call site already knows.
     /// </para>
     /// </remarks>
-    private void CollectWhenIdle() => Post(() =>
+    /// <param name="compactLargeObjects">
+    /// Whether to compact the large object heap as well. True for a capture, false for a
+    /// recording — see the remarks, both were measured.
+    /// </param>
+    private void CollectWhenIdle(bool compactLargeObjects = true) => Post(() =>
     {
+        // One collection only: the runtime puts this back to Default as soon as the
+        // blocking gen-2 below has run, so it cannot reach a collection somebody else
+        // asked for.
+        if (compactLargeObjects)
+        {
+            GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+        }
+
         GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
         return Task.CompletedTask;
     });
