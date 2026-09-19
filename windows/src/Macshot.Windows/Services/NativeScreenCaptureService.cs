@@ -230,6 +230,17 @@ public sealed class NativeScreenCaptureService
             throw new InvalidOperationException("Select a non-empty capture region before saving.");
         }
 
+        // The cut that is not a cut. One overlay per display asks for its own display's
+        // region, and on a single display that region is the whole capture — so the
+        // commonest machine there is paid a second screen of large-object heap per
+        // capture, 12.9MB at 2038x1588, to copy a picture into a frame indistinguishable
+        // from the one it was read from. Sharing is safe because nothing anywhere writes
+        // into a capture's pixels: every transform allocates its own output.
+        if (left == 0 && top == 0 && width == frame.Width && height == frame.Height)
+        {
+            return frame;
+        }
+
         var pixels = new byte[checked(width * height * 4)];
         for (var row = 0; row < height; row++)
         {
