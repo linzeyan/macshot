@@ -75,6 +75,39 @@ public sealed class FrameComposerTests
     }
 
     [TestMethod]
+    public void Draw_KeepsAWholeScreenCaptureRatherThanCopyingIt()
+    {
+        // One display is most machines, and there its capture already *is* the whole
+        // canvas: copying it would spend a second full screen — 12.9MB at 2038x1588 —
+        // at the exact moment a capture is at its peak, to produce bytes identical to
+        // the ones read from. What makes keeping it safe is that the copy it replaces
+        // overwrote every byte of the canvas, alpha included.
+        var only = new CaptureMonitor("only", new CaptureRegion(0, 0, 4, 4), 1, IsPrimary: true);
+        var composer = new FrameComposer(new MonitorLayout([only]));
+        var captured = Filled(4, 4, 55);
+
+        composer.Draw(only, 4, 4, captured);
+
+        Assert.AreSame(captured, composer.ToImage(), "a full-canvas draw must not allocate a second screen");
+    }
+
+    [TestMethod]
+    public void ToImage_AnswersOpaqueBlackWhenNothingWasDrawn()
+    {
+        // The canvas is made on demand now, so the path where no display delivered
+        // anything has to answer a frame rather than a null: a failed capture should
+        // preview as a black screen, not crash whatever was going to show it.
+        var only = new CaptureMonitor("only", new CaptureRegion(0, 0, 4, 4), 1, IsPrimary: true);
+        var composer = new FrameComposer(new MonitorLayout([only]));
+
+        var image = composer.ToImage();
+
+        Assert.AreEqual(4 * 4 * 4, image.Length);
+        Assert.AreEqual(0, image[0]);
+        Assert.AreEqual(byte.MaxValue, image[3], "and opaque, or it previews as a hole");
+    }
+
+    [TestMethod]
     public void Draw_RejectsAPixelBufferThatDoesNotMatchItsDimensions()
     {
         var only = new CaptureMonitor("only", new CaptureRegion(0, 0, 4, 4), 1, IsPrimary: true);

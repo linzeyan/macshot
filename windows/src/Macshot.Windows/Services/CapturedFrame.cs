@@ -1,7 +1,8 @@
+using System.Runtime.InteropServices.WindowsRuntime;
+
 using Macshot.Windows.Core.Imaging;
 
 using Windows.Graphics.Imaging;
-using Windows.Security.Cryptography;
 
 namespace Macshot.Windows.Services;
 
@@ -70,16 +71,19 @@ public sealed class CapturedFrame
     /// </remarks>
     public BitmapAlphaMode AlphaMode => HasAlpha ? BitmapAlphaMode.Straight : BitmapAlphaMode.Ignore;
 
-    public SoftwareBitmap ToSoftwareBitmap()
-    {
-        var buffer = CryptographicBuffer.CreateFromByteArray(BgraPixels);
-        return SoftwareBitmap.CreateCopyFromBuffer(
-            buffer,
-            BitmapPixelFormat.Bgra8,
-            Width,
-            Height,
-            AlphaMode);
-    }
+    /// <remarks>
+    /// <c>AsBuffer</c> wraps the array; <c>CryptographicBuffer.CreateFromByteArray</c>,
+    /// which used to be here, copies it. Between that copy and
+    /// <c>CreateCopyFromBuffer</c>'s own, every surface that showed a capture paid two
+    /// full screens instead of one — 12.9MB apiece at 2038x1588, spent at the moment a
+    /// capture is already at its high-water mark.
+    /// </remarks>
+    public SoftwareBitmap ToSoftwareBitmap() => SoftwareBitmap.CreateCopyFromBuffer(
+        BgraPixels.AsBuffer(),
+        BitmapPixelFormat.Bgra8,
+        Width,
+        Height,
+        AlphaMode);
 
     /// <summary>
     /// The same pixels in the one form <see cref="SoftwareBitmapSource"/> accepts.
@@ -110,9 +114,8 @@ public sealed class CapturedFrame
             return ToSoftwareBitmap();
         }
 
-        var buffer = CryptographicBuffer.CreateFromByteArray(PremultipliedAlpha.From(BgraPixels));
         return SoftwareBitmap.CreateCopyFromBuffer(
-            buffer,
+            PremultipliedAlpha.From(BgraPixels).AsBuffer(),
             BitmapPixelFormat.Bgra8,
             Width,
             Height,
