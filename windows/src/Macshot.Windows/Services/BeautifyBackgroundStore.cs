@@ -97,6 +97,17 @@ internal static class BeautifyBackgroundStore
         CurrentBytes = bytes;
         Swatch = bytes is null ? null : await DecodeAsync(bytes, SwatchExtent);
         Current = bytes is null || !inUse ? null : await DecodeAsync(bytes);
+
+        // Which of the two branches a session took is the difference between a resident
+        // 12.9MB and nothing, and it is decided by a setting rather than by anything the
+        // user does — so without this line the saving is invisible on the only machines
+        // that matter.
+        DiagnosticLog.Verbose(bytes is null
+            ? "no beautify background is stored"
+            : $"beautify background {bytes.Length / 1024}KB on disk, decoded "
+                + (Current is { } full
+                    ? $"{full.Width}x{full.Height} because it is the chosen style"
+                    : $"only as a {Swatch?.Width}px swatch, not being the chosen style"));
     }
 
     /// <summary>

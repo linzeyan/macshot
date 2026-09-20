@@ -4,6 +4,7 @@ using System.Runtime;
 using System.Runtime.InteropServices;
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
+using Macshot.Windows.Core.Diagnostics;
 using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Input;
 using Macshot.Windows.Core.Output;
@@ -941,6 +942,12 @@ public sealed class CaptureController : IDisposable
     /// </remarks>
     private async Task<CapturedFrame> CaptureDesktopAsync(DisplaySet displays)
     {
+        // Taking a capture is where the process is at its heaviest, and that peak is
+        // what every "macshot is not giving the memory back" report is actually about.
+        // Measured across the call rather than guessed at from Task Manager afterwards,
+        // by which time a delivery and a collection have both happened.
+        var before = MemorySnapshot.Take();
+
         var frame = await _screenCapture.CaptureVirtualDesktopAsync(
             displays,
             _settings.Current.CaptureCursor);
@@ -949,7 +956,9 @@ public sealed class CaptureController : IDisposable
         // message box, which is the weakest kind of evidence there is.
         DiagnosticLog.Verbose(
             $"desktop captured {frame.Width}x{frame.Height} at {frame.VirtualX},{frame.VirtualY} "
-                + $"via {_screenCapture.Backend}");
+                + $"via {_screenCapture.Backend}, "
+                + $"{frame.BgraPixels.Length / (1024.0 * 1024.0):0.#}MB a screen; "
+                + MemorySnapshot.Take().Since(before));
 
         if (_screenCapture.FellBackUnexpectedly && !_reportedCaptureFallback)
         {
@@ -1117,7 +1126,7 @@ public sealed class CaptureController : IDisposable
             }
 
             await DeliverAsync(result);
-            CollectWhenIdle();
+            CollectWhenIdle("a capture");
         }
         catch (Exception exception)
         {
@@ -1971,7 +1980,7 @@ public sealed class CaptureController : IDisposable
     private void OnCaptureCancelled(object? sender, EventArgs args)
     {
         DismissOverlays();
-        CollectWhenIdle();
+        CollectWhenIdle("a cancelled capture");
     }
 
     private void DismissOverlays()
@@ -2406,7 +2415,7 @@ public sealed class CaptureController : IDisposable
             // Not the large object heap: a starved full-screen recording churns a frame
             // of it per frame, and compacting one that size was measured at 2691MB
             // against 845-994MB without. See CollectWhenIdle.
-            CollectWhenIdle(compactLargeObjects: false);
+            CollectWhenIdle("a recording", compactLargeObjects: false);
         }
     }
 
@@ -2948,12 +2957,19 @@ public sealed class CaptureController : IDisposable
     /// threshold would only guess at what the call site already knows.
     /// </para>
     /// </remarks>
+    /// <param name="after">
+    /// What has just finished, for the log line. Every number above was measured on a
+    /// machine that could be reached; the ones that matter from here on are on machines
+    /// that cannot be, and this is the only place they are written down.
+    /// </param>
     /// <param name="compactLargeObjects">
     /// Whether to compact the large object heap as well. True for a capture, false for a
     /// recording — see the remarks, both were measured.
     /// </param>
-    private void CollectWhenIdle(bool compactLargeObjects = true) => Post(() =>
+    private void CollectWhenIdle(string after, bool compactLargeObjects = true) => Post(() =>
     {
+        var before = MemorySnapshot.Take();
+
         // One collection only: the runtime puts this back to Default as soon as the
         // blocking gen-2 below has run, so it cannot reach a collection somebody else
         // asked for.
@@ -2963,6 +2979,13 @@ public sealed class CaptureController : IDisposable
         }
 
         GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+
+        // Sampled after the collection, so the committed and large-object figures are
+        // this collection's rather than the previous one's. What the pair says is which
+        // of the two explanations a heavy process has: private bytes that fall are a
+        // high-water mark the collector had not been given a reason to clear, and
+        // private bytes that do not are something still being held.
+        DiagnosticLog.Verbose($"collected after {after}: {MemorySnapshot.Take().Since(before)}");
         return Task.CompletedTask;
     });
 
