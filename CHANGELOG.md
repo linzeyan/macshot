@@ -3,6 +3,34 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.14] - 2026-09-20
+
+### Fixed
+
+- **Taking a screenshot no longer needs two extra copies of your screen while it is being
+  taken.** The moment a capture is taken is when macshot is at its largest, and two of the
+  copies it was making at that moment were producing pixels identical to the ones they had
+  just been read from: one to assemble a single display into a picture the same size, and
+  one on the way to showing it. On a 2038×1588 display that is 12.3MB each. Measured
+  against the previous version over three captures, memory in use after each falls from
+  156/187/190MB to 141/177/176MB.
+
+- **A closed editor was holding on to every earlier version of the picture.** Cropping,
+  flipping or removing a background keeps the picture it replaced so the change can be
+  undone, up to 512MB of them. Closing the window let go of the current picture and left
+  that history standing, and a closed window is never cleaned up on its own — so it stayed
+  for the rest of the session. The scroll-capture preview panel kept its stitched page the
+  same way.
+
+### Added
+
+- **macshot can now say where its memory went, in its own log.** Turn on detailed logging
+  in Preferences and every capture writes down what one screen costs on your machine, what
+  the process weighed before and after taking it, what was handed back, and how much of
+  that a cleanup actually returned. This exists because memory reports come from machines
+  we cannot measure — with the log there is no longer any guessing about whether a number
+  in Task Manager is something being held or simply something not yet cleaned up.
+
 ## [0.8.13] - 2026-09-19
 
 ### Fixed

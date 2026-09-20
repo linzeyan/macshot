@@ -42,6 +42,16 @@ public sealed partial class ScrollCapturePreviewWindow : Window
     {
         LiveSurfaces.Shared.Watch("scroll preview", this);
         InitializeComponent();
+
+        // The panel shows the whole stitched page, which is what a scroll capture exists
+        // to make long: four bytes a pixel of a page that can be many screens tall. A
+        // closed WinUI window is never collected, so this is held for the life of the
+        // process unless it is given up by hand, the same as every other surface here.
+        Closed += (_, _) =>
+        {
+            Stitched.Source = null;
+            _bitmap = null;
+        };
     }
 
     /// <summary>Puts the panel beside <paramref name="target"/>, on whichever side has room.</summary>

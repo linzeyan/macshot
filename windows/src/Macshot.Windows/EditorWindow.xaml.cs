@@ -534,6 +534,13 @@ public sealed partial class EditorWindow : Window
         {
             AnnotationToolbar.PersistStyle();
 
+            // Counted before any of it goes, because afterwards there is nothing left to
+            // measure. The current picture is never also in the history: an undo takes its
+            // step back out of the list on the way to becoming the picture again.
+            var undoSteps = _imageUndo.Count;
+            var handedBack = _frame.BgraPixels.LongLength
+                + _imageUndo.Sum(step => step.Frame.BgraPixels.LongLength);
+
             // The picture being edited and the four copies of it the canvas works on. A
             // closed WinUI window is never collected, so an editor left open on a 4K
             // capture is otherwise 130MB the process never gives back — see
@@ -541,9 +548,20 @@ public sealed partial class EditorWindow : Window
             AnnotationCanvas.Release();
             _frame = CapturedFrame.Empty;
 
+            // And every earlier version of it. A crop, a background removal or a rotate
+            // each keep the whole picture they replaced so it can be undone, up to
+            // ImageUndoBudget.Bytes — 512MB — and the line above was letting go of one
+            // frame while leaving that standing. It is the largest thing a closed window
+            // in this app can hold.
+            _imageUndo.Clear();
+
             // The hold timer is the dispatcher queue's, and its handler is what would keep
             // this window — which WinUI never collects anyway — reachable from the thread.
             _hold.Release();
+
+            DiagnosticLog.Verbose(
+                $"editor handed back {handedBack / (1024.0 * 1024.0):0.#}MB of pixels it was "
+                    + $"holding, {undoSteps} of them image undo steps");
         };
     }
 
