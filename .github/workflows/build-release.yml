@@ -120,7 +120,7 @@ jobs:
       # product and the MSIX is an addition, so a missing SDK tool or a timestamp server
       # having a bad day must not be able to cost a release the binaries that were already
       # built and sitting on disk two steps earlier.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         with:
           name: macshot-zip-${{ matrix.variant }}-${{ matrix.arch }}
           path: ${{ steps.package.outputs.name }}
@@ -180,7 +180,7 @@ jobs:
             "signed=true" >> $env:GITHUB_OUTPUT
           }
 
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: steps.msix.outputs.signed == 'true'
         with:
           name: macshot-msix-${{ matrix.variant }}-${{ matrix.arch }}
@@ -190,7 +190,7 @@ jobs:
       # Under a name the release job does not collect, which is what keeps an
       # uninstallable file off the release page while still leaving it somewhere it can be
       # downloaded and signed by hand.
-      - uses: actions/upload-artifact@v4
+      - uses: actions/upload-artifact@v7
         if: steps.msix.outputs.signed == 'false'
         with:
           name: unsigned-msix-${{ matrix.variant }}-${{ matrix.arch }}
@@ -208,7 +208,7 @@ jobs:
       # By pattern, not everything: the unsigned MSIX artifacts are deliberately named
       # outside it so that a run with no signing certificate cannot attach a file Windows
       # will refuse to install.
-      - uses: actions/download-artifact@v4
+      - uses: actions/download-artifact@v7
         with:
           pattern: macshot-*
           path: artifacts
