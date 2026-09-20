@@ -1,3 +1,4 @@
+using Macshot.Windows.Core.Diagnostics;
 using Macshot.Windows.Core.Recognition;
 using Macshot.Windows.Services;
 using Microsoft.UI.Windowing;
@@ -74,6 +75,7 @@ public sealed partial class TextRecognitionWindow : Window
         _settings = settings;
 #endif
 
+        LiveSurfaces.Shared.Watch("recognition", this);
         InitializeComponent();
         // Every string in the XAML is already the English text macshot keys by,
         // so the page is translated in place rather than written twice.

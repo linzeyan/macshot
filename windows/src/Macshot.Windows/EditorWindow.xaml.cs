@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices.WindowsRuntime;
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
+using Macshot.Windows.Core.Diagnostics;
 using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Input;
 using Macshot.Windows.Core.Recognition;
@@ -233,6 +234,7 @@ public sealed partial class EditorWindow : Window
         var opening = state ?? CaptureEditState.None;
         _effects = opening.Effects;
         _beautify = opening.Beautify;
+        LiveSurfaces.Shared.Watch("editor", this);
         InitializeComponent();
         // Every string in the XAML is already the English text macshot keys by,
         // so the page is translated in place rather than written twice.

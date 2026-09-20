@@ -1,6 +1,7 @@
 using System.Runtime.InteropServices.WindowsRuntime;
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
+using Macshot.Windows.Core.Diagnostics;
 using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Input;
 using Macshot.Windows.Core.Recognition;
@@ -448,6 +449,11 @@ public sealed partial class CaptureOverlayView : UserControl
         _captureWindow = captureWindow ?? throw new ArgumentNullException(nameof(captureWindow));
         _monitorFrame = NativeScreenCaptureService.Crop(desktopFrame, layout.FrameRegionOf(monitor));
         _placement = new MonitorFramePlacement(layout, monitor);
+
+        // The surface this was written for: one overlay is two frozen screens, a boundary
+        // index and four copies of the chosen region, and a timer holding one held every
+        // one ever raised. See LiveSurfaces.
+        LiveSurfaces.Shared.Watch("overlay", this);
         InitializeComponent();
         // Every string in the XAML is already the English text macshot keys by,
         // so the page is translated in place rather than written twice.
@@ -2996,6 +3002,17 @@ public sealed partial class CaptureOverlayView : UserControl
     /// </remarks>
     private void ReleasePixels()
     {
+        // Counted before they go, because afterwards there is nothing left to measure.
+        // The monitor frame is usually the desktop frame itself — one display means the
+        // per-monitor crop covers the whole capture, and NativeScreenCaptureService.Crop
+        // hands the same buffer back — so counting both would report twice what was held.
+        var handedBack = _desktopFrame.BgraPixels.Length
+            + (ReferenceEquals(_monitorFrame.BgraPixels, _desktopFrame.BgraPixels)
+                ? 0
+                : _monitorFrame.BgraPixels.Length)
+            + (_capturedWindow?.BgraPixels.Length ?? 0)
+            + (_boundaries?.Bytes ?? 0);
+
         _desktopFrame = CapturedFrame.Empty;
         _monitorFrame = CapturedFrame.Empty;
         _capturedWindow = null;
@@ -3011,6 +3028,13 @@ public sealed partial class CaptureOverlayView : UserControl
         // The marks and the region under them: another four copies of the chosen area,
         // which for a full-screen capture is four more screens.
         AnnotationCanvas.Release();
+
+        // The framework keeps the window itself, so none of the above would ever be
+        // collected on its own. Whether this ran, and what it was worth, is otherwise
+        // only knowable by attaching a debugger to the machine having the problem.
+        DiagnosticLog.Verbose(
+            $"overlay for {_monitor.DeviceName} handed back "
+                + $"{handedBack / (1024.0 * 1024.0):0.#}MB of pixels it was holding");
     }
 
     /// <summary>

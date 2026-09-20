@@ -436,7 +436,8 @@ public sealed class ScreenRecorder : IDisposable
             $"recorded {video.Kept} frames from {frames.Arrivals} arrivals ({frames.Empty} empty),"
                 + $" {video.Repeated} repeated, {video.Retaken} taken by hand, {frames.Dropped}"
                 + $" dropped, first frame {(seed is null ? "not seeded" : "seeded")},"
-                + $" {buffers.Allocated} buffers for {buffers.Lent} frames,"
+                + $" {buffers.Allocated} buffers ({buffers.AllocatedBytes / (1024.0 * 1024.0):0.#}MB)"
+                + $" for {buffers.Lent} frames,"
                 + $" over {frames.Elapsed:mm\\:ss}");
 
         // The compositor delivered nothing at all, which on a recording longer than a second
@@ -1174,6 +1175,14 @@ public sealed class ScreenRecorder : IDisposable
 
         /// <inheritdoc cref="Allocated"/>
         public int Lent { get; private set; }
+
+        /// <summary>
+        /// What those allocations weigh. Four frames is 52MB on a full display, and a
+        /// recording that settled at 845MB against one that settled at 2691MB differs by
+        /// this and by what the collector then did with it — neither of which a count of
+        /// buffers alone tells anybody reading the log.
+        /// </summary>
+        public long AllocatedBytes => (long)Allocated * _length;
 
         /// <summary>
         /// Turns a top-down BGRA frame into the buffer the encoder reads, which is

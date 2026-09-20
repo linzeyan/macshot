@@ -1,5 +1,6 @@
 using System.Runtime.InteropServices.WindowsRuntime;
 using Macshot.Windows.Core.Capture;
+using Macshot.Windows.Core.Diagnostics;
 using Macshot.Windows.Services;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -39,6 +40,7 @@ public sealed partial class ScrollCapturePreviewWindow : Window
 
     public ScrollCapturePreviewWindow()
     {
+        LiveSurfaces.Shared.Watch("scroll preview", this);
         InitializeComponent();
     }
 

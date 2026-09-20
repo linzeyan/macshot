@@ -1,4 +1,5 @@
 using System.Globalization;
+using Macshot.Windows.Core.Diagnostics;
 using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Output;
 using Macshot.Windows.Services;
@@ -112,6 +113,11 @@ public sealed partial class HistoryWindow : Window
         ArgumentNullException.ThrowIfNull(settings);
 
         _settings = settings;
+
+        // Not a capture, but the surface that cost 31MB of WinUI's first window and
+        // returned none of it on close — so whether a second one is ever built, and
+        // whether the first is still there when it is, is worth being able to read.
+        LiveSurfaces.Shared.Watch("history", this);
         InitializeComponent();
 
         // Every string in the XAML is already the English text macshot keys by,

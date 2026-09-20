@@ -1,5 +1,6 @@
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
+using Macshot.Windows.Core.Diagnostics;
 using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Services;
 using Macshot.Windows.Toolbar;
@@ -54,6 +55,7 @@ public sealed partial class ThumbnailWindow : Window
         _frame = frame ?? throw new ArgumentNullException(nameof(frame));
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         HistoryPath = historyPath;
+        LiveSurfaces.Shared.Watch("thumbnail", this);
         InitializeComponent();
         // Every string in the XAML is already the English text macshot keys by,
         // so the page is translated in place rather than written twice.

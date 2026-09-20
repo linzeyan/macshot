@@ -2986,6 +2986,12 @@ public sealed class CaptureController : IDisposable
         // high-water mark the collector had not been given a reason to clear, and
         // private bytes that do not are something still being held.
         DiagnosticLog.Verbose($"collected after {after}: {MemorySnapshot.Take().Since(before)}");
+
+        // Only meaningful here, straight after a blocking gen-2: an idle tray app never
+        // collects, so anywhere else every surface ever made is still alive and the count
+        // says nothing. A number that does not fall back towards zero is the signature of
+        // the leak this app has already had once. See LiveSurfaces.
+        DiagnosticLog.Verbose($"still alive: {LiveSurfaces.Shared.Census()}");
         return Task.CompletedTask;
     });
 

@@ -102,6 +102,17 @@ public sealed class BoundarySnapIndex
     public int OriginY { get; }
 
     /// <summary>
+    /// What this costs to hold — two bytes a pixel, 6.5MB beside a 2038x1588 desktop.
+    /// </summary>
+    /// <remarks>
+    /// Exposed so that the overlay dropping it can say what it gave back. An overlay's
+    /// hand-releases are invisible from outside and are the difference between +10MB and
+    /// +1MB a capture, so on a machine nobody can reach the log is the only evidence that
+    /// they ran.
+    /// </remarks>
+    public int Bytes => _vertical.Length + _horizontal.Length;
+
+    /// <summary>
     /// Reads the boundaries out of a BGRA capture, or answers null when there is nothing
     /// to read.
     /// </summary>

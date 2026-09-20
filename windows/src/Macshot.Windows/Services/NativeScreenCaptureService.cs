@@ -238,6 +238,12 @@ public sealed class NativeScreenCaptureService
         // into a capture's pixels: every transform allocates its own output.
         if (left == 0 && top == 0 && width == frame.Width && height == frame.Height)
         {
+            // Which of the two branches a machine takes is decided by how many displays it
+            // has, and there is no other way to tell from a log whether the saving applies
+            // to the machine the report came from.
+            DiagnosticLog.Verbose(
+                $"crop of {width}x{height} covers the whole capture: sharing it rather than "
+                    + $"copying {frame.BgraPixels.Length / (1024.0 * 1024.0):0.#}MB");
             return frame;
         }
 
