@@ -3,6 +3,29 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.15] - 2026-09-21
+
+### Fixed
+
+- **A finished recording now gives its memory back the way a screenshot does.** Cleaning
+  up after a recording deliberately left the large blocks it had been working in where
+  they lay, on the strength of one measurement taken on a much older build. On a machine
+  whose recordings are small — which includes every machine where the screen recorder
+  receives no frames and macshot falls back to copying the screen by hand — that left
+  around 21MB of unusable gaps behind each recording, and nothing reclaimed them until the
+  next screenshot was taken. Whether to tidy up is now decided by how much memory is in
+  use at that moment, which is the thing that actually made the difference.
+
+### Added
+
+- **The log says which renderer macshot was given.** A screenshot and a recording each ask
+  Windows for a graphics device of their own, and on a machine with no usable GPU — a
+  virtual desktop, a remote session — either can quietly fall back to rendering in
+  software without the other doing so. That is now written down, and says which of the two
+  it was. So is the moment a recording's capture actually starts, which was previously
+  written just before the attempt rather than after it — on a machine that then recorded
+  nothing, that line was answering the only useful question wrongly.
+
 ## [0.8.14] - 2026-09-20
 
 ### Fixed
