@@ -1974,9 +1974,14 @@ public sealed class ScreenRecorder : IDisposable
 
         public void Start()
         {
-            DiagnosticLog.Verbose("capture started");
             _clock.Restart();
             _session.StartCapture();
+
+            // After the call, not before it. This line is read when a recording got no
+            // frames at all, which is exactly when "did our own code even run" is the
+            // question — and printed ahead of the call it reports, it answered that
+            // question wrongly and looked like the platform refusing.
+            DiagnosticLog.Verbose("capture started");
         }
 
         /// <summary>
