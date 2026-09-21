@@ -54,5 +54,43 @@ public sealed class MemorySnapshotTests
         Assert.IsTrue(now.ManagedBytes > 0, "the running process has a managed heap, this test being on it");
     }
 
+    [TestMethod]
+    public void IsWorthCompacting_SaysYesToEveryHeapACaptureOrAStarvedRecordingLeaves()
+    {
+        // These are the two shapes that reach CollectWhenIdle on a real machine, and the
+        // decision used to be declared by which of them called rather than measured. A
+        // field log then showed a recording arriving lighter than a capture, so the
+        // recording's opt-out cost it 21MB of large-object holes per run for nothing.
+        var capture = new MemorySnapshot(0, 18 * Mb, 0, 0, 0, AfterACollection: true);
+        var starvedRecording = new MemorySnapshot(0, 5 * Mb, 0, 0, 0, AfterACollection: true);
+
+        Assert.IsTrue(capture.IsWorthCompacting);
+        Assert.IsTrue(starvedRecording.IsWorthCompacting);
+    }
+
+    [TestMethod]
+    public void IsWorthCompacting_SaysNoToTheHeapThatMadeCompactingRuinous()
+    {
+        // A full-screen recording that keeps its frames settled at 845-994MB without
+        // compaction and 2691MB with it — the compaction climbing after the recording
+        // had stopped, which is this decision running. Nothing above a few hundred
+        // megabytes may ask for it again.
+        var heavyRecording = new MemorySnapshot(0, 900 * Mb, 0, 0, 0, AfterACollection: true);
+
+        Assert.IsFalse(heavyRecording.IsWorthCompacting);
+    }
+
+    [TestMethod]
+    public void IsWorthCompacting_ReadsTheLiveFigureAndNotTheLastCollectionsLargeObjectHeap()
+    {
+        // The whole point of deciding from ManagedBytes: everything GetGCMemoryInfo
+        // reports is the *previous* collection's, so on this path — collect now, having
+        // just dropped a recording's worth of frames — the large-object figure is the
+        // stale one. A snapshot whose two numbers disagree must follow the live one.
+        var stale = new MemorySnapshot(0, 900 * Mb, 0, LargeObjectBytes: 12 * Mb, 0, AfterACollection: true);
+
+        Assert.IsFalse(stale.IsWorthCompacting, "the 12MB is what the heap was at the last collection, not now");
+    }
+
     private const long Mb = 1024 * 1024;
 }

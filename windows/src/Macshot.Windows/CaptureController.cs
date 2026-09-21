@@ -2412,10 +2412,7 @@ public sealed class CaptureController : IDisposable
                 _hotkeys.Unregister(HotkeyStopRecording);
             }
 
-            // Not the large object heap: a starved full-screen recording churns a frame
-            // of it per frame, and compacting one that size was measured at 2691MB
-            // against 845-994MB without. See CollectWhenIdle.
-            CollectWhenIdle("a recording", compactLargeObjects: false);
+            CollectWhenIdle("a recording");
         }
     }
 
@@ -2935,26 +2932,29 @@ public sealed class CaptureController : IDisposable
     /// </para>
     /// <para>
     /// The flag does <em>not</em> reach the large object heap — that needs
-    /// <c>GCSettings.LargeObjectHeapCompactionMode</c>, which is
-    /// <paramref name="compactLargeObjects"/>. Whether to ask for it is not a matter of
-    /// taste: it was measured twice, on the two paths that reach here, and the answers
-    /// are opposite.
+    /// <c>GCSettings.LargeObjectHeapCompactionMode</c>, and whether to ask for it is
+    /// decided here by how much is alive rather than by which path called. Both answers
+    /// were measured. After an ordinary capture it is the whole point: one capture leaves
+    /// a screen's worth of large-object holes between the few buffers that survive, and
+    /// nothing reuses them because macshot then allocates nothing at all. Measured on the
+    /// VM at 2038x1588, 59MB committed with 36MB of it free becomes 44MB committed with
+    /// <em>none</em> free, and the process settles at 148MB rather than 158MB two minutes
+    /// later. On a heap of hundreds of megabytes it is ruinous: a starved full-screen
+    /// recording settled at 845-994MB over three runs without it, and at 2691MB with it,
+    /// having climbed <em>after</em> the recording stopped, which is this call running.
     /// </para>
     /// <para>
-    /// After a <em>capture</em> it is the whole point. One capture leaves a screen's worth
-    /// of large-object holes between the few buffers that survive, and nothing reuses them
-    /// because macshot then allocates nothing at all. Measured on the VM at 2038x1588:
-    /// 59MB committed with 36MB of it free becomes 44MB committed with <em>none</em> free,
-    /// and the process settles at 148MB rather than 158MB two minutes after the capture.
-    /// </para>
-    /// <para>
-    /// After a <em>recording</em> it is ruinous, which is why that call site opts out. A
-    /// starved full-screen recording churns a frame of large-object heap per frame and
-    /// settles at 845-994MB over three runs without it; with it the same recording settled
-    /// at 2691MB and stayed there, having climbed <em>after</em> the recording stopped,
-    /// which is this call running. Compacting a heap that size costs more address space
-    /// than it returns. The difference is the size of what is being compacted, so a
-    /// threshold would only guess at what the call site already knows.
+    /// That reads as "compact after a capture, not after a recording" and it was written
+    /// that way, with the choice passed in. It was wrong twice over. A recording on a
+    /// machine whose compositor delivers nothing keeps almost no frames — a field log had
+    /// three of them at 4.3-5.2MB alive, less than any capture on the same machine — and
+    /// opting out left each one 21MB of large-object holes that nothing reclaimed until
+    /// the next capture. And the heavy recording the opt-out was written for no longer
+    /// has a heavy heap: measured again on the VM, a minute of full-screen recording
+    /// peaks at 625MB and arrives here with 43MB alive, compacts, and ends with a large
+    /// object heap that has nothing unused in it. What decides is the size of the heap
+    /// being compacted, which is a thing to measure and not a thing the call site knows.
+    /// See <see cref="MemorySnapshot.IsWorthCompacting"/>.
     /// </para>
     /// </remarks>
     /// <param name="after">
@@ -2962,18 +2962,15 @@ public sealed class CaptureController : IDisposable
     /// machine that could be reached; the ones that matter from here on are on machines
     /// that cannot be, and this is the only place they are written down.
     /// </param>
-    /// <param name="compactLargeObjects">
-    /// Whether to compact the large object heap as well. True for a capture, false for a
-    /// recording — see the remarks, both were measured.
-    /// </param>
-    private void CollectWhenIdle(string after, bool compactLargeObjects = true) => Post(() =>
+    private void CollectWhenIdle(string after) => Post(() =>
     {
         var before = MemorySnapshot.Take();
 
         // One collection only: the runtime puts this back to Default as soon as the
         // blocking gen-2 below has run, so it cannot reach a collection somebody else
         // asked for.
-        if (compactLargeObjects)
+        var compacting = before.IsWorthCompacting;
+        if (compacting)
         {
             GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
         }
@@ -2984,8 +2981,12 @@ public sealed class CaptureController : IDisposable
         // this collection's rather than the previous one's. What the pair says is which
         // of the two explanations a heavy process has: private bytes that fall are a
         // high-water mark the collector had not been given a reason to clear, and
-        // private bytes that do not are something still being held.
-        DiagnosticLog.Verbose($"collected after {after}: {MemorySnapshot.Take().Since(before)}");
+        // private bytes that do not are something still being held. Which way the
+        // compaction went is written down beside them because it is now a judgement made
+        // from a number, and the number it was made from is in the same line.
+        DiagnosticLog.Verbose(
+            $"collected after {after}{(compacting ? "" : ", large objects left where they lie")}: "
+                + MemorySnapshot.Take().Since(before));
 
         // Only meaningful here, straight after a blocking gen-2: an idle tray app never
         // collects, so anywhere else every surface ever made is still alive and the count
