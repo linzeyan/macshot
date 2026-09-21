@@ -565,7 +565,7 @@ public sealed class ScreenRecorder : IDisposable
         return new RecordingResult(path, frames.Elapsed, written, frames.Dropped);
     }
 
-    private IDirect3DDevice Device() => _device ??= GraphicsCaptureService.CreateDirect3DDevice();
+    private IDirect3DDevice Device() => _device ??= GraphicsCaptureService.CreateDirect3DDevice("a recording");
 
     /// <summary>
     /// What the item looks like at the moment recording starts, or null when it could not

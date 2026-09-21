@@ -107,7 +107,7 @@ public sealed class GraphicsCaptureService : IDisposable
         // keeping it. That memory is d3d11.dll and the software rasterizer a VM falls
         // back to, loaded once per process, not this object — every COM reference here
         // is released already. Do not spend a device creation per capture on it again.
-        var device = _device ??= CreateDirect3DDevice();
+        var device = _device ??= CreateDirect3DDevice("a screenshot");
         var composer = new FrameComposer(displays.Layout);
 
         foreach (var monitor in displays.Layout.Monitors)
@@ -154,7 +154,7 @@ public sealed class GraphicsCaptureService : IDisposable
             throw new InvalidOperationException("Windows no longer reports bounds for that window.");
         }
 
-        var device = _device ??= CreateDirect3DDevice();
+        var device = _device ??= CreateDirect3DDevice("a screenshot");
 
         var (width, height, pixels) = await CaptureItemAsync(device, OpenWindow(windowId));
         var crop = WindowFrameCrop.Resolve(windowRect, visibleBounds, width, height);
@@ -394,7 +394,12 @@ public sealed class GraphicsCaptureService : IDisposable
     /// renderer as a dependency to obtain one object is a worse trade than this much
     /// interop.
     /// </remarks>
-    internal static IDirect3DDevice CreateDirect3DDevice()
+    /// <param name="forWhat">
+    /// What the device is for, for the log. A screenshot and a recording each build one
+    /// through here and they do not have to get the same answer, which is the point of
+    /// saying which is which.
+    /// </param>
+    internal static IDirect3DDevice CreateDirect3DDevice(string forWhat)
     {
         var result = D3D11CreateDevice(
             IntPtr.Zero,
@@ -412,6 +417,7 @@ public sealed class GraphicsCaptureService : IDisposable
         {
             // A machine with no usable GPU — a VM, a remote session — still has to be
             // able to take a screenshot, and WARP renders in software.
+            var hardwareFailure = result;
             result = D3D11CreateDevice(
                 IntPtr.Zero,
                 DriverTypeWarp,
@@ -423,6 +429,20 @@ public sealed class GraphicsCaptureService : IDisposable
                 out d3dDevice,
                 out _,
                 out context);
+
+            // Not traced but written, and this is why: a screenshot and a recording each
+            // build a device of their own through here, and on a VDI that reported three
+            // recordings of nothing while its screenshots worked, which of the two got
+            // software rendering is the difference that would explain it. Nothing else in
+            // the log distinguishes them, and the fallback is silent by nature — it
+            // produces a working device.
+            DiagnosticLog.Write(
+                $"No hardware graphics device for {forWhat} (0x{hardwareFailure:X8}); "
+                    + $"rendering in software{(result < 0 ? " failed too" : string.Empty)}");
+        }
+        else
+        {
+            DiagnosticLog.Verbose($"graphics device for {forWhat} created on the hardware renderer");
         }
 
         Marshal.ThrowExceptionForHR(result);
