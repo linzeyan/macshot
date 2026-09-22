@@ -22,7 +22,63 @@ permissions:
   contents: write
 
 jobs:
+  # A tag does not run windows-build.yml — that triggers on pushes to the branch — so
+  # without this a release was cut from whatever the tag pointed at, tests or no tests.
+  # v0.8.16 shipped that way: four zips published while CI was red on the same commit,
+  # and nothing in the release said so.
+  #
+  # Ahead of the matrix rather than beside it, so a tag whose tests fail publishes
+  # nothing at all and costs one runner instead of four. It is the same build and the
+  # same invocation as windows-build.yml, which is deliberate: a release must be gated on
+  # what CI already means by green, not on a second opinion that could drift from it.
+  test:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v5
+        with:
+          ref: ${{ github.event.inputs.tag || github.ref }}
+
+      - uses: actions/setup-dotnet@v5
+        with:
+          dotnet-version: 10.0.x
+
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          targets: x86_64-pc-windows-msvc
+
+      - run: dotnet build windows/Macshot.Windows.sln --configuration Release --warnaserror
+      - run: >
+          dotnet test windows/Macshot.Windows.sln --configuration Release --no-build
+          --logger "trx;LogFileName=test-results.trx" --results-directory test-results
+
+      # The same reason windows-build.yml does this: the log endpoint answers 403 here and
+      # artifacts answer 401, so an annotation is the only way a red run can say which
+      # test failed rather than only that one did.
+      - name: Say which tests failed, where the log cannot be read
+        if: always()
+        shell: pwsh
+        run: |
+          $trx = Get-ChildItem test-results -Filter *.trx -Recurse -ErrorAction SilentlyContinue |
+              Select-Object -First 1
+          if (-not $trx) {
+              Write-Output "::error::The test run wrote no trx, so it failed before any test ran."
+              exit 0
+          }
+
+          [xml]$results = Get-Content $trx.FullName
+          $failed = @($results.TestRun.Results.UnitTestResult | Where-Object { $_.outcome -eq 'Failed' })
+          foreach ($test in $failed) {
+              # One line, because an annotation is one line: a stack trace with its
+              # newlines intact is truncated to its first and least useful frame.
+              $why = ($test.Output.ErrorInfo.Message + ' || ' + $test.Output.ErrorInfo.StackTrace) `
+                  -replace '\r?\n', ' ⏎ '
+              Write-Output "::error::$($test.testName): $why"
+          }
+
+          Write-Output "$($failed.Count) test(s) failed."
+
   build:
+    needs: test
     runs-on: windows-latest
     strategy:
       # One failing architecture should not cancel the other: knowing that arm64 builds
