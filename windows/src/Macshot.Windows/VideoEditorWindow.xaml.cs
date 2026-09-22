@@ -3,6 +3,7 @@ using System.Diagnostics;
 using System.Runtime.InteropServices;
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
+using Macshot.Windows.Core.Diagnostics;
 using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Output;
 using Macshot.Windows.Recording;
@@ -365,6 +366,12 @@ public sealed partial class VideoEditorWindow : Window
         _tick = (_, _) => FollowPlayhead();
         _ticker.Tick += _tick;
 
+        // The last surface to be counted, and the one with most to hold: a MediaPlayer,
+        // a decoded preview and the effects band. Its ratio is read the way every other
+        // window's is -- see LiveSurfaces, N/N is the framework's to release and only a
+        // number that stops falling is this code's fault.
+        LiveSurfaces.Shared.Watch("video editor", this);
+
         Closed += (_, _) => Teardown();
     }
 
@@ -449,6 +456,8 @@ public sealed partial class VideoEditorWindow : Window
     /// <summary>Reads the recording, sizes the window to it, and fills the controls.</summary>
     private async Task LoadAsync()
     {
+        var before = MemorySnapshot.Take();
+
         try
         {
             var file = await StorageFile.GetFileFromPathAsync(_path);
@@ -469,6 +478,15 @@ public sealed partial class VideoEditorWindow : Window
             PlaceOnScreen();
             DrawTimeline();
             _ticker.Start();
+
+            // What opening this costs, because most of it is a MediaPlayer's and the
+            // collector cannot see the size of that -- so the managed figure alone would
+            // report the largest window macshot opens as nearly free.
+            DiagnosticLog.Verbose(
+                $"video editor opened on {_sourceWidth}x{_sourceHeight}, {_duration:0.#}s at "
+                    + $"{FrameRate}fps{(_sourceHasAudio ? " with sound" : string.Empty)}, "
+                    + $"{Bytes(_sourceBytes)} on disk; "
+                    + MemorySnapshot.Take().Since(before));
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException
             or ArgumentException or NotSupportedException or COMException)
@@ -2494,6 +2512,8 @@ public sealed partial class VideoEditorWindow : Window
 
     private void Teardown()
     {
+        var before = MemorySnapshot.Take();
+
         RememberCaptionStyle();
         _ticker.Stop();
 
@@ -2509,6 +2529,13 @@ public sealed partial class VideoEditorWindow : Window
 
         _gif = null;
         GifView.Source = null;
+
+        // The pair either side of the disposal, rather than a count of what was let go:
+        // the player and the decoded preview are both native, so what they were worth
+        // only shows as private bytes. The managed half of this window survives until the
+        // collection CaptureController asks for once the window is gone, which is the
+        // line that follows this one in the log.
+        DiagnosticLog.Verbose($"video editor closed; {MemorySnapshot.Take().Since(before)}");
     }
 
     /// <summary>

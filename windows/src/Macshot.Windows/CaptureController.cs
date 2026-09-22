@@ -2754,17 +2754,20 @@ public sealed class CaptureController : IDisposable
     /// </summary>
     private void ShowVideoEditor(string path)
     {
-#if OFFLINE
-        VideoEditorWindow.Show(path, _settings);
-#else
         // Subscribed through the callback rather than after the call, because a second
         // "Open Video..." on a file already open hands back the window that is there —
-        // and subscribing to it twice would send the next export twice.
-        VideoEditorWindow.Show(
-            path,
-            _settings,
-            editor => editor.UploadRequested += (_, exported) => Post(() => _uploads.UploadFileAsync(exported)));
+        // and subscribing to it twice would collect twice and send the next export twice.
+        VideoEditorWindow.Show(path, _settings, editor =>
+        {
+            // The largest thing macshot ever has open, and closing it leaves the same
+            // shape of rubbish a finished capture does, in a process that then goes back
+            // to being a tray icon and never collects on its own. See CollectWhenIdle.
+            editor.Closed += (_, _) => CollectWhenIdle("the video editor");
+
+#if !OFFLINE
+            editor.UploadRequested += (_, exported) => Post(() => _uploads.UploadFileAsync(exported));
 #endif
+        });
     }
 
     /// <summary>Opens the picture on the clipboard in the editor.</summary>
