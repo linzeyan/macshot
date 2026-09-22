@@ -3,6 +3,35 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.16] - 2026-09-22
+
+### Fixed
+
+- **Closing the video editor now gives its memory back.** Closing it let go of the player
+  and the preview straight away, but the rest — tens of megabytes of working copies — sat
+  there until the next screenshot was taken, because macshot allocates nothing while it is
+  idle and so the cleanup it relies on never runs on its own. Measured on a test machine,
+  closing the editor now returns 38MB that used to stay for the rest of the session.
+
+- **A large recording could have stopped tidying its memory altogether.** The rule added in
+  0.8.15 that decides when tidying is worth doing was set from a measurement that turned out
+  to be on the small side: an ordinary recording taken after a screenshot in the same
+  session is already most of the way to the line where macshot would have stopped. The line
+  has been moved to five times the largest case ever measured.
+
+### Added
+
+- **The log now says why a recording captured nothing.** On some machines — virtual
+  desktops especially — Windows refuses when macshot asks it to start capturing the screen.
+  macshot fell back to copying the screen by hand, which works, but the refusal itself was
+  thrown away: nothing was left to distinguish it from a screen that simply never changed,
+  and the recording reported `0 frames` either way. The refusal is now written down with its
+  error code. The same is true of a recording whose sound would not start.
+
+- **The video editor writes down what it costs.** Opening and closing it are now in the log
+  with what the recording was and what the process weighed either side, which is what the
+  rest of macshot's windows have been doing since 0.8.14 and this one was not.
+
 ## [0.8.15] - 2026-09-21
 
 ### Fixed
