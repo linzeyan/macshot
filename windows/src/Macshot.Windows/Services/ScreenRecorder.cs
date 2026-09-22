@@ -353,7 +353,20 @@ public sealed class ScreenRecorder : IDisposable
             // pipeline first wants a frame. Starting sooner would only fill the queue
             // with desktop from before the recording began.
             frames.Start();
-            track?.Start();
+
+            try
+            {
+                track?.Start();
+            }
+            catch (Exception exception)
+            {
+                // Caught for the reason FrameStream.Start catches its own, and it is the
+                // same handler: nothing thrown from here reaches the recording. A
+                // recording that silently lost its sound is worth having; one that
+                // silently skipped the line below is not.
+                DiagnosticLog.Write($"The recording's audio would not start: {exception.Message}");
+            }
+
             args.Request.SetActualStartPosition(TimeSpan.Zero);
         };
 
@@ -448,11 +461,13 @@ public sealed class ScreenRecorder : IDisposable
         if (video.Kept == 0)
         {
             DiagnosticLog.Write(
-                frames.Arrivals == 0
-                    ? "the compositor never signalled a frame: nothing was wrong with collecting"
-                        + " them, there were none"
-                    : $"the compositor signalled {frames.Arrivals} times with nothing to collect:"
-                        + " the frames were announced and then were not there");
+                frames.NotStarted is { } refusal
+                    ? $"and the compositor was never asked: {refusal}"
+                    : frames.Arrivals == 0
+                        ? "the compositor never signalled a frame: nothing was wrong with collecting"
+                            + " them, there were none"
+                        : $"the compositor signalled {frames.Arrivals} times with nothing to collect:"
+                            + " the frames were announced and then were not there");
 
             DiagnosticLog.Write(
                 video.Retaken > 0
@@ -1972,10 +1987,38 @@ public sealed class ScreenRecorder : IDisposable
         /// <summary>Frames the rate did not call for.</summary>
         public int Dropped => _cadence.Dropped;
 
+        /// <summary>Why the capture session would not start, if it would not.</summary>
+        public string? NotStarted { get; private set; }
+
+        /// <remarks>
+        /// <para>
+        /// The MP4 path calls this from <c>MediaStreamSource.Starting</c>, which is a
+        /// media pipeline thread and not the one that built the session. That is why the
+        /// failure is caught rather than thrown: an exception out of a WinRT event
+        /// handler is returned to the native caller as an HRESULT and lost, and the
+        /// recording carries on being taken by hand with nothing saying why. A Windows 10
+        /// VDI reported <c>0 frames from 0 arrivals</c> for weeks that way, which reads
+        /// as a compositor that never signalled and was a session that never started.
+        /// </para>
+        /// <para>
+        /// The HRESULT is written out as a number because the message arrives in the
+        /// machine's own language, and the number is the half that can be looked up.
+        /// </para>
+        /// </remarks>
         public void Start()
         {
             _clock.Restart();
-            _session.StartCapture();
+
+            try
+            {
+                _session.StartCapture();
+            }
+            catch (Exception exception)
+            {
+                NotStarted = $"{exception.GetType().Name} 0x{exception.HResult:X8}: {exception.Message}";
+                DiagnosticLog.Write($"The capture session would not start: {NotStarted}");
+                return;
+            }
 
             // After the call, not before it. This line is read when a recording got no
             // frames at all, which is exactly when "did our own code even run" is the
