@@ -35,23 +35,25 @@ public readonly record struct MemorySnapshot(
 
     /// <summary>Above this much alive, compacting costs more than it returns.</summary>
     /// <remarks>
-    /// Set from the measured side of a gap an order of magnitude wide, not from theory.
-    /// Everything that has ever been worth compacting was tens of megabytes alive: a
-    /// field machine's captures 16.9-18MB and its recordings 4.3-5.2MB, the VM's captures
-    /// 45.5MB, and the heaviest case anyone has produced — a minute of full-screen
-    /// recording on the VM, a process peaking at 625MB — was 43MB alive by the time this
-    /// was asked, because nearly all of that peak is not the managed heap.
+    /// Set from the measured side of a gap an order of magnitude wide, not from theory,
+    /// and it has already had to move once. Ordinary use reaches further up than the
+    /// first measurements suggested: a field machine's captures arrive with 16.9-18MB
+    /// alive and its recordings with 4.3-5.2MB, and a minute of full-screen recording on
+    /// the VM — a process peaking at 625MB — with 43MB, but a region recording taken
+    /// after a screenshot in the same session arrives with <em>88-105MB</em>. A ceiling
+    /// at 128MB would have stopped compacting on that, which is the ordinary case and
+    /// exactly the one compaction is for.
     ///
     /// The one run where compacting was ruinous, a recording that settled at 2691MB with
     /// it against 845-994MB without, was a heap hundreds of megabytes large and is a heap
     /// this app no longer builds: it predates the frame pool, which took that same
     /// measurement to 175MB by stopping the per-frame large-object churn that fragmented
-    /// it. So this is a guard against a shape that has been designed out rather than a
-    /// line anything currently walks near — which is why it sits at a round number, and
-    /// why <see cref="Since"/> prints the figure it was compared against, so the next
-    /// report can move it with evidence rather than with taste.
+    /// it. So this guards a shape that has been designed out, and sits five times above
+    /// the heaviest ordinary heap ever measured and well below the one that misbehaved.
+    /// There is no evidence between the two — <see cref="Since"/> prints the figure this
+    /// was compared against precisely so that the next report can move it again.
     /// </remarks>
-    private const long CompactionCeiling = 128L * 1024 * 1024;
+    private const long CompactionCeiling = 512L * 1024 * 1024;
 
     /// <summary>
     /// Whether a collection taken at this moment should compact the large object heap.

@@ -69,6 +69,18 @@ public sealed class MemorySnapshotTests
     }
 
     [TestMethod]
+    public void IsWorthCompacting_SaysYesToARecordingTakenAfterAScreenshotInTheSameSession()
+    {
+        // The case that moved the ceiling. Measured on the VM, a region recording in a
+        // session that had already taken a screenshot arrives here with 88-105MB alive,
+        // an order of magnitude above a recording measured on its own — and the first
+        // ceiling, set from that lighter run, would have declined the ordinary case.
+        var afterAScreenshot = new MemorySnapshot(0, 105 * Mb, 0, 0, 0, AfterACollection: true);
+
+        Assert.IsTrue(afterAScreenshot.IsWorthCompacting);
+    }
+
+    [TestMethod]
     public void IsWorthCompacting_SaysNoToTheHeapThatMadeCompactingRuinous()
     {
         // A full-screen recording that keeps its frames settled at 845-994MB without
