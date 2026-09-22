@@ -1,3 +1,4 @@
+using Macshot.Windows.Core.Capture;
 using Windows.Graphics.Imaging;
 using Windows.Media.Editing;
 using Windows.Media.MediaProperties;
@@ -187,6 +188,15 @@ internal static class TestVideo
         return best;
     }
 
+    /// <remarks>
+    /// The profile says what the audio is, rather than taking what a stock one came with,
+    /// for the reason <see cref="VideoEffectsCompositor"/>'s mux says it: the audio half of
+    /// a profile from <c>CreateMp4</c> is left unresolved, and a machine that does not fill
+    /// it in renders a file the render calls a success and nothing can read afterwards. The
+    /// product learned that once; this fixture, which composes with a background track in
+    /// exactly the same way, did not — and only the three tests whose source carries sound
+    /// failed, on CI and never on a VM that happens to resolve it.
+    /// </remarks>
     private static async Task<StorageFile> RenderAsync(
         StorageFolder folder, MediaComposition composition, IReadOnlyList<StorageFile> images)
     {
@@ -195,13 +205,30 @@ internal static class TestVideo
             var file = await folder.CreateFileAsync(
                 "macshot-source.mp4", CreationCollisionOption.GenerateUniqueName);
 
+            var profile = MediaEncodingProfile.CreateMp4(VideoEncodingQuality.Vga);
+            if (composition.BackgroundAudioTracks.Count > 0)
+            {
+                profile.Audio = AudioEncodingProperties.CreateAac(
+                    (uint)AudioPlan.SampleRate, (uint)AudioPlan.Channels, AudioPlan.Bitrate);
+            }
+
             var result = await composition.RenderToFileAsync(
-                file,
-                MediaTrimmingPreference.Precise,
-                MediaEncodingProfile.CreateMp4(VideoEncodingQuality.Vga));
+                file, MediaTrimmingPreference.Precise, profile);
 
             Assert.AreEqual(
                 TranscodeFailureReason.None, result, "the test video could not be rendered");
+
+            // Read back before anything is measured against it. A fixture that rendered
+            // something other than what it was asked for has to say so here: it showed up
+            // as three unrelated-looking failures three steps downstream — a duration that
+            // was a second out and a thumbnail that threw — and none of them named the
+            // file that was actually wrong.
+            var written = await MediaClip.CreateFromFileAsync(file);
+            Assert.AreEqual(
+                composition.Duration.TotalSeconds,
+                written.OriginalDuration.TotalSeconds,
+                0.2,
+                "the test video did not come back as long as the clips that went into it");
 
             return file;
         }
