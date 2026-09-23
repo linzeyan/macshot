@@ -57,6 +57,8 @@
 "Framed in {0}" = "Incorniciato in {0}";
 "Freehand smoothing" = "Arrotondamento a mano libera";
 "GIF:" = "GIF:";
+"GitHub answered with an error ({0})." = "GitHub ha risposto con un errore ({0}).";
+"GitHub did not answer within {0} seconds." = "GitHub non ha risposto entro {0} secondi.";
 "Google Drive not signed in" = "Accesso a Google Drive non effettuato";
 "Hide {0}" = "Nascondi {0}";
 "History cleared." = "Cronologia cancellata.";
@@ -85,6 +87,7 @@
 "macshot could not open '{0}': {1}" = "macshot non è riuscito ad aprire «{0}»: {1}";
 "macshot could not open that image: {0}" = "macshot non è riuscito ad aprire l'immagine: {0}";
 "macshot could not open that recording: {0}" = "macshot non è riuscito ad aprire la registrazione: {0}";
+"macshot could not reach GitHub." = "macshot non è riuscito a raggiungere GitHub.";
 "macshot has no capture called '{0}' in its history." = "macshot non ha nessuna acquisizione chiamata «{0}» nella cronologia.";
 "macshot is already running. Its icon is in the notification area, at the right-hand end of the taskbar." = "macshot è già in esecuzione. La sua icona è nell'area di notifica, all'estremità destra della barra delle applicazioni.";
 "macshot was installed from a package, so Windows installs its updates." = "macshot è stato installato da un pacchetto, quindi Windows installa i suoi aggiornamenti.";

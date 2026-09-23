@@ -1783,14 +1783,42 @@ public sealed class CaptureController : IDisposable
             // made is not news, and the log is where it belongs.
             DiagnosticLog.Write($"The update check failed: {exception.Message}");
 
-            if (asked)
-            {
-                FailureReport.Notice(
+            // The page as well as the reason: a check that cannot get through is often a
+            // network that lets a browser through and not an app — a proxy, a filter — and
+            // the release is one click from there either way.
+            if (asked
+                && Alert.Show(
                     _messageWindow.Handle,
-                    L("Could not check for updates.") + Environment.NewLine + exception.Message);
+                    L("Could not check for updates."),
+                    WhyGitHubFailed(exception) + Environment.NewLine + Environment.NewLine
+                        + L("Open the download page?"),
+                    Alert.Icon.Error,
+                    L("OK"),
+                    L("Cancel")) == 0)
+            {
+                OpenWithShell(UpdateService.ReleasesPage);
             }
         }
     }
+
+    /// <summary>
+    /// Why a request to GitHub failed, in the user's language, or the exception's own
+    /// message when it is not a network failure.
+    /// </summary>
+    /// <remarks>
+    /// A network exception's message is English from .NET or the system's language from
+    /// the socket layer, and in neither case says anything a user can act on — "A task was
+    /// canceled." was the whole of one report. What they can act on is which of the three
+    /// it was: GitHub slow, GitHub unreachable, or GitHub saying no. The exception's own
+    /// text still goes to the log, where it is the useful half.
+    /// </remarks>
+    private static string WhyGitHubFailed(Exception exception) => exception switch
+    {
+        TimeoutException => L("GitHub did not answer within {0} seconds.", UpdateService.Patience.TotalSeconds),
+        HttpRequestException { StatusCode: { } status } => L("GitHub answered with an error ({0}).", (int)status),
+        HttpRequestException => L("macshot could not reach GitHub."),
+        _ => exception.Message,
+    };
 
     /// <summary>
     /// What to say instead of offering the install, when this installation cannot replace
@@ -1873,7 +1901,7 @@ public sealed class CaptureController : IDisposable
             DiagnosticLog.Write($"The update to {tag} was not installed: {exception.Message}");
             FailureReport.Notice(
                 _messageWindow.Handle,
-                L("The update could not be installed.") + Environment.NewLine + exception.Message);
+                L("The update could not be installed.") + Environment.NewLine + WhyGitHubFailed(exception));
         }
     }
 

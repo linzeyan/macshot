@@ -57,6 +57,8 @@
 "Framed in {0}" = "Рамка: {0}";
 "Freehand smoothing" = "Сглаживание от руки";
 "GIF:" = "GIF:";
+"GitHub answered with an error ({0})." = "GitHub ответил ошибкой ({0}).";
+"GitHub did not answer within {0} seconds." = "GitHub не ответил за {0} секунд.";
 "Google Drive not signed in" = "Вход в Google Диск не выполнен";
 "Hide {0}" = "Скрыть «{0}»";
 "History cleared." = "История очищена.";
@@ -85,6 +87,7 @@
 "macshot could not open '{0}': {1}" = "macshot не смог открыть «{0}»: {1}";
 "macshot could not open that image: {0}" = "macshot не смог открыть это изображение: {0}";
 "macshot could not open that recording: {0}" = "macshot не смог открыть эту запись: {0}";
+"macshot could not reach GitHub." = "macshot не смог подключиться к GitHub.";
 "macshot has no capture called '{0}' in its history." = "В истории macshot нет снимка с именем «{0}».";
 "macshot is already running. Its icon is in the notification area, at the right-hand end of the taskbar." = "macshot уже запущен. Его значок находится в области уведомлений, у правого края панели задач.";
 "macshot was installed from a package, so Windows installs its updates." = "macshot установлен из пакета, поэтому обновления устанавливает Windows.";

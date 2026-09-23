@@ -57,6 +57,8 @@
 "Framed in {0}" = "已套用外框：{0}";
 "Freehand smoothing" = "手繪平滑度";
 "GIF:" = "GIF：";
+"GitHub answered with an error ({0})." = "GitHub 回應了錯誤（{0}）。";
+"GitHub did not answer within {0} seconds." = "GitHub 在 {0} 秒內沒有回應。";
 "Google Drive not signed in" = "尚未登入 Google 雲端硬碟";
 "Hide {0}" = "隱藏{0}";
 "History cleared." = "已清除記錄。";
@@ -85,6 +87,7 @@
 "macshot could not open '{0}': {1}" = "macshot 無法打開「{0}」：{1}";
 "macshot could not open that image: {0}" = "macshot 無法打開該影像：{0}";
 "macshot could not open that recording: {0}" = "macshot 無法打開該錄製：{0}";
+"macshot could not reach GitHub." = "macshot 無法連線 GitHub。";
 "macshot has no capture called '{0}' in its history." = "macshot 的歷史記錄中沒有名為「{0}」的擷取。";
 "macshot is already running. Its icon is in the notification area, at the right-hand end of the taskbar." = "macshot 已在執行。它的圖像在工作列右端的通知區域。";
 "macshot was installed from a package, so Windows installs its updates." = "macshot 是從封裝安裝的，更新由 Windows 安裝。";

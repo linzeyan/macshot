@@ -47,7 +47,7 @@ internal static class UpdateService
     /// How long the check may take before it is given up on. A menu item that has been
     /// pressed and says nothing is one that gets pressed again.
     /// </summary>
-    private static readonly TimeSpan Patience = TimeSpan.FromSeconds(15);
+    internal static readonly TimeSpan Patience = TimeSpan.FromSeconds(15);
 
     /// <summary>How much of a download is moved at a time.</summary>
     private const int ChunkBytes = 64 * 1024;
@@ -93,9 +93,17 @@ internal static class UpdateService
     /// The release this build should be offered, or null when there is none.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Throws what the request threw. The caller decides whether a failed check is worth
     /// a message box — it is when the user asked for the check, and it is not when a timer
     /// asked for it on a machine that happens to be on a train.
+    /// </para>
+    /// <para>
+    /// Except the deadline, which is thrown as a <see cref="TimeoutException"/>. It arrives
+    /// as a cancellation, whose message is "A task was canceled." — and that is what a
+    /// user who pressed Check for Updates on a slow network was shown, in English, under a
+    /// translated heading, with nothing in it saying that GitHub had simply not answered.
+    /// </para>
     /// </remarks>
     public static async Task<ReleaseListing?> FindUpdateAsync(
         bool beta,
@@ -104,8 +112,17 @@ internal static class UpdateService
         using var deadline = CancellationTokenSource.CreateLinkedTokenSource(token);
         deadline.CancelAfter(Patience);
 
-        var json = await Client.GetStringAsync(new Uri(ReleasesUrl), deadline.Token)
-            .ConfigureAwait(false);
+        string json;
+        try
+        {
+            json = await Client.GetStringAsync(new Uri(ReleasesUrl), deadline.Token)
+                .ConfigureAwait(false);
+        }
+        catch (OperationCanceledException exception) when (!token.IsCancellationRequested)
+        {
+            throw new TimeoutException(
+                $"GitHub did not answer within {Patience.TotalSeconds:0} seconds.", exception);
+        }
 
         return ReleaseCheck.Offer(
             ReleaseCheck.Parse(json),

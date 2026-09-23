@@ -57,6 +57,8 @@
 "Framed in {0}" = "フレーム：{0}";
 "Freehand smoothing" = "フリーハンドの滑らかさ";
 "GIF:" = "GIF:";
+"GitHub answered with an error ({0})." = "GitHub がエラーを返しました（{0}）。";
+"GitHub did not answer within {0} seconds." = "GitHub から {0} 秒以内に応答がありませんでした。";
 "Google Drive not signed in" = "Google ドライブにサインインしていません";
 "Hide {0}" = "{0}を非表示";
 "History cleared." = "履歴を消去しました。";
@@ -85,6 +87,7 @@
 "macshot could not open '{0}': {1}" = "macshot は「{0}」を開けませんでした：{1}";
 "macshot could not open that image: {0}" = "macshot はその画像を開けませんでした：{0}";
 "macshot could not open that recording: {0}" = "macshot はその収録を開けませんでした：{0}";
+"macshot could not reach GitHub." = "macshot は GitHub に接続できませんでした。";
 "macshot has no capture called '{0}' in its history." = "macshot の履歴に「{0}」というキャプチャはありません。";
 "macshot is already running. Its icon is in the notification area, at the right-hand end of the taskbar." = "macshot はすでに実行中です。アイコンはタスクバー右端の通知領域にあります。";
 "macshot was installed from a package, so Windows installs its updates." = "macshot はパッケージからインストールされているため、更新は Windows が行います。";

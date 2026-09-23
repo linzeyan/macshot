@@ -57,6 +57,8 @@
 "Framed in {0}" = "프레임: {0}";
 "Freehand smoothing" = "자유 곡선 다듬기";
 "GIF:" = "GIF:";
+"GitHub answered with an error ({0})." = "GitHub에서 오류를 반환했습니다({0}).";
+"GitHub did not answer within {0} seconds." = "GitHub가 {0}초 안에 응답하지 않았습니다.";
 "Google Drive not signed in" = "Google 드라이브에 로그인하지 않았습니다";
 "Hide {0}" = "{0} 숨기기";
 "History cleared." = "기록을 지웠습니다.";
@@ -85,6 +87,7 @@
 "macshot could not open '{0}': {1}" = "macshot이 '{0}'을(를) 열 수 없습니다: {1}";
 "macshot could not open that image: {0}" = "macshot이 해당 이미지를 열 수 없습니다: {0}";
 "macshot could not open that recording: {0}" = "macshot이 해당 녹화를 열 수 없습니다: {0}";
+"macshot could not reach GitHub." = "macshot이 GitHub에 연결할 수 없습니다.";
 "macshot has no capture called '{0}' in its history." = "macshot 기록에 '{0}'이라는 캡처가 없습니다.";
 "macshot is already running. Its icon is in the notification area, at the right-hand end of the taskbar." = "macshot이 이미 실행 중입니다. 아이콘은 작업 표시줄 오른쪽 끝의 알림 영역에 있습니다.";
 "macshot was installed from a package, so Windows installs its updates." = "macshot은 패키지로 설치되어 업데이트는 Windows가 설치합니다.";
