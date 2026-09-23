@@ -3,6 +3,35 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.17] - 2026-09-23
+
+### Fixed
+
+- **Recording on some Windows 10 machines no longer falls back to copying the screen by
+  hand.** The reason 0.8.16 started writing down arrived: on those machines Windows refused
+  to start capturing the screen on every recording, with error `0x8001010E`, because macshot
+  asked from a different thread than the one that had set the capture up. Windows 11 accepts
+  that and Windows 10 does not. Every recording there was made from copies of the screen
+  taken by hand, about twenty a second whatever frame rate was chosen. macshot now asks from
+  the right thread.
+
+- **Check for Updates now says what went wrong, in your language.** When GitHub could not
+  be reached, the message was the raw error — "A task was canceled." in English, under a
+  translated heading. It now says whether GitHub did not answer in time, could not be
+  reached, or answered with an error, and offers to open the download page. A failed update
+  download says the same.
+
+### Changed
+
+- **Updates download only what changed.** An update used to download the whole 77MB
+  release, nearly all of which is the .NET runtime and the Windows App SDK, and those do not
+  change from one release to the next: from 0.8.15 to 0.8.16, 9 of 521 files differed.
+  macshot now fetches just those files out of the release and copies the rest from the
+  copy it is already running from — 3MB instead of 77MB, which on the connection it was
+  measured on took 34 seconds instead of three and a half minutes. If the download cannot
+  be done that way, it downloads the whole release as before. This takes effect from the
+  update *after* this one, since this release is downloaded by the version before it.
+
 ## [0.8.16] - 2026-09-22
 
 ### Fixed
