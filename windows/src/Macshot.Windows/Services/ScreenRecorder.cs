@@ -6,6 +6,7 @@ using System.Threading.Channels;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
 using Macshot.Windows.Core.Output;
+using Microsoft.UI.Dispatching;
 
 // Imported rather than qualified for the same reason as in GraphicsCaptureService:
 // inside namespace Macshot.Windows the name "Windows" binds to Macshot.Windows.
@@ -1926,6 +1927,12 @@ public sealed class ScreenRecorder : IDisposable
         /// <summary>Written from the UI thread, read on the compositor's.</summary>
         private volatile bool _paused;
 
+        /// <summary>
+        /// The thread the session was built on — the one thread every Windows lets it be
+        /// started from. Null when it was built off any dispatcher. See Start.
+        /// </summary>
+        private readonly DispatcherQueue? _home = DispatcherQueue.GetForCurrentThread();
+
         public FrameStream(
             IDirect3DDevice device,
             GraphicsCaptureItem item,
@@ -1993,19 +2000,36 @@ public sealed class ScreenRecorder : IDisposable
         /// <remarks>
         /// <para>
         /// The MP4 path calls this from <c>MediaStreamSource.Starting</c>, which is a
-        /// media pipeline thread and not the one that built the session. That is why the
-        /// failure is caught rather than thrown: an exception out of a WinRT event
-        /// handler is returned to the native caller as an HRESULT and lost, and the
-        /// recording carries on being taken by hand with nothing saying why. A Windows 10
-        /// VDI reported <c>0 frames from 0 arrivals</c> for weeks that way, which reads
-        /// as a compositor that never signalled and was a session that never started.
+        /// media pipeline thread and not the one that built the session — and a
+        /// <c>GraphicsCaptureSession</c> is not agile on every Windows. On Windows 11 the
+        /// call works from anywhere; on the Windows 10 VDI that reported
+        /// <c>0 frames from 0 arrivals</c> for weeks it answered
+        /// <c>RPC_E_WRONG_THREAD</c>, every time, and every one of those recordings was
+        /// taken by hand. So the start is sent back to the thread the session was built
+        /// on, which is the UI thread and idle here: it is awaiting the transcode.
         /// </para>
         /// <para>
-        /// The HRESULT is written out as a number because the message arrives in the
+        /// The failure is still caught rather than thrown: an exception out of a WinRT
+        /// event handler is returned to the native caller as an HRESULT and lost, and the
+        /// recording carries on being taken by hand with nothing saying why. That is how
+        /// the fault above read as a compositor that never signalled for as long as it
+        /// did. The HRESULT is written out as a number because the message arrives in the
         /// machine's own language, and the number is the half that can be looked up.
         /// </para>
         /// </remarks>
         public void Start()
+        {
+            // Falls through when the queue will not take it, which only happens as the app
+            // quits; the attempt below then fails and says so rather than doing nothing.
+            if (_home is { HasThreadAccess: false } home && home.TryEnqueue(StartHere))
+            {
+                return;
+            }
+
+            StartHere();
+        }
+
+        private void StartHere()
         {
             _clock.Restart();
 

@@ -501,15 +501,26 @@ start the macOS pipeline on `main`, and vice versa.
   compositor's own frames in the same file, 174 of 200 consecutive frame differences were
   exactly zero.
 
-  Two things about that fallback are still unmeasured **anywhere but a Win11 VM**, because
-  the VM's compositor works and its pointer never reaches the overlay: whether GDI copies a
-  VDI's screen at all, and the window path, which cannot be started without snapping a
-  window by hand.
+  GDI does copy a VDI's screen: that machine's log from 2026-09-23 has 1870 frames taken by
+  hand over 96 seconds and 2996 over 146, about twenty a second. The window path is still
+  unmeasured **anywhere but a Win11 VM**, because it cannot be started without snapping a
+  window by hand and the VM's pointer never reaches the overlay.
 - **`0 frames, 0 dropped` used to be two faults wearing one face.** `OnFrameArrived`
   returns silently when `TryGetNextFrame()` gives nothing, so a compositor that never
   signalled and one that signalled with nothing to collect logged the same line. The
   summary now reads `N frames from M arrivals (K empty)`, and a recording that kept nothing
   says which of the two it was.
+- **On that Windows 10 VDI it was neither: the session was never started.** Once the
+  refusal was logged it read `The capture session would not start: COMException 0x8001010E`
+  — `RPC_E_WRONG_THREAD`, on every recording. The MP4 path started the session from
+  `MediaStreamSource.Starting`, a media pipeline thread, and a `GraphicsCaptureSession` built
+  on the UI thread is not agile there; Windows 11 accepts the call from anywhere, which is why
+  the VM never showed it. The same class of fault as the retake's `item.Size` above, on a
+  different object. `FrameStream.Start` now sends the call back to the session's own thread.
+  **Unconfirmed on the machine itself** — the next log from it should say `capture started`
+  and a nonzero `frames from … arrivals`. What runs after that has never run there either:
+  the pipeline thread reading each `Direct3D11CaptureFrame`, from a pool created
+  free-threaded. That is the next assumption of the same kind.
 - The MSIX installs, launches and captures — measured on the VM with a test certificate.
   What used to stop it was never the container: the capture path called an API a packaged
   app may only use with the `graphicsCaptureProgrammatic` capability, and the manifest
