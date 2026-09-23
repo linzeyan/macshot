@@ -224,6 +224,19 @@ internal static class UpdateService
         }
     }
 
+    /// <summary>
+    /// Writes <paramref name="asset"/>'s build into <paramref name="payload"/>, fetching
+    /// only the files that differ from <paramref name="installed"/>. See
+    /// <see cref="UpdateDelta"/>.
+    /// </summary>
+    public static Task<UpdateDeltaResult> FetchChangedAsync(
+        ReleaseAsset asset,
+        string installed,
+        string payload,
+        IProgress<double>? progress,
+        CancellationToken token) =>
+        UpdateDelta.StageAsync(Client, new Uri(asset.Url), installed, payload, progress, token);
+
     private static HttpClient CreateClient()
     {
         var client = new HttpClient();

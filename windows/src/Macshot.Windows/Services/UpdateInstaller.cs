@@ -72,10 +72,19 @@ internal static class UpdateInstaller
     /// new build.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Anything already staged for this release is thrown away first. A half-finished
     /// attempt — the app was quit mid-download, the machine lost power — would otherwise
     /// be unpacked over and produce a folder that is partly one version and partly
     /// another, which is the one outcome worse than not updating.
+    /// </para>
+    /// <para>
+    /// Only what changed is downloaded, and the rest is copied from this installation:
+    /// 3MB of a 77MB release, measured from 0.8.15 to 0.8.16. Any failure of that falls
+    /// back to downloading the whole zip, as every update did before — this is the one
+    /// part of macshot that cannot be allowed to break itself, because a broken updater
+    /// cannot deliver its own fix.
+    /// </para>
     /// </remarks>
     public static async Task<string> StageAsync(
         string tag,
@@ -89,15 +98,39 @@ internal static class UpdateInstaller
         Remove(folder);
         Directory.CreateDirectory(folder);
 
-        var archive = UpdateStaging.Archive(local, tag);
-        await UpdateService.DownloadAsync(asset, archive, progress, token).ConfigureAwait(false);
-
         var payload = UpdateStaging.Payload(local, tag);
-        ZipFile.ExtractToDirectory(archive, payload);
 
-        // The zip is a hundred and fifty megabytes and has done its job. Leaving it would
-        // double what an update costs on disk until the next start swept it up.
-        File.Delete(archive);
+        try
+        {
+            var clock = Stopwatch.StartNew();
+            var delta = await UpdateService
+                .FetchChangedAsync(asset, InstallDirectory, payload, progress, token)
+                .ConfigureAwait(false);
+
+            DiagnosticLog.Write(
+                $"fetched {delta.Fetched} of {delta.Fetched + delta.Reused} files of {tag},"
+                    + $" {Megabytes(delta.FetchedBytes)} of {Megabytes(delta.ArchiveBytes)}"
+                    + $" in {delta.Requests} requests and {clock.Elapsed.TotalSeconds:0.0}s;"
+                    + " the rest were already installed");
+        }
+        catch (Exception exception) when (!token.IsCancellationRequested)
+        {
+            DiagnosticLog.Write(
+                $"Could not fetch only what {tag} changed, so downloading all of it:"
+                    + $" {exception.GetType().Name}: {exception.Message}");
+
+            Remove(payload);
+
+            var archive = UpdateStaging.Archive(local, tag);
+            await UpdateService.DownloadAsync(asset, archive, progress, token).ConfigureAwait(false);
+
+            // Over whatever the attempt above left, should it not have been removable.
+            ZipFile.ExtractToDirectory(archive, payload, overwriteFiles: true);
+
+            // The zip is a hundred and fifty megabytes and has done its job. Leaving it would
+            // double what an update costs on disk until the next start swept it up.
+            File.Delete(archive);
+        }
 
         var executable = Path.Combine(payload, Path.GetFileName(Environment.ProcessPath) ?? string.Empty);
         if (!File.Exists(executable))
@@ -158,6 +191,8 @@ internal static class UpdateInstaller
         var local = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
         Remove(UpdateStaging.Root(local));
     }
+
+    private static string Megabytes(long bytes) => $"{bytes / (1024.0 * 1024.0):0.#}MB";
 
     private static void Remove(string folder)
     {

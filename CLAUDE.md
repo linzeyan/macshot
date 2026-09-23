@@ -383,6 +383,15 @@ build. Changing the naming scheme without changing that method breaks the update
 everyone already running the app. `EveryNameTheReleaseWorkflowAttachesIsOfferedToExactlyOneVariant`
 pins the eight names the workflow produces; a rename there has to be made here too.
 
+**So is the zip's shape.** An update does not download the zip: `UpdateDelta` reads its
+directory by byte range and fetches only the entries whose CRC-32 differs from the
+installed file, copying the rest from the installation — 3MB of 77MB from 0.8.15 to
+0.8.16, measured against GitHub. That works because the zip's layout is the installed
+folder's and nearly every file in it is byte-identical from one release to the next.
+Anything that makes every file differ — a single-file publish, trimming — quietly turns
+every update back into the full 77MB; anything that breaks it outright, such as a
+compression method `ZipArchive` cannot read, falls back to exactly that.
+
 ### The MSIX, and signing it
 
 Each matrix leg publishes once. `windows/tools/pack-msix.ps1` packs that same directory,
