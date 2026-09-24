@@ -47,11 +47,20 @@ internal static class TestExport
     }
 
     /// <summary>A scratch folder of this run's own, deleted with everything in it.</summary>
+    /// <remarks>
+    /// A name never used before, for the reason the compositor's scratch files have one:
+    /// the media stack answers a reused path from the file that used to be there while any
+    /// clip that saw it is uncollected. <c>GenerateUniqueName</c> handed every test the
+    /// folder the last one had just deleted, and so the same path for every file inside —
+    /// on CI a test intermittently measured the one before it, as a video a second too long
+    /// or a thumbnail that threw; with every clip held alive on the VM, every fixture came
+    /// back as long as the first one.
+    /// </remarks>
     public static async Task<StorageFolder> ScratchAsync()
     {
         var temp = await StorageFolder.GetFolderFromPathAsync(Path.GetTempPath());
 
         return await temp.CreateFolderAsync(
-            "macshot-export-tests", CreationCollisionOption.GenerateUniqueName);
+            $"macshot-export-tests-{Guid.NewGuid():N}", CreationCollisionOption.FailIfExists);
     }
 }

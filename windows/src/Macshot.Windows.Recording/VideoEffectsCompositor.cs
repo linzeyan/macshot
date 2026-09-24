@@ -182,7 +182,7 @@ public static class VideoEffectsCompositor
             var frames = destination;
             if (carriesAudio)
             {
-                frames = await ScratchFileAsync("macshot-effects.mp4");
+                frames = await ScratchFileAsync("effects.mp4");
                 scratch.Add(frames);
             }
 
@@ -256,11 +256,22 @@ public static class VideoEffectsCompositor
         }
     }
 
+    /// <remarks>
+    /// A name never used before, rather than a fixed one made unique only against what is
+    /// on disk. A <see cref="MediaClip"/> or <see cref="BackgroundAudioTrack"/> opened on a
+    /// path is answered — length, streams — from the file that used to be there, for as
+    /// long as any clip that saw that file is still waiting for the collector. The fixed
+    /// name came back free after every export, so an export with sound could be muxed
+    /// against the previous one's frames: measured on the VM with the earlier clip kept
+    /// alive, a cut export threw 0xC00DA7FC. Whether it bit depended on when the collector
+    /// had last run, which is why it read for days as a flaky test on CI.
+    /// </remarks>
     private static async Task<StorageFile> ScratchFileAsync(string name)
     {
         var folder = await StorageFolder.GetFolderFromPathAsync(Path.GetTempPath());
 
-        return await folder.CreateFileAsync(name, CreationCollisionOption.GenerateUniqueName);
+        return await folder.CreateFileAsync(
+            $"macshot-{Guid.NewGuid():N}-{name}", CreationCollisionOption.FailIfExists);
     }
 
     /// <summary>Writes every frame of the export, with no audio track at all.</summary>
@@ -623,7 +634,7 @@ public static class VideoEffectsCompositor
         StorageFile source,
         List<StorageFile> scratch)
     {
-        var extracted = await ScratchFileAsync("macshot-source.wav");
+        var extracted = await ScratchFileAsync("source.wav");
         scratch.Add(extracted);
 
         var profile = MediaEncodingProfile.CreateWav(AudioEncodingQuality.High);
@@ -698,7 +709,7 @@ public static class VideoEffectsCompositor
             return null;
         }
 
-        var retimed = await ScratchFileAsync("macshot-retimed.wav");
+        var retimed = await ScratchFileAsync("retimed.wav");
         scratch.Add(retimed);
 
         // Off the UI thread: this is a straight memcpy loop over the whole track, and on
