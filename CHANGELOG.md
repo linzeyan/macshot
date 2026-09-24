@@ -3,9 +3,18 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
-## [0.8.18] - 2026-09-24
+## [0.8.19] - 2026-09-24
+
+0.8.18 was tagged but never released, so its fix is listed here with this one.
 
 ### Fixed
+
+- **Exporting a recording with sound no longer fails, or comes out the wrong length, the
+  second time.** With a zoom, a censor, a caption, a speed change or a freeze on the effects
+  band, the export puts the recording's sound back in a second pass through a scratch file
+  that had the same name on every export — and Windows could go on describing that file as
+  it had been the time before. A later export in the same session could stop with an error,
+  or come out as long as the previous one. Each export now has scratch files of its own.
 
 - **Recording part of the screen no longer puts a yellow border round the whole display.**
   Windows draws that border round anything being captured, and for a screen or region
