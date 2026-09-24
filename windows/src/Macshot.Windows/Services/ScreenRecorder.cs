@@ -158,7 +158,7 @@ public sealed class ScreenRecorder : IDisposable
     /// Which sounds to record. Ignored for GIF, which has nowhere to put them — as it
     /// is on macOS.
     /// </param>
-    public Task<RecordingResult> RecordDisplayAsync(
+    public async Task<RecordingResult> RecordDisplayAsync(
         nint monitorHandle,
         string path,
         RecordingFormat format,
@@ -168,6 +168,15 @@ public sealed class ScreenRecorder : IDisposable
         RecordingAudio audio = default)
     {
         ObjectDisposedException.ThrowIf(_disposed, this);
+
+        // Windows draws a yellow border round whatever a session captures, and for a display
+        // that is the whole screen however small the region being recorded. Where it cannot
+        // be switched off — all of Windows 10, and a Windows 11 whose privacy settings say
+        // no — no session is opened: every frame is a screen copy, the path a recording the
+        // compositor starves already takes, and on the Windows 10 VDI the border was reported
+        // from that path ran at twenty frames a second. Asked before the item is opened so
+        // that nothing is carried across the await.
+        var copyScreen = !await GraphicsCaptureService.MayHideBorderAsync();
 
         var item = GraphicsCaptureService.OpenDisplay(monitorHandle);
 
@@ -190,23 +199,30 @@ public sealed class ScreenRecorder : IDisposable
         // One each, rather than one shared: the MP4 path takes its frame straight into the
         // buffer the encoder will read and gives that buffer back afterwards, and a GIF
         // frame is pixels the recording keeps. See ScreenCopyInto.
+        //
+        // Off the thread that asks, so that a copy runs while the recording waits out its
+        // interval rather than after it. That matters most where the copies are the whole
+        // recording: measured on the VM, a 600x400 region with no session was 22.8 frames a
+        // second this way against 15.0 taken inline, on three buffers against four.
         return format == RecordingFormat.Gif
-            ? RecordGifAsync(
+            ? await RecordGifAsync(
                 item,
-                () => Task.FromResult(ScreenCopy(monitorHandle, size, crop)),
+                () => Task.Run(() => ScreenCopy(monitorHandle, size, crop)),
                 path,
                 crop,
                 null,
                 frameRate ?? GifRecordingPlan.DefaultFrameRate,
+                copyScreen,
                 cancellation)
-            : RecordMp4Async(
+            : await RecordMp4Async(
                 item,
-                buffers => Task.FromResult(ScreenCopyInto(buffers, monitorHandle, size, crop)),
+                buffers => Task.Run(() => ScreenCopyInto(buffers, monitorHandle, size, crop)),
                 path,
                 crop,
                 null,
                 frameRate ?? RecordingPlan.DefaultFrameRate,
                 audio,
+                copyScreen,
                 cancellation);
     }
 
@@ -274,8 +290,20 @@ public sealed class ScreenRecorder : IDisposable
 
         // No crop: a window recording is trimmed by follow, which is the window's own
         // rectangle and moves with it, rather than by a fixed one cut out of a display.
+        //
+        // Never a copy of the screen, even where the border cannot be switched off, for the
+        // reason above. There the border is round the window being recorded, which is at
+        // least round the right thing.
         return format == RecordingFormat.Gif
-            ? RecordGifAsync(item, byHand, path, null, follow, frameRate ?? GifRecordingPlan.DefaultFrameRate, cancellation)
+            ? RecordGifAsync(
+                item,
+                byHand,
+                path,
+                null,
+                follow,
+                frameRate ?? GifRecordingPlan.DefaultFrameRate,
+                copyScreen: false,
+                cancellation)
             : RecordMp4Async(
                 item,
                 buffers => RetakeAsync(buffers, byHand, follow),
@@ -284,6 +312,7 @@ public sealed class ScreenRecorder : IDisposable
                 follow,
                 frameRate ?? RecordingPlan.DefaultFrameRate,
                 audio,
+                copyScreen: false,
                 cancellation);
     }
 
@@ -307,6 +336,7 @@ public sealed class ScreenRecorder : IDisposable
         WindowRecordingArea? follow,
         int frameRate,
         RecordingAudio audio,
+        bool copyScreen,
         CancellationToken cancellation)
     {
         var size = item.Size;
@@ -327,10 +357,21 @@ public sealed class ScreenRecorder : IDisposable
         using var buffers = new FrameBuffers();
 
         // Before the recording's own session exists, so the two are never open at once,
-        // and because this is the frame the recording may otherwise never be given.
-        var seed = SeedBuffer(buffers, await SeedPixelsAsync(item), crop, follow);
+        // and because this is the frame the recording may otherwise never be given. A
+        // recording that copies the screen takes its first copy instead: a session opened
+        // for one frame would flash the very border it is avoiding.
+        var seed = copyScreen
+            ? await retake(buffers)
+            : SeedBuffer(buffers, await SeedPixelsAsync(item), crop, follow);
 
-        using var frames = new FrameStream(Device(), item, plan.FrameInterval, cancellation);
+        using var frames = copyScreen
+            ? new FrameStream(plan.FrameInterval, cancellation)
+            : new FrameStream(
+                Device(),
+                item,
+                plan.FrameInterval,
+                await GraphicsCaptureService.MayHideBorderAsync(),
+                cancellation);
         using var held = Holding(frames);
         using var video = new Mp4Frames(
             buffers,
@@ -447,9 +488,12 @@ public sealed class ScreenRecorder : IDisposable
         // cannot be asked until after the recording that would have to have been traced.
         // A recording is a deliberate act minutes apart, so one line costs nothing.
         DiagnosticLog.Write(
-            $"recorded {video.Kept} frames from {frames.Arrivals} arrivals ({frames.Empty} empty),"
-                + $" {video.Repeated} repeated, {video.Retaken} taken by hand, {frames.Dropped}"
-                + $" dropped, first frame {(seed is null ? "not seeded" : "seeded")},"
+            (frames.HasSession
+                ? $"recorded {video.Kept} frames from {frames.Arrivals} arrivals ({frames.Empty} empty),"
+                    + $" {video.Repeated} repeated, {video.Retaken} taken by hand, {frames.Dropped} dropped,"
+                : $"recorded {video.Retaken} frames copied off the screen, with no capture session,"
+                    + $" {video.Repeated} repeated,")
+                + $" first frame {(seed is null ? "not seeded" : "seeded")},"
                 + $" {buffers.Allocated} buffers ({buffers.AllocatedBytes / (1024.0 * 1024.0):0.#}MB)"
                 + $" for {buffers.Lent} frames,"
                 + $" over {frames.Elapsed:mm\\:ss}");
@@ -459,7 +503,7 @@ public sealed class ScreenRecorder : IDisposable
         // opening a session delivers a frame whether anything changed or not. Said here
         // because it cannot be told from the file, and because it is the one condition under
         // which the by-hand path above is what produced the recording.
-        if (video.Kept == 0)
+        if (frames.HasSession && video.Kept == 0)
         {
             DiagnosticLog.Write(
                 frames.NotStarted is { } refusal
@@ -497,6 +541,7 @@ public sealed class ScreenRecorder : IDisposable
         RecordedArea? crop,
         WindowRecordingArea? follow,
         int frameRate,
+        bool copyScreen,
         CancellationToken cancellation)
     {
         var size = item.Size;
@@ -508,10 +553,20 @@ public sealed class ScreenRecorder : IDisposable
         var timing = new GifFrameTiming();
 
         // For the same reason the MP4 path takes one, and before the recording's own
-        // session exists: see SeedPixelsAsync.
-        var seed = SeedGifFrame(await SeedPixelsAsync(item), plan, crop, follow);
+        // session exists: see SeedPixelsAsync. Taken the way every other frame will be when
+        // there is to be no session, for the reason the MP4 path gives.
+        var seed = copyScreen
+            ? await RetakeGifFrameAsync(byHand, plan, follow, TimeSpan.Zero)
+            : SeedGifFrame(await SeedPixelsAsync(item), plan, crop, follow);
 
-        using var frames = new FrameStream(Device(), item, plan.FrameInterval, cancellation);
+        using var frames = copyScreen
+            ? new FrameStream(plan.FrameInterval, cancellation)
+            : new FrameStream(
+                Device(),
+                item,
+                plan.FrameInterval,
+                await GraphicsCaptureService.MayHideBorderAsync(),
+                cancellation);
         using var held = Holding(frames);
         using var output = await OpenForWritingAsync(path);
 
@@ -1554,12 +1609,19 @@ public sealed class ScreenRecorder : IDisposable
         : IDisposable
         where T : class
     {
-        private readonly RetakeCadence _cadence = new(frameInterval);
+        /// <remarks>
+        /// With no session behind the stream these are not a fallback but the recording, and
+        /// the cadence drops everything it has for telling a working session from a dead one.
+        /// </remarks>
+        private readonly RetakeCadence _cadence = new(frameInterval, isOnlySource: !frames.HasSession);
 
         /// <summary>The capture in flight, or null when there is none.</summary>
         private Task<T?>? _running;
 
-        /// <summary>Frames this produced. Zero wherever recording works at all.</summary>
+        /// <summary>
+        /// Frames this produced. Zero wherever a session works, and every frame after the
+        /// first where there is none.
+        /// </summary>
         public int Count => _cadence.Taken;
 
         /// <summary>
@@ -1719,8 +1781,7 @@ public sealed class ScreenRecorder : IDisposable
         public int Repeated { get; private set; }
 
         /// <summary>
-        /// Frames taken by hand because the compositor delivered none. Zero on every
-        /// machine where recording works at all: see <see cref="Retakes"/>.
+        /// Frames taken by hand: see <see cref="Retakes"/>.
         /// </summary>
         public int Retaken => _retakes.Count;
 
@@ -1913,8 +1974,11 @@ public sealed class ScreenRecorder : IDisposable
     /// </remarks>
     private sealed class FrameStream : IRecordingClock, IDisposable
     {
-        private readonly Direct3D11CaptureFramePool _pool;
-        private readonly GraphicsCaptureSession _session;
+        /// <summary>Both null for a stream with no session. See the constructors.</summary>
+        private readonly Direct3D11CaptureFramePool? _pool;
+
+        /// <inheritdoc cref="_pool"/>
+        private readonly GraphicsCaptureSession? _session;
         private readonly Channel<TimedFrame> _frames;
         private readonly FrameCadence _cadence;
         private readonly Stopwatch _clock = new();
@@ -1933,11 +1997,12 @@ public sealed class ScreenRecorder : IDisposable
         /// </summary>
         private readonly DispatcherQueue? _home = DispatcherQueue.GetForCurrentThread();
 
-        public FrameStream(
-            IDirect3DDevice device,
-            GraphicsCaptureItem item,
-            TimeSpan interval,
-            CancellationToken cancellation)
+        /// <summary>
+        /// A stream nothing is written to: the clock, the pause and the end of a recording
+        /// whose every frame is copied off the screen, because a session would draw a border
+        /// round the whole display. See <see cref="RecordDisplayAsync"/>.
+        /// </summary>
+        public FrameStream(TimeSpan interval, CancellationToken cancellation)
         {
             _cadence = new FrameCadence(interval);
             _frames = Channel.CreateBounded<TimedFrame>(new BoundedChannelOptions(QueueDepth)
@@ -1950,6 +2015,21 @@ public sealed class ScreenRecorder : IDisposable
                 SingleWriter = true,
             });
 
+            _stopping = cancellation.Register(() => _frames.Writer.TryComplete());
+        }
+
+        /// <param name="borderless">
+        /// Whether Windows has said the session may go without its yellow border. See
+        /// <see cref="GraphicsCaptureService.MayHideBorderAsync"/>.
+        /// </param>
+        public FrameStream(
+            IDirect3DDevice device,
+            GraphicsCaptureItem item,
+            TimeSpan interval,
+            bool borderless,
+            CancellationToken cancellation)
+            : this(interval, cancellation)
+        {
             _pool = Direct3D11CaptureFramePool.CreateFreeThreaded(
                 device,
                 DirectXPixelFormat.B8G8R8A8UIntNormalized,
@@ -1968,6 +2048,11 @@ public sealed class ScreenRecorder : IDisposable
             // missing the thing being demonstrated.
             _session.IsCursorCaptureEnabled = true;
 
+            if (borderless)
+            {
+                GraphicsCaptureService.HideBorder(_session);
+            }
+
             // A window that closes, or a display that is unplugged, ends the recording
             // with what it has rather than hanging on an item that will never deliver
             // another frame.
@@ -1976,8 +2061,10 @@ public sealed class ScreenRecorder : IDisposable
                 DiagnosticLog.Verbose("the capture item closed; the recording ends with what it has");
                 _frames.Writer.TryComplete();
             };
-            _stopping = cancellation.Register(() => _frames.Writer.TryComplete());
         }
+
+        /// <summary>Whether the compositor is behind this, or nothing is.</summary>
+        public bool HasSession => _session is not null;
 
         /// <summary>How long the recording has been running.</summary>
         public TimeSpan Elapsed => _clock.Elapsed;
@@ -2032,6 +2119,12 @@ public sealed class ScreenRecorder : IDisposable
         private void StartHere()
         {
             _clock.Restart();
+
+            if (_session is null)
+            {
+                DiagnosticLog.Verbose("started with no capture session: every frame is copied off the screen");
+                return;
+            }
 
             try
             {
@@ -2127,9 +2220,14 @@ public sealed class ScreenRecorder : IDisposable
             _frames.Writer.TryComplete();
             _clock.Stop();
             _stopping.Dispose();
-            _pool.FrameArrived -= OnFrameArrived;
-            _session.Dispose();
-            _pool.Dispose();
+
+            if (_pool is not null)
+            {
+                _pool.FrameArrived -= OnFrameArrived;
+            }
+
+            _session?.Dispose();
+            _pool?.Dispose();
 
             // Whatever the encoder never asked for. Each queued frame holds a texture,
             // and a recording that ended early would otherwise leave a few behind.

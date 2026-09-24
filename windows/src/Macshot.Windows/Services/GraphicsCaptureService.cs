@@ -11,6 +11,7 @@ using Windows.Graphics.Capture;
 using Windows.Graphics.DirectX;
 using Windows.Graphics.DirectX.Direct3D11;
 using Windows.Graphics.Imaging;
+using Windows.Security.Authorization.AppCapabilityAccess;
 
 namespace Macshot.Windows.Services;
 
@@ -79,6 +80,9 @@ public sealed class GraphicsCaptureService : IDisposable
     /// <summary>IID of <c>ID3D10Multithread</c>, which a D3D11 device also answers to.</summary>
     private static readonly Guid MultithreadId = new("9b7e4e00-342c-4106-a19f-4f2704f689f0");
 
+    /// <summary>The answer <see cref="MayHideBorderAsync"/> got, once it has asked.</summary>
+    private static Task<bool>? _mayHideBorder;
+
     private IDirect3DDevice? _device;
     private bool _disposed;
 
@@ -87,6 +91,77 @@ public sealed class GraphicsCaptureService : IDisposable
     /// releases do not, which is why BitBlt stays in the tree.
     /// </summary>
     public static bool IsSupported => GraphicsCaptureSession.IsSupported();
+
+    /// <summary>
+    /// Whether a capture session may be told not to draw the yellow border Windows puts
+    /// round whatever is being captured.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// For a display the border is round the whole screen, however small the region being
+    /// recorded — which is what was reported, and is not what macOS shows. Windows 11 lets an
+    /// app switch it off; Windows 10 has no way to, so there the answer is no and a display
+    /// recording opens no session at all (see <see cref="ScreenRecorder"/>).
+    /// </para>
+    /// <para>
+    /// Asked once. An unpackaged app is answered without a prompt — measured on the VM,
+    /// <c>Allowed</c> in under a tenth of a second. A packaged one is documented to need
+    /// <c>graphicsCaptureWithoutBorder</c> declared, which the MSIX does not; that refusal is
+    /// unmeasured. Neither is worth asking about on every screenshot, and a refusal costs the
+    /// border rather than the capture.
+    /// </para>
+    /// </remarks>
+    internal static Task<bool> MayHideBorderAsync() => _mayHideBorder ??= AskToHideBorderAsync();
+
+    private static async Task<bool> AskToHideBorderAsync()
+    {
+        // The version rather than ApiInformation, because this is the check the platform
+        // analyser follows: GraphicsCaptureAccess and IsBorderRequired are 20348 and the app
+        // declares 19041.
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 20348))
+        {
+            DiagnosticLog.Write("This Windows cannot capture without drawing a border round what is captured");
+            return false;
+        }
+
+        try
+        {
+            var access = await GraphicsCaptureAccess.RequestAccessAsync(GraphicsCaptureAccessKind.Borderless);
+            DiagnosticLog.Write($"Capturing without a border: {access}");
+            return access == AppCapabilityAccessStatus.Allowed;
+        }
+        catch (Exception exception)
+        {
+            DiagnosticLog.Write(
+                $"Could not ask to capture without a border: {exception.GetType().Name}"
+                    + $" 0x{exception.HResult:X8}: {exception.Message}");
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Switches the border off on <paramref name="session"/>. Only called once
+    /// <see cref="MayHideBorderAsync"/> has said yes.
+    /// </summary>
+    internal static void HideBorder(GraphicsCaptureSession session)
+    {
+        if (!OperatingSystem.IsWindowsVersionAtLeast(10, 0, 20348))
+        {
+            return;
+        }
+
+        try
+        {
+            session.IsBorderRequired = false;
+        }
+        catch (Exception exception)
+        {
+            // A border the user can see is not worth losing the capture over.
+            DiagnosticLog.Write(
+                $"Could not switch the capture border off: {exception.GetType().Name}"
+                    + $" 0x{exception.HResult:X8}: {exception.Message}");
+        }
+    }
 
     /// <param name="includeCursor">
     /// Whether the pointer is drawn into the frame. The capture session decides it, so
@@ -350,6 +425,12 @@ public sealed class GraphicsCaptureService : IDisposable
         GraphicsCaptureItem item,
         bool includeCursor = false)
     {
+        // Before the pool and the session exist, because an await may come back on another
+        // thread and a session is not agile on every Windows. Where it is not — Windows 10 —
+        // this has no await in it and completes where it was called; and after the first
+        // capture it is a finished task everywhere.
+        var borderless = await MayHideBorderAsync();
+
         var arrival = new TaskCompletionSource<Direct3D11CaptureFrame>(
             TaskCreationOptions.RunContinuationsAsynchronously);
 
@@ -374,6 +455,12 @@ public sealed class GraphicsCaptureService : IDisposable
         // A screenshot of the pointer is almost never what was wanted, so this is off
         // unless the setting asks for it — macshot's captureCursor.
         session.IsCursorCaptureEnabled = includeCursor;
+
+        if (borderless)
+        {
+            HideBorder(session);
+        }
+
         session.StartCapture();
 
         using var captured = await arrival.Task.WaitAsync(FrameTimeout);

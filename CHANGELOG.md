@@ -3,6 +3,20 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.18] - 2026-09-24
+
+### Fixed
+
+- **Recording part of the screen no longer puts a yellow border round the whole display.**
+  Windows draws that border round anything being captured, and for a screen or region
+  recording it went round the entire display, however small the region. On Windows 11
+  macshot now asks Windows to leave it off, for screenshots and recordings alike. Windows 10
+  has no way to turn it off, so there a screen or region recording no longer uses Windows'
+  capture at all and copies the screen instead: no border, at a lower frame rate — around
+  twenty frames a second for a region, whatever rate is chosen. Recording a single window
+  on Windows 10 still shows the border, round that window only, and a screenshot there can
+  still show it for the instant it takes.
+
 ## [0.8.17] - 2026-09-23
 
 ### Fixed

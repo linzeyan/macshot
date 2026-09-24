@@ -141,4 +141,58 @@ public sealed class RetakeCadenceTests
             at += SlowEnoughToBeItsOwnRate;
         }
     }
+
+    [TestMethod]
+    public void ShouldTake_TakesTheFirstFrameAtOnceWhenNoSessionWasOpened()
+    {
+        // The grace is room for a session about to deliver. A display recorded without one —
+        // on a Windows that would otherwise draw its yellow border round the whole screen —
+        // has nothing coming, and waiting it out would freeze the head of every recording.
+        var cadence = new RetakeCadence(SlowEnoughToBeItsOwnRate, isOnlySource: true);
+
+        Assert.IsTrue(cadence.ShouldTake(kept: 0, TimeSpan.Zero, paused: false));
+    }
+
+    [TestMethod]
+    public void ShouldTake_KeepsCopyingThroughFailuresWhenTheCopiesAreTheWholeRecording()
+    {
+        // A UAC prompt or a display mode change makes the screen unreadable for a moment.
+        // Retiring after three misses is right for a fallback, which leaves the compositor's
+        // frames behind it; here it would leave the rest of the recording one still frame.
+        var cadence = new RetakeCadence(SlowEnoughToBeItsOwnRate, isOnlySource: true);
+        var at = TimeSpan.Zero;
+
+        for (var attempt = 0; attempt < RetakeCadence.Attempts * 2; attempt++)
+        {
+            Assert.IsTrue(cadence.ShouldTake(kept: 0, at, paused: false));
+            cadence.Record(took: false);
+            at += SlowEnoughToBeItsOwnRate;
+        }
+
+        Assert.IsTrue(cadence.ShouldTake(kept: 0, at, paused: false), "the screen is readable again");
+    }
+
+    [TestMethod]
+    public void ShouldTake_StillLeavesAPauseEmptyWhenTheCopiesAreTheWholeRecording()
+    {
+        // Dropping the grace and the retirement must not drop the pause with them: the held
+        // seconds would come back into the file as frames.
+        var cadence = new RetakeCadence(SlowEnoughToBeItsOwnRate, isOnlySource: true);
+
+        Assert.IsFalse(cadence.ShouldTake(kept: 0, PastTheGrace, paused: true));
+    }
+
+    [TestMethod]
+    public void ShouldTake_StillHoldsToItsIntervalWhenTheCopiesAreTheWholeRecording()
+    {
+        // Every frame of such a recording is a screen copy, so this is what stops one from
+        // being started on every sample request the encoder makes.
+        var cadence = new RetakeCadence(SlowEnoughToBeItsOwnRate, isOnlySource: true);
+
+        Assert.IsTrue(cadence.ShouldTake(kept: 0, TimeSpan.Zero, paused: false));
+        cadence.Record(took: true);
+
+        Assert.IsFalse(cadence.ShouldTake(kept: 0, SlowEnoughToBeItsOwnRate - TimeSpan.FromMilliseconds(1), false));
+        Assert.IsTrue(cadence.ShouldTake(kept: 0, SlowEnoughToBeItsOwnRate, paused: false));
+    }
 }

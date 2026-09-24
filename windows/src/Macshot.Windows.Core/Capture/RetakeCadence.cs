@@ -21,6 +21,11 @@ namespace Macshot.Windows.Core.Capture;
 /// read <c>elapsed - TimeSpan.MinValue</c>, which overflows: every recording ended a second
 /// after it started, and only a measurement on a real machine found it.
 /// </para>
+/// <para>
+/// It also paces the one kind of recording where copying the screen is not a fallback but
+/// the whole of it: a display recorded where Windows cannot be told not to draw its yellow
+/// border, and so no session is opened. See the constructor's <c>isOnlySource</c>.
+/// </para>
 /// </remarks>
 public sealed class RetakeCadence
 {
@@ -76,6 +81,7 @@ public sealed class RetakeCadence
     public const int Attempts = 3;
 
     private readonly TimeSpan _interval;
+    private readonly bool _isOnlySource;
 
     private TimeSpan? _at;
     private int _failures;
@@ -85,9 +91,18 @@ public sealed class RetakeCadence
     /// <see cref="FastestUseful"/> is copied at its own rate rather than faster: a frame the
     /// file has nowhere to put is a screen copied for nothing.
     /// </param>
-    public RetakeCadence(TimeSpan frameInterval)
+    /// <param name="isOnlySource">
+    /// Whether the copies are the recording rather than a stand-in for a session that is
+    /// not working. There is then no session to give a grace to and nothing to fall back
+    /// to: the first frame is taken at once, and a copy that fails is tried again at the next
+    /// interval rather than counted towards giving up — a failure there is a moment of the
+    /// screen being unreadable, a UAC prompt or a mode change, and retiring would freeze the
+    /// rest of the recording on the frame before it.
+    /// </param>
+    public RetakeCadence(TimeSpan frameInterval, bool isOnlySource = false)
     {
         _interval = frameInterval > FastestUseful ? frameInterval : FastestUseful;
+        _isOnlySource = isOnlySource;
     }
 
     /// <summary>The fastest this will ask for a frame, given the recording's own rate.</summary>
@@ -110,7 +125,12 @@ public sealed class RetakeCadence
     /// </param>
     public bool ShouldTake(int kept, TimeSpan elapsed, bool paused)
     {
-        if (kept > 0 || _failures >= Attempts || paused || elapsed < StarvedAfter)
+        if (paused)
+        {
+            return false;
+        }
+
+        if (!_isOnlySource && (kept > 0 || _failures >= Attempts || elapsed < StarvedAfter))
         {
             return false;
         }

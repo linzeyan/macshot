@@ -526,18 +526,37 @@ start the macOS pipeline on `main`, and vice versa.
   on the UI thread is not agile there; Windows 11 accepts the call from anywhere, which is why
   the VM never showed it. The same class of fault as the retake's `item.Size` above, on a
   different object. `FrameStream.Start` now sends the call back to the session's own thread.
-  **Unconfirmed on the machine itself** — the next log from it should say `capture started`
-  and a nonzero `frames from … arrivals`. What runs after that has never run there either:
-  the pipeline thread reading each `Direct3D11CaptureFrame`, from a pool created
-  free-threaded. That is the next assumption of the same kind.
+  **Confirmed there on 2026-09-24**: `capture started`, 1300–2605 frames from the compositor
+  a recording and none taken by hand — so the pipeline thread reading frames from a
+  free-threaded pool works there too. A display recording on Windows 10 no longer opens a
+  session at all (next entry); the fix still carries its window recordings.
+- **Windows draws a yellow border round whatever a capture session is capturing**, and for
+  a display that is the whole screen however small the region being recorded — reported
+  from the same VDI the day the fix above landed. Windows 11 lets an app switch it off
+  (`IsBorderRequired`, build 20348, after `GraphicsCaptureAccess.RequestAccessAsync(Borderless)`);
+  on the VM that answers `Allowed` with no prompt and the border is gone from screenshots and
+  recordings alike. `vm-shot.sh` does photograph the border, so its absence there means
+  something. **Windows 10 has no way to switch it off**, so there a display or region
+  recording opens no session: every frame is a GDI copy (`FrameStream` built without an
+  item, `RetakeCadence` with `isOnlySource`), started off the thread that asks. Measured on
+  the VM with that path forced on, a 600×400 region at 30fps: 22.8 real frames a second,
+  against 15.0 with the copy taken inline; a 12fps GIF of the same, 9.8. A **window**
+  recording keeps its session there, border and all — a screen copy would carry whatever is
+  in front of the window. What still shows the border on Windows 10 is a screenshot's own
+  one-frame session, for as long as it takes to deliver. The first capture logs
+  `Capturing without a border: Allowed` or `This Windows cannot capture without drawing a
+  border…`; a sessionless recording ends `recorded N frames copied off the screen`.
+  **Unmeasured on Windows 10 itself** — the VM is Windows 11, and the path was forced there.
 - The MSIX installs, launches and captures — measured on the VM with a test certificate.
   What used to stop it was never the container: the capture path called an API a packaged
   app may only use with the `graphicsCaptureProgrammatic` capability, and the manifest
   declares only `runFullTrust`. That path is gone and the manifest needs nothing added.
   What is left is that no release carries an installer, because there is no certificate to
   sign one with, and that `windows.startupTask` and `windows.protocol` are still
-  undeclared, so launch-at-login and the `macshot:` scheme are dead in a package. See
-  Releasing.
+  undeclared, so launch-at-login and the `macshot:` scheme are dead in a package. Nor is
+  `graphicsCaptureWithoutBorder`, which the documentation says a package needs before
+  Windows will let it drop the capture border: expect a packaged build to be refused and to
+  record displays the Windows 10 way. Unmeasured. See Releasing.
 - Save formats match macOS: PNG, JPEG, HEIC, WebP and AVIF. WIC writes neither WebP nor
   AVIF — its support for both is a decoder — so each has its own encoder beside the app.
   WebP is libwebp, carried per architecture from `Imazen.WebP.NativeRuntime.win-*` and
