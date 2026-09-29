@@ -2280,11 +2280,10 @@ public sealed class CaptureController : IDisposable
 
         // And a frame round the same rectangle, which is what still says where the
         // recording is once that panel has been dragged out of the way.
-        RecordedRegionWindow? border = null;
+        RecordedRegionOverlay? border = null;
         if (followed is null && _settings.Current.ShowRecordedRegionBorder)
         {
-            border = new RecordedRegionWindow();
-            border.ShowAround(request.Region ?? monitor.Bounds, monitor.Scale);
+            border = new RecordedRegionOverlay(request.Region ?? monitor.Bounds, monitor.Bounds, monitor.Scale);
         }
 
         // And a ring out of every click, which unlike the frame is meant to be in the
@@ -2424,7 +2423,7 @@ public sealed class CaptureController : IDisposable
             // say a recording was running that had already finished. The click hook goes
             // with it — leaving a low-level mouse hook installed after the recording has
             // ended would put macshot in the path of every mouse event on the machine.
-            border?.Close();
+            border?.Dispose();
             clicks?.Dispose();
             keystrokes?.Dispose();
 
