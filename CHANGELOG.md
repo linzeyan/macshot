@@ -3,6 +3,19 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.20] - 2026-09-29
+
+### Fixed
+
+- **Recordings of part of the screen no longer have a pale strip across the top.** macshot
+  draws a frame round the area being recorded, so you can see what is being recorded once
+  the recording panel has been moved out of the way. It was meant to be a thin line in the
+  accent colour just outside that area, but it never appeared. Windows drew a window edge
+  in its place: a light grey strip across the top of the area, and a thin dark line a few
+  pixels inside the other three sides. All of it ended up in the recording. Recordings of
+  the whole screen had the same strip along their top edge. The frame is now the purple
+  line macOS draws, outside the area, and none of it appears in the recording.
+
 ## [0.8.19] - 2026-09-24
 
 0.8.18 was tagged but never released, so its fix is listed here with this one.
