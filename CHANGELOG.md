@@ -3,6 +3,17 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.21] - 2026-09-30
+
+### Fixed
+
+- **macshot now gives memory back to Windows when it goes idle.** Until now, macshot kept
+  most of the memory it had used for a screenshot or a recording for as long as it was
+  running. It now returns that memory after a screenshot, after a recording, and when the
+  video editor closes. In our tests, macshot sat idle at 131MB in Task Manager after three
+  screen recordings; it now sits at 16MB. The first screenshot after a long idle may take a
+  moment longer, because Windows has to load part of macshot back into memory.
+
 ## [0.8.20] - 2026-09-29
 
 ### Fixed
