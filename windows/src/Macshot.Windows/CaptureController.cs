@@ -2992,20 +2992,33 @@ public sealed class CaptureController : IDisposable
     /// machine that could be reached; the ones that matter from here on are on machines
     /// that cannot be, and this is the only place they are written down.
     /// </param>
-    private void CollectWhenIdle(string after) => Post(() =>
+    private void CollectWhenIdle(string after) => Post(async () =>
     {
         var before = MemorySnapshot.Take();
-
-        // One collection only: the runtime puts this back to Default as soon as the
-        // blocking gen-2 below has run, so it cannot reach a collection somebody else
-        // asked for.
         var compacting = before.IsWorthCompacting;
-        if (compacting)
+
+        void Collect()
         {
-            GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+            // One collection only: the runtime puts this back to Default as soon as the
+            // blocking gen-2 below has run, so it cannot reach a collection somebody else
+            // asked for.
+            if (compacting)
+            {
+                GCSettings.LargeObjectHeapCompactionMode = GCLargeObjectHeapCompactionMode.CompactOnce;
+            }
+
+            // Aggressive where compacting is affordable at all: Forced compacts and then
+            // keeps the emptied memory committed for the next allocation, and an idle tray
+            // app has no next allocation. Aggressive hands it back to Windows. It costs no
+            // more than compacting already did, which is why it follows the same judgement.
+            GC.Collect(
+                2,
+                compacting ? GCCollectionMode.Aggressive : GCCollectionMode.Forced,
+                blocking: true,
+                compacting: true);
         }
 
-        GC.Collect(2, GCCollectionMode.Forced, blocking: true, compacting: true);
+        Collect();
 
         // Sampled after the collection, so the committed and large-object figures are
         // this collection's rather than the previous one's. What the pair says is which
@@ -3018,12 +3031,40 @@ public sealed class CaptureController : IDisposable
             $"collected after {after}{(compacting ? "" : ", large objects left where they lie")}: "
                 + MemorySnapshot.Take().Since(before));
 
+        // Then again, for as long as that finds more. Much of what survives one collection
+        // is only waiting on a finalizer: a frame wrapped for Media Foundation is held by a
+        // wrapper that has one, and a wrapper can hold the next. Measured on the VM after a
+        // full-screen recording: 39.5MB alive, then 26.7, then 14.3, then no further — a
+        // frame a round, which an idle app never collects on its own. Waited for off this
+        // thread, because a WinRT object's release may have to come back to it. A round that
+        // freed less than a megabyte freed no frame, only the log line's own garbage.
+        var survived = MemorySnapshot.Take();
+        var rounds = 0;
+        for (var alive = long.MaxValue; rounds < 4 && GC.GetTotalMemory(false) < alive - 1048576; rounds++)
+        {
+            alive = GC.GetTotalMemory(false);
+            await Task.Run(GC.WaitForPendingFinalizers);
+            Collect();
+        }
+
+        DiagnosticLog.Verbose($"collected again once finalized, {rounds} rounds: {MemorySnapshot.Take().Since(survived)}");
+
+        // Then the pages. Most of what an idle macshot holds is loaded once and kept for the
+        // life of the process — WinUI's first window and d3d11 are about 60MB of it — and
+        // no collection returns that. Taking it out of the working set does not free it,
+        // but it gives the RAM back to everything else until the next capture reads it
+        // back in. That read is what the next hotkey pays, and on a machine short of memory
+        // it is the right way round.
+        var resident = Environment.WorkingSet;
+        EmptyWorkingSet(CurrentProcess);
+        DiagnosticLog.Verbose(
+            $"working set handed back: {resident / 1048576.0:0.#}MB -> {Environment.WorkingSet / 1048576.0:0.#}MB");
+
         // Only meaningful here, straight after a blocking gen-2: an idle tray app never
         // collects, so anywhere else every surface ever made is still alive and the count
         // says nothing. A number that does not fall back towards zero is the signature of
         // the leak this app has already had once. See LiveSurfaces.
         DiagnosticLog.Verbose($"still alive: {LiveSurfaces.Shared.Census()}");
-        return Task.CompletedTask;
     });
 
     private void Post(Func<Task> action)
@@ -3051,6 +3092,13 @@ public sealed class CaptureController : IDisposable
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetCursorPos(out CursorLocation point);
+
+    /// <summary>GetCurrentProcess()'s pseudo-handle, which is documented as -1.</summary>
+    private static readonly IntPtr CurrentProcess = new(-1);
+
+    [DllImport("psapi.dll")]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    private static extern bool EmptyWorkingSet(IntPtr process);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct CursorLocation
