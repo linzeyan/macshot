@@ -800,11 +800,16 @@ public sealed record Annotation(
             return HitTestPolyline(SmoothPath.Through(AnchorPath), point, tolerance);
         }
 
+        // A filled shape is grabbed anywhere it paints, as macshot does
+        // (Annotation.swift:426-428, 440-442): its interior hides what is behind it, so
+        // there is nothing underneath a click there could have meant instead.
+        var filled = Style.ShapeFill != ShapeFill.Stroke;
+
         return Tool switch
         {
             AnnotationTool.Rectangle => Contains(bounds, point, tolerance)
-                && !Contains(Deflate(bounds, tolerance), point, 0),
-            AnnotationTool.Ellipse => HitTestEllipseOutline(bounds, point, tolerance),
+                && (filled || !Contains(Deflate(bounds, tolerance), point, 0)),
+            AnnotationTool.Ellipse => HitTestEllipse(bounds, point, tolerance, filled),
             _ => DistanceToSegment(Start, End, point) <= tolerance,
         };
     }
@@ -915,7 +920,7 @@ public sealed record Annotation(
         return false;
     }
 
-    private static bool HitTestEllipseOutline(CaptureRegion bounds, CapturePoint point, double tolerance)
+    private static bool HitTestEllipse(CaptureRegion bounds, CapturePoint point, double tolerance, bool filled)
     {
         var radiusX = bounds.Width / 2;
         var radiusY = bounds.Height / 2;
@@ -933,7 +938,8 @@ public sealed record Annotation(
 
         // Scaling the normalized error by the smaller radius approximates the real
         // distance to the outline closely enough for a pointer tolerance.
-        return Math.Abs(normalizedDistance - 1) * Math.Min(radiusX, radiusY) <= tolerance;
+        var outside = normalizedDistance - 1;
+        return (filled ? outside : Math.Abs(outside)) * Math.Min(radiusX, radiusY) <= tolerance;
     }
 
     private static bool Contains(CaptureRegion region, CapturePoint point, double tolerance)

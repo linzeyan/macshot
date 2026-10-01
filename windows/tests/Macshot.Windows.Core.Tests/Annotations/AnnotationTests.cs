@@ -71,6 +71,28 @@ public sealed class AnnotationTests
         Assert.IsFalse(ellipse.HitTest(new CapturePoint(2, 2)), "a bounding box corner must not hit");
     }
 
+    /// <summary>
+    /// A filled shape covers what it frames, so a press inside it can only be meant for
+    /// the shape. Hollow-only hit-testing left a solid box movable by its rim alone — a
+    /// press in the middle drew a second box on top instead. macshot grabs the interior
+    /// (Annotation.swift:426-428, 440-442).
+    /// </summary>
+    [TestMethod]
+    public void HitTest_FilledShapesAreGrabbedInsideButNotBeyondTheirEdge()
+    {
+        foreach (var fill in new[] { ShapeFill.Fill, ShapeFill.StrokeAndFill })
+        {
+            var style = AnnotationStyle.Default with { ShapeFill = fill };
+            var rectangle = Annotation.Create(AnnotationTool.Rectangle, new CapturePoint(10, 10), new CapturePoint(50, 30), style);
+            var ellipse = Annotation.Create(AnnotationTool.Ellipse, new CapturePoint(0, 0), new CapturePoint(100, 50), style);
+
+            Assert.IsTrue(rectangle.HitTest(new CapturePoint(30, 20)), $"{fill} rectangle interior");
+            Assert.IsTrue(ellipse.HitTest(new CapturePoint(50, 25)), $"{fill} ellipse centre");
+            Assert.IsFalse(rectangle.HitTest(new CapturePoint(80, 20)), $"{fill} rectangle, well outside");
+            Assert.IsFalse(ellipse.HitTest(new CapturePoint(2, 2)), $"{fill} ellipse, bounding box corner");
+        }
+    }
+
     [TestMethod]
     public void HitTest_ToleranceGrowsWithStrokeWidth()
     {
