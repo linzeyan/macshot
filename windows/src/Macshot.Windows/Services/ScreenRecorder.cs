@@ -494,6 +494,7 @@ public sealed class ScreenRecorder : IDisposable
                 : $"recorded {video.Retaken} frames copied off the screen, with no capture session,"
                     + $" {video.Repeated} repeated,")
                 + $" first frame {(seed is null ? "not seeded" : "seeded")},"
+                + $" first sample asked for at {At(video.FirstAsked)}, first new frame at {At(video.FirstFresh)},"
                 + $" {buffers.Allocated} buffers ({buffers.AllocatedBytes / (1024.0 * 1024.0):0.#}MB)"
                 + $" for {buffers.Lent} frames,"
                 + $" over {frames.Elapsed:mm\\:ss}");
@@ -522,6 +523,8 @@ public sealed class ScreenRecorder : IDisposable
         }
 
         return new RecordingResult(path, frames.Elapsed, video.Kept, frames.Dropped, track?.SeparateTracks);
+
+        static string At(TimeSpan? moment) => moment is { } at ? $"{at.TotalSeconds:0.00}s" : "never";
     }
 
     /// <summary>
@@ -1789,16 +1792,34 @@ public sealed class ScreenRecorder : IDisposable
         public Exception? Failure { get; private set; }
 
         /// <summary>
+        /// When the encoder first asked for a sample, and when the first frame other than
+        /// the seed arrived, on the recording's own clock. Null if it never happened.
+        /// </summary>
+        /// <remarks>
+        /// A Windows 10 recording was reported to open on five still seconds, and its
+        /// summary could not say why: an encoder that asked late, a first frame that came
+        /// late, and a screen that simply did not move all logged the same line. Either of
+        /// these near five seconds is the recording's fault; both near zero is not.
+        /// </remarks>
+        public TimeSpan? FirstAsked { get; private set; }
+
+        /// <inheritdoc cref="FirstAsked"/>
+        public TimeSpan? FirstFresh { get; private set; }
+
+        /// <summary>
         /// The sample for <paramref name="request"/>, or null once the recording has
         /// stopped and everything captured has been handed over.
         /// </summary>
         public async Task<MediaStreamSample?> NextAsync(MediaStreamSourceSampleRequest request)
         {
+            FirstAsked ??= frames.Elapsed;
+
             while (true)
             {
                 if (await frames.NextAsync(interval) is { } timed)
                 {
                     Kept++;
+                    FirstFresh ??= timed.Timestamp;
                     return await KeepAsync(timed);
                 }
 
@@ -1814,6 +1835,7 @@ public sealed class ScreenRecorder : IDisposable
                 // see Retakes.
                 if (_retakes.Poll(Kept) is { } byHand)
                 {
+                    FirstFresh ??= frames.Elapsed;
                     Keep(byHand);
                 }
 
