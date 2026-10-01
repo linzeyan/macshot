@@ -3,6 +3,22 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.22] - 2026-10-01
+
+### Fixed
+
+- **A filled rectangle or ellipse can now be picked up anywhere inside it.** Before, a
+  filled shape could only be moved by its edge, as an outlined one is, and pressing in the
+  middle drew a new shape on top of it. That is still how an outlined shape works, so you
+  can click what it frames, but a filled shape covers what is behind it. Shapes now work
+  the way they do on macOS.
+
+### Changed
+
+- The diagnostic log records how soon a recording received its first frame. A recording
+  on Windows 10 was reported to begin with several seconds of still picture. If that
+  happens again, the log will show whether the delay came from the recording itself.
+
 ## [0.8.21] - 2026-09-30
 
 ### Fixed
