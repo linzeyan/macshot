@@ -3,6 +3,36 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.24] - 2026-10-02
+
+### Changed
+
+- **The marker is a highlighter, as on macOS.** It follows the pointer instead of drawing
+  a straight line from where you pressed to where you let go, so it can follow a sloping
+  line of text or circle something. It draws a broad, see-through band six times the width
+  shown on the toolbar, so the text under it stays readable. Before, it drew a thin opaque
+  line that covered what it was meant to mark.
+- **Line widths and sizes are in points, as on macOS**, so a mark looks as thick on a
+  display scaled to 175% as on one at 100%. This covers lines, text, numbers, stamps and
+  the magnifier. Before, they were in screen pixels, so at 175% a width of 3 drew a line
+  little more than half as thick as on macOS. On a scaled display, new marks are now
+  thicker and larger than before.
+- **A selected pencil or marker stroke is outlined around its whole width**, rather than
+  through the middle of it.
+
+### Added
+
+- **Hold Shift to keep a pencil or marker stroke straight**, as on macOS. The stroke
+  follows whichever direction you move first, horizontal or vertical, from the point
+  where you pressed Shift.
+
+### Note
+
+- **If you had changed the marker's width, it goes back to 3 once.** The number now means
+  something different, and the old setting would have drawn a band six times too wide.
+  Highlights in captures you saved earlier reopen from the history at the width they were
+  drawn at, but they are now see-through.
+
 ## [0.8.23] - 2026-10-02
 
 ### Changed
