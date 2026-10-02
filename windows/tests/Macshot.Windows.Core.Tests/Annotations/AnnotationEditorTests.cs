@@ -1,5 +1,6 @@
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
+using Macshot.Windows.Core.Recognition;
 
 namespace Macshot.Windows.Core.Tests.Annotations;
 
@@ -148,7 +149,53 @@ public sealed class AnnotationEditorTests
         Assert.AreEqual(7, rectangle?.Style.StrokeWidth ?? 0, 1e-9);
         Assert.AreEqual(14, rectangle?.Style.CornerRadius ?? 0, 1e-9);
         Assert.AreEqual(210, loupe?.BoundingRect.Width ?? 0, 1e-9);
+        Assert.AreEqual(1.75, rectangle?.Style.PixelsPerPoint ?? 0, 1e-9, "so its fixed sizes can be drawn in points too");
         Assert.AreEqual(4, editor.Style.StrokeWidth, "while the row goes on showing the 4 it was set to");
+    }
+
+    /// <summary>
+    /// A smart highlighter is laying a band over a line of text, which is always level:
+    /// macshot holds it to the height it was pressed at (MarkerToolHandler.swift:70-73).
+    /// Left free, the hand's sag would be drawn for the whole drag and only straightened
+    /// when let go, which reads as the tool fighting the hand.
+    /// </summary>
+    [TestMethod]
+    public void PointerMoved_SmartMarkerRunsLevelFromWhereItWasPressed()
+    {
+        var editor = NewEditor(AnnotationTool.Marker);
+        editor.SmartMarker = true;
+
+        editor.PointerPressed(new CapturePoint(10, 50));
+        editor.PointerMoved(new CapturePoint(60, 70));
+        editor.PointerMoved(new CapturePoint(100, 35));
+        var stroke = editor.PointerReleased(new CapturePoint(100, 35));
+
+        Assert.IsNotNull(stroke);
+        Assert.IsTrue(stroke.Points.All(point => point.Y == 50), "the band left the height it was pressed at");
+        Assert.AreEqual(100, stroke.Points[^1].X, "and still went as far as the hand did");
+    }
+
+    /// <summary>
+    /// The band is as tall as the text it is about to cover from the moment it is pressed,
+    /// as macshot sizes it (MarkerToolHandler.swift:48-53) — not the row's width for the
+    /// drag and the line's only once the snap lands, which would show the user a band that
+    /// fits nothing until they let go. In points of the surface, like every other size.
+    /// </summary>
+    [TestMethod]
+    public void PointerPressed_SmartMarkerIsAsThickAsTheLineUnderThePress()
+    {
+        var editor = NewEditor(AnnotationTool.Marker);
+        editor.Scale = 2;
+        editor.SmartMarker = true;
+        editor.RecognizedText =
+        [
+            new RecognizedLine([new RecognizedWord("above", new CaptureRegion(0, 0, 200, 16))]),
+            new RecognizedLine([new RecognizedWord("pressed", new CaptureRegion(0, 40, 200, 20))]),
+        ];
+
+        editor.PointerPressed(new CapturePoint(20, 52));
+
+        Assert.AreEqual(28, editor.Draft?.InkWidth ?? 0, 1e-9, "the line's 20 and 4 points of padding at 2x");
     }
 
     /// <summary>

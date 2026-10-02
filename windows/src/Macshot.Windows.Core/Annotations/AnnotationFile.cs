@@ -146,6 +146,7 @@ public static class AnnotationFile
             LoupeMagnification = annotation.Style.LoupeMagnification,
             LoupeSize = annotation.Style.LoupeSize,
             StampSize = annotation.Style.StampSize,
+            PixelsPerPoint = annotation.Style.PixelsPerPoint,
 
             // Flattened rather than an array of objects: a smoothed pencil stroke runs
             // to hundreds of samples, and {"x":1,"y":2} costs four times what 1,2 does
@@ -299,6 +300,10 @@ public static class AnnotationFile
             StampSize = stored.StampSize >= AnnotationStyle.MinStampSize
                 ? stored.StampSize
                 : AnnotationStyle.DefaultStampSize,
+
+            // Absent from every file written before a mark knew it, and 1 is what those
+            // marks were drawn at — so an old capture reopens looking as it was saved.
+            PixelsPerPoint = stored.PixelsPerPoint > 0 ? stored.PixelsPerPoint : 1,
         };
 
         var sprite = Unpack(stored.Sprite);
@@ -536,6 +541,12 @@ public static class AnnotationFile
         /// which reads back as the default rather than as a glyph of no size.
         /// </summary>
         public double StampSize { get; init; }
+
+        /// <summary>
+        /// How many frame pixels a point was where the mark was drawn. Zero in files written
+        /// before it was kept, which reads back as 1.
+        /// </summary>
+        public double PixelsPerPoint { get; init; }
 
         public double[]? Points { get; init; }
 

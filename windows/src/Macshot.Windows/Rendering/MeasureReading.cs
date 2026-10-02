@@ -57,7 +57,9 @@ internal static class MeasureReading
         // Chosen in frame pixels and divided by the scale, because RenderTargetBitmap
         // rasterizes layout units at that scale. Picking it in layout units would halve
         // the reading on a 200% display.
-        var fontSize = Math.Max(MinimumFontSize, style.StrokeWidth * FontSizePerStrokeUnit) / rasterizationScale;
+        var fontSize = Math.Max(
+            MinimumFontSize * style.PixelsPerPoint,
+            style.StrokeWidth * FontSizePerStrokeUnit) / rasterizationScale;
         var fill = GlyphSpriteFactory.ToBrushColor(style);
 
         // On a pill in the mark's own colour rather than bare glyphs. A ruler is dragged

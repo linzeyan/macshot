@@ -96,7 +96,7 @@ public static class AnnotationHandles
     public const double RotateReach = 24;
 
     /// <summary>
-    /// The smallest a loupe can be resized to, in frame pixels: macshot's floor
+    /// The smallest a loupe can be resized to, in points: macshot's floor
     /// (<c>OverlayView.swift:6086-6093</c>), below which there is too little lens left to
     /// see anything magnified in.
     /// </summary>
@@ -547,7 +547,7 @@ public static class AnnotationHandles
         var deltaX = point.X - anchor.X;
         var deltaY = point.Y - anchor.Y;
         var side = Math.Max(
-            MinLoupeSide,
+            MinLoupeSide * annotation.Style.PixelsPerPoint,
             Math.Max(alongX ? Math.Abs(deltaX) : 0, alongY ? Math.Abs(deltaY) : 0));
 
         // A side spreads the axis it does not move about the anchor, which sits on the

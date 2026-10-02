@@ -9,7 +9,14 @@ public enum LineStyle
 
 public static class LineStyleExtensions
 {
-    public static IReadOnlyList<double> CreateDashPattern(this LineStyle style, double strokeWidth)
+    /// <param name="pixelsPerPoint">
+    /// What the dots' floor of 6 points comes to where the line is drawn — see
+    /// <see cref="AnnotationStyle.PixelsPerPoint"/>.
+    /// </param>
+    public static IReadOnlyList<double> CreateDashPattern(
+        this LineStyle style,
+        double strokeWidth,
+        double pixelsPerPoint = 1)
     {
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(strokeWidth);
 
@@ -17,7 +24,7 @@ public static class LineStyleExtensions
         {
             LineStyle.Solid => [],
             LineStyle.Dashed => [strokeWidth * 3, strokeWidth * 2],
-            LineStyle.Dotted => [0, Math.Max(strokeWidth * 2, 6)],
+            LineStyle.Dotted => [0, Math.Max(strokeWidth * 2, 6 * pixelsPerPoint)],
             _ => throw new ArgumentOutOfRangeException(nameof(style)),
         };
     }

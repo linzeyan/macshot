@@ -366,6 +366,20 @@ public sealed record AnnotationStyle(
     public double NumberStrokeWidth { get; init; } = DefaultStrokeWidth;
 
     /// <summary>
+    /// How many frame pixels one point is on the surface a mark was drawn on: 1 on the
+    /// row, the display's scale on a mark placed in the overlay.
+    /// </summary>
+    /// <remarks>
+    /// The sizes above are converted once, where a mark is made (<see cref="ScaledBy"/>),
+    /// but a mark is also drawn with fixed sizes nobody sets — an arrowhead's floor, a
+    /// badge's smallest diameter, the padding round a label — which macshot gives in
+    /// points like everything else. Without this a mark could not say how big a point is,
+    /// and those would stay frame pixels: half their size at 200%. One in every file
+    /// written before it existed, which draws those marks exactly as they were drawn.
+    /// </remarks>
+    public double PixelsPerPoint { get; init; } = 1;
+
+    /// <summary>
     /// The number this tool's one size control is showing: whichever of the four widths
     /// belongs to it.
     /// </summary>
@@ -428,6 +442,7 @@ public sealed record AnnotationStyle(
         StampSize = StampSize * factor,
         MarkerStrokeWidth = MarkerStrokeWidth * factor,
         NumberStrokeWidth = NumberStrokeWidth * factor,
+        PixelsPerPoint = PixelsPerPoint * factor,
     };
 
     /// <summary>
@@ -466,6 +481,7 @@ public sealed record AnnotationStyle(
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(StampSize);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(MarkerStrokeWidth);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(NumberStrokeWidth);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(PixelsPerPoint);
         if (Opacity is < 0 or > 1)
         {
             throw new ArgumentOutOfRangeException(nameof(Opacity));

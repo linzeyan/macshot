@@ -158,8 +158,9 @@ internal static class TextGlyphs
 
         // Both measured in layout units for the same reason the font size is: the sprite
         // is rasterized at the display's scale, so a padding chosen in frame pixels would
-        // be twice macshot's at 200%.
-        var scaled = 1 / rasterizationScale;
+        // be twice macshot's at 200%. And macshot's numbers are points, so they come to
+        // as many frame pixels as a point does on the surface the label was put on.
+        var scaled = style.PixelsPerPoint / rasterizationScale;
 
         return new Border
         {

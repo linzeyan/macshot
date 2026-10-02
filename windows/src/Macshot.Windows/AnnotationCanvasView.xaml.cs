@@ -104,6 +104,9 @@ public sealed partial class AnnotationCanvasView : UserControl
     /// </summary>
     private Task _pendingSprite = Task.CompletedTask;
 
+    /// <summary>What <see cref="TextOnShowAsync"/> last read, and the pixels it read it from.</summary>
+    private (CapturedFrame? Source, CaptureRegion Region, Task<IReadOnlyList<RecognizedLine>> Lines)? _textOnShow;
+
     public AnnotationCanvasView()
     {
         InitializeComponent();
@@ -126,9 +129,6 @@ public sealed partial class AnnotationCanvasView : UserControl
     /// because the toolbar owns the control and the answer can change between two clicks.
     /// </summary>
     public Func<int> NumberStartAt { get; set; } = () => 1;
-
-    /// <summary>Whether a highlighter stroke should land on the text it was drawn across.</summary>
-    public Func<bool> SmartMarker { get; set; } = () => false;
 
     /// <summary>Whether a censor drag should cover only the text found inside its region.</summary>
     public Func<bool> CensorTextOnly { get; set; } = () => false;
@@ -200,6 +200,7 @@ public sealed partial class AnnotationCanvasView : UserControl
         _preview?.Detach();
         _preview = null;
         _source = null;
+        _textOnShow = null;
         _editor = null;
     }
 
@@ -268,7 +269,26 @@ public sealed partial class AnnotationCanvasView : UserControl
 
         var radius = editor.BrushRadius / _placement.Scale;
         var centre = _placement.ToLayout(point);
+        BrushPill.Visibility = Visibility.Collapsed;
 
+        if (editor.Tool == AnnotationTool.Marker && editor.SmartMarker)
+        {
+            // Read now, while the pointer is only hovering, as macshot does on every move
+            // in this mode (MarkerToolHandler.ensureOCRCache): by the press the text is
+            // usually known and the stroke can start at the height of the line under it.
+            var text = TextOnShowAsync();
+            editor.RecognizedText = text.IsCompletedSuccessfully ? text.Result : null;
+
+            Canvas.SetLeft(BrushPill, centre.X - (BrushPill.Width / 2));
+            Canvas.SetTop(BrushPill, centre.Y - (BrushPill.Height / 2));
+            BrushPill.Visibility = Visibility.Visible;
+            BrushDot.Visibility = Visibility.Collapsed;
+            BrushRing.Visibility = Visibility.Collapsed;
+            BrushLayer.Visibility = Visibility.Visible;
+            return;
+        }
+
+        BrushDot.Visibility = Visibility.Visible;
         if (editor.Tool == AnnotationTool.Marker)
         {
             Circle(BrushDot, centre, radius);
@@ -326,7 +346,7 @@ public sealed partial class AnnotationCanvasView : UserControl
 
         // Both of these read the screen, which is why they are here rather than in the
         // editor: Core has no OCR engine and no business acquiring one.
-        if (committed.Tool == AnnotationTool.Marker && SmartMarker())
+        if (committed.Tool == AnnotationTool.Marker && _editor is { SmartMarker: true })
         {
             QueueSprite(() => SnapMarkerAsync(committed));
         }
@@ -347,7 +367,7 @@ public sealed partial class AnnotationCanvasView : UserControl
     /// </remarks>
     private async Task SnapMarkerAsync(Annotation stroke)
     {
-        var snapped = TextSnapping.SnapToText(stroke, await RecognizeAsync());
+        var snapped = TextSnapping.SnapToText(stroke, await TextOnShowAsync());
         if (!ReferenceEquals(snapped, stroke))
         {
             _editor?.Document.Amend(snapped);
@@ -826,6 +846,32 @@ public sealed partial class AnnotationCanvasView : UserControl
         }
 
         return await TextRecognizer.RecognizeAsync(source, _region.X, _region.Y);
+    }
+
+    /// <summary>
+    /// The text in the pixels on show, recognised once for as long as they stay on show.
+    /// </summary>
+    /// <remarks>
+    /// For the smart highlighter, which asks on every hover and every stroke — macshot
+    /// keeps its observations for the selection the same way
+    /// (<c>MarkerToolHandler.swift:16-18</c>). Not shared with the other readers of the
+    /// text, which each ask once and are not worth a cache's question of when it goes
+    /// stale.
+    /// </remarks>
+    private Task<IReadOnlyList<RecognizedLine>> TextOnShowAsync()
+    {
+        // A failed read is asked again rather than kept, as it was before there was a
+        // cache: one engine hiccup should not switch the option off for the whole capture.
+        if (_textOnShow is not { } known
+            || !ReferenceEquals(known.Source, _source)
+            || known.Region != _region
+            || known.Lines.IsFaulted)
+        {
+            known = (_source, _region, RecognizeAsync());
+            _textOnShow = known;
+        }
+
+        return known.Lines;
     }
 
     /// <summary>

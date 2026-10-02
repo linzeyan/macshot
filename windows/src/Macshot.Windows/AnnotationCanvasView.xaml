@@ -27,6 +27,12 @@
         <Canvas x:Name="BrushLayer" IsHitTestVisible="False" Visibility="Collapsed">
             <Ellipse x:Name="BrushDot" />
             <Ellipse x:Name="BrushRing" />
+
+            <!-- The smart highlighter's tip instead of a dot: macshot's yellow pill,
+                 12 by 22 with a 1-wide rim (MarkerToolHandler.swift:22-37). A shape's
+                 stroke falls inside its bounds, so this is the pill's outer edge. -->
+            <Rectangle x:Name="BrushPill" Width="11" Height="21" RadiusX="5.5" RadiusY="5.5"
+                       Fill="#80FFFF00" Stroke="#E6FFFF00" StrokeThickness="1" Visibility="Collapsed" />
         </Canvas>
 
         <!-- The only part of the chrome that is a control: the one button a group of

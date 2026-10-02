@@ -744,9 +744,6 @@ public sealed partial class AnnotationToolbarView : UserControl
     /// </summary>
     public int NumberStartAt => _numberStartAt;
 
-    /// <summary>Whether a highlighter stroke should land on the text it was drawn across.</summary>
-    public bool SmartMarker => _smartMarker.IsChecked == true;
-
     /// <summary>Whether a censor drag should cover only the text found inside the region.</summary>
     public bool CensorTextOnly => _censorScope.SelectedIndex == 1;
 
@@ -879,8 +876,8 @@ public sealed partial class AnnotationToolbarView : UserControl
         _censorScope.SelectionChanged += (_, index) => Remember(
             current => current with { CensorTextOnly = index == 1 });
 
-        _smartMarker.Checked += (_, _) => Remember(current => current with { SmartMarker = true });
-        _smartMarker.Unchecked += (_, _) => Remember(current => current with { SmartMarker = false });
+        _smartMarker.Checked += (_, _) => ShowSmartMarker(true);
+        _smartMarker.Unchecked += (_, _) => ShowSmartMarker(false);
 
         // Straight onto the editor, the way Smoothing is: it changes how the next gesture
         // is recorded rather than how any mark is styled, so it does not belong in the
@@ -2168,6 +2165,16 @@ public sealed partial class AnnotationToolbarView : UserControl
     });
 
     /// <summary>Holds the ruler inside the region, or lets it out, and remembers which.</summary>
+    private void ShowSmartMarker(bool wanted)
+    {
+        if (_editor is { } editor)
+        {
+            editor.SmartMarker = wanted;
+        }
+
+        Remember(current => current with { SmartMarker = wanted });
+    }
+
     private void ShowRulerClamp(bool wanted)
     {
         if (_editor is { } editor)
@@ -3142,7 +3149,8 @@ public sealed partial class AnnotationToolbarView : UserControl
             _pencilPressure.IsChecked = editor.PenPressure;
             editor.ClampRulerToRegion = settings.Current.MeasureClampToSelection;
             _clampRuler.IsChecked = editor.ClampRulerToRegion;
-            _smartMarker.IsChecked = settings.Current.SmartMarker;
+            editor.SmartMarker = settings.Current.SmartMarker;
+            _smartMarker.IsChecked = editor.SmartMarker;
             _censorMode.SelectedIndex = (int)_loadedStyle.CensorMode;
             _censorScope.SelectedIndex = settings.Current.CensorTextOnly ? 1 : 0;
 

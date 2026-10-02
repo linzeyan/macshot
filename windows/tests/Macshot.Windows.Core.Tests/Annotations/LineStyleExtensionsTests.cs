@@ -20,4 +20,17 @@ public sealed class LineStyleExtensionsTests
 
         CollectionAssert.AreEqual(new[] { 0d, 6d }, pattern.ToArray());
     }
+
+    /// <summary>
+    /// That minimum is macshot's 6 points, so a dotted line drawn on a 200% screen is
+    /// spaced 12 frame pixels apart: in frame pixels it would have twice as many dots
+    /// there, and read as a different line.
+    /// </summary>
+    [TestMethod]
+    public void Dotted_SpacesItsMinimumInPointsOfTheSurfaceDrawnOn()
+    {
+        var pattern = LineStyle.Dotted.CreateDashPattern(2, pixelsPerPoint: 2);
+
+        CollectionAssert.AreEqual(new[] { 0d, 12d }, pattern.ToArray());
+    }
 }

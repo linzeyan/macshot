@@ -332,6 +332,42 @@ public sealed class AnnotationFileTests
         CollectionAssert.AreEqual(marker.Points.ToArray(), restored.Points.ToArray());
     }
 
+    /// <summary>
+    /// A mark's fixed sizes — an arrowhead's floor, a halo's spread — are drawn in points
+    /// of the screen it was put on. Reopened without knowing how big a point was there, a
+    /// capture from a 175% display would come back with every one of them shrunk.
+    /// </summary>
+    [TestMethod]
+    public void RoundTrip_KeepsHowBigAPointWasWhereTheMarkWasDrawn()
+    {
+        var arrow = Annotation.Create(
+            AnnotationTool.Arrow,
+            new CapturePoint(0, 0),
+            new CapturePoint(100, 0),
+            AnnotationStyle.Default.ScaledBy(1.75));
+
+        var restored = AnnotationFile.Read(AnnotationFile.Write([arrow])).Single();
+
+        Assert.AreEqual(1.75, restored.Style.PixelsPerPoint, 1e-9);
+    }
+
+    /// <summary>
+    /// And one saved before marks knew it was drawn with those sizes in frame pixels, which
+    /// is a point of 1 — so it reopens exactly as it was saved.
+    /// </summary>
+    [TestMethod]
+    public void Read_TakesAPointAsOnePixelInAFileThatDoesNotSay()
+    {
+        const string Document =
+            """
+            {"version":2,"annotations":[{"id":"00000000-0000-0000-0000-000000000001",
+            "tool":"Arrow","startX":10,"startY":20,"endX":110,"endY":20,
+            "color":"#FFFF0000","strokeWidth":3,"lineStyle":"Solid","opacity":1}]}
+            """;
+
+        Assert.AreEqual(1, AnnotationFile.Read(Document).Single().Style.PixelsPerPoint);
+    }
+
     [TestMethod]
     public void RoundTrip_KeepsTheAnchorsAMarkWasBentThrough()
     {

@@ -3414,7 +3414,6 @@ public sealed partial class CaptureOverlayView : UserControl
         AnnotationCanvas.StampEmoji = () => AnnotationToolbar.StampEmoji;
         AnnotationCanvas.StampPicture = () => AnnotationToolbar.StampPicture;
         AnnotationCanvas.NumberStartAt = () => AnnotationToolbar.NumberStartAt;
-        AnnotationCanvas.SmartMarker = () => AnnotationToolbar.SmartMarker;
         AnnotationCanvas.CensorTextOnly = () => AnnotationToolbar.CensorTextOnly;
         AnnotationCanvas.TypingEnded += (_, _) =>
         {

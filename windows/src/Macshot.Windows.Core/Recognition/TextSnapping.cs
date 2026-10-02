@@ -44,6 +44,11 @@ public static class TextSnapping
     private const double TextCentre = 0.55;
 
     /// <summary>
+    /// How far past either end of a line a press can land and still be sized to it.
+    /// </summary>
+    private const double HorizontalReach = 10;
+
+    /// <summary>
     /// <paramref name="stroke"/> laid across the line of text it crossed, or unchanged
     /// when it crossed none.
     /// </summary>
@@ -58,18 +63,19 @@ public static class TextSnapping
         ArgumentNullException.ThrowIfNull(lines);
 
         var drawn = stroke.BoundingRect;
+        var point = stroke.Style.PixelsPerPoint;
 
         // The height the stroke was drawn at, not its box: a stroke dragged a little off
         // the horizontal has a tall box, and its ends are what say where it was aimed.
         var height = (stroke.Start.Y + stroke.End.Y) / 2;
 
         CaptureRegion best = default;
-        var bestOverlap = MinimumOverlap;
+        var bestOverlap = MinimumOverlap * point;
 
         foreach (var line in lines)
         {
             var box = line.Bounds;
-            if (height < box.Y - VerticalReach || height > box.Bottom + VerticalReach)
+            if (height < box.Y - (VerticalReach * point) || height > box.Bottom + (VerticalReach * point))
             {
                 continue;
             }
@@ -103,12 +109,58 @@ public static class TextSnapping
             // still a freehand one — moved, never reshaped by a grip.
             Points = [start, end],
             Pressures = [],
-            // Stored as the highlighter stores every width, a sixth of what is drawn, as
-            // macshot sizes it (MarkerToolHandler.swift:238).
-            Style = stroke.Style with
-            {
-                StrokeWidth = (best.Height + HeightPadding) / Annotation.MarkerInkScale,
-            },
+            Style = stroke.Style with { StrokeWidth = StrokeWidthFor(best.Height, point) },
         };
     }
+
+    /// <summary>
+    /// How wide a highlighter pressed at <paramref name="point"/> should be to cover the
+    /// line of text under it, or null when there is none — macshot's
+    /// <c>textLineHeight(at:)</c> (<c>MarkerToolHandler.swift:298-327</c>).
+    /// </summary>
+    /// <remarks>
+    /// Read at the press rather than only once the stroke is let go, so the band is the
+    /// height of the text for the whole drag and the snap at the end only straightens it.
+    /// The reach is looser than <see cref="SnapToText"/>'s — half a line above or below,
+    /// and a little past either end — because a press is aimed at a word, not drawn
+    /// across one, and the nearest line to it is the one meant.
+    /// </remarks>
+    public static double? StrokeWidthAt(
+        CapturePoint point,
+        IEnumerable<RecognizedLine> lines,
+        double pixelsPerPoint)
+    {
+        ArgumentNullException.ThrowIfNull(lines);
+
+        double? width = null;
+        var nearest = double.MaxValue;
+        var sideways = HorizontalReach * pixelsPerPoint;
+
+        foreach (var line in lines)
+        {
+            var box = line.Bounds;
+            var reach = box.Height / 2;
+            if (point.X < box.X - sideways || point.X > box.Right + sideways
+                || point.Y < box.Y - reach || point.Y > box.Bottom + reach)
+            {
+                continue;
+            }
+
+            var distance = Math.Abs(point.Y - (box.Y + reach));
+            if (distance < nearest)
+            {
+                nearest = distance;
+                width = StrokeWidthFor(box.Height, pixelsPerPoint);
+            }
+        }
+
+        return width;
+    }
+
+    /// <summary>
+    /// A line's height, padded, as the highlighter stores every width: a sixth of what is
+    /// drawn, as macshot sizes it (<c>MarkerToolHandler.swift:238</c>).
+    /// </summary>
+    private static double StrokeWidthFor(double lineHeight, double pixelsPerPoint) =>
+        (lineHeight + (HeightPadding * pixelsPerPoint)) / Annotation.MarkerInkScale;
 }

@@ -360,7 +360,7 @@ public static class AnnotationRasterizer
 
         // Far enough out that the end bars, which are as long as the stroke is wide, do
         // not run into the digits.
-        var reach = Math.Max(annotation.Style.StrokeWidth * MeasureCapLength, 6) + (sprite.Height / 2.0);
+        var reach = Math.Max(annotation.Style.StrokeWidth * MeasureCapLength, 6 * annotation.Style.PixelsPerPoint) + (sprite.Height / 2.0);
 
         return new CapturePoint(
             mid.X + (acrossX * reach) - (sprite.Width / 2.0),
@@ -483,7 +483,7 @@ public static class AnnotationRasterizer
     private static double BlurRadius(CaptureRegion region) =>
         Math.Max(10, Math.Min(region.Width, region.Height) * 0.03);
 
-    /// <summary>The hairline round a spotlight, in frame pixels — macshot's own 1.5.</summary>
+    /// <summary>The hairline round a spotlight, in points — macshot's own 1.5.</summary>
     private const double SpotlightBorderWidth = 1.5;
 
     /// <summary>
@@ -511,7 +511,7 @@ public static class AnnotationRasterizer
         {
             Color = SpotlightBorderColor,
             Opacity = SpotlightBorderOpacity,
-            StrokeWidth = SpotlightBorderWidth,
+            StrokeWidth = SpotlightBorderWidth * annotation.Style.PixelsPerPoint,
 
             // A halo would be a second ring round the first, in a colour the tool never
             // offered: the spotlight is not drawn in the style the halo belongs to.
@@ -847,7 +847,7 @@ public static class AnnotationRasterizer
             return [path];
         }
 
-        var reach = Math.Max(annotation.Style.StrokeWidth * MeasureCapLength, 6);
+        var reach = Math.Max(annotation.Style.StrokeWidth * MeasureCapLength, 6 * annotation.Style.PixelsPerPoint);
         return [path, Bar(path[0], atStart, reach), Bar(path[^1], atEnd, reach)];
     }
 
@@ -1008,8 +1008,9 @@ public static class AnnotationRasterizer
         }
 
         var stroke = annotation.Style.StrokeWidth;
-        var tailHalf = Math.Max(2, stroke * 0.5);
-        var shaftHalf = Math.Max(4, stroke * 1.5);
+        var point = annotation.Style.PixelsPerPoint;
+        var tailHalf = Math.Max(2 * point, stroke * 0.5);
+        var shaftHalf = Math.Max(4 * point, stroke * 1.5);
         var headHalf = shaftHalf * 2;
 
         // The full width of the head against the arrow's length, with half again of
@@ -1088,15 +1089,16 @@ public static class AnnotationRasterizer
         }
 
         var noise = new SketchyNoise(annotation.Id);
-        var stroke = Math.Max(1.2, annotation.Style.StrokeWidth);
-        var headLength = Math.Min(Math.Max(stroke * 4.3, 13), length * 0.27);
-        var gap = Math.Clamp(stroke * 0.28, 1.5, Math.Max(2, length * 0.025));
+        var point = annotation.Style.PixelsPerPoint;
+        var stroke = Math.Max(1.2 * point, annotation.Style.StrokeWidth);
+        var headLength = Math.Min(Math.Max(stroke * 4.3, 13 * point), length * 0.27);
+        var gap = Math.Clamp(stroke * 0.28, 1.5 * point, Math.Max(2 * point, length * 0.025));
         var shaftLength = Math.Max(0, length - headLength - gap);
 
         // How far off the line the shaft strays. Bounded at both ends: proportional
         // wobble on a heavy stroke would come out as a corkscrew, and none at all on a
         // hairline would leave a straight arrow wearing a crooked head.
-        var wander = Math.Clamp(stroke * 0.18, 0.45, 1.8);
+        var wander = Math.Clamp(stroke * 0.18, 0.45 * point, 1.8 * point);
         var slowPhase = noise.Next(0, Math.Tau);
         var fastPhase = noise.Next(0, Math.Tau);
 
@@ -1131,7 +1133,7 @@ public static class AnnotationRasterizer
             tip.X + (heading.X * overshoot) - (heading.Y * sideways),
             tip.Y + (heading.Y * overshoot) + (heading.X * sideways));
 
-        var spread = Math.Max(stroke * 2.6, 8);
+        var spread = Math.Max(stroke * 2.6, 8 * point);
 
         // The legs are drawn one after the other from the same noise, which is what makes
         // them differ: passed by value each would start from the same state and the head
@@ -1295,7 +1297,7 @@ public static class AnnotationRasterizer
             : (atEnd ? annotation.Start : annotation.End);
 
         var angle = Math.Atan2(tip.Y - approach.Y, tip.X - approach.X);
-        var headLength = ArrowHeadLength(annotation.Style.StrokeWidth);
+        var headLength = ArrowHeadLength(annotation.Style);
 
         return
         [
@@ -1324,7 +1326,7 @@ public static class AnnotationRasterizer
 
         // Half a head's length either side: wide enough to read as a deliberate end,
         // narrow enough that it cannot be mistaken for a head of its own.
-        var reach = ArrowHeadLength(annotation.Style.StrokeWidth) / 2;
+        var reach = ArrowHeadLength(annotation.Style) / 2;
 
         return
         [
@@ -1337,7 +1339,8 @@ public static class AnnotationRasterizer
     /// How far a head reaches back from its tip. Grows with the stroke, with a floor so
     /// a hairline arrow still ends in something visible.
     /// </summary>
-    private static double ArrowHeadLength(double strokeWidth) => Math.Max(strokeWidth * 4, 10);
+    private static double ArrowHeadLength(AnnotationStyle style) =>
+        Math.Max(style.StrokeWidth * 4, 10 * style.PixelsPerPoint);
 
     private static void CompositeStrokes(
         byte[] pixels,
@@ -1415,7 +1418,7 @@ public static class AnnotationRasterizer
                         Style = style with
                         {
                             Color = halo,
-                            StrokeWidth = style.StrokeWidth + AnnotationStyle.OutlineSpread,
+                            StrokeWidth = style.StrokeWidth + (AnnotationStyle.OutlineSpread * style.PixelsPerPoint),
 
                             // Solid whatever the shape's own pattern is, as macshot forces.
                             LineStyle = LineStyle.Solid,
@@ -1471,7 +1474,7 @@ public static class AnnotationRasterizer
                 style with
                 {
                     Color = halo,
-                    StrokeWidth = style.StrokeWidth + AnnotationStyle.OutlineSpread,
+                    StrokeWidth = style.StrokeWidth + (AnnotationStyle.OutlineSpread * style.PixelsPerPoint),
 
                     // Solid whatever the mark is, as macshot forces: a dashed halo round a
                     // dashed line is two rows of dots and reads as neither.
@@ -1563,7 +1566,7 @@ public static class AnnotationRasterizer
             return;
         }
 
-        var pattern = style.LineStyle.CreateDashPattern(style.StrokeWidth);
+        var pattern = style.LineStyle.CreateDashPattern(style.StrokeWidth, style.PixelsPerPoint);
         if (pattern.Count == 0 || pattern.Sum() <= 0)
         {
             StampRange(mask, polyline, 0, total, radius, step);

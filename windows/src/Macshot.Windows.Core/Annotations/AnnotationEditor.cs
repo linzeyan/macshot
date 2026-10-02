@@ -1,4 +1,5 @@
 using Macshot.Windows.Core.Capture;
+using Macshot.Windows.Core.Recognition;
 
 namespace Macshot.Windows.Core.Annotations;
 
@@ -131,6 +132,12 @@ public sealed class AnnotationEditor
     private CapturePoint _origin;
     private List<CapturePoint>? _freeformSamples;
     private List<double>? _freeformPressures;
+
+    /// <summary>
+    /// The style the freehand stroke in flight is drawn in, fixed at the press: a smart
+    /// highlighter is sized there to the text under it and keeps that size to the end.
+    /// </summary>
+    private AnnotationStyle? _freeformStyle;
 
     // Where Shift took hold of a freehand stroke, and the axis it was then held to — null
     // until the pointer has gone far enough to say which. See HeldToAxis.
@@ -286,6 +293,25 @@ public sealed class AnnotationEditor
     /// written on the picture is worse than a mark trimmed off it.
     /// </remarks>
     public bool ClampRulerToRegion { get; set; } = true;
+
+    /// <summary>
+    /// Whether the highlighter is laid on the text it is drawn across — macshot's smart
+    /// marker. Set by the toolbar, the way <see cref="ClampRulerToRegion"/> is.
+    /// </summary>
+    /// <remarks>
+    /// Here as well as in the host, which snaps the finished stroke to the line it found,
+    /// because two parts of it belong to the gesture: the stroke runs level from where it
+    /// was pressed (<c>MarkerToolHandler.swift:70-73</c>) — a highlight of a line of text
+    /// is never anything else — and it is as thick as the line under the press.
+    /// </remarks>
+    public bool SmartMarker { get; set; }
+
+    /// <summary>
+    /// The lines of text on show, in frame pixels, or null while they are not known yet.
+    /// Recognised by the host ahead of the press so a smart highlighter can be sized to
+    /// the line under it from the start — <see cref="TextSnapping.StrokeWidthAt"/>.
+    /// </summary>
+    public IReadOnlyList<RecognizedLine>? RecognizedText { get; set; }
 
     /// <summary>
     /// Where the mark in flight lined up, for the host to draw. Cleared the moment the
@@ -682,7 +708,15 @@ public sealed class AnnotationEditor
             _freeformPressures = _tool == AnnotationTool.Pencil && PenPressure && pressure > 0
                 ? [pressure]
                 : null;
-            Draft = Annotation.CreateFreeform(_tool, _freeformSamples, DrawingStyle, _freeformPressures);
+            _freeformStyle = DrawingStyle;
+            if (IsSmartMarker
+                && RecognizedText is { } lines
+                && TextSnapping.StrokeWidthAt(point, lines, _freeformStyle.PixelsPerPoint) is { } width)
+            {
+                _freeformStyle = _freeformStyle with { StrokeWidth = width };
+            }
+
+            Draft = Annotation.CreateFreeform(_tool, _freeformSamples, _freeformStyle, _freeformPressures);
             return false;
         }
 
@@ -790,7 +824,7 @@ public sealed class AnnotationEditor
         {
             _freeformSamples.Add(HeldToAxis(point, modifiers));
             _freeformPressures?.Add(Math.Clamp(pressure, MinRecordedPressure, 1));
-            Draft = Annotation.CreateFreeform(_tool, _freeformSamples, DrawingStyle, _freeformPressures);
+            Draft = Annotation.CreateFreeform(_tool, _freeformSamples, _freeformStyle ?? DrawingStyle, _freeformPressures);
             return;
         }
 
@@ -924,6 +958,7 @@ public sealed class AnnotationEditor
         _handle = null;
         _freeformSamples = null;
         _freeformPressures = null;
+        _freeformStyle = null;
         _pendingDeselect = null;
         _movingWith.Clear();
         _movedWith.Clear();
@@ -1053,6 +1088,7 @@ public sealed class AnnotationEditor
         _handle = null;
         _freeformSamples = null;
         _freeformPressures = null;
+        _freeformStyle = null;
         _movingWith.Clear();
         _movedWith.Clear();
         _pendingDeselect = null;
@@ -1136,6 +1172,7 @@ public sealed class AnnotationEditor
         Draft = null;
         _freeformSamples = null;
         _freeformPressures = null;
+        _freeformStyle = null;
         _origin = point;
 
         Take(hit, modifiers);
@@ -1473,6 +1510,11 @@ public sealed class AnnotationEditor
     /// </remarks>
     private CapturePoint HeldToAxis(CapturePoint point, EditorModifiers modifiers)
     {
+        if (IsSmartMarker)
+        {
+            return new CapturePoint(point.X, _freeformSamples![0].Y);
+        }
+
         if (!modifiers.HasFlag(EditorModifiers.Constrain))
         {
             _axisAnchor = null;
@@ -1497,6 +1539,8 @@ public sealed class AnnotationEditor
         };
     }
 
+    private bool IsSmartMarker => SmartMarker && _tool == AnnotationTool.Marker;
+
     private static bool IsWorthKeeping(Annotation annotation)
     {
         // A single pencil dot is a deliberate mark, so freeform strokes are exempt
@@ -1508,7 +1552,8 @@ public sealed class AnnotationEditor
 
         var deltaX = annotation.End.X - annotation.Start.X;
         var deltaY = annotation.End.Y - annotation.Start.Y;
-        return Math.Sqrt(deltaX * deltaX + deltaY * deltaY) >= MinimumDragDistance;
+        return Math.Sqrt(deltaX * deltaX + deltaY * deltaY)
+            >= MinimumDragDistance * annotation.Style.PixelsPerPoint;
     }
 
     /// <summary>

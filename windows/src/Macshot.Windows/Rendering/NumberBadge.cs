@@ -35,7 +35,9 @@ internal static class NumberBadge
         // RenderTargetBitmap rasterizes layout units at that scale. Choosing them in
         // layout units directly would make the badge come out half the intended size
         // on a 200% display, which is D7's coordinate trap.
-        var diameter = Math.Max(MinimumDiameter, style.StrokeWidth * DiameterPerStrokeUnit) / rasterizationScale;
+        var diameter = Math.Max(
+            MinimumDiameter * style.PixelsPerPoint,
+            style.StrokeWidth * DiameterPerStrokeUnit) / rasterizationScale;
         var fill = GlyphSpriteFactory.ToBrushColor(style);
 
         return new Border

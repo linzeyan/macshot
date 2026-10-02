@@ -298,6 +298,32 @@ public sealed class AnnotationRasterizerTests
         Assert.AreEqual(0, BlueAt(rendered, Width - 1, Height - 1), "the visible corner must still be painted");
     }
 
+    /// <summary>
+    /// A mark put on a 200% display is the same mark as one put on a 100% display, in
+    /// twice the pixels — every size macshot gives is in points, the fixed ones as much as
+    /// the row's. Drawn in frame pixels, a hairline arrow's head, a ruler's end bars and a
+    /// halo's spread would come out half their size on a high-density screen and the
+    /// capture would look different depending on where it was taken.
+    /// </summary>
+    [TestMethod]
+    [DataRow(AnnotationTool.Arrow, false)]
+    [DataRow(AnnotationTool.Measure, false)]
+    [DataRow(AnnotationTool.Rectangle, true)]
+    public void Render_DrawsAMarkFromAScaledDisplayAsTheSameMarkInMorePixels(AnnotationTool tool, bool halo)
+    {
+        var style = new AnnotationStyle(Black, 1) { Outline = halo ? new AnnotationColor(255, 0, 0) : null };
+
+        var atOne = InkedBounds(Annotation.Create(tool, new CapturePoint(20, 20), new CapturePoint(60, 30), style));
+        var atTwo = InkedBounds(Annotation.Create(
+            tool,
+            new CapturePoint(40, 40),
+            new CapturePoint(120, 60),
+            style.ScaledBy(2)));
+
+        Assert.AreEqual(atOne.Width * 2, atTwo.Width, 3, "wide");
+        Assert.AreEqual(atOne.Height * 2, atTwo.Height, 3, "tall");
+    }
+
     [TestMethod]
     public void Render_RejectsAPixelBufferThatDoesNotMatchTheFrame()
     {
@@ -314,6 +340,33 @@ public sealed class AnnotationRasterizerTests
             new AnnotationStyle(Black, strokeWidth, lineStyle));
 
         return AnnotationRasterizer.Render(Width, Height, WhiteFrame(), [annotation]);
+    }
+
+    /// <summary>The box round every pixel <paramref name="annotation"/> touches on a large white frame.</summary>
+    private static CaptureRegion InkedBounds(Annotation annotation)
+    {
+        const int Side = 200;
+        var frame = new byte[Side * Side * 4];
+        Array.Fill(frame, byte.MaxValue);
+        var rendered = AnnotationRasterizer.Render(Side, Side, frame, [annotation]);
+
+        int left = Side, top = Side, right = -1, bottom = -1;
+        for (var y = 0; y < Side; y++)
+        {
+            for (var x = 0; x < Side; x++)
+            {
+                var at = ((y * Side) + x) * 4;
+                if (rendered[at] < 250 || rendered[at + 1] < 250 || rendered[at + 2] < 250)
+                {
+                    left = Math.Min(left, x);
+                    right = Math.Max(right, x);
+                    top = Math.Min(top, y);
+                    bottom = Math.Max(bottom, y);
+                }
+            }
+        }
+
+        return new CaptureRegion(left, top, right - left + 1, bottom - top + 1);
     }
 
     private static byte[] WhiteFrame()

@@ -125,6 +125,43 @@ public sealed class TextSnappingTests
             "The stroke snapped to the line above the one it was drawn on.");
     }
 
+    /// <summary>
+    /// The padding over the text is macshot's 4 points, so on a 200% screen it is 8 frame
+    /// pixels — the band clears the ascenders there by as much as it does at 100%.
+    /// </summary>
+    [TestMethod]
+    public void SnapToText_PadsTheTextInPointsOfTheSurfaceDrawnOn()
+    {
+        var line = Line(("text", new CaptureRegion(100, 200, 300, 20)));
+        var stroke = Stroke(from: (110, 208), to: (380, 208));
+        stroke = stroke with { Style = stroke.Style with { PixelsPerPoint = 2 } };
+
+        var snapped = TextSnapping.SnapToText(stroke, [line]);
+
+        Assert.AreEqual(28, snapped.InkWidth, 1e-9);
+    }
+
+    /// <summary>
+    /// A press is aimed at a word, so the line nearest it is the one meant, even with
+    /// another close by; and a press in clear space has no line to be sized to, which has
+    /// to say so rather than pick one, or the highlighter would take the height of text
+    /// across the screen.
+    /// </summary>
+    [TestMethod]
+    public void StrokeWidthAt_TakesTheLineNearestThePress()
+    {
+        IReadOnlyList<RecognizedLine> lines =
+        [
+            Line(("upper", new CaptureRegion(100, 200, 300, 12))),
+            Line(("lower", new CaptureRegion(100, 214, 300, 32))),
+        ];
+
+        Assert.AreEqual(6, TextSnapping.StrokeWidthAt(new CapturePoint(150, 236), lines, 1) ?? 0, 1e-9);
+        Assert.AreEqual(16d / 6, TextSnapping.StrokeWidthAt(new CapturePoint(95, 205), lines, 1) ?? 0, 1e-9);
+        Assert.IsNull(TextSnapping.StrokeWidthAt(new CapturePoint(150, 400), lines, 1));
+        Assert.IsNull(TextSnapping.StrokeWidthAt(new CapturePoint(50, 205), lines, 1));
+    }
+
     private static Annotation Stroke((double X, double Y) from, (double X, double Y) to, double strokeWidth = 6) =>
         Annotation.Create(
             AnnotationTool.Marker,
