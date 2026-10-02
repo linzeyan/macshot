@@ -78,7 +78,7 @@ public sealed class AnnotationStyleSizeTests
         // The behaviour the split exists for, end to end through the editor.
         var editor = new AnnotationEditor(new AnnotationDocument())
         {
-            Style = AnnotationStyle.Default with { StrokeWidth = 3, MarkerStrokeWidth = 18 },
+            Style = AnnotationStyle.Default with { StrokeWidth = 3, MarkerStrokeWidth = 6 },
             Tool = AnnotationTool.Marker,
         };
 
@@ -87,11 +87,11 @@ public sealed class AnnotationStyleSizeTests
         var marker = editor.PointerReleased(new CapturePoint(60, 10));
 
         editor.Tool = AnnotationTool.Arrow;
-        editor.PointerPressed(new CapturePoint(10, 40));
-        editor.PointerMoved(new CapturePoint(60, 40));
-        var arrow = editor.PointerReleased(new CapturePoint(60, 40));
+        editor.PointerPressed(new CapturePoint(10, 80));
+        editor.PointerMoved(new CapturePoint(60, 80));
+        var arrow = editor.PointerReleased(new CapturePoint(60, 80));
 
-        Assert.AreEqual(18, marker?.Style.StrokeWidth, "the highlighter draws at its own width");
+        Assert.AreEqual(6, marker?.Style.StrokeWidth, "the highlighter keeps its own width");
         Assert.AreEqual(3, arrow?.Style.StrokeWidth, "and leaves the arrow at the shared one");
     }
 }

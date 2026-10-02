@@ -45,15 +45,17 @@ internal static class TextGlyphs
     /// scale, because <c>RenderTargetBitmap</c> rasterizes layout units at that
     /// scale: picking it in layout units would halve the text on a 200% display.
     /// </summary>
+    /// <remarks>
+    /// Not held to the row's bounds: those are in points, and this size is a mark's, in
+    /// frame pixels — a 200 on a 175% display is 350 of them, and clamping it here would
+    /// shrink the largest labels on exactly the displays that most need them large.
+    /// </remarks>
     public static double FontSizeFor(AnnotationStyle style, double rasterizationScale)
     {
         ArgumentNullException.ThrowIfNull(style);
         ArgumentOutOfRangeException.ThrowIfNegativeOrZero(rasterizationScale);
 
-        return Math.Clamp(
-            style.FontSize,
-            AnnotationStyle.MinFontSize,
-            AnnotationStyle.MaxFontSize) / rasterizationScale;
+        return style.FontSize / rasterizationScale;
     }
 
     /// <summary>

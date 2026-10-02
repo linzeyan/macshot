@@ -58,6 +58,24 @@ public sealed class AnnotationTests
         Assert.IsFalse(spotlight.HitTest(new CapturePoint(80, 20)));
     }
 
+    /// <summary>
+    /// macshot grabs a highlighter anywhere on the band it draws (Annotation.swift:386-392).
+    /// Measured against the stored width alone, a press on the visible edge of an
+    /// 18-pixel band falls through to whatever is under it.
+    /// </summary>
+    [TestMethod]
+    public void HitTest_GrabsAMarkerAcrossTheBandItDraws()
+    {
+        var marker = Annotation.Create(
+            AnnotationTool.Marker,
+            new CapturePoint(0, 50),
+            new CapturePoint(100, 50),
+            new AnnotationStyle(new AnnotationColor(0, 0, 0), 3));
+
+        Assert.IsTrue(marker.HitTest(new CapturePoint(50, 50 + 9 + 7)), "within reach of the band's edge");
+        Assert.IsFalse(marker.HitTest(new CapturePoint(50, 50 + 9 + 9)), "past it");
+    }
+
     [TestMethod]
     public void HitTest_EllipseUsesTheOutlineNotTheBoundingBox()
     {

@@ -971,7 +971,8 @@ public sealed partial class AnnotationCanvasView : UserControl
             return;
         }
 
-        var style = editor.Style;
+        // In frame pixels, as every placed mark's size is — see AnnotationEditor.DrawingStyle.
+        var style = editor.DrawingStyle;
 
         if (StampPicture() is { } picture)
         {
@@ -1016,7 +1017,8 @@ public sealed partial class AnnotationCanvasView : UserControl
             // No padding, so the first glyph sits at the click point rather than inset
             // from it by whatever the theme's padding happens to be.
             Padding = new Thickness(0),
-            FontSize = TextGlyphs.FontSizeFor(editor.Style, SpriteScale),
+            // The size the label will be committed at, so the text does not jump on Enter.
+            FontSize = TextGlyphs.FontSizeFor(editor.DrawingStyle, SpriteScale),
             FontFamily = TextGlyphs.FamilyFor(editor.Style),
             FontWeight = TextGlyphs.WeightFor(editor.Style),
             FontStyle = TextGlyphs.SlantFor(editor.Style),
@@ -1097,7 +1099,7 @@ public sealed partial class AnnotationCanvasView : UserControl
 
         var text = entry.Text.Trim();
         var origin = _textEntryOrigin;
-        var style = editor.Style;
+        var style = editor.DrawingStyle;
 
         // Torn down before the await, so the LostFocus that removing the box raises
         // cannot commit the same text a second time.

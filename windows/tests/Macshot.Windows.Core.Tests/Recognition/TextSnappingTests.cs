@@ -44,7 +44,9 @@ public sealed class TextSnappingTests
 
     /// <summary>
     /// Covering the text is what a highlighter does. Left at the width the slider happened
-    /// to be on, the mark would either miss half the glyphs or swallow the line above.
+    /// to be on, the mark would either miss half the glyphs or swallow the line above —
+    /// and the line's height stored as the width, rather than a sixth of it, is drawn six
+    /// times over and swallows several.
     /// </summary>
     [TestMethod]
     public void SnapToText_ThickensTheStrokeToCoverTheText()
@@ -54,25 +56,26 @@ public sealed class TextSnappingTests
 
         var snapped = TextSnapping.SnapToText(stroke, [line]);
 
-        Assert.IsTrue(
-            snapped.Style.StrokeWidth >= 20,
-            $"A {snapped.Style.StrokeWidth} stroke does not cover a 20-tall line.");
+        Assert.AreEqual(24, snapped.InkWidth, 1e-9, "the line's 20 and its padding, as drawn");
     }
 
     /// <summary>
     /// The hand-drawn samples have to go with the ends. Left behind, the marker would draw
     /// its original wobbly path and the snap would appear to have done nothing at all —
-    /// which is exactly how this failed before the samples were cleared.
+    /// which is exactly how this failed before the samples were replaced. Replaced by the
+    /// new ends rather than emptied, so the result is still a freehand stroke and offers
+    /// no grip that would reshape it into something else.
     /// </summary>
     [TestMethod]
-    public void SnapToText_DropsTheHandDrawnPath()
+    public void SnapToText_ReplacesTheHandDrawnPathWithTheStraightOne()
     {
         var line = Line(("text", new CaptureRegion(100, 200, 300, 20)));
         var stroke = Stroke(from: (110, 204), to: (380, 214));
 
         var snapped = TextSnapping.SnapToText(stroke, [line]);
 
-        Assert.AreEqual(0, snapped.Points.Count);
+        CollectionAssert.AreEqual(new[] { snapped.Start, snapped.End }, snapped.Points.ToArray());
+        Assert.AreEqual(0, AnnotationHandles.For(snapped).Count);
     }
 
     /// <summary>

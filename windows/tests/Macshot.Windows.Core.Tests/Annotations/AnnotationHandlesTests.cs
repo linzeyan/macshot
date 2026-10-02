@@ -93,6 +93,25 @@ public sealed class AnnotationHandlesTests
         Assert.AreEqual(0, AnnotationHandles.For(pencil).Count);
     }
 
+    /// <summary>
+    /// A stroke's samples run down the middle of its ink. Outlined at their bounds, a
+    /// selected highlighter's dashed box would run through the band — on a straight one,
+    /// collapse onto a single line inside it — instead of around what was selected.
+    /// </summary>
+    [TestMethod]
+    public void Outline_SurroundsAFreehandStrokesInkNotItsSamples()
+    {
+        var marker = Annotation.CreateFreeform(
+            AnnotationTool.Marker,
+            [new CapturePoint(10, 50), new CapturePoint(90, 50)],
+            new AnnotationStyle(new AnnotationColor(0, 0, 0), 3));
+
+        var outline = AnnotationHandles.Outline(marker);
+
+        Assert.AreEqual(new CapturePoint(1, 41), outline[0], "nine pixels out: half an 18-pixel band");
+        Assert.AreEqual(new CapturePoint(99, 59), outline[2]);
+    }
+
     [TestMethod]
     public void SpriteMark_OffersNoHandlesBecauseItsPixelsAreCompositedOneToOne()
     {

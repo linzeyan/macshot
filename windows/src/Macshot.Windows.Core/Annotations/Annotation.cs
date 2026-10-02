@@ -192,7 +192,8 @@ public sealed record AnnotationStyle(
         new(new AnnotationColor(76, 194, 255), DefaultStrokeWidth);
 
     /// <summary>
-    /// How big a label's text is, in frame pixels, independent of the stroke width.
+    /// How big a label's text is, in points (frame pixels on a mark), independent of the
+    /// stroke width.
     /// </summary>
     /// <remarks>
     /// Its own number rather than a multiple of <see cref="StrokeWidth"/>, which is what
@@ -322,7 +323,7 @@ public sealed record AnnotationStyle(
     public double LoupeMagnification { get; init; } = DefaultLoupeMagnification;
 
     /// <summary>
-    /// How wide the loupe is placed, in frame pixels. Read by
+    /// How wide the loupe is placed, in points (frame pixels on a mark). Read by
     /// <see cref="AnnotationTool.Loupe"/> and by nothing else.
     /// </summary>
     /// <remarks>
@@ -334,7 +335,7 @@ public sealed record AnnotationStyle(
     public double LoupeSize { get; init; } = DefaultLoupeSize;
 
     /// <summary>
-    /// How big a stamp's glyph is drawn, in frame pixels. Read by
+    /// How big a stamp's glyph is drawn, in points (frame pixels on a mark). Read by
     /// <see cref="AnnotationTool.Stamp"/> and by nothing else.
     /// </summary>
     /// <remarks>
@@ -346,7 +347,7 @@ public sealed record AnnotationStyle(
     public double StampSize { get; init; } = DefaultStampSize;
 
     /// <summary>
-    /// The width the highlighter remembers, in frame pixels. macshot's
+    /// The width the highlighter remembers, in points (frame pixels on a mark). macshot's
     /// <c>markerStrokeWidth</c>.
     /// </summary>
     /// <remarks>
@@ -359,7 +360,7 @@ public sealed record AnnotationStyle(
     public double MarkerStrokeWidth { get; init; } = DefaultStrokeWidth;
 
     /// <summary>
-    /// The width the numbered badge remembers, in frame pixels. macshot's
+    /// The width the numbered badge remembers, in points (frame pixels on a mark). macshot's
     /// <c>numberStrokeWidth</c>.
     /// </summary>
     public double NumberStrokeWidth { get; init; } = DefaultStrokeWidth;
@@ -407,6 +408,29 @@ public sealed record AnnotationStyle(
             : this;
 
     /// <summary>
+    /// The same style with every size multiplied by <paramref name="factor"/>: the row's
+    /// sizes, which are points on the surface being drawn on, turned into the frame pixels
+    /// a placed mark carries.
+    /// </summary>
+    /// <remarks>
+    /// macshot sizes a mark in points and only multiplies by the backing scale where it
+    /// renders (<c>OverlayView.swift:9672-9718</c>), so a 3 on its row is as thick on a
+    /// Retina screen as anywhere else. Converted once, where a mark is made, rather than
+    /// carried as points: everything after that — the rasterizer, the hit test, the file a
+    /// capture is reopened from — already speaks frame pixels and goes on doing so.
+    /// </remarks>
+    public AnnotationStyle ScaledBy(double factor) => this with
+    {
+        StrokeWidth = StrokeWidth * factor,
+        CornerRadius = CornerRadius * factor,
+        FontSize = FontSize * factor,
+        LoupeSize = LoupeSize * factor,
+        StampSize = StampSize * factor,
+        MarkerStrokeWidth = MarkerStrokeWidth * factor,
+        NumberStrokeWidth = NumberStrokeWidth * factor,
+    };
+
+    /// <summary>
     /// Where one press of the row's − or + lands, from wherever the size is now.
     /// </summary>
     /// <remarks>
@@ -425,8 +449,12 @@ public sealed record AnnotationStyle(
     /// units the size is given in. Never thinner than a whole unit: below that the outline
     /// is an antialiasing artefact rather than an edge, which is worse than none.
     /// </summary>
+    /// <remarks>
+    /// Not held to the row's bounds, which are in points: a mark's size is in frame pixels
+    /// and on a scaled display goes past them (<see cref="ScaledBy"/>).
+    /// </remarks>
     public static double GlyphStrokeWidth(double fontSize) =>
-        Math.Max(1, Math.Clamp(fontSize, MinFontSize, MaxFontSize) * GlyphStrokeFraction);
+        Math.Max(1, fontSize * GlyphStrokeFraction);
 
     public void Validate()
     {
@@ -771,6 +799,23 @@ public sealed record Annotation(
     public const double GrabThreshold = 8;
 
     /// <summary>
+    /// How many times its stored width the highlighter is drawn. macshot keeps the
+    /// marker's number on the 1–30 scale every other stroke uses and widens it only where
+    /// it draws (<c>Annotation.swift:630</c>), so the row reads 3px for a band 18 wide.
+    /// </summary>
+    public const double MarkerInkScale = 6;
+
+    /// <summary>The width this mark's stroke is laid down at, in frame pixels.</summary>
+    public double InkWidth => InkWidthFor(Tool, Style.StrokeWidth);
+
+    /// <summary>
+    /// The width a stroke of <paramref name="strokeWidth"/> is laid down at by
+    /// <paramref name="tool"/>: the stored width, except the highlighter's.
+    /// </summary>
+    public static double InkWidthFor(AnnotationTool tool, double strokeWidth) =>
+        tool == AnnotationTool.Marker ? strokeWidth * MarkerInkScale : strokeWidth;
+
+    /// <summary>
     /// Tests whether a frame-space point grabs this annotation. Marks that cover what is
     /// under them are grabbed anywhere inside their bounds; outline tools are grabbed
     /// only near the stroke, so a click inside an empty rectangle falls through to
@@ -780,7 +825,9 @@ public sealed record Annotation(
     {
         ArgumentOutOfRangeException.ThrowIfNegative(threshold);
 
-        var tolerance = threshold + Style.StrokeWidth / 2;
+        // The ink, not the stored number: a highlighter is grabbed across the band it
+        // draws, as macshot grabs it (Annotation.swift:388).
+        var tolerance = threshold + InkWidth / 2;
         var bounds = BoundingRect;
 
         // The spotlight is grabbed inside its bounds as well, though what it covers is

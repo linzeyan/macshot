@@ -1982,7 +1982,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         _stampImage.Visibility = stamping;
         _quickStampRun.Visibility = stamping;
 
-        _smoothing.Visibility = Show(AnnotationEditor.IsFreeform(tool));
+        _smoothing.Visibility = Show(AnnotationEditor.Smooths(tool));
         _pencilPressure.Visibility = Show(AnnotationToolOptions.UsesPressure(tool));
         _smartMarker.Visibility = Show(AnnotationToolOptions.UsesSmartSnap(tool));
         _censorMode.Visibility = Show(AnnotationToolOptions.UsesCensorMode(tool));

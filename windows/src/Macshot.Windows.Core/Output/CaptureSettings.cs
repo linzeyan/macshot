@@ -1,3 +1,4 @@
+using System.Text.Json.Serialization;
 using Macshot.Windows.Core.Annotations;
 using Macshot.Windows.Core.Capture;
 using Macshot.Windows.Core.Imaging;
@@ -517,7 +518,7 @@ public sealed record CaptureSettings
     /// <summary>Whether the rectangle and ellipse tools outline, wash, or fill.</summary>
     public ShapeFill AnnotationShapeFill { get; init; } = ShapeFill.Stroke;
 
-    /// <summary>How far the rectangle tool rounds its corners, in frame pixels.</summary>
+    /// <summary>How far the rectangle tool rounds its corners, in points.</summary>
     public double AnnotationCornerRadius { get; init; }
 
     /// <summary>
@@ -534,7 +535,7 @@ public sealed record CaptureSettings
     /// </summary>
     public string AnnotationOutline { get; init; } = string.Empty;
 
-    /// <summary>How big the text tool sets a label, in frame pixels.</summary>
+    /// <summary>How big the text tool sets a label, in points.</summary>
     /// <remarks>
     /// Remembered apart from the stroke width because it is set apart from it: the two
     /// shared one number until the text tool grew its own controls, which meant sizing a
@@ -689,33 +690,43 @@ public sealed record CaptureSettings
     public double LoupeMagnification { get; init; } = AnnotationStyle.DefaultLoupeMagnification;
 
     /// <summary>
-    /// How wide a loupe is placed, in captured pixels. macshot's <c>loupeSize</c>, and the
+    /// How wide a loupe is placed, in points. macshot's <c>loupeSize</c>, and the
     /// only size on this row that is not a stroke width — a loupe is placed with a click,
     /// so nothing about the gesture says how big it should be.
     /// </summary>
     public double LoupeSize { get; init; } = AnnotationStyle.DefaultLoupeSize;
 
     /// <summary>
-    /// How big a stamp is placed, in captured pixels. macshot's <c>stampSize</c> — like the
+    /// How big a stamp is placed, in points. macshot's <c>stampSize</c> — like the
     /// loupe's, a size rather than a stroke, because a stamp is clicked into place and the
     /// click says nothing about how big it should be.
     /// </summary>
     public double StampSize { get; init; } = AnnotationStyle.DefaultStampSize;
 
     /// <summary>
-    /// The width the highlighter is left at, in captured pixels. macshot's
-    /// <c>markerStrokeWidth</c>.
+    /// The width the highlighter is left at, in points, a sixth of the band it draws.
+    /// macshot's <c>markerStrokeWidth</c>.
     /// </summary>
     /// <remarks>
+    /// <para>
     /// Its own number, and remembered like the loupe's and the stamp's, because a
     /// highlighter is wanted at the height of a line of text and every other stroke tool
     /// is not. Sharing one width made a trip through the highlighter the last thing that
     /// had happened to the next arrow.
+    /// </para>
+    /// <para>
+    /// Stored under its own key rather than macshot's. Until 0.8.24 this number was the
+    /// band's whole width in pixels, so one carried over would now be drawn six times
+    /// over — an 18 chosen for an 18-pixel band would lay down 108 points of ink. Under a
+    /// new key the old number is simply not read, and every highlighter starts again at
+    /// macshot's 3.
+    /// </para>
     /// </remarks>
+    [JsonPropertyName("markerSize")]
     public double MarkerStrokeWidth { get; init; } = AnnotationStyle.DefaultStrokeWidth;
 
     /// <summary>
-    /// The width the numbered badge is left at, in captured pixels. macshot's
+    /// The width the numbered badge is left at, in points. macshot's
     /// <c>numberStrokeWidth</c> — the badge is drawn from it, so this is what sizes the
     /// circle.
     /// </summary>

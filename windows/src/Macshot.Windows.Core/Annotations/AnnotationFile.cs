@@ -38,7 +38,12 @@ public static class AnnotationFile
     /// would get wrong; a new optional field is not one, because a missing value reads
     /// back as its default.
     /// </summary>
-    public const int CurrentVersion = 1;
+    /// <remarks>
+    /// 2: the highlighter's width became a sixth of the band it draws, and its path the
+    /// samples the hand made rather than the line between its ends. See
+    /// <see cref="InTodaysTerms"/>.
+    /// </remarks>
+    public const int CurrentVersion = 2;
 
     private static readonly JsonSerializerOptions SerializerOptions = new()
     {
@@ -83,7 +88,13 @@ public static class AnnotationFile
                 return [];
             }
 
-            return [.. stored.Select(FromStored).Where(annotation => annotation is not null).Select(annotation => annotation!)];
+            return
+            [
+                .. stored
+                    .Select(FromStored)
+                    .Where(annotation => annotation is not null)
+                    .Select(annotation => InTodaysTerms(annotation!, document.Version)),
+            ];
         }
         catch (JsonException)
         {
@@ -159,6 +170,35 @@ public static class AnnotationFile
             Sprite = annotation.Sprite is { } sprite
                 ? new StoredSprite(sprite.Width, sprite.Height, Pack(sprite.Pixels))
                 : null,
+        };
+    }
+
+    /// <summary>
+    /// A mark read from a document of <paramref name="version"/>, restated in what the
+    /// current version means by the same fields.
+    /// </summary>
+    /// <remarks>
+    /// Version 1 stored a highlighter at the whole width of its band and as the straight
+    /// line between its ends, which is all it was then. Read as written, every highlight
+    /// in a capture reopened from the history would come back six times as thick, and
+    /// with grips at its ends that a highlighter no longer has.
+    /// </remarks>
+    private static Annotation InTodaysTerms(Annotation annotation, int version)
+    {
+        if (version >= 2 || annotation.Tool != AnnotationTool.Marker)
+        {
+            return annotation;
+        }
+
+        return annotation with
+        {
+            Style = annotation.Style with
+            {
+                StrokeWidth = annotation.Style.StrokeWidth / Annotation.MarkerInkScale,
+            },
+            Points = annotation.Points.Count > 0
+                ? annotation.Points
+                : [annotation.Start, annotation.End],
         };
     }
 
@@ -250,12 +290,14 @@ public static class AnnotationFile
 
             // Read the same way. What is stored is the width the loupe was placed at rather
             // than what the row happens to be set to now, so a capture reopened a month
-            // later magnifies the same patch it did when it was made.
+            // later magnifies the same patch it did when it was made. Not held under the
+            // row's ceiling either: that is in points, and a mark placed on a scaled display
+            // is in frame pixels and goes past it (AnnotationStyle.ScaledBy).
             LoupeSize = stored.LoupeSize >= AnnotationStyle.MinLoupeSize
-                ? Math.Min(stored.LoupeSize, AnnotationStyle.MaxLoupeSize)
+                ? stored.LoupeSize
                 : AnnotationStyle.DefaultLoupeSize,
             StampSize = stored.StampSize >= AnnotationStyle.MinStampSize
-                ? Math.Min(stored.StampSize, AnnotationStyle.MaxStampSize)
+                ? stored.StampSize
                 : AnnotationStyle.DefaultStampSize,
         };
 

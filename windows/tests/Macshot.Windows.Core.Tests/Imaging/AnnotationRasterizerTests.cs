@@ -110,8 +110,8 @@ public sealed class AnnotationRasterizerTests
     {
         // Stamping round caps along a stroke overlaps them heavily. Blending each
         // stamp separately would darken the overlaps, which is what makes a
-        // half-opacity highlighter look mottled instead of even.
-        var style = new AnnotationStyle(Black, 4, LineStyle.Solid, Opacity: 0.5);
+        // translucent highlighter look mottled instead of even.
+        var style = new AnnotationStyle(Black, 2);
         var annotation = Annotation.Create(
             AnnotationTool.Marker,
             new CapturePoint(5, 10),
@@ -121,11 +121,60 @@ public sealed class AnnotationRasterizerTests
         var rendered = AnnotationRasterizer.Render(Width, Height, WhiteFrame(), [annotation]);
 
         var reference = BlueAt(rendered, 20, 10);
-        Assert.AreEqual(128, reference, "50% black over white must land on the midpoint");
+        Assert.AreEqual(166, reference, "the marker's 35% black over white, laid down once");
         for (var x = 21; x <= 40; x++)
         {
             Assert.AreEqual(reference, BlueAt(rendered, x, 10), $"x={x} differs, so overlaps were blended twice");
         }
+    }
+
+    /// <summary>
+    /// macshot's highlighter is a broad see-through band whose number on the row is a sixth
+    /// of what it draws (Annotation.swift:630). Drawn at the number itself it was a 3-pixel
+    /// opaque line: a pen rather than a highlighter, hiding the text it was meant to mark.
+    /// </summary>
+    [TestMethod]
+    public void Render_MarkerIsSixTimesTheRowWidthAndAlwaysSeeThrough()
+    {
+        // Half-transparent and dotted on purpose: the marker takes neither, so a band at
+        // another shade, or with gaps between dots, is reading a style it should ignore.
+        var style = new AnnotationStyle(Black with { Alpha = 128 }, 2, LineStyle.Dotted);
+        var annotation = Annotation.Create(
+            AnnotationTool.Marker,
+            new CapturePoint(5, 12),
+            new CapturePoint(55, 12),
+            style);
+
+        var rendered = AnnotationRasterizer.Render(Width, Height, WhiteFrame(), [annotation]);
+
+        for (var x = 15; x <= 45; x++)
+        {
+            Assert.AreEqual(166, BlueAt(rendered, x, 12), $"x={x}: 35% black over white, unbroken");
+        }
+
+        Assert.IsTrue(IsInked(rendered, 30, 7), "inside a twelve-pixel band");
+        Assert.IsTrue(IsInked(rendered, 30, 16), "inside a twelve-pixel band");
+        Assert.IsFalse(IsInked(rendered, 30, 3), "past the band's edge");
+        Assert.IsFalse(IsInked(rendered, 30, 20), "past the band's edge");
+    }
+
+    /// <summary>
+    /// A highlighter goes where the hand took it, as macshot's does. Drawn as the line
+    /// between its ends, a stroke that dipped under a word and came back up would leave a
+    /// bar across the top and nothing where it was actually drawn.
+    /// </summary>
+    [TestMethod]
+    public void Render_MarkerFollowsItsSamplesRatherThanItsEnds()
+    {
+        var annotation = Annotation.CreateFreeform(
+            AnnotationTool.Marker,
+            [new CapturePoint(4, 4), new CapturePoint(32, 20), new CapturePoint(60, 4)],
+            new AnnotationStyle(Black, 1));
+
+        var rendered = AnnotationRasterizer.Render(Width, Height, WhiteFrame(), [annotation]);
+
+        Assert.IsTrue(IsInked(rendered, 32, 19), "the bottom of the V, where the hand went");
+        Assert.IsFalse(IsInked(rendered, 32, 4), "the straight line between the ends, where it did not");
     }
 
     [TestMethod]

@@ -88,18 +88,27 @@ public static class TextSnapping
         }
 
         var middle = best.Y + (best.Height * TextCentre);
+        var start = new CapturePoint(drawn.X, middle);
+        var end = new CapturePoint(drawn.Right, middle);
 
         return stroke with
         {
-            Start = new CapturePoint(drawn.X, middle),
-            End = new CapturePoint(drawn.Right, middle),
+            Start = start,
+            End = end,
 
-            // Emptied along with the ends, because a marker is drawn from its samples when
-            // it has them: leaving the hand-drawn path behind would draw the old stroke
-            // under new ends and show the snap as having done nothing.
-            Points = [],
+            // Replaced along with the ends, because a marker is drawn from its samples:
+            // leaving the hand-drawn path behind would draw the old stroke under new ends
+            // and show the snap as having done nothing. Two samples rather than none, as
+            // macshot leaves it (MarkerToolHandler.swift:238-241), so the snapped stroke is
+            // still a freehand one — moved, never reshaped by a grip.
+            Points = [start, end],
             Pressures = [],
-            Style = stroke.Style with { StrokeWidth = best.Height + HeightPadding },
+            // Stored as the highlighter stores every width, a sixth of what is drawn, as
+            // macshot sizes it (MarkerToolHandler.swift:238).
+            Style = stroke.Style with
+            {
+                StrokeWidth = (best.Height + HeightPadding) / Annotation.MarkerInkScale,
+            },
         };
     }
 }

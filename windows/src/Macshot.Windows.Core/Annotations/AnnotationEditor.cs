@@ -98,6 +98,12 @@ public sealed class AnnotationEditor
     private const double MinRecordedPressure = 0.05;
 
     /// <summary>
+    /// How far, in points, a Shift-held freehand stroke has to travel before the axis it
+    /// is held to is chosen — macshot's 5 (<c>PencilToolHandler.swift:53</c>).
+    /// </summary>
+    private const double AxisChoiceDistance = 5;
+
+    /// <summary>
     /// How far a marquee has to be dragged before it selects anything.
     /// </summary>
     /// <remarks>
@@ -125,6 +131,11 @@ public sealed class AnnotationEditor
     private CapturePoint _origin;
     private List<CapturePoint>? _freeformSamples;
     private List<double>? _freeformPressures;
+
+    // Where Shift took hold of a freehand stroke, and the axis it was then held to — null
+    // until the pointer has gone far enough to say which. See HeldToAxis.
+    private CapturePoint? _axisAnchor;
+    private bool? _axisIsHorizontal;
     private Annotation? _dragTarget;
 
     // The whole handle rather than its kind, because an anchor grip is told apart from the
@@ -183,28 +194,34 @@ public sealed class AnnotationEditor
         }
     }
 
+    /// <summary>
+    /// The row's style, with its sizes in points on the surface being drawn on — what the
+    /// toolbar shows and the settings remember.
+    /// </summary>
     public AnnotationStyle Style { get; set; } = AnnotationStyle.Default;
 
     /// <summary>
-    /// <see cref="Style"/> as the tool in hand draws it, with that tool's own remembered
-    /// width in the place the rasterizer reads.
+    /// <see cref="Style"/> as the tool in hand draws it: that tool's own remembered width in
+    /// the place the rasterizer reads, and every size in frame pixels.
     /// </summary>
     /// <remarks>
     /// Every mark is created from this rather than from <see cref="Style"/> itself, so
     /// that a highlighter set to a line's height does not leave the next arrow at that
-    /// width. See <see cref="AnnotationStyle.ForTool"/>.
+    /// width (<see cref="AnnotationStyle.ForTool"/>), and so a 3 on the row is as thick on
+    /// a 175% display as it looks on a 100% one (<see cref="AnnotationStyle.ScaledBy"/>).
     /// </remarks>
-    public AnnotationStyle DrawingStyle => Style.ForTool(_tool);
+    public AnnotationStyle DrawingStyle => Style.ForTool(_tool).ScaledBy(_scale);
 
     /// <summary>
     /// Frame pixels to the layout unit on the surface being drawn on: one display's DPI
     /// scaling over an overlay, and one over an image laid out at its own pixel size.
     /// </summary>
     /// <remarks>
-    /// Only the grab points and the reach of a press on a mark read it, and only because
-    /// they are sizes a hand aims at rather than distances in the capture. Everything else
-    /// here is in frame pixels throughout, which is why this is a property of the editor
-    /// and not a parameter on every call.
+    /// Read wherever a size is meant in points rather than as a distance in the capture:
+    /// the grab points and the reach of a press, which a hand aims at, and the sizes on
+    /// the row, which macshot gives in points too. Everything else here is in frame pixels
+    /// throughout, which is why this is a property of the editor and not a parameter on
+    /// every call.
     /// </remarks>
     public double Scale
     {
@@ -456,10 +473,9 @@ public sealed class AnnotationEditor
     /// <remarks>
     /// Never under macshot's two points (<c>OverlayView.swift:4130</c>), or the thinnest
     /// pencil's dot would vanish under the pointer.
-    /// macshot's marker is six times its stored width when drawn and its dot is sized to
-    /// match; this port stores the width it draws, so both tools read the same number.
     /// </remarks>
-    public double BrushRadius => Math.Max(DrawingStyle.StrokeWidth / 2, 2 * _scale);
+    public double BrushRadius =>
+        Math.Max(Annotation.InkWidthFor(_tool, DrawingStyle.StrokeWidth) / 2, 2 * _scale);
 
     /// <summary>
     /// A corner or an edge says which way it resizes; every other handle moves a point
@@ -545,7 +561,7 @@ public sealed class AnnotationEditor
     /// does, so there is nothing of the previous offer worth keeping.
     /// </remarks>
     public void ProposeSpan(CapturePoint from, CapturePoint to) =>
-        AutoSpan = Annotation.Create(AnnotationTool.Measure, from, to, Style);
+        AutoSpan = Annotation.Create(AnnotationTool.Measure, from, to, Style.ScaledBy(_scale));
 
     /// <summary>
     /// Puts the offered ruler on the canvas and clears the offer.
@@ -655,10 +671,17 @@ public sealed class AnnotationEditor
             return false;
         }
 
-        if (IsFreeform(_tool))
+        if (DrawsOnPress(_tool))
         {
             _freeformSamples = [point];
-            _freeformPressures = PenPressure && pressure > 0 ? [pressure] : null;
+            _axisAnchor = null;
+            _axisIsHorizontal = null;
+
+            // The pencil's alone: macshot never records a pressure for the highlighter
+            // (MarkerToolHandler.swift:46-60), which is one even band however it is drawn.
+            _freeformPressures = _tool == AnnotationTool.Pencil && PenPressure && pressure > 0
+                ? [pressure]
+                : null;
             Draft = Annotation.CreateFreeform(_tool, _freeformSamples, DrawingStyle, _freeformPressures);
             return false;
         }
@@ -670,7 +693,7 @@ public sealed class AnnotationEditor
         // silently winning.
         if (_tool == AnnotationTool.Loupe)
         {
-            Draft = Placed(point, Style.LoupeSize);
+            Draft = Placed(point, DrawingStyle.LoupeSize);
             return false;
         }
 
@@ -765,7 +788,7 @@ public sealed class AnnotationEditor
 
         if (_freeformSamples is not null)
         {
-            _freeformSamples.Add(point);
+            _freeformSamples.Add(HeldToAxis(point, modifiers));
             _freeformPressures?.Add(Math.Clamp(pressure, MinRecordedPressure, 1));
             Draft = Annotation.CreateFreeform(_tool, _freeformSamples, DrawingStyle, _freeformPressures);
             return;
@@ -776,7 +799,7 @@ public sealed class AnnotationEditor
         // sizing it.
         if (_tool == AnnotationTool.Loupe)
         {
-            Draft = Placed(point, Style.LoupeSize);
+            Draft = Placed(point, DrawingStyle.LoupeSize);
             return;
         }
 
@@ -954,7 +977,7 @@ public sealed class AnnotationEditor
     /// </summary>
     private Annotation Finished(Annotation draft)
     {
-        if (Smoothing == PencilSmoothing.None || draft.Points.Count < 3)
+        if (!Smooths(draft.Tool) || Smoothing == PencilSmoothing.None || draft.Points.Count < 3)
         {
             return draft;
         }
@@ -1428,11 +1451,51 @@ public sealed class AnnotationEditor
     }
 
     /// <summary>
-    /// Whether the tool draws by following the pointer rather than by dragging out a
-    /// shape — which is the same question as whether <see cref="Smoothing"/> applies to
-    /// it, so the toolbar asks here instead of keeping a list of its own.
+    /// Whether <see cref="Smoothing"/> applies to the tool, which the toolbar asks here
+    /// instead of keeping a list of its own.
     /// </summary>
-    public static bool IsFreeform(AnnotationTool tool) => tool is AnnotationTool.Pencil;
+    /// <remarks>
+    /// The pencil's alone, though the highlighter follows the pointer too: macshot offers
+    /// smoothing only on the pencil's row (<c>ToolOptionsRowView.swift:184</c>) and draws
+    /// the highlighter straight through its samples (<c>Annotation.swift:778-793</c>).
+    /// </remarks>
+    public static bool Smooths(AnnotationTool tool) => tool is AnnotationTool.Pencil;
+
+    /// <summary>
+    /// A freehand sample held to one axis while Shift is down — macshot's
+    /// <c>freeformShiftDirection</c> (<c>PencilToolHandler.swift:44-67</c>).
+    /// </summary>
+    /// <remarks>
+    /// From wherever the stroke was when Shift went down, not from where it started, so a
+    /// stroke can wander and then run straight. The axis is not chosen until the pointer
+    /// has gone a few points from there, because the first pixel of a hand's movement
+    /// says nothing about the direction it means; until then the stroke holds still.
+    /// </remarks>
+    private CapturePoint HeldToAxis(CapturePoint point, EditorModifiers modifiers)
+    {
+        if (!modifiers.HasFlag(EditorModifiers.Constrain))
+        {
+            _axisAnchor = null;
+            _axisIsHorizontal = null;
+            return point;
+        }
+
+        var anchor = _axisAnchor ??= _freeformSamples![^1];
+        var deltaX = point.X - anchor.X;
+        var deltaY = point.Y - anchor.Y;
+        if (_axisIsHorizontal is null
+            && Math.Sqrt(deltaX * deltaX + deltaY * deltaY) > AxisChoiceDistance * _scale)
+        {
+            _axisIsHorizontal = Math.Abs(deltaX) >= Math.Abs(deltaY);
+        }
+
+        return _axisIsHorizontal switch
+        {
+            true => new CapturePoint(point.X, anchor.Y),
+            false => new CapturePoint(anchor.X, point.Y),
+            null => anchor,
+        };
+    }
 
     private static bool IsWorthKeeping(Annotation annotation)
     {
@@ -1533,8 +1596,7 @@ public sealed class AnnotationEditor
         // Constraining a line means an angle; constraining an area means a square. A
         // spotlight is an area — it is dragged out as the rectangle that stays lit, not
         // as a stroke.
-        return tool is AnnotationTool.Line or AnnotationTool.Arrow or AnnotationTool.Marker
-            or AnnotationTool.Measure
+        return tool is AnnotationTool.Line or AnnotationTool.Arrow or AnnotationTool.Measure
             ? SnapToAxis(origin, point)
             : SnapToSquare(origin, point);
     }

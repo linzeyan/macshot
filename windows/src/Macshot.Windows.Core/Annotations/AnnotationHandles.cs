@@ -240,6 +240,20 @@ public static class AnnotationHandles
         var bounds = annotation.BoundingRect;
         var centre = Centre(annotation);
 
+        // A freehand stroke's samples run down the middle of its ink, so an outline at
+        // their bounds would cut through the band it is meant to surround — the
+        // highlighter's most of all. macshot pads by the painted radius
+        // (OverlayView.swift:4451-4458).
+        if (annotation.Points.Count > 0)
+        {
+            var reach = annotation.InkWidth / 2;
+            bounds = new CaptureRegion(
+                bounds.X - reach,
+                bounds.Y - reach,
+                bounds.Width + (reach * 2),
+                bounds.Height + (reach * 2));
+        }
+
         return
         [
             Turn(new CapturePoint(bounds.X, bounds.Y), centre, annotation.Rotation),
@@ -296,7 +310,6 @@ public static class AnnotationHandles
     private static bool IsLinear(AnnotationTool tool) => tool
         is AnnotationTool.Line
         or AnnotationTool.Arrow
-        or AnnotationTool.Marker
         or AnnotationTool.Measure;
 
     private static IReadOnlyList<AnnotationHandle> LinearHandles(Annotation annotation)

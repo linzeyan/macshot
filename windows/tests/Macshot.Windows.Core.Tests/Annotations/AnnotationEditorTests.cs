@@ -116,16 +116,98 @@ public sealed class AnnotationEditorTests
     public void BrushRadius_IsHalfTheStrokeTheToolWouldDrawButNeverTooSmallToSee()
     {
         var editor = NewEditor(AnnotationTool.Marker);
-        editor.Style = editor.Style with { StrokeWidth = 1, MarkerStrokeWidth = 18 };
+        editor.Style = editor.Style with { StrokeWidth = 1, MarkerStrokeWidth = 3 };
 
         Assert.AreEqual(PointerCursor.Brush, editor.CursorAt(new CapturePoint(50, 50)));
-        Assert.AreEqual(9, editor.BrushRadius, 1e-9, "the marker's own width, not the pencil's");
+        Assert.AreEqual(9, editor.BrushRadius, 1e-9, "the marker's own width as drawn, six times over");
 
         editor.Tool = AnnotationTool.Pencil;
         Assert.AreEqual(2, editor.BrushRadius, 1e-9, "a one-pixel pencil still gets a visible dot");
 
         editor.Scale = 2;
         Assert.AreEqual(4, editor.BrushRadius, 1e-9, "two points, not two pixels");
+    }
+
+    /// <summary>
+    /// macshot's row is in points: a 3 is as thick on a Retina screen as on any other,
+    /// because a mark is multiplied out to pixels only where it is drawn. Taken as frame
+    /// pixels, every stroke, corner and loupe came out smaller the higher the display's
+    /// scaling — at 175%, little more than half of what the same number gives on the Mac.
+    /// </summary>
+    [TestMethod]
+    public void PointerReleased_SizesAMarkInPointsOfTheSurfaceItIsDrawnOn()
+    {
+        var editor = NewEditor(AnnotationTool.Rectangle);
+        editor.Scale = 1.75;
+        editor.Style = editor.Style with { StrokeWidth = 4, CornerRadius = 8, LoupeSize = 120 };
+
+        var rectangle = DragOut(editor, new CapturePoint(10, 10), new CapturePoint(100, 80));
+        editor.Tool = AnnotationTool.Loupe;
+        var loupe = DragOut(editor, new CapturePoint(300, 300), new CapturePoint(300, 300));
+
+        Assert.AreEqual(7, rectangle?.Style.StrokeWidth ?? 0, 1e-9);
+        Assert.AreEqual(14, rectangle?.Style.CornerRadius ?? 0, 1e-9);
+        Assert.AreEqual(210, loupe?.BoundingRect.Width ?? 0, 1e-9);
+        Assert.AreEqual(4, editor.Style.StrokeWidth, "while the row goes on showing the 4 it was set to");
+    }
+
+    /// <summary>
+    /// macshot's highlighter is a freehand tool that keeps its samples as drawn: no
+    /// smoothing, which macshot offers only on the pencil, and no pressure, which it never
+    /// records for the marker. Drawn as a straight line between press and release, it
+    /// could not follow a line of text that is not perfectly level, nor circle anything.
+    /// </summary>
+    [TestMethod]
+    public void PointerReleased_MarkerKeepsTheSamplesTheHandMade()
+    {
+        var editor = NewEditor(AnnotationTool.Marker);
+        editor.Smoothing = PencilSmoothing.Smooth;
+        editor.PenPressure = true;
+
+        editor.PointerPressed(new CapturePoint(10, 10), pressure: 0.5);
+        editor.PointerMoved(new CapturePoint(50, 40), pressure: 0.5);
+        var marker = editor.PointerReleased(new CapturePoint(90, 10), pressure: 0.5);
+
+        Assert.IsNotNull(marker);
+        CollectionAssert.Contains(marker.Points.ToArray(), new CapturePoint(50, 40), "the turn, exactly where it was made");
+        Assert.AreEqual(0, marker.Pressures.Count);
+    }
+
+    /// <summary>
+    /// Shift holds a freehand stroke to the axis it sets off along from where Shift went
+    /// down — macshot's <c>freeformShiftDirection</c>, on the pencil and the highlighter
+    /// alike. Without it there is no way to rule a highlight along a line of text by hand.
+    /// </summary>
+    [TestMethod]
+    [DataRow(AnnotationTool.Pencil)]
+    [DataRow(AnnotationTool.Marker)]
+    public void PointerMoved_ShiftHoldsAFreehandStrokeToTheAxisItSetsOffAlong(AnnotationTool tool)
+    {
+        var editor = NewEditor(tool);
+        editor.Smoothing = PencilSmoothing.None;
+
+        editor.PointerPressed(new CapturePoint(10, 10));
+        editor.PointerMoved(new CapturePoint(30, 12));
+        editor.PointerMoved(new CapturePoint(31, 13), EditorModifiers.Constrain);
+        editor.PointerMoved(new CapturePoint(60, 20), EditorModifiers.Constrain);
+        editor.PointerMoved(new CapturePoint(80, 40), EditorModifiers.Constrain);
+        editor.PointerMoved(new CapturePoint(85, 70));
+        var stroke = editor.PointerReleased(new CapturePoint(85, 70));
+
+        Assert.IsNotNull(stroke);
+        CollectionAssert.AreEqual(
+            new[]
+            {
+                new CapturePoint(10, 10),
+                new CapturePoint(30, 12),
+                new CapturePoint(30, 12),
+                new CapturePoint(60, 12),
+                new CapturePoint(80, 12),
+                new CapturePoint(85, 70),
+                new CapturePoint(85, 70),
+            },
+            stroke.Points.ToArray(),
+            "held still until the direction is plain, then level with where Shift went down, then free again");
     }
 
     /// <summary>
@@ -1270,5 +1352,12 @@ public sealed class AnnotationEditorTests
         editor.PointerPressed(from, modifiers);
         editor.PointerMoved(to, modifiers);
         editor.PointerReleased(to, modifiers);
+    }
+
+    private static Annotation? DragOut(AnnotationEditor editor, CapturePoint from, CapturePoint to)
+    {
+        editor.PointerPressed(from);
+        editor.PointerMoved(to);
+        return editor.PointerReleased(to);
     }
 }

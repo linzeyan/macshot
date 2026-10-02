@@ -601,6 +601,30 @@ public sealed class CaptureSettingsTests
     }
 
     /// <summary>
+    /// Until 0.8.24 the highlighter's number was the whole width of its band. It is now a
+    /// sixth of it, as macshot's is, so a number carried over would be drawn six times
+    /// over — an 18 picked for an 18-pixel band becoming 108 points of ink. Under a new key
+    /// the old number is not read and the highlighter starts again at macshot's 3, while
+    /// one set since survives the file like every other preference.
+    /// </summary>
+    [TestMethod]
+    public void AHighlighterWidthFromBeforeItWasASixthOfTheBandIsNotCarriedOver()
+    {
+        var old = JsonSerializer.Deserialize<CaptureSettings>(
+            """{ "markerStrokeWidth": 18, "quality": 71 }""",
+            CaptureSettingsJson.Options);
+        var current = JsonSerializer.Deserialize<CaptureSettings>(
+            JsonSerializer.Serialize(
+                CaptureSettings.Default with { MarkerStrokeWidth = 5 },
+                CaptureSettingsJson.Options),
+            CaptureSettingsJson.Options);
+
+        Assert.AreEqual(71, old?.Quality, "the rest of the file has to survive the dead key");
+        Assert.AreEqual(AnnotationStyle.DefaultStrokeWidth, old?.MarkerStrokeWidth);
+        Assert.AreEqual(5, current?.MarkerStrokeWidth);
+    }
+
+    /// <summary>
     /// A caption's look is remembered across recordings, not merely within one editor
     /// window. Someone who captions every clip in the same face and colour sets it up once;
     /// dropping it at the end of the session would mean doing that work again tomorrow.

@@ -24,6 +24,9 @@ public static class AnnotationRasterizer
     /// <summary>Extra margin around a stroke so its antialiased edge is not clipped.</summary>
     private const double AntialiasMargin = 2;
 
+    /// <summary>How much of the highlighter's colour covers what is under it.</summary>
+    private const double MarkerOpacity = 0.35;
+
     /// <summary>
     /// The tools this rasterizer draws, which is what the toolbar may offer. A tool
     /// outside this list reaches <see cref="DrawAnnotation"/>'s default case and
@@ -157,8 +160,30 @@ public static class AnnotationRasterizer
             CompositeStrokes(pixels, width, height, [BuildFreeformPath(annotation)], annotation);
             break;
         case AnnotationTool.Line:
-        case AnnotationTool.Marker:
             CompositeStrokes(pixels, width, height, [BuildShaftPath(annotation)], annotation);
+            break;
+        case AnnotationTool.Marker:
+            // macshot's highlighter (Annotation.swift:629-630, 666-797): through the
+            // samples as the hand made them, six times the width the row shows, at a
+            // fixed 0.35 whatever the colour's own alpha, and solid with no halo — the
+            // marker never takes the line style the pencil does
+            // (MarkerToolHandler.swift:53-59).
+            CompositeStrokes(
+                pixels,
+                width,
+                height,
+                [BuildFreeformPath(annotation)],
+                annotation with
+                {
+                    Style = annotation.Style with
+                    {
+                        StrokeWidth = annotation.InkWidth,
+                        Color = annotation.Style.Color with { Alpha = byte.MaxValue },
+                        Opacity = MarkerOpacity,
+                        LineStyle = LineStyle.Solid,
+                        Outline = null,
+                    },
+                });
             break;
         case AnnotationTool.Highlight:
             // Only the hairline: what makes a spotlight a spotlight is the dim outside it,

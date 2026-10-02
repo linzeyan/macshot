@@ -281,7 +281,55 @@ public sealed class AnnotationFileTests
 
         // Better than a partial read: a later version's meaning for a field this one
         // understands is not knowable, and a mark placed wrongly is worse than none.
-        Assert.AreEqual(0, AnnotationFile.Read(document.Replace("\"version\":1", "\"version\":2", StringComparison.Ordinal)).Count);
+        var later = document.Replace(
+            $"\"version\":{AnnotationFile.CurrentVersion}",
+            $"\"version\":{AnnotationFile.CurrentVersion + 1}",
+            StringComparison.Ordinal);
+        Assert.AreNotEqual(document, later, "the version has to be found to be bumped");
+        Assert.AreEqual(0, AnnotationFile.Read(later).Count);
+    }
+
+    /// <summary>
+    /// A highlighter saved before 0.8.24 was stored at the whole width of its band, as the
+    /// straight line between its ends. Read as written, every highlight in a capture
+    /// reopened from the history would come back six times as thick as it was saved, and
+    /// with end grips a highlighter no longer has.
+    /// </summary>
+    [TestMethod]
+    public void Read_ReopensAnOldHighlighterAsThickAsItWasSaved()
+    {
+        const string Document =
+            """
+            {"version":1,"annotations":[{"id":"00000000-0000-0000-0000-000000000001",
+            "tool":"Marker","startX":10,"startY":20,"endX":110,"endY":20,
+            "color":"#FFFFFF00","strokeWidth":18,"lineStyle":"Solid","opacity":1}]}
+            """;
+
+        var restored = AnnotationFile.Read(Document).Single();
+
+        Assert.AreEqual(18, restored.InkWidth, 1e-9);
+        CollectionAssert.AreEqual(
+            new[] { new CapturePoint(10, 20), new CapturePoint(110, 20) },
+            restored.Points.ToArray());
+        Assert.AreEqual(0, AnnotationHandles.For(restored).Count);
+    }
+
+    /// <summary>
+    /// And one saved since is stored in today's terms, so reading it back must not shrink
+    /// it a second time.
+    /// </summary>
+    [TestMethod]
+    public void RoundTrip_KeepsAHighlightersWidth()
+    {
+        var marker = Annotation.CreateFreeform(
+            AnnotationTool.Marker,
+            [new CapturePoint(10, 20), new CapturePoint(60, 30), new CapturePoint(110, 20)],
+            AnnotationStyle.Default with { StrokeWidth = 3 });
+
+        var restored = AnnotationFile.Read(AnnotationFile.Write([marker])).Single();
+
+        Assert.AreEqual(3, restored.Style.StrokeWidth, 1e-9);
+        CollectionAssert.AreEqual(marker.Points.ToArray(), restored.Points.ToArray());
     }
 
     [TestMethod]
