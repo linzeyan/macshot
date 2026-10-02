@@ -3,6 +3,43 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.25] - 2026-10-03
+
+### Changed
+
+- **The editor opens a capture at the size it was on screen, as on macOS.** On a display
+  scaled to 175%, a capture used to open in the editor 175% larger than it was, with its
+  handles and marks enlarged to match. It now opens at 100% with one pixel of the capture
+  to one pixel of the screen, and marks and handles are the size they were when you drew
+  them. Captures reopened from the history open the same way.
+- **Image files open at their own size.** The editor reads the file's resolution, as
+  macOS does, so a 96 DPI image opens at its size in points. On a display scaled to 175%
+  it looks larger than its pixel count, exactly as a 72 DPI image does on a Retina Mac.
+- **Arrowheads, number badges, the padding around labels, dotted lines and the other
+  sizes you do not set are in points too**, so on a scaled display they are no longer
+  smaller than on macOS. 0.8.24 did this for the sizes on the toolbar; this finishes it.
+- **The smart marker works as on macOS while you draw.** The band stays level from where
+  you pressed and is as thick as the line of text under the pointer from the start. The
+  pointer becomes a yellow highlighter tip. Before, the band followed the pointer at the
+  toolbar's width and only snapped to the text when you let go.
+- **"Save at standard resolution" uses the scale the capture was taken at.** An image
+  opened from a file is no longer shrunk by your display's scaling when you save it.
+
+### Fixed
+
+- **The editor's tool options are no longer cut off** at the bottom of the window.
+- **The editor window opens big enough** to show the capture and its toolbars on a
+  scaled display.
+- **The text box in the editor is the size the label will be**, so the text no longer
+  changes size when you press Enter.
+
+### Note
+
+- **Captures in the history from earlier versions open as before**, because they were
+  saved without the scale they were taken at. Only captures taken with this version open
+  at 1:1.
+- **WebP and AVIF files do not store a resolution**, so they open at one point per pixel.
+
 ## [0.8.24] - 2026-10-02
 
 ### Changed
