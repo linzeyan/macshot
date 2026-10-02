@@ -3,6 +3,33 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.23] - 2026-10-02
+
+### Changed
+
+- **The pointer now shows what a click will do, as it does on macOS.** Over a mark you can
+  move, it becomes the move pointer, whichever drawing tool is selected. Over the handles
+  of a selected shape, it shows the direction that handle resizes. Before, it stayed a
+  crosshair everywhere unless the pointer tool was selected, so the only way to find out
+  whether a click would draw or move something was to click.
+- **Marks are easier to pick up on a high-resolution display.** The distance at which a
+  click still catches a line used to shrink as Windows' display scaling went up, so at
+  175% you had to put the crosshair right on the line. It is now the same at every scaling,
+  as on macOS.
+- **The pencil and the marker show how thick their line will be.** A dot the size of the
+  stroke follows the pointer, so you can judge the width before you draw. On macOS the dot
+  replaces the pointer; on Windows the crosshair stays and the dot is drawn under it.
+
+### Added
+
+- **Shapes have a handle in the middle of each side**, as on macOS. Drag one to make a
+  rectangle, ellipse or other shape taller or wider without changing its other dimension.
+
+### Fixed
+
+- **The magnifier stays round when you resize it.** Dragging one of its corners used to
+  stretch it into an oval, which stretched what it magnified too.
+
 ## [0.8.22] - 2026-10-01
 
 ### Fixed
