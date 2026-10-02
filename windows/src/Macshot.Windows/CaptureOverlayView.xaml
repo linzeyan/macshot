@@ -46,6 +46,7 @@
                 PointerPressed="SelectionCanvas_PointerPressed"
                 PointerMoved="SelectionCanvas_PointerMoved"
                 PointerReleased="SelectionCanvas_PointerReleased"
+                PointerExited="SelectionCanvas_PointerExited"
                 PointerWheelChanged="SelectionCanvas_PointerWheelChanged" />
 
             <!-- Above SelectionCanvas so marks are not tinted by the selection fill. The

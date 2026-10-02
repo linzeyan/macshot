@@ -764,12 +764,19 @@ public sealed record Annotation(
     }
 
     /// <summary>
+    /// How far beyond its stroke a mark is still grabbed, in layout units — macshot's
+    /// eight points (<c>Annotation.swift:373</c>). See <see cref="AnnotationEditor.MarkAt"/>
+    /// for the scaling.
+    /// </summary>
+    public const double GrabThreshold = 8;
+
+    /// <summary>
     /// Tests whether a frame-space point grabs this annotation. Marks that cover what is
     /// under them are grabbed anywhere inside their bounds; outline tools are grabbed
     /// only near the stroke, so a click inside an empty rectangle falls through to
     /// whatever is behind it.
     /// </summary>
-    public bool HitTest(CapturePoint point, double threshold = 6)
+    public bool HitTest(CapturePoint point, double threshold = GrabThreshold)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(threshold);
 

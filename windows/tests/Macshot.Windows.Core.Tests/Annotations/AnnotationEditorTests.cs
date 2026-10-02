@@ -18,6 +18,116 @@ public sealed class AnnotationEditorTests
         Assert.IsNull(editor.Draft, "the draft must be cleared once it is committed");
     }
 
+    /// <summary>
+    /// The report this pins: with the rectangle tool in hand, a rectangle already drawn
+    /// could be dragged by its edge, but the pointer stayed a crosshair over it, so nothing
+    /// said where it could be picked up. macOS shows the hand over any mark for every tool
+    /// that grabs one (OverlayView.swift:1388-1400).
+    /// </summary>
+    [TestMethod]
+    public void CursorAt_ShowsTheGrabOverAMarkWhicheverDrawingToolIsInHand()
+    {
+        var editor = NewEditor(AnnotationTool.Rectangle);
+        Drag(editor, new CapturePoint(10, 10), new CapturePoint(90, 60));
+        editor.PointerPressed(new CapturePoint(300, 300));
+        editor.PointerReleased(new CapturePoint(300, 300));
+
+        Assert.AreEqual(PointerCursor.Grab, editor.CursorAt(new CapturePoint(10, 30)), "on the edge");
+        Assert.AreEqual(PointerCursor.Crosshair, editor.CursorAt(new CapturePoint(50, 35)), "inside a hollow one");
+        Assert.AreEqual(PointerCursor.Crosshair, editor.CursorAt(new CapturePoint(200, 200)), "over nothing");
+    }
+
+    /// <summary>
+    /// The cursor has to promise what the press does. A pencil draws over a mark rather
+    /// than taking it, and Alt draws through whatever is underneath, so a grab shown there
+    /// would be a promise the click breaks.
+    /// </summary>
+    [TestMethod]
+    public void CursorAt_KeepsTheToolsCursorWhereThePressWouldDrawInstead()
+    {
+        var editor = NewEditor(AnnotationTool.Arrow);
+        Drag(editor, new CapturePoint(10, 10), new CapturePoint(90, 10));
+        var onIt = new CapturePoint(50, 10);
+
+        Assert.AreEqual(PointerCursor.Crosshair, editor.CursorAt(onIt, EditorModifiers.DrawThrough));
+
+        editor.Tool = AnnotationTool.Pencil;
+        Assert.AreEqual(PointerCursor.Brush, editor.CursorAt(onIt));
+        Assert.AreEqual(PointerCursor.Grab, editor.CursorAt(onIt, EditorModifiers.Extend), "Ctrl grabs even with a pencil");
+
+        editor.Tool = AnnotationTool.Select;
+        Assert.AreEqual(PointerCursor.Grab, editor.CursorAt(onIt));
+        Assert.AreEqual(PointerCursor.Arrow, editor.CursorAt(new CapturePoint(50, 80)));
+    }
+
+    /// <summary>
+    /// A held mark keeps the grab wherever the pointer goes, the way macOS's hand stays
+    /// closed until the release: a cursor that changed as the mark lagged a frame behind
+    /// the pointer would read as the grip slipping. A resize keeps its arrow instead,
+    /// because Windows draws the grab as the move arrow.
+    /// </summary>
+    [TestMethod]
+    public void CursorAt_StaysOnWhatThePressTookHoldOfUntilTheRelease()
+    {
+        var editor = NewEditor(AnnotationTool.Rectangle);
+        Drag(editor, new CapturePoint(10, 10), new CapturePoint(90, 60));
+
+        editor.PointerPressed(new CapturePoint(10, 30));
+        editor.PointerMoved(new CapturePoint(400, 400));
+        Assert.AreEqual(PointerCursor.Grab, editor.CursorAt(new CapturePoint(400, 400)));
+        editor.PointerReleased(new CapturePoint(400, 400));
+
+        var corner = editor.Selected!.BoundingRect;
+        var bottomRight = new CapturePoint(corner.Right, corner.Bottom);
+        Assert.AreEqual(PointerCursor.ResizeFalling, editor.CursorAt(bottomRight));
+        editor.PointerPressed(bottomRight);
+        editor.PointerMoved(new CapturePoint(900, 900));
+        Assert.AreEqual(PointerCursor.ResizeFalling, editor.CursorAt(new CapturePoint(900, 900)));
+
+        editor.Tool = AnnotationTool.Arrow;
+        Drag(editor, new CapturePoint(600, 100), new CapturePoint(700, 100));
+        editor.PointerPressed(new CapturePoint(800, 300));
+        Assert.AreEqual(PointerCursor.Crosshair, editor.CursorAt(new CapturePoint(650, 100)), "drawing a new mark is not holding one");
+    }
+
+    /// <summary>
+    /// The freehand tools show the stroke a press would lay down under the pointer, so
+    /// the width can be judged before any ink is spent. The dot has to be the stroke's
+    /// size, and has to stay big enough to see at the thinnest setting.
+    /// </summary>
+    [TestMethod]
+    public void BrushRadius_IsHalfTheStrokeTheToolWouldDrawButNeverTooSmallToSee()
+    {
+        var editor = NewEditor(AnnotationTool.Marker);
+        editor.Style = editor.Style with { StrokeWidth = 1, MarkerStrokeWidth = 18 };
+
+        Assert.AreEqual(PointerCursor.Brush, editor.CursorAt(new CapturePoint(50, 50)));
+        Assert.AreEqual(9, editor.BrushRadius, 1e-9, "the marker's own width, not the pencil's");
+
+        editor.Tool = AnnotationTool.Pencil;
+        Assert.AreEqual(2, editor.BrushRadius, 1e-9, "a one-pixel pencil still gets a visible dot");
+
+        editor.Scale = 2;
+        Assert.AreEqual(4, editor.BrushRadius, 1e-9, "two points, not two pixels");
+    }
+
+    /// <summary>
+    /// macOS's eight-point reach is in points. Measured in frame pixels it shrank with the
+    /// display's scaling, so at 175% a line had to be hit almost exactly.
+    /// </summary>
+    [TestMethod]
+    public void MarkAt_ReachesAsFarOnAHighDpiDisplayAsAHandDoesAt100Percent()
+    {
+        var editor = NewEditor(AnnotationTool.Line);
+        Drag(editor, new CapturePoint(0, 100), new CapturePoint(400, 100));
+        var nearby = new CapturePoint(200, 112);
+
+        Assert.IsNull(editor.MarkAt(nearby), "12 pixels off is out of reach at 100%");
+
+        editor.Scale = 2;
+        Assert.IsNotNull(editor.MarkAt(nearby), "and within it at 200%, where it is six points");
+    }
+
     [TestMethod]
     public void ProposeSpan_DrawsTheRulerWithoutPuttingItInTheDocument()
     {

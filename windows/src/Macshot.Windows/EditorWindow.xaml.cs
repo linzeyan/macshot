@@ -993,9 +993,12 @@ public sealed partial class EditorWindow : Window
         AnnotationCanvas.Render();
     }
 
+    private void InputCanvas_PointerExited(object sender, PointerRoutedEventArgs e) =>
+        AnnotationCanvas.ShowBrush(null);
+
     private void InputCanvas_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
-        UpdateCursor(ToFrame(e));
+        UpdateCursor(ToFrame(e), ToModifiers(e));
 
         if (_cropping)
         {
@@ -1061,8 +1064,11 @@ public sealed partial class EditorWindow : Window
     /// or draw. The image is one canvas, and none of those is a control with a hover state
     /// of its own.
     /// </summary>
-    private void UpdateCursor(CapturePoint point)
+    private void UpdateCursor(CapturePoint point, EditorModifiers modifiers)
     {
+        // As in the overlay: only the last line puts the dot back.
+        AnnotationCanvas.ShowBrush(null);
+
         if (_cropping)
         {
             InputCanvas.UseCursor(InputSystemCursorShape.Cross);
@@ -1075,24 +1081,16 @@ public sealed partial class EditorWindow : Window
             return;
         }
 
-        // Before the tool is asked: the selected mark's handles are grabbable whatever is
-        // in hand, so a crosshair over one would say "draw" where the press reshapes.
-        if (_editor.SelectionShown is { } shown
-            && AnnotationHandles.At(shown, point, _editor.Scale) is { } handle)
+        // The arrow while a label is being typed, as the overlay shows it.
+        if (AnnotationCanvas.IsTyping)
         {
-            InputCanvas.UseCursor(CursorHints.For(handle.Kind));
+            InputCanvas.UseCursor(InputSystemCursorShape.Arrow);
             return;
         }
 
-        if (_editor.Tool != AnnotationTool.Select)
-        {
-            InputCanvas.UseCursor(InputSystemCursorShape.Cross);
-            return;
-        }
-
-        InputCanvas.UseCursor(_editor.Document.HitTest(point) is null
-            ? InputSystemCursorShape.Arrow
-            : InputSystemCursorShape.SizeAll);
+        var cursor = _editor.CursorAt(point, modifiers);
+        InputCanvas.UseCursor(CursorHints.For(cursor));
+        AnnotationCanvas.ShowBrush(cursor == PointerCursor.Brush && !_editor.IsDragging ? point : null);
     }
 
     private void EditorRoot_KeyDown(object sender, KeyRoutedEventArgs e)

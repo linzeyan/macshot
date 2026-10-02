@@ -201,10 +201,10 @@ public sealed class AnnotationEditor
     /// scaling over an overlay, and one over an image laid out at its own pixel size.
     /// </summary>
     /// <remarks>
-    /// Only the grab points read it, and only because they are sizes a hand aims at
-    /// rather than distances in the capture. Everything else here is in frame pixels
-    /// throughout, which is why this is a property of the editor and not a parameter on
-    /// every call.
+    /// Only the grab points and the reach of a press on a mark read it, and only because
+    /// they are sizes a hand aims at rather than distances in the capture. Everything else
+    /// here is in frame pixels throughout, which is why this is a property of the editor
+    /// and not a parameter on every call.
     /// </remarks>
     public double Scale
     {
@@ -384,6 +384,94 @@ public sealed class AnnotationEditor
         SelectionShown is { } shown ? AnnotationHandles.For(shown, _scale) : [];
 
     public bool IsDragging => _isPressed && Draft is not null;
+
+    /// <summary>
+    /// The topmost mark a press at <paramref name="point"/> would land on, with the reach
+    /// scaled to the display as the handles' is.
+    /// </summary>
+    /// <remarks>
+    /// macshot's eight points (<c>Annotation.swift:373</c>) are points, not pixels: in
+    /// frame pixels the same line was half as easy to hit at 200% as at 100%, and on a
+    /// high-DPI display the pointer had to sit on the stroke itself.
+    /// </remarks>
+    public Annotation? MarkAt(CapturePoint point) =>
+        _document.HitTest(point, Annotation.GrabThreshold * _scale);
+
+    /// <summary>
+    /// What the pointer at <paramref name="point"/> should look like: what a press there
+    /// would do, or what the press already down is doing.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// The same questions in the order <see cref="PointerPressed"/> asks them, so the
+    /// pointer cannot promise one thing and the click do another. macshot's
+    /// <c>updateCursorForPoint</c> (<c>OverlayView.swift:1306-1418</c>) shows a hand over
+    /// any mark for every tool but the two freehand ones, which is the rule
+    /// <see cref="GrabsExistingMarks"/> already applies to the press.
+    /// </para>
+    /// <para>
+    /// A held mark keeps its cursor whatever passes under the pointer, as macshot's hand
+    /// stays closed until the release (<c>:8423</c>, <c>:8621</c>, <c>:8637</c>). Except
+    /// that a corner or an edge keeps its resize arrow rather than taking the grab: macshot
+    /// closes the hand there too, but Windows draws the grab as the move arrow, and a move
+    /// arrow over a resize says the wrong thing about what the drag is doing.
+    /// </para>
+    /// </remarks>
+    public PointerCursor CursorAt(CapturePoint point, EditorModifiers modifiers = EditorModifiers.None)
+    {
+        if (_isPressed)
+        {
+            return _handle is { } held ? CursorFor(held.Kind)
+                : _dragTarget is not null ? PointerCursor.Grab
+                : ToolCursor;
+        }
+
+        if (_tool != AnnotationTool.ColorSampler
+            && !DrawsThrough(_tool, modifiers)
+            && Selected is { } selected
+            && AnnotationHandles.At(selected, point, _scale) is { } handle)
+        {
+            return CursorFor(handle.Kind);
+        }
+
+        if (GrabsExistingMarks(modifiers) && MarkAt(point) is { IsMovable: true })
+        {
+            return PointerCursor.Grab;
+        }
+
+        return ToolCursor;
+    }
+
+    private PointerCursor ToolCursor => _tool switch
+    {
+        AnnotationTool.Select => PointerCursor.Arrow,
+        AnnotationTool.Pencil or AnnotationTool.Marker => PointerCursor.Brush,
+        _ => PointerCursor.Crosshair,
+    };
+
+    /// <summary>
+    /// How big the dot under the pointer is, in frame pixels: half the stroke a press would
+    /// lay down, so its width can be seen before any of it is drawn.
+    /// </summary>
+    /// <remarks>
+    /// Never under macshot's two points (<c>OverlayView.swift:4130</c>), or the thinnest
+    /// pencil's dot would vanish under the pointer.
+    /// macshot's marker is six times its stored width when drawn and its dot is sized to
+    /// match; this port stores the width it draws, so both tools read the same number.
+    /// </remarks>
+    public double BrushRadius => Math.Max(DrawingStyle.StrokeWidth / 2, 2 * _scale);
+
+    /// <summary>
+    /// A corner or an edge says which way it resizes; every other handle moves a point
+    /// anywhere, or turns the shape, and gets the hand, as macshot gives it
+    /// (<c>OverlayView.swift:1346-1369</c>).
+    /// </summary>
+    private static PointerCursor CursorFor(AnnotationHandleKind kind) => kind switch
+    {
+        AnnotationHandleKind.TopLeft or AnnotationHandleKind.BottomRight => PointerCursor.ResizeFalling,
+        AnnotationHandleKind.TopRight or AnnotationHandleKind.BottomLeft => PointerCursor.ResizeRising,
+        _ => PointerCursor.Grab,
+    };
 
     /// <summary>
     /// Whether a drag is in flight that Space would move rather than resize.
@@ -1012,7 +1100,7 @@ public sealed class AnnotationEditor
     /// </param>
     public bool LongPressed(CapturePoint point, EditorModifiers modifiers = EditorModifiers.None)
     {
-        if (!_isPressed || _document.HitTest(point) is not { IsMovable: true } hit)
+        if (!_isPressed || MarkAt(point) is not { IsMovable: true } hit)
         {
             return false;
         }
@@ -1067,7 +1155,7 @@ public sealed class AnnotationEditor
     /// </remarks>
     public bool AddAnchor(CapturePoint point)
     {
-        if (Anchorable(Selected, point) is not { } target)
+        if (Anchorable(Selected, point, Annotation.GrabThreshold * _scale) is not { } target)
         {
             return false;
         }
@@ -1082,10 +1170,10 @@ public sealed class AnnotationEditor
         return true;
     }
 
-    private static Annotation? Anchorable(Annotation? annotation, CapturePoint point) =>
+    private static Annotation? Anchorable(Annotation? annotation, CapturePoint point, double reach) =>
         annotation is not null
             && Annotation.AcceptsWaypoints(annotation.Tool)
-            && annotation.HitTest(point)
+            && annotation.HitTest(point, reach)
                 ? annotation
                 : null;
 
@@ -1118,7 +1206,7 @@ public sealed class AnnotationEditor
     /// </summary>
     private bool BeginSelection(CapturePoint point, EditorModifiers modifiers)
     {
-        var hit = _document.HitTest(point);
+        var hit = MarkAt(point);
         if (hit is null)
         {
             // Ctrl over empty space sweeps a selection rather than missing one

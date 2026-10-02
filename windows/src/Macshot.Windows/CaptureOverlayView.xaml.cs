@@ -858,6 +858,10 @@ public sealed partial class CaptureOverlayView : UserControl
         if (e.GetCurrentPoint(SelectionCanvas).Properties.IsMiddleButtonPressed)
         {
             _panningFrom = e.GetCurrentPoint(OverlayRoot).Position;
+
+            // Here because the moves that follow skip UpdateCursor: a pencil's dot would
+            // otherwise be carried off with the picture, away from the pointer.
+            AnnotationCanvas.ShowBrush(null);
             return;
         }
 
@@ -867,6 +871,9 @@ public sealed partial class CaptureOverlayView : UserControl
         if (e.GetCurrentPoint(SelectionCanvas).Properties.IsRightButtonPressed && IsAnnotating)
         {
             _colorWheel.Show(ToLayoutPoint(e));
+
+            // For the reason the pan gives: nothing moves the dot while the ring is up.
+            AnnotationCanvas.ShowBrush(null);
             return;
         }
 
@@ -959,6 +966,11 @@ public sealed partial class CaptureOverlayView : UserControl
         DrawMarquee(_selectionStart.Value, _selectionStart.Value);
     }
 
+    // Onto the toolbar or off the display: the pointer is back, and its stand-in must not
+    // be left behind at the edge it crossed.
+    private void SelectionCanvas_PointerExited(object sender, PointerRoutedEventArgs e) =>
+        AnnotationCanvas.ShowBrush(null);
+
     private void SelectionCanvas_PointerMoved(object sender, PointerRoutedEventArgs e)
     {
         // First, and before any of the early returns below: the auto-measure offer needs
@@ -984,7 +996,7 @@ public sealed partial class CaptureOverlayView : UserControl
             return;
         }
 
-        UpdateCursor(ToFrame(e));
+        UpdateCursor(ToFrame(e), ToModifiers(e));
 
         if (AnnotationToolbar.IsSamplingColor)
         {
@@ -1083,7 +1095,7 @@ public sealed partial class CaptureOverlayView : UserControl
     /// different things depending on where it lands. Nothing is a control, so there is no
     /// hover state to read and the pointer is the only thing that can say which.
     /// </remarks>
-    private void UpdateCursor(CapturePoint point)
+    private void UpdateCursor(CapturePoint point, EditorModifiers modifiers)
     {
         // Mid-drag the cursor is left alone: what was grabbed is what is still happening,
         // and a shape changing under the user's hand reads as the grab having slipped.
@@ -1091,6 +1103,10 @@ public sealed partial class CaptureOverlayView : UserControl
         {
             return;
         }
+
+        // Taken away here and put back only by the last line: every other answer below
+        // is a press that would not draw, and a dot under it would promise a stroke.
+        AnnotationCanvas.ShowBrush(null);
 
         if (AnnotationToolbar.IsSamplingColor)
         {
@@ -1110,6 +1126,14 @@ public sealed partial class CaptureOverlayView : UserControl
             return;
         }
 
+        // While a label is being typed the canvas is not what the user is working on, and
+        // macOS says so with the arrow (OverlayView.swift:1283-1286).
+        if (AnnotationCanvas.IsTyping)
+        {
+            SelectionCanvas.UseCursor(InputSystemCursorShape.Arrow);
+            return;
+        }
+
         // Same order the press handler tries things in, or the cursor would promise
         // something other than what clicking does.
         if (_regionIsAdjustable && _selection is { } region)
@@ -1122,32 +1146,12 @@ public sealed partial class CaptureOverlayView : UserControl
             }
         }
 
-        SelectionCanvas.UseCursor(AnnotationCursor(point));
-    }
+        var cursor = _editor.CursorAt(point, modifiers);
+        SelectionCanvas.UseCursor(CursorHints.For(cursor));
 
-    /// <summary>
-    /// The cursor for the active tool: what it will do to the mark under the pointer with
-    /// the select tool, and the crosshair a mark is drawn with otherwise.
-    /// </summary>
-    private InputSystemCursorShape AnnotationCursor(CapturePoint point)
-    {
-        // The selected mark's handles answer to every tool, so the cursor has to as well:
-        // a crosshair over a handle that is about to reshape something rather than draw
-        // is the interface lying about what the press will do.
-        if (_editor.SelectionShown is { } shown
-            && AnnotationHandles.At(shown, point, _editor.Scale) is { } handle)
-        {
-            return CursorHints.For(handle.Kind);
-        }
-
-        if (_editor.Tool != AnnotationTool.Select)
-        {
-            return InputSystemCursorShape.Cross;
-        }
-
-        return _editor.Document.HitTest(point) is null
-            ? InputSystemCursorShape.Arrow
-            : InputSystemCursorShape.SizeAll;
+        // Not while the stroke is being drawn: the ink itself shows where the pen is, as
+        // macshot leaves it (OverlayView.swift:1873).
+        AnnotationCanvas.ShowBrush(cursor == PointerCursor.Brush && !_editor.IsDragging ? point : null);
     }
 
     /// <summary>
@@ -4068,7 +4072,7 @@ public sealed partial class CaptureOverlayView : UserControl
             return false;
         }
 
-        if (_editor.Document.HitTest(point) is { Tool: AnnotationTool.Text })
+        if (_editor.MarkAt(point) is { Tool: AnnotationTool.Text })
         {
             return false;
         }

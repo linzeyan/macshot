@@ -93,7 +93,8 @@
                         Background="Transparent"
                         PointerPressed="InputCanvas_PointerPressed"
                         PointerMoved="InputCanvas_PointerMoved"
-                        PointerReleased="InputCanvas_PointerReleased" />
+                        PointerReleased="InputCanvas_PointerReleased"
+                        PointerExited="InputCanvas_PointerExited" />
 
 
                     <local:AnnotationCanvasView x:Name="AnnotationCanvas" />

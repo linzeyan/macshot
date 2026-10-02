@@ -81,6 +81,10 @@ public sealed partial class AnnotationCanvasView : UserControl
     private readonly Brush _pillIcon = new SolidColorBrush(Color.FromArgb(255, 255, 102, 102));
     private readonly Brush _pillText = new SolidColorBrush(Color.FromArgb(255, 255, 255, 255));
 
+    // The pencil dot's rings: white at macshot's 0.6 and black at its 0.3.
+    private readonly Brush _brushLight = new SolidColorBrush(Color.FromArgb(153, 255, 255, 255));
+    private readonly Brush _brushDark = new SolidColorBrush(Color.FromArgb(77, 0, 0, 0));
+
     private AnnotationEditor? _editor;
     private IFramePlacement _placement = new ImageFramePlacement();
     private Action<string> _reportHint = _ => { };
@@ -241,6 +245,62 @@ public sealed partial class AnnotationCanvasView : UserControl
         {
             _reportHint(MeasureReading.Format(ruler.Span, ruler.Style.MeasureInPoints, SpriteScale));
         }
+    }
+
+    /// <summary>
+    /// Draws the pencil's or the marker's dot centred on <paramref name="at"/>, or takes it
+    /// away for null.
+    /// </summary>
+    /// <remarks>
+    /// macshot's two looks (<c>OverlayView.swift:4134-4174</c>): the pencil a solid dot in
+    /// its colour, ringed light outside and dark inside so it shows on any picture; the
+    /// marker a translucent disc, as see-through as the ink it lays down. Sized in frame
+    /// pixels and placed on the canvas, so it grows with the zoom exactly as the stroke
+    /// will.
+    /// </remarks>
+    public void ShowBrush(CapturePoint? at)
+    {
+        if (at is not { } point || _editor is not { } editor)
+        {
+            BrushLayer.Visibility = Visibility.Collapsed;
+            return;
+        }
+
+        var radius = editor.BrushRadius / _placement.Scale;
+        var centre = _placement.ToLayout(point);
+
+        if (editor.Tool == AnnotationTool.Marker)
+        {
+            Circle(BrushDot, centre, radius);
+            BrushDot.Fill = new SolidColorBrush(GlyphSpriteFactory.ToBrushColor(editor.Style.Color, 0.35));
+            BrushDot.Stroke = new SolidColorBrush(GlyphSpriteFactory.ToBrushColor(editor.Style.Color, 0.7));
+            BrushDot.StrokeThickness = 1;
+            BrushRing.Visibility = Visibility.Collapsed;
+        }
+        else
+        {
+            // A shape's stroke is drawn inside its bounds, so each circle is sized to put
+            // its ring where macshot's falls: the light one just outside the dot, the dark
+            // one just inside it.
+            Circle(BrushDot, centre, radius + 1);
+            BrushDot.Fill = new SolidColorBrush(GlyphSpriteFactory.ToBrushColor(editor.Style));
+            BrushDot.Stroke = _brushLight;
+            BrushDot.StrokeThickness = 1;
+            Circle(BrushRing, centre, radius - 0.25);
+            BrushRing.Stroke = _brushDark;
+            BrushRing.StrokeThickness = 0.5;
+            BrushRing.Visibility = Visibility.Visible;
+        }
+
+        BrushLayer.Visibility = Visibility.Visible;
+    }
+
+    private static void Circle(Ellipse ellipse, Point centre, double radius)
+    {
+        ellipse.Width = radius * 2;
+        ellipse.Height = radius * 2;
+        Canvas.SetLeft(ellipse, centre.X - radius);
+        Canvas.SetTop(ellipse, centre.Y - radius);
     }
 
     /// <summary>

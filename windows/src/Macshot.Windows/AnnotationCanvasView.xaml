@@ -20,6 +20,15 @@
              editing them. -->
         <Canvas x:Name="SelectionLayer" IsHitTestVisible="False" />
 
+        <!-- The pencil's and the marker's dot, the size of the stroke a press would lay
+             down. Over the chrome, as macshot draws it after the handles, and never hit
+             testable: it sits exactly under the pointer and would otherwise take every
+             press. -->
+        <Canvas x:Name="BrushLayer" IsHitTestVisible="False" Visibility="Collapsed">
+            <Ellipse x:Name="BrushDot" />
+            <Ellipse x:Name="BrushRing" />
+        </Canvas>
+
         <!-- The only part of the chrome that is a control: the one button a group of
              selected marks is deleted with. A layer of its own because the one above is
              not hit testable at all, and a Canvas with no background hit tests only its

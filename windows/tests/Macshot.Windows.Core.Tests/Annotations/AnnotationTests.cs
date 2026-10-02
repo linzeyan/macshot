@@ -64,11 +64,11 @@ public sealed class AnnotationTests
         var ellipse = Annotation.Create(
             AnnotationTool.Ellipse,
             new CapturePoint(0, 0),
-            new CapturePoint(100, 50));
+            new CapturePoint(200, 100));
 
-        Assert.IsTrue(ellipse.HitTest(new CapturePoint(100, 25)), "a point on the outline must hit");
-        Assert.IsFalse(ellipse.HitTest(new CapturePoint(50, 25)), "the center must not hit");
-        Assert.IsFalse(ellipse.HitTest(new CapturePoint(2, 2)), "a bounding box corner must not hit");
+        Assert.IsTrue(ellipse.HitTest(new CapturePoint(200, 50)), "a point on the outline must hit");
+        Assert.IsFalse(ellipse.HitTest(new CapturePoint(100, 50)), "the center must not hit");
+        Assert.IsFalse(ellipse.HitTest(new CapturePoint(4, 4)), "a bounding box corner must not hit");
     }
 
     /// <summary>
@@ -84,12 +84,12 @@ public sealed class AnnotationTests
         {
             var style = AnnotationStyle.Default with { ShapeFill = fill };
             var rectangle = Annotation.Create(AnnotationTool.Rectangle, new CapturePoint(10, 10), new CapturePoint(50, 30), style);
-            var ellipse = Annotation.Create(AnnotationTool.Ellipse, new CapturePoint(0, 0), new CapturePoint(100, 50), style);
+            var ellipse = Annotation.Create(AnnotationTool.Ellipse, new CapturePoint(0, 0), new CapturePoint(200, 100), style);
 
             Assert.IsTrue(rectangle.HitTest(new CapturePoint(30, 20)), $"{fill} rectangle interior");
-            Assert.IsTrue(ellipse.HitTest(new CapturePoint(50, 25)), $"{fill} ellipse centre");
+            Assert.IsTrue(ellipse.HitTest(new CapturePoint(100, 50)), $"{fill} ellipse centre");
             Assert.IsFalse(rectangle.HitTest(new CapturePoint(80, 20)), $"{fill} rectangle, well outside");
-            Assert.IsFalse(ellipse.HitTest(new CapturePoint(2, 2)), $"{fill} ellipse, bounding box corner");
+            Assert.IsFalse(ellipse.HitTest(new CapturePoint(4, 4)), $"{fill} ellipse, bounding box corner");
         }
     }
 

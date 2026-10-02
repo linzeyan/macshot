@@ -28,20 +28,15 @@ internal static class CursorHints
         _ => InputSystemCursorShape.Cross,
     };
 
-    /// <summary>The cursor for one of the grab points on a selected mark.</summary>
-    public static InputSystemCursorShape For(AnnotationHandleKind kind) => kind switch
+    /// <summary>The cursor for what a press on the annotation canvas would do.</summary>
+    public static InputSystemCursorShape For(PointerCursor cursor) => cursor switch
     {
-        AnnotationHandleKind.TopLeft or AnnotationHandleKind.BottomRight =>
-            InputSystemCursorShape.SizeNorthwestSoutheast,
-        AnnotationHandleKind.TopRight or AnnotationHandleKind.BottomLeft =>
-            InputSystemCursorShape.SizeNortheastSouthwest,
-
-        // No system cursor turns or bends anything, so both of those handles borrow the
-        // hand: what they have in common is that the shape follows the grip rather than a
-        // corner following an axis.
-        AnnotationHandleKind.Rotate or AnnotationHandleKind.Bend => InputSystemCursorShape.Hand,
-
-        // An end of a line goes anywhere, so no single axis describes it.
-        _ => InputSystemCursorShape.SizeAll,
+        PointerCursor.Arrow => InputSystemCursorShape.Arrow,
+        PointerCursor.Grab => InputSystemCursorShape.SizeAll,
+        PointerCursor.ResizeFalling => InputSystemCursorShape.SizeNorthwestSoutheast,
+        PointerCursor.ResizeRising => InputSystemCursorShape.SizeNortheastSouthwest,
+        PointerCursor.ResizeVertical => InputSystemCursorShape.SizeNorthSouth,
+        PointerCursor.ResizeHorizontal => InputSystemCursorShape.SizeWestEast,
+        _ => InputSystemCursorShape.Cross,
     };
 }

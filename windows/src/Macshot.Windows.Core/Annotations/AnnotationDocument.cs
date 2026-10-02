@@ -280,7 +280,7 @@ public sealed class AnnotationDocument
     }
 
     /// <summary>Returns the topmost annotation under a frame-space point, or null.</summary>
-    public Annotation? HitTest(CapturePoint point, double threshold = 6)
+    public Annotation? HitTest(CapturePoint point, double threshold = Annotation.GrabThreshold)
     {
         for (var index = _annotations.Count - 1; index >= 0; index--)
         {
