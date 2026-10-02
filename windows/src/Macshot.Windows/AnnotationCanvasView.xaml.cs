@@ -86,7 +86,7 @@ public sealed partial class AnnotationCanvasView : UserControl
     private readonly Brush _brushDark = new SolidColorBrush(Color.FromArgb(77, 0, 0, 0));
 
     private AnnotationEditor? _editor;
-    private IFramePlacement _placement = new ImageFramePlacement();
+    private IFramePlacement _placement = new ImageFramePlacement(1);
     private Action<string> _reportHint = _ => { };
     private Func<double>? _rasterizationScale;
 
@@ -244,7 +244,7 @@ public sealed partial class AnnotationCanvasView : UserControl
         // harder to read than one that sits still.
         if (_editor?.Draft is { Tool: AnnotationTool.Measure } ruler)
         {
-            _reportHint(MeasureReading.Format(ruler.Span, ruler.Style.MeasureInPoints, SpriteScale));
+            _reportHint(MeasureReading.Format(ruler.Span, ruler.Style.MeasureInPoints, ruler.Style.PixelsPerPoint));
         }
     }
 
@@ -1064,7 +1064,10 @@ public sealed partial class AnnotationCanvasView : UserControl
             // from it by whatever the theme's padding happens to be.
             Padding = new Thickness(0),
             // The size the label will be committed at, so the text does not jump on Enter.
-            FontSize = TextGlyphs.FontSizeFor(editor.DrawingStyle, SpriteScale),
+            // By the placement rather than the sprite scale: the box sits on the canvas, in
+            // its units, where a sprite is rasterized at the display's. The two only part
+            // in an editor showing a picture at a scale other than its screen's.
+            FontSize = TextGlyphs.FontSizeFor(editor.DrawingStyle, _placement.Scale),
             FontFamily = TextGlyphs.FamilyFor(editor.Style),
             FontWeight = TextGlyphs.WeightFor(editor.Style),
             FontStyle = TextGlyphs.SlantFor(editor.Style),

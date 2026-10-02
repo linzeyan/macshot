@@ -167,12 +167,10 @@ public static class ImageDelivery
     /// quality whatever the save format is. macshot draws the line in the same place.
     /// </para>
     /// <para>
-    /// The scale is the one belonging to the display the capture came from, found by its
-    /// own top-left corner, falling back to the primary display for a frame whose origin
-    /// is on no display at all. Enumerating for every save is a handful of Win32 calls;
-    /// carrying the scale on every <see cref="CapturedFrame"/> through every crop,
-    /// stitch and composite it passes through would be a field to keep true in a dozen
-    /// places.
+    /// The scale is the frame's own (<see cref="CapturedFrame.Scale"/>) rather than the
+    /// display's under its top-left corner, which is what it used to be read from: a
+    /// picture opened from a file sits at the origin too, and was shrunk by the primary
+    /// display's scale as though it had been captured there.
     /// </para>
     /// </remarks>
     public static CapturedFrame ForSaving(CapturedFrame frame, CaptureSettings settings)
@@ -185,22 +183,7 @@ public static class ImageDelivery
             return frame;
         }
 
-        double scale;
-        try
-        {
-            var layout = MonitorEnumerator.Enumerate().Layout;
-            var origin = new CapturePoint(frame.VirtualX, frame.VirtualY);
-            scale = (layout.MonitorAt(origin) ?? layout.Primary).Scale;
-        }
-        catch (Exception exception)
-        {
-            // The capture is in hand and the user asked for it to be saved. Writing it at
-            // the size it was taken is a worse answer than the one they chose, and a far
-            // better one than an error where a file should be.
-            DiagnosticLog.Write($"Could not read the display scale; saving at full size: {exception.Message}");
-            return frame;
-        }
-
+        var scale = frame.Scale;
         var width = (int)Math.Round(frame.Width / scale);
         var height = (int)Math.Round(frame.Height / scale);
 
@@ -216,7 +199,8 @@ public static class ImageDelivery
             frame.VirtualY,
             width,
             height,
-            FrameScaler.Downscale(frame.BgraPixels, frame.Width, frame.Height, width, height));
+            FrameScaler.Downscale(frame.BgraPixels, frame.Width, frame.Height, width, height),
+            1);
     }
 
     /// <summary>
@@ -277,8 +261,12 @@ public static class ImageDelivery
             frame.AlphaMode,
             (uint)frame.Width,
             (uint)frame.Height,
-            96,
-            96,
+
+            // The frame's scale as a resolution, the way the Mac writes a 2x capture at 144
+            // DPI: it is what lets the file reopen at the size it was on screen
+            // (ImageLoader.LoadAsync). Ninety-six is a point to a pixel here, as 72 is there.
+            96 * frame.Scale,
+            96 * frame.Scale,
             frame.BgraPixels);
         await encoder.FlushAsync();
     }

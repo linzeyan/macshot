@@ -112,6 +112,7 @@ internal static class OnnxBackgroundRemover
             frame.Width,
             frame.Height,
             pixels,
+            frame.Scale,
             hasAlpha: true);
     }
 }

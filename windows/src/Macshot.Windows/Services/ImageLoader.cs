@@ -50,7 +50,14 @@ public static class ImageLoader
 
         // No virtual-desktop origin: a file has no place on the screen, and the only
         // thing that reads it back is a pin window deciding where to open.
-        return new CapturedFrame(0, 0, bitmap.PixelWidth, bitmap.PixelHeight, pixels);
+        //
+        // The scale is the file's resolution, the way NSImage(data:) sizes a picture on
+        // the Mac: macshot writes a capture at 96 DPI a point (ImageDelivery), so one
+        // reopened from history comes back at the size it was on screen. Never below
+        // one, as there: a 72 DPI JPEG is not a picture to enlarge. Compared rather than
+        // Math.Max'd so a decoder that answers NaN reads as a point a pixel.
+        var scale = decoder.DpiX > 96 ? decoder.DpiX / 96 : 1;
+        return new CapturedFrame(0, 0, bitmap.PixelWidth, bitmap.PixelHeight, pixels, scale);
     }
 
     /// <summary>
@@ -94,6 +101,8 @@ public static class ImageLoader
 
         var pixels = new byte[checked(bitmap.PixelWidth * bitmap.PixelHeight * 4)];
         bitmap.CopyToBuffer(pixels.AsBuffer());
-        return new CapturedFrame(0, 0, bitmap.PixelWidth, bitmap.PixelHeight, pixels);
+
+        // A thumbnail is drawn at a size its caller chose, so it has no scale to keep.
+        return new CapturedFrame(0, 0, bitmap.PixelWidth, bitmap.PixelHeight, pixels, 1);
     }
 }

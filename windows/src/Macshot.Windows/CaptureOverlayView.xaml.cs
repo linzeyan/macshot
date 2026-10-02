@@ -441,13 +441,18 @@ public sealed partial class CaptureOverlayView : UserControl
         IReadOnlyList<CaptureWindow> snapCandidates,
         Func<long, Task<CapturedFrame?>> captureWindow)
     {
-        _desktopFrame = desktopFrame ?? throw new ArgumentNullException(nameof(desktopFrame));
         _layout = layout ?? throw new ArgumentNullException(nameof(layout));
         _monitor = monitor ?? throw new ArgumentNullException(nameof(monitor));
+
+        // At this display's scale: one picture of every screen is shared by an overlay on
+        // each, and what this one hands out was taken on its own display. Every crop
+        // below carries it on (NativeScreenCaptureService.Crop).
+        _desktopFrame = (desktopFrame ?? throw new ArgumentNullException(nameof(desktopFrame)))
+            .WithScale(monitor.Scale);
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _snapCandidates = snapCandidates ?? throw new ArgumentNullException(nameof(snapCandidates));
         _captureWindow = captureWindow ?? throw new ArgumentNullException(nameof(captureWindow));
-        _monitorFrame = NativeScreenCaptureService.Crop(desktopFrame, layout.FrameRegionOf(monitor));
+        _monitorFrame = NativeScreenCaptureService.Crop(_desktopFrame, layout.FrameRegionOf(monitor));
         _placement = new MonitorFramePlacement(layout, monitor);
 
         // The surface this was written for: one overlay is two frozen screens, a boundary
@@ -1401,7 +1406,9 @@ public sealed partial class CaptureOverlayView : UserControl
         _selection = region;
         _hoveredWindow = null;
         _snappedWindow = snapped;
-        _capturedWindow = capturedWindow;
+        // A window's own capture has no display, so it comes at a point a pixel; it was
+        // taken on this one.
+        _capturedWindow = capturedWindow?.WithScale(_monitor.Scale);
         _capturedWindowTitle = windowTitle;
         _regionIsAdjustable = capturedWindow is null;
         AnnotationToolbar.SnappedWindow = windowTitle is not null;
@@ -2704,7 +2711,8 @@ public sealed partial class CaptureOverlayView : UserControl
             source.VirtualY,
             source.Width,
             source.Height,
-            ImageEffects.Apply(source.Width, source.Height, source.BgraPixels, _effects));
+            ImageEffects.Apply(source.Width, source.Height, source.BgraPixels, _effects),
+            source.Scale);
     }
 
     /// <summary>
@@ -2733,7 +2741,8 @@ public sealed partial class CaptureOverlayView : UserControl
             source.VirtualY,
             source.Width,
             source.Height,
-            FrameTransforms.Invert(source.Width, source.Height, source.BgraPixels));
+            FrameTransforms.Invert(source.Width, source.Height, source.BgraPixels),
+            source.Scale);
     }
 
     /// <summary>
@@ -3068,7 +3077,7 @@ public sealed partial class CaptureOverlayView : UserControl
             FrameOptions,
             _monitor.Scale);
 
-        return new CapturedFrame(finished.VirtualX, finished.VirtualY, width, height, pixels);
+        return new CapturedFrame(finished.VirtualX, finished.VirtualY, width, height, pixels, finished.Scale);
     }
 
     /// <summary>

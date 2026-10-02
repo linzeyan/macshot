@@ -374,7 +374,7 @@ public sealed partial class ThumbnailWindow : Window
     private Task TurnAsync(ImageTurn turn) => RunAsync("Could not turn the capture", async () =>
     {
         var (width, height, pixels) = FrameTransforms.Apply(turn, _frame.Width, _frame.Height, _frame.BgraPixels);
-        _frame = new CapturedFrame(_frame.VirtualX, _frame.VirtualY, width, height, pixels, _frame.HasAlpha);
+        _frame = new CapturedFrame(_frame.VirtualX, _frame.VirtualY, width, height, pixels, _frame.Scale, _frame.HasAlpha);
 
         await ThumbnailImage.ShowAsync(_frame);
 

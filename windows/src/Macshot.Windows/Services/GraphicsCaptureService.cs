@@ -201,7 +201,11 @@ public sealed class GraphicsCaptureService : IDisposable
             composer.VirtualY,
             composer.Width,
             composer.Height,
-            composer.ToImage());
+            composer.ToImage(),
+
+            // One for a desktop that may span displays of different scales: the overlay
+            // covering each display is what knows which one a region is on, and says so.
+            1);
     }
 
     /// <summary>
@@ -234,7 +238,7 @@ public sealed class GraphicsCaptureService : IDisposable
         var (width, height, pixels) = await CaptureItemAsync(device, OpenWindow(windowId));
         var crop = WindowFrameCrop.Resolve(windowRect, visibleBounds, width, height);
 
-        var frame = new CapturedFrame((int)windowRect.X, (int)windowRect.Y, width, height, pixels);
+        var frame = new CapturedFrame((int)windowRect.X, (int)windowRect.Y, width, height, pixels, 1);
         return NativeScreenCaptureService.Crop(frame, crop);
     }
 

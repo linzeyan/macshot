@@ -927,7 +927,15 @@ public sealed class CaptureController : IDisposable
 
     public async Task CaptureAllScreensAsync()
     {
-        await DeliverAsync(await CaptureDesktopAsync(MonitorEnumerator.Enumerate()));
+        var displays = MonitorEnumerator.Enumerate();
+        var frame = await CaptureDesktopAsync(displays);
+
+        // An overlay gives every other capture its display's scale. With none up, the
+        // display under the frame's corner does — what saving read before a frame
+        // carried a scale of its own.
+        var origin = new CapturePoint(frame.VirtualX, frame.VirtualY);
+        var monitor = displays.Layout.MonitorAt(origin) ?? displays.Layout.Primary;
+        await DeliverAsync(frame.WithScale(monitor.Scale));
     }
 
     /// <summary>
@@ -2162,10 +2170,19 @@ public sealed class CaptureController : IDisposable
                 L("That page was longer than macshot will capture in one go, so the bottom of it is missing."));
         }
 
+        // The window's frames come at a point a pixel, having no display of their own;
+        // the one under the middle of what was scrolled gives them theirs, as the overlay
+        // does every other capture. The middle, because a window's corner can be off
+        // every screen.
+        var bounds = request.Region ?? request.Window.Bounds;
+        var layout = MonitorEnumerator.Enumerate().Layout;
+        var middle = new CapturePoint(bounds.X + bounds.Width / 2, bounds.Y + bounds.Height / 2);
+        var monitor = layout.MonitorAt(middle) ?? layout.Primary;
+
         // Annotated, which is the one thing a scroll capture used to be delivered without:
         // it is taken with no overlay up, so it never passed through the phase every other
         // capture does on the way here.
-        await DeliverAsync(result.Frame, pass: AnnotationPass.Owed);
+        await DeliverAsync(result.Frame.WithScale(monitor.Scale), pass: AnnotationPass.Owed);
     }
 
     /// <summary>

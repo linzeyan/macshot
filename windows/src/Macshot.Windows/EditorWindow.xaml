@@ -61,7 +61,7 @@
             ViewChanged="Scroller_ViewChanged">
 
             <!-- Sized to what is on show, which is the image and the frame around it when
-                 there is one. Both are set from Present in pixels. -->
+                 there is one. Both are set from Present, in points. -->
             <Grid x:Name="ImageHost">
                 <!-- The frame's background and shadow, with the capture's own area left
                      clear — the same picture the export lays down, drawn around the image

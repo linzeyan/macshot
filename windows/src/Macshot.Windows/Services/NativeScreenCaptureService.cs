@@ -56,7 +56,7 @@ public sealed class NativeScreenCaptureService
     {
         var bytes = new byte[checked(width * height * 4)];
         Blit(x, y, width, height, includeCursor, topDown: true, bytes);
-        return new CapturedFrame(x, y, width, height, bytes);
+        return new CapturedFrame(x, y, width, height, bytes, 1);
     }
 
     /// <summary>
@@ -258,7 +258,7 @@ public sealed class NativeScreenCaptureService
                 width * 4);
         }
 
-        return new CapturedFrame(frame.VirtualX + left, frame.VirtualY + top, width, height, pixels);
+        return new CapturedFrame(frame.VirtualX + left, frame.VirtualY + top, width, height, pixels, frame.Scale);
     }
 
     [DllImport("user32.dll", SetLastError = true)]

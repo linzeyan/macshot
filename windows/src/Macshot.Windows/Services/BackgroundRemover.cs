@@ -215,6 +215,7 @@ internal static class BackgroundRemover
             frame.Width,
             frame.Height,
             pixels,
+            frame.Scale,
             hasAlpha: true);
     }
 

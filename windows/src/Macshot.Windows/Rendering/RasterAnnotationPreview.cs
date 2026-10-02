@@ -96,7 +96,8 @@ public sealed class RasterAnnotationPreview
         _baseFrame.VirtualY,
         _baseFrame.Width,
         _baseFrame.Height,
-        (byte[])_pixels.Clone());
+        (byte[])_pixels.Clone(),
+        _baseFrame.Scale);
 
     /// <summary>
     /// The marks in the archived image's own coordinates, ready to be put beside it.

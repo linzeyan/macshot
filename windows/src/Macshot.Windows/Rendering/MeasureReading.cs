@@ -37,15 +37,16 @@ internal static class MeasureReading
     /// inch, which is one pixel at 100% and half of one at 200%. Dividing by the scale the
     /// capture was taken at is what turns the second into the first — the same conversion
     /// macshot makes through the backing scale factor, and the reason the two builds agree
-    /// about a rule measured on the same screen.
+    /// about a rule measured on the same screen. The mark's scale, not the display's: an
+    /// editor shows a picture at the scale it was taken at, whichever screen it is on.
     /// </para>
     /// </remarks>
-    public static string Format(double span, bool inPoints, double rasterizationScale)
+    public static string Format(double span, bool inPoints, double pixelsPerPoint)
     {
-        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(rasterizationScale);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(pixelsPerPoint);
 
         return inPoints
-            ? string.Create(CultureInfo.CurrentCulture, $"{Math.Round(span / rasterizationScale)} pt")
+            ? string.Create(CultureInfo.CurrentCulture, $"{Math.Round(span / pixelsPerPoint)} pt")
             : string.Create(CultureInfo.CurrentCulture, $"{Math.Round(span)} px");
     }
 
@@ -72,7 +73,7 @@ internal static class MeasureReading
             Background = new SolidColorBrush(fill),
             Child = new TextBlock
             {
-                Text = Format(span, style.MeasureInPoints, rasterizationScale),
+                Text = Format(span, style.MeasureInPoints, style.PixelsPerPoint),
                 FontSize = fontSize,
                 FontWeight = FontWeights.SemiBold,
                 Foreground = new SolidColorBrush(GlyphSpriteFactory.ReadableOn(fill)),

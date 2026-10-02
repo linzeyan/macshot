@@ -57,26 +57,29 @@ public sealed class MonitorFramePlacement(MonitorLayout layout, CaptureMonitor m
 }
 
 /// <summary>
-/// An image laid out at its own pixel size: one layout unit is one pixel and nothing
-/// moves.
+/// An image laid out at its size in points — its own scale (<c>CapturedFrame.Scale</c>),
+/// not the window's — with nothing moving.
 /// </summary>
 /// <remarks>
-/// This is not a placeholder for a zoom factor. Zooming an editor is done by the
-/// <c>ScrollViewer</c> around the canvas, and WinUI reports a pointer position relative
-/// to the element it is asked about with the zoom already divided out — so a point that
-/// arrives here is in canvas units whatever the zoom is, and dividing again would put
-/// every mark in the wrong place at any zoom but 100%.
+/// <para>
+/// macshot's editor shows an <c>NSImage</c> at its point size, so at 100% a capture from a
+/// 2x display is one image pixel to a screen pixel and its handles and marks are the size
+/// they were in the overlay. Laid out a pixel to a unit instead, the same capture opened
+/// at 175% of its size on a 175% display.
+/// </para>
+/// <para>
+/// This is not a zoom factor. Zooming an editor is done by the <c>ScrollViewer</c> around
+/// the canvas, and WinUI reports a pointer position relative to the element it is asked
+/// about with the zoom already divided out — so a point that arrives here is in canvas
+/// units whatever the zoom is, and dividing by the zoom again would put every mark in the
+/// wrong place at any zoom but 100%.
+/// </para>
 /// </remarks>
-public sealed class ImageFramePlacement : IFramePlacement
+public sealed class ImageFramePlacement(double scale) : IFramePlacement
 {
-    public Point ToLayout(CapturePoint framePoint) => new(framePoint.X, framePoint.Y);
+    public Point ToLayout(CapturePoint framePoint) => new(framePoint.X / scale, framePoint.Y / scale);
 
-    public CapturePoint ToFrame(Point layoutPoint) => new(layoutPoint.X, layoutPoint.Y);
+    public CapturePoint ToFrame(Point layoutPoint) => new(layoutPoint.X * scale, layoutPoint.Y * scale);
 
-    /// <summary>
-    /// One, and not the window's DPI scaling. The image is laid out a pixel to a layout
-    /// unit whatever the display is at, so a handle twenty-four pixels off the shape is
-    /// already twenty-four layout units off it.
-    /// </summary>
-    public double Scale => 1;
+    public double Scale => scale;
 }

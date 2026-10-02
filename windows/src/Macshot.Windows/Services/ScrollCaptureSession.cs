@@ -334,7 +334,8 @@ public sealed class ScrollCaptureSession
             first.VirtualY + (int)crop.Y,
             stitcher.Width,
             stitcher.Height,
-            stitcher.ToImage());
+            stitcher.ToImage(),
+            first.Scale);
 
         return new ScrollCaptureResult(stitched, stop, frames);
     }

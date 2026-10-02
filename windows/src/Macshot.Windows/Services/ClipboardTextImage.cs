@@ -165,7 +165,7 @@ internal static class ClipboardTextImage
 
             // No place on the virtual desktop: this came from the clipboard, so the pin
             // window is free to open it wherever a new pin belongs.
-            return new CapturedFrame(0, 0, width, height, pixels);
+            return new CapturedFrame(0, 0, width, height, pixels, 1);
         }
         finally
         {

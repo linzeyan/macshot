@@ -77,7 +77,11 @@ public sealed partial class EditorWindow : Window
     /// </summary>
     private readonly PressHold _hold;
 
-    private readonly IFramePlacement _placement = new ImageFramePlacement();
+    /// <summary>
+    /// The opening frame's scale, kept for the window's life: every image operation here
+    /// hands its result the scale of the frame it replaced.
+    /// </summary>
+    private readonly IFramePlacement _placement;
 
     /// <summary>
     /// What each image operation replaced, and the marks that were live when it ran.
@@ -228,6 +232,7 @@ public sealed partial class EditorWindow : Window
         CaptureEditState? state = null)
     {
         _frame = frame ?? throw new ArgumentNullException(nameof(frame));
+        _placement = new ImageFramePlacement(frame.Scale);
         _settings = settings ?? throw new ArgumentNullException(nameof(settings));
         _opensWith = annotations;
 
@@ -317,8 +322,8 @@ public sealed partial class EditorWindow : Window
     }
 
     /// <summary>
-    /// Shows the current image at its own pixel size, which is what makes one layout unit
-    /// one pixel and the placement between marks and pixels the identity.
+    /// Shows the current image at its size in points, the unit <see cref="_placement"/>
+    /// maps marks and pixels through.
     /// </summary>
     private void Present()
     {
@@ -330,7 +335,8 @@ public sealed partial class EditorWindow : Window
                 _frame.VirtualY,
                 _frame.Width,
                 _frame.Height,
-                ImageEffects.Apply(_frame.Width, _frame.Height, _frame.BgraPixels, _effects));
+                ImageEffects.Apply(_frame.Width, _frame.Height, _frame.BgraPixels, _effects),
+                _frame.Scale);
 
         // Before the canvas is presented onto it: the surface it draws on is the one this
         // sizes and insets, and presenting into a surface still the previous size would
@@ -396,14 +402,17 @@ public sealed partial class EditorWindow : Window
     /// </remarks>
     private void ShowFrame()
     {
-        ImageSurface.Width = _frame.Width;
-        ImageSurface.Height = _frame.Height;
+        // In points, the unit the placement lays the canvas out in: every pixel size
+        // below is divided by the capture's scale on its way to the layout.
+        var scale = _placement.Scale;
+        ImageSurface.Width = _frame.Width / scale;
+        ImageSurface.Height = _frame.Height / scale;
 
         if (!_beautify.Enabled)
         {
             ImageSurface.Margin = new Thickness(0);
-            ImageHost.Width = _frame.Width;
-            ImageHost.Height = _frame.Height;
+            ImageHost.Width = _frame.Width / scale;
+            ImageHost.Height = _frame.Height / scale;
             FrameBackdrop.Visibility = Visibility.Collapsed;
 
             // Dropped rather than kept for next time: it is the size of a capture, and the
@@ -434,8 +443,8 @@ public sealed partial class EditorWindow : Window
                 stream.Write(pixels, 0, pixels.Length);
             }
 
-            ImageHost.Width = width;
-            ImageHost.Height = height;
+            ImageHost.Width = width / scale;
+            ImageHost.Height = height / scale;
             FrameBackdrop.Source = bitmap;
             _backdropShown = wanted;
         }
@@ -447,7 +456,7 @@ public sealed partial class EditorWindow : Window
         var placed = BeautifyRenderer.FrameAround(
             new CaptureRegion(0, 0, _frame.Width, _frame.Height), options, _beautify.Scale);
 
-        ImageSurface.Margin = new Thickness(-placed.X, -placed.Y, 0, 0);
+        ImageSurface.Margin = new Thickness(-placed.X / scale, -placed.Y / scale, 0, 0);
         FrameBackdrop.Visibility = Visibility.Visible;
     }
 
@@ -478,7 +487,7 @@ public sealed partial class EditorWindow : Window
             FrameOptions,
             _beautify.Scale);
 
-        return new CapturedFrame(finished.VirtualX, finished.VirtualY, width, height, pixels);
+        return new CapturedFrame(finished.VirtualX, finished.VirtualY, width, height, pixels, finished.Scale);
     }
 
     private void WireToolbar()
@@ -524,9 +533,12 @@ public sealed partial class EditorWindow : Window
         AnnotationToolbar.Beautified = _beautify.Enabled;
 
         // The strips sit at fixed corners of the window here rather than around a
-        // selection, so what they are placed against is the window itself — and it is
-        // resizable, so they are placed again every time it changes.
-        EditorRoot.SizeChanged += (_, args) => AnnotationToolbar.Reposition(
+        // selection, so what they are placed against is the window — and it is
+        // resizable, so they are placed again every time it changes. The toolbar's own
+        // size rather than the root's: it sits in the row under the top bar, and measured
+        // against the whole window every strip landed the bar's height too low, the
+        // options row below the window's bottom edge.
+        AnnotationToolbar.SizeChanged += (_, args) => AnnotationToolbar.Reposition(
             default,
             new CaptureRegion(0, 0, args.NewSize.Width, args.NewSize.Height));
 
@@ -882,7 +894,8 @@ public sealed partial class EditorWindow : Window
                     existing.BgraPixels,
                     added.Width,
                     added.Height,
-                    added.BgraPixels)),
+                    added.BgraPixels),
+                existing.Scale),
             "Capture added • Ctrl+Z to undo");
     }
 
@@ -907,12 +920,17 @@ public sealed partial class EditorWindow : Window
         // capture now, so the two differ, and sizing to the pixels inside opened a framed
         // capture showing a corner of its own background.
         //
-        // The image is in pixels and so is an AppWindow's size, so no scaling comes into
-        // this. The extra height is the title bar and the toolbar, which the image would
-        // otherwise open underneath.
+        // The image is laid out in points and an AppWindow is sized in pixels, so the
+        // display it opens on says how many: a capture opens at the size it was taken, a
+        // file at 96 DPI at its own size in points. The extra height is the title bar and
+        // the toolbar, which the image would otherwise open underneath — laid out in
+        // points too, so scaled with it: added as pixels, the toolbar's options row opened
+        // cut off on a 175% display.
         var presented = PresentedSize;
-        var width = Math.Clamp(presented.Width + 48, 640, Math.Max(640, maxWidth));
-        var height = Math.Clamp(presented.Height + 160, 480, Math.Max(480, maxHeight));
+        var width = (int)Math.Ceiling(((presented.Width / _placement.Scale) + 48) * monitor.Scale);
+        var height = (int)Math.Ceiling(((presented.Height / _placement.Scale) + 160) * monitor.Scale);
+        width = Math.Clamp(width, 640, Math.Max(640, maxWidth));
+        height = Math.Clamp(height, 480, Math.Max(480, maxHeight));
 
         return new RectInt32(
             (int)(monitor.WorkArea.X + ((monitor.WorkArea.Width - width) / 2)),
@@ -941,7 +959,7 @@ public sealed partial class EditorWindow : Window
 
         _zoomFitted = true;
         var opening = CaptureFit.OpeningZoom(
-            PresentedSize.Width,
+            PresentedSize.Width / _placement.Scale,
             Scroller.ViewportWidth,
             Scroller.MinZoomFactor,
             Scroller.MaxZoomFactor);
@@ -1036,9 +1054,12 @@ public sealed partial class EditorWindow : Window
         {
             if (_cropStart is { } start)
             {
-                var end = e.GetCurrentPoint(InputCanvas).Position;
+                // Drawn on the canvas and cut from the pixels, which part at any scale
+                // but a point a pixel.
+                var from = _placement.ToFrame(start);
+                var to = _placement.ToFrame(e.GetCurrentPoint(InputCanvas).Position);
                 _cropStart = null;
-                CropTo(CaptureRegion.FromPoints(start.X, start.Y, end.X, end.Y));
+                CropTo(CaptureRegion.FromPoints(from.X, from.Y, to.X, to.Y));
             }
 
             return;
@@ -1314,7 +1335,7 @@ public sealed partial class EditorWindow : Window
                     frame.Height,
                     frame.BgraPixels,
                     region);
-                return new CapturedFrame(frame.VirtualX, frame.VirtualY, width, height, pixels);
+                return new CapturedFrame(frame.VirtualX, frame.VirtualY, width, height, pixels, frame.Scale);
             },
             $"Cropped to {(int)region.Width} × {(int)region.Height} • Ctrl+Z to undo");
 
@@ -1339,7 +1360,8 @@ public sealed partial class EditorWindow : Window
                 frame.VirtualY,
                 frame.Width,
                 frame.Height,
-                FrameTransforms.Invert(frame.Width, frame.Height, frame.BgraPixels)),
+                FrameTransforms.Invert(frame.Width, frame.Height, frame.BgraPixels),
+                frame.Scale),
             "Colours inverted • Ctrl+Z to undo");
     }
 
@@ -1353,7 +1375,8 @@ public sealed partial class EditorWindow : Window
                 frame.Height,
                 horizontal
                     ? FrameTransforms.FlipHorizontal(frame.Width, frame.Height, frame.BgraPixels)
-                    : FrameTransforms.FlipVertical(frame.Width, frame.Height, frame.BgraPixels)),
+                    : FrameTransforms.FlipVertical(frame.Width, frame.Height, frame.BgraPixels),
+                frame.Scale),
             $"Flipped {(horizontal ? "horizontally" : "vertically")} • Ctrl+Z to undo");
     }
 
@@ -1409,7 +1432,10 @@ public sealed partial class EditorWindow : Window
         _beautify = BeautifyState.Of(
             _beautify.IsWindowSnap ? options.ForWindowSnap() : options,
             _beautify.IsWindowSnap,
-            EditorRoot.XamlRoot?.RasterizationScale ?? 1,
+
+            // The capture's points, not this window's: a frame put round a 2x capture on a
+            // 1x display is the same frame the overlay would have drawn where it was taken.
+            _placement.Scale,
             BeautifyBackgroundStore.CurrentBytes);
 
         _backdrop = BeautifyBackgroundStore.Current;

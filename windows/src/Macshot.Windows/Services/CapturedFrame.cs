@@ -14,11 +14,13 @@ public sealed class CapturedFrame
         int width,
         int height,
         byte[] bgraPixels,
+        double scale,
         bool hasAlpha = false)
     {
         ArgumentOutOfRangeException.ThrowIfNegative(width);
         ArgumentOutOfRangeException.ThrowIfNegative(height);
         ArgumentNullException.ThrowIfNull(bgraPixels);
+        ArgumentOutOfRangeException.ThrowIfNegativeOrZero(scale);
 
         if (bgraPixels.Length != checked(width * height * 4))
         {
@@ -30,6 +32,7 @@ public sealed class CapturedFrame
         Width = width;
         Height = height;
         BgraPixels = bgraPixels;
+        Scale = scale;
         HasAlpha = hasAlpha;
     }
 
@@ -38,7 +41,7 @@ public sealed class CapturedFrame
     /// because the framework has not let go of it. See
     /// <c>CaptureOverlayView.ReleasePixels</c>.
     /// </summary>
-    public static CapturedFrame Empty { get; } = new(0, 0, 0, 0, []);
+    public static CapturedFrame Empty { get; } = new(0, 0, 0, 0, [], 1);
 
     public int VirtualX { get; }
 
@@ -49,6 +52,26 @@ public sealed class CapturedFrame
     public int Height { get; }
 
     public byte[] BgraPixels { get; }
+
+    /// <summary>
+    /// How many of these pixels make one point of the screen they were taken from: the
+    /// display's scale for a capture, and 1 for a picture that never was one.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// What an <c>NSImage</c>'s size says on the Mac, where a capture taken at 2x is twice
+    /// as many pixels as points and is shown, sized and marked up in the points.
+    /// macshot's editor lays a capture out at that size, so it opens at the size it was on
+    /// screen and a 3 on the row is as thick there as it was in the overlay. A bare buffer
+    /// cannot say any of that, which is why this is here.
+    /// </para>
+    /// <para>
+    /// Required rather than defaulted, so a frame made from another one has to say what it
+    /// carries over: a default would let each of the two dozen places that build one drop
+    /// it without anything noticing.
+    /// </para>
+    /// </remarks>
+    public double Scale { get; }
 
     /// <summary>
     /// Whether the alpha byte of each pixel means anything.
@@ -78,6 +101,11 @@ public sealed class CapturedFrame
     /// full screens instead of one — 12.9MB apiece at 2038x1588, spent at the moment a
     /// capture is already at its high-water mark.
     /// </remarks>
+    /// <summary>The same pixels, said to be worth <paramref name="scale"/> to a point.</summary>
+    /// <remarks>Shares the buffer: nothing about the pixels changes.</remarks>
+    public CapturedFrame WithScale(double scale) =>
+        new(VirtualX, VirtualY, Width, Height, BgraPixels, scale, HasAlpha);
+
     public SoftwareBitmap ToSoftwareBitmap() => SoftwareBitmap.CreateCopyFromBuffer(
         BgraPixels.AsBuffer(),
         BitmapPixelFormat.Bgra8,

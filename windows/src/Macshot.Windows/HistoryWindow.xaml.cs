@@ -493,7 +493,7 @@ public sealed partial class HistoryWindow : Window
         }
 
         var (width, height, pixels) = FrameTransforms.Apply(turn, frame.Width, frame.Height, frame.BgraPixels);
-        var turned = new CapturedFrame(frame.VirtualX, frame.VirtualY, width, height, pixels, frame.HasAlpha);
+        var turned = new CapturedFrame(frame.VirtualX, frame.VirtualY, width, height, pixels, frame.Scale, frame.HasAlpha);
 
         if (await ScreenshotHistory.RewriteAsync(entry.Path, turned, _settings.Current) is null)
         {
