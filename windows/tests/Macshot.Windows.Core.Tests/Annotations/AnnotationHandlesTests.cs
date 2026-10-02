@@ -31,8 +31,11 @@ public sealed class AnnotationHandlesTests
     }
 
     [TestMethod]
-    public void AreaShape_OffersFourCornersAndARotation()
+    public void AreaShape_OffersItsCornersItsSidesAndARotation()
     {
+        // The sides as well as the corners, as macshot offers them: without them a box
+        // that only needed to be taller could not be made so without its width changing
+        // by however much the hand wandered.
         var rectangle = Shape(AnnotationTool.Rectangle, 10, 10, 60, 40);
 
         var kinds = AnnotationHandles.For(rectangle).Select(handle => handle.Kind).ToArray();
@@ -44,13 +47,17 @@ public sealed class AnnotationHandlesTests
                 AnnotationHandleKind.TopRight,
                 AnnotationHandleKind.BottomLeft,
                 AnnotationHandleKind.BottomRight,
+                AnnotationHandleKind.Top,
+                AnnotationHandleKind.Bottom,
+                AnnotationHandleKind.Left,
+                AnnotationHandleKind.Right,
                 AnnotationHandleKind.Rotate,
             },
             kinds);
     }
 
     [TestMethod]
-    public void Spotlight_OffersItsCornersButNoRotation()
+    public void Spotlight_OffersItsCornersAndSidesButNoRotation()
     {
         // An area, not a line: it used to offer the two ends of a stroke, which on a
         // region that has four corners to adjust is two handles in the wrong places. The
@@ -68,6 +75,10 @@ public sealed class AnnotationHandlesTests
                 AnnotationHandleKind.TopRight,
                 AnnotationHandleKind.BottomLeft,
                 AnnotationHandleKind.BottomRight,
+                AnnotationHandleKind.Top,
+                AnnotationHandleKind.Bottom,
+                AnnotationHandleKind.Left,
+                AnnotationHandleKind.Right,
             },
             kinds);
     }
@@ -297,6 +308,68 @@ public sealed class AnnotationHandlesTests
 
         Assert.AreEqual(0, dragged.BoundingRect.X, 1e-9, "the shape must not move under an unmoved handle");
         Assert.AreEqual(0, dragged.BoundingRect.Y, 1e-9);
+    }
+
+    [TestMethod]
+    public void SideHandles_SitOnTheMiddleOfEachSide()
+    {
+        var rectangle = Shape(AnnotationTool.Rectangle, 10, 10, 60, 40);
+
+        Assert.AreEqual(new CapturePoint(35, 10), HandleAt(rectangle, AnnotationHandleKind.Top));
+        Assert.AreEqual(new CapturePoint(60, 25), HandleAt(rectangle, AnnotationHandleKind.Right));
+    }
+
+    /// <summary>
+    /// The pointer's other coordinate is ignored, Shift included: a hand drifting along
+    /// the edge must not shear the shape, and one side has no aspect ratio to keep.
+    /// </summary>
+    [TestMethod]
+    public void DraggingASide_MovesThatSideAndNothingElse()
+    {
+        var rectangle = Shape(AnnotationTool.Rectangle, 10, 10, 60, 40);
+
+        var dragged = AnnotationHandles.Drag(
+            rectangle,
+            AnnotationHandleKind.Right,
+            new CapturePoint(90, 70),
+            EditorModifiers.Constrain);
+
+        var bounds = dragged.BoundingRect;
+        Assert.AreEqual(10, bounds.X, 1e-9);
+        Assert.AreEqual(90, bounds.Right, 1e-9);
+        Assert.AreEqual(10, bounds.Y, 1e-9, "the drift across the side must not move the top");
+        Assert.AreEqual(40, bounds.Bottom, 1e-9, "nor the bottom");
+    }
+
+    /// <summary>
+    /// A loupe is a lens: from a side it would otherwise be pulled into an oval that
+    /// stretches what it magnifies. macshot keeps it round from every handle, centred
+    /// along the side being dragged.
+    /// </summary>
+    [TestMethod]
+    public void DraggingALoupesSide_KeepsItRound()
+    {
+        var loupe = Shape(AnnotationTool.Loupe, 0, 0, 100, 100);
+
+        var dragged = AnnotationHandles.Drag(loupe, AnnotationHandleKind.Right, new CapturePoint(160, 30));
+
+        var bounds = dragged.BoundingRect;
+        Assert.AreEqual(160, bounds.Width, 1e-9);
+        Assert.AreEqual(160, bounds.Height, 1e-9);
+        Assert.AreEqual(0, bounds.X, 1e-9, "the opposite side stays where it was");
+        Assert.AreEqual(50, bounds.Y + (bounds.Height / 2), 1e-9, "and the lens stays centred along it");
+        Assert.AreEqual(160, dragged.Style.LoupeSize, 1e-9, "the row must read back the size just made");
+    }
+
+    [TestMethod]
+    public void DraggingALoupesCorner_KeepsItRoundAndBigEnoughToSeeThrough()
+    {
+        var loupe = Shape(AnnotationTool.Loupe, 0, 0, 100, 100);
+
+        var dragged = AnnotationHandles.Drag(loupe, AnnotationHandleKind.BottomRight, new CapturePoint(10, 5));
+
+        Assert.AreEqual(AnnotationHandles.MinLoupeSide, dragged.BoundingRect.Width, 1e-9);
+        Assert.AreEqual(AnnotationHandles.MinLoupeSide, dragged.BoundingRect.Height, 1e-9);
     }
 
     [TestMethod]

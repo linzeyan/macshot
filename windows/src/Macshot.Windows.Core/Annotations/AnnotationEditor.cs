@@ -470,6 +470,8 @@ public sealed class AnnotationEditor
     {
         AnnotationHandleKind.TopLeft or AnnotationHandleKind.BottomRight => PointerCursor.ResizeFalling,
         AnnotationHandleKind.TopRight or AnnotationHandleKind.BottomLeft => PointerCursor.ResizeRising,
+        AnnotationHandleKind.Top or AnnotationHandleKind.Bottom => PointerCursor.ResizeVertical,
+        AnnotationHandleKind.Left or AnnotationHandleKind.Right => PointerCursor.ResizeHorizontal,
         _ => PointerCursor.Grab,
     };
 

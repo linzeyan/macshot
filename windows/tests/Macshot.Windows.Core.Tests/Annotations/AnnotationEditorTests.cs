@@ -91,6 +91,23 @@ public sealed class AnnotationEditorTests
     }
 
     /// <summary>
+    /// A side moves along one axis only, and the pointer has to say which before the
+    /// press: the grab there would promise a move, and a diagonal would promise the
+    /// other axis too.
+    /// </summary>
+    [TestMethod]
+    public void CursorAt_ShowsWhichWayTheSideOfASelectedShapeResizes()
+    {
+        var editor = NewEditor(AnnotationTool.Rectangle);
+        Drag(editor, new CapturePoint(10, 10), new CapturePoint(90, 60));
+        editor.PointerPressed(new CapturePoint(10, 30));
+        editor.PointerReleased(new CapturePoint(10, 30));
+
+        Assert.AreEqual(PointerCursor.ResizeVertical, editor.CursorAt(new CapturePoint(50, 60)));
+        Assert.AreEqual(PointerCursor.ResizeHorizontal, editor.CursorAt(new CapturePoint(90, 35)));
+    }
+
+    /// <summary>
     /// The freehand tools show the stroke a press would lay down under the pointer, so
     /// the width can be judged before any ink is spent. The dot has to be the stroke's
     /// size, and has to stay big enough to see at the thinnest setting.

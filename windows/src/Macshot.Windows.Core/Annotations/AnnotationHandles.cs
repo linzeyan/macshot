@@ -22,6 +22,12 @@ public enum AnnotationHandleKind
     BottomLeft,
     BottomRight,
 
+    /// <summary>Moves one side of an area shape, leaving the other three where they are.</summary>
+    Top,
+    Bottom,
+    Left,
+    Right,
+
     /// <summary>Turns an area shape about the centre of its upright bounds.</summary>
     Rotate,
 }
@@ -88,6 +94,13 @@ public static class AnnotationHandles
     /// shorten with it.
     /// </remarks>
     public const double RotateReach = 24;
+
+    /// <summary>
+    /// The smallest a loupe can be resized to, in frame pixels: macshot's floor
+    /// (<c>OverlayView.swift:6086-6093</c>), below which there is too little lens left to
+    /// see anything magnified in.
+    /// </summary>
+    public const double MinLoupeSide = 40;
 
     /// <summary>
     /// The handles <paramref name="annotation"/> offers, or nothing for a mark that only
@@ -198,10 +211,15 @@ public static class AnnotationHandles
             },
             AnnotationHandleKind.Bend => BentTo(annotation, upright),
             AnnotationHandleKind.Waypoint => MovedAnchor(annotation, index, upright),
+            _ when annotation.Tool == AnnotationTool.Loupe => ResizeLoupe(annotation, kind, upright),
             AnnotationHandleKind.TopLeft
                 or AnnotationHandleKind.TopRight
                 or AnnotationHandleKind.BottomLeft
                 or AnnotationHandleKind.BottomRight => ResizeCorner(annotation, kind, upright, modifiers),
+            AnnotationHandleKind.Top
+                or AnnotationHandleKind.Bottom
+                or AnnotationHandleKind.Left
+                or AnnotationHandleKind.Right => ResizeEdge(annotation, kind, upright),
             _ => annotation,
         };
     }
@@ -340,12 +358,19 @@ public static class AnnotationHandles
         var bounds = annotation.BoundingRect;
         var centre = Centre(annotation);
 
-        var handles = new List<AnnotationHandle>(5)
+        // The middle of each side as well as the corners, which is what macshot offers on
+        // every shape it offers corners on (OverlayView.swift:4963-4975): a box that only
+        // needs to be taller should not have its width riding on a steady hand.
+        var handles = new List<AnnotationHandle>(9)
         {
             new(AnnotationHandleKind.TopLeft, Turn(new CapturePoint(bounds.X, bounds.Y), centre, annotation.Rotation)),
             new(AnnotationHandleKind.TopRight, Turn(new CapturePoint(bounds.Right, bounds.Y), centre, annotation.Rotation)),
             new(AnnotationHandleKind.BottomLeft, Turn(new CapturePoint(bounds.X, bounds.Bottom), centre, annotation.Rotation)),
             new(AnnotationHandleKind.BottomRight, Turn(new CapturePoint(bounds.Right, bounds.Bottom), centre, annotation.Rotation)),
+            new(AnnotationHandleKind.Top, Turn(new CapturePoint(centre.X, bounds.Y), centre, annotation.Rotation)),
+            new(AnnotationHandleKind.Bottom, Turn(new CapturePoint(centre.X, bounds.Bottom), centre, annotation.Rotation)),
+            new(AnnotationHandleKind.Left, Turn(new CapturePoint(bounds.X, centre.Y), centre, annotation.Rotation)),
+            new(AnnotationHandleKind.Right, Turn(new CapturePoint(bounds.Right, centre.Y), centre, annotation.Rotation)),
         };
 
         // A spotlight is left unturnable, as macshot leaves it: the region it lights is
@@ -457,6 +482,73 @@ public static class AnnotationHandles
         {
             Start = anchor,
             End = Square(anchor, point, modifiers),
+        };
+    }
+
+    /// <summary>
+    /// The shape with one side moved to <paramref name="point"/>. Only the coordinate
+    /// across that side is read, so a hand drifting along the edge does not shear the
+    /// shape, and Shift does nothing: one side has no aspect ratio to keep.
+    /// </summary>
+    private static Annotation ResizeEdge(Annotation annotation, AnnotationHandleKind kind, CapturePoint point)
+    {
+        var bounds = annotation.BoundingRect;
+
+        var (start, end) = kind switch
+        {
+            AnnotationHandleKind.Top => (new CapturePoint(bounds.X, bounds.Bottom), new CapturePoint(bounds.Right, point.Y)),
+            AnnotationHandleKind.Bottom => (new CapturePoint(bounds.X, bounds.Y), new CapturePoint(bounds.Right, point.Y)),
+            AnnotationHandleKind.Left => (new CapturePoint(bounds.Right, bounds.Y), new CapturePoint(point.X, bounds.Bottom)),
+            _ => (new CapturePoint(bounds.X, bounds.Y), new CapturePoint(point.X, bounds.Bottom)),
+        };
+
+        return annotation with { Start = start, End = end };
+    }
+
+    /// <summary>
+    /// The loupe resized from any of its handles: still a circle, as macshot keeps it
+    /// (<c>OverlayView.swift:6081-6135</c>), because it is a lens and an oval one would
+    /// stretch what it shows. A corner keeps the opposite corner where it was; a side
+    /// keeps the opposite side and stays centred along it. Its remembered size follows,
+    /// so the row reads back the loupe the user has just made.
+    /// </summary>
+    private static Annotation ResizeLoupe(Annotation annotation, AnnotationHandleKind kind, CapturePoint point)
+    {
+        var bounds = annotation.BoundingRect;
+        var centre = Centre(annotation);
+
+        // Each anchor is paired with the axes the pointer is read along: both for a corner,
+        // one for a side, whose other axis is spread evenly about the centre instead.
+        var (anchor, alongX, alongY) = kind switch
+        {
+            AnnotationHandleKind.TopLeft => (new CapturePoint(bounds.Right, bounds.Bottom), true, true),
+            AnnotationHandleKind.TopRight => (new CapturePoint(bounds.X, bounds.Bottom), true, true),
+            AnnotationHandleKind.BottomLeft => (new CapturePoint(bounds.Right, bounds.Y), true, true),
+            AnnotationHandleKind.BottomRight => (new CapturePoint(bounds.X, bounds.Y), true, true),
+            AnnotationHandleKind.Top => (new CapturePoint(centre.X, bounds.Bottom), false, true),
+            AnnotationHandleKind.Bottom => (new CapturePoint(centre.X, bounds.Y), false, true),
+            AnnotationHandleKind.Left => (new CapturePoint(bounds.Right, centre.Y), true, false),
+            _ => (new CapturePoint(bounds.X, centre.Y), true, false),
+        };
+
+        var deltaX = point.X - anchor.X;
+        var deltaY = point.Y - anchor.Y;
+        var side = Math.Max(
+            MinLoupeSide,
+            Math.Max(alongX ? Math.Abs(deltaX) : 0, alongY ? Math.Abs(deltaY) : 0));
+
+        // A side spreads the axis it does not move about the anchor, which sits on the
+        // centre line; a corner grows away from the anchor towards the pointer.
+        var startX = alongX ? anchor.X : anchor.X - (side / 2);
+        var startY = alongY ? anchor.Y : anchor.Y - (side / 2);
+        var endX = alongX ? anchor.X + Math.CopySign(side, deltaX) : anchor.X + (side / 2);
+        var endY = alongY ? anchor.Y + Math.CopySign(side, deltaY) : anchor.Y + (side / 2);
+
+        return annotation with
+        {
+            Start = new CapturePoint(startX, startY),
+            End = new CapturePoint(endX, endY),
+            Style = annotation.Style.WithSizeFor(AnnotationTool.Loupe, side),
         };
     }
 
