@@ -91,7 +91,11 @@ public sealed partial class PinWindow : Window
             _frame.VirtualY + (_frame.Height / 2d));
         var display = layout.MonitorAt(centre) ?? layout.Primary;
 
-        _opening = PinPlacement.Opening(_frame.Width, _frame.Height, display.WorkArea);
+        // At its size in points, as macshot pins an NSImage (PinWindowController.swift:24):
+        // a capture opens the size it was on screen, a 96 DPI file at its own size in
+        // points, whichever display either lands on.
+        var toScreen = display.Scale / _frame.Scale;
+        _opening = PinPlacement.Opening(_frame.Width * toScreen, _frame.Height * toScreen, display.WorkArea);
         appWindow.MoveAndResize(ToRect(_opening));
 
         Activate();
