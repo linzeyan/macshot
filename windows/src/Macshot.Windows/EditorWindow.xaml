@@ -45,10 +45,14 @@
              separate window: a scroll capture is taller than any screen, and a region
              capture is often smaller than the window it is being marked up in. Content
              alignment centres an image that does not fill the viewport, so a small
-             capture sits in the middle rather than in the corner. -->
+             capture sits in the middle rather than in the corner. The padding is
+             macshot's content inset (DetachedEditorWindowController.swift:144-148): the
+             toolbars float over the bottom and the right, and the image is centred in
+             what they leave rather than under them. -->
         <ScrollViewer
             Grid.Row="1"
             x:Name="Scroller"
+            Padding="0,0,50,84"
             ZoomMode="Enabled"
             MinZoomFactor="0.1"
             MaxZoomFactor="8"

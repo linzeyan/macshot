@@ -68,6 +68,22 @@ public sealed partial class EditorWindow : Window
     /// </summary>
     private const double MaxWorkAreaShare = 0.9;
 
+    /// <summary>
+    /// What the window adds round the image, in points: macshot's right toolbar and
+    /// padding across, and its top bar, bottom toolbar, options row and padding down
+    /// (<c>DetachedEditorWindowController.swift:72-75</c>).
+    /// </summary>
+    private const double EditorChromeWidth = 46 + 60;
+
+    /// <inheritdoc cref="EditorChromeWidth"/>
+    private const double EditorChromeHeight = 32 + 44 + 40 + 40;
+
+    /// <summary>The smallest content macshot opens an editor at, in points.</summary>
+    private const double EditorMinimumWidth = 800;
+
+    /// <inheritdoc cref="EditorMinimumWidth"/>
+    private const double EditorMinimumHeight = 400;
+
     private readonly SettingsStore _settings;
     private readonly AnnotationEditor _editor = new(new AnnotationDocument());
 
@@ -310,7 +326,7 @@ public sealed partial class EditorWindow : Window
         _editor.Document.Changed += (_, _) => RefreshDone();
 
         var appWindow = this.GetAppWindow();
-        appWindow.MoveAndResize(PlaceOverImage());
+        PlaceOverImage(appWindow);
 
         // The question macshot asks in windowShouldClose, in the shape Windows asks it.
         // Without it the X is a way to lose every mark on a capture without being told,
@@ -910,33 +926,39 @@ public sealed partial class EditorWindow : Window
     /// Opens over the image: its own size where that fits, and short of the work area
     /// where it does not.
     /// </summary>
-    private RectInt32 PlaceOverImage()
+    /// <remarks>
+    /// macshot's arithmetic (<c>DetachedEditorWindowController.swift:68-79</c>), in points
+    /// and for the content rather than the frame, which is what <c>ResizeClient</c> sizes:
+    /// the title bar is the system's on both, and neither counts it.
+    /// </remarks>
+    private void PlaceOverImage(AppWindow window)
     {
         var monitor = MonitorEnumerator.Enumerate().Layout.Primary;
-        var maxWidth = (int)(monitor.WorkArea.Width * MaxWorkAreaShare);
-        var maxHeight = (int)(monitor.WorkArea.Height * MaxWorkAreaShare);
+        var maxWidth = monitor.WorkArea.Width * MaxWorkAreaShare / monitor.Scale;
+        var maxHeight = monitor.WorkArea.Height * MaxWorkAreaShare / monitor.Scale;
 
         // What is presented rather than what was captured: a frame is a layer around the
         // capture now, so the two differ, and sizing to the pixels inside opened a framed
-        // capture showing a corner of its own background.
-        //
-        // The image is laid out in points and an AppWindow is sized in pixels, so the
-        // display it opens on says how many: a capture opens at the size it was taken, a
-        // file at 96 DPI at its own size in points. The extra height is the title bar and
-        // the toolbar, which the image would otherwise open underneath — laid out in
-        // points too, so scaled with it: added as pixels, the toolbar's options row opened
-        // cut off on a 175% display.
+        // capture showing a corner of its own background. In points, as the image is laid
+        // out: a capture opens at the size it was taken, a 96 DPI file at its own size in
+        // points.
         var presented = PresentedSize;
-        var width = (int)Math.Ceiling(((presented.Width / _placement.Scale) + 48) * monitor.Scale);
-        var height = (int)Math.Ceiling(((presented.Height / _placement.Scale) + 160) * monitor.Scale);
-        width = Math.Clamp(width, 640, Math.Max(640, maxWidth));
-        height = Math.Clamp(height, 480, Math.Max(480, maxHeight));
+        var width = Math.Min(
+            maxWidth,
+            Math.Max(EditorMinimumWidth, (presented.Width / _placement.Scale) + EditorChromeWidth));
+        var height = Math.Min(
+            maxHeight,
+            Math.Max(EditorMinimumHeight, (presented.Height / _placement.Scale) + EditorChromeHeight));
 
-        return new RectInt32(
-            (int)(monitor.WorkArea.X + ((monitor.WorkArea.Width - width) / 2)),
-            (int)(monitor.WorkArea.Y + ((monitor.WorkArea.Height - height) / 2)),
-            width,
-            height);
+        window.ResizeClient(new SizeInt32(
+            (int)Math.Ceiling(width * monitor.Scale),
+            (int)Math.Ceiling(height * monitor.Scale)));
+
+        // Centred by the frame, which only has a size once the content has been given one.
+        var outer = window.Size;
+        window.Move(new PointInt32(
+            (int)(monitor.WorkArea.X + ((monitor.WorkArea.Width - outer.Width) / 2)),
+            (int)(monitor.WorkArea.Y + ((monitor.WorkArea.Height - outer.Height) / 2))));
     }
 
     /// <summary>
