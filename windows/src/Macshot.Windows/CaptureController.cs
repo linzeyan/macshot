@@ -2048,10 +2048,10 @@ public sealed class CaptureController : IDisposable
     /// The overlay is handing its capture to the editor rather than to delivery. The
     /// overlays go first: they are always on top, so the editor would open behind them.
     /// </summary>
-    private void OnEditorRequested(object? sender, CapturedFrame frame) => Post(() =>
+    private void OnEditorRequested(object? sender, EditableCapture capture) => Post(() =>
     {
         DismissOverlays();
-        return ShowEditorAsync(frame);
+        return ShowEditorAsync(capture.Raw, capture.Annotations, state: capture.State);
     });
 
     private void OnScrollCaptureRequested(object? sender, ScrollCaptureRequest request) =>

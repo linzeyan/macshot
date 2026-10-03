@@ -485,11 +485,10 @@ public sealed partial class CaptureOverlayView : UserControl
     public event EventHandler? Cancelled;
 
     /// <summary>
-    /// Raised with the finished image when the user asks for it in the editor window
-    /// rather than delivered. The capture ends either way; what differs is where the
-    /// pixels go, which is why this carries them the way completing does.
+    /// Raised with the capture as it can be edited — its pixels, its marks and its two
+    /// layers — when the user asks for it in the editor window rather than delivered.
     /// </summary>
-    public event EventHandler<CapturedFrame>? EditorRequested;
+    public event EventHandler<EditableCapture>? EditorRequested;
 
     /// <summary>
     /// Raised when the user asks for a window to be scroll-captured. The overlay
@@ -3388,25 +3387,26 @@ public sealed partial class CaptureOverlayView : UserControl
     }
 
     /// <summary>
-    /// Hands the marked-up pixels to the editor window instead of to delivery.
+    /// Hands the capture to the editor window instead of to delivery.
     /// </summary>
     /// <remarks>
-    /// The marks go across as pixels rather than as annotations. They were drawn against
-    /// the whole virtual desktop and the editor's image starts at its own origin, so
-    /// carrying them as objects would need every one shifted — and the user asked for the
-    /// image they are looking at, not for a second chance at the arrow.
+    /// The marks go across as marks, shifted to the image's own origin, with the
+    /// adjustment and the frame as the layers they are — macshot's
+    /// <c>OverlayWindowController.swift:824-843</c>. The same set a capture is archived
+    /// as, so the editor opens it the way it reopens one from the history: the arrow
+    /// drawn a moment ago can still be moved.
     /// </remarks>
     private async Task OpenInEditorAsync()
     {
-        if (!IsAnnotating)
+        if (!IsAnnotating || _selection is not { } region)
         {
             return;
         }
 
         await AnnotationCanvas.FlushAsync();
-        if (Finished() is { } finished)
+        if (AnnotationCanvas.ToEditable(RawPixelsFor(region), EditState()) is { } editable)
         {
-            EditorRequested?.Invoke(this, finished);
+            EditorRequested?.Invoke(this, editable);
         }
     }
 
