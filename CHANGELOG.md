@@ -3,6 +3,22 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.26] - 2026-10-03
+
+### Changed
+
+- **Marks stay editable when you open a capture in the editor**, as on macOS. Before,
+  anything you had drawn on the capture became part of the picture on the way into the
+  editor, so you could no longer move it, change it or delete it. Adjustments such as
+  brightness and contrast, and the frame, come across as settings you can still change,
+  too.
+- **The editor window opens at the size macOS uses**, and the capture is centred in the
+  space above the toolbar and beside the buttons on the right, rather than partly under
+  them.
+- **A pinned image opens at the size it is in the editor.** A capture pins at the size it
+  was on screen, as before. An image file now pins at its own size, as on macOS, rather
+  than at its pixel count, which made it look smaller on a scaled display.
+
 ## [0.8.25] - 2026-10-03
 
 ### Changed
