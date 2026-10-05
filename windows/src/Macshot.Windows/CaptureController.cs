@@ -2387,6 +2387,8 @@ public sealed class CaptureController : IDisposable
                 _settings.Current.RecordMicAudio,
                 _settings.Current.MicrophoneDeviceId));
 
+        var editorOpens = false;
+
         try
         {
             var path = ResolveRecordingPath(format);
@@ -2423,7 +2425,7 @@ public sealed class CaptureController : IDisposable
             // going, exactly as it does on macOS: the answer can rewrite the file, and an
             // editor opened on the version about to be replaced would be editing a file
             // that is no longer there.
-            await DeliverRecordingAsync(await BalancedRecordingAsync(result));
+            editorOpens = await DeliverRecordingAsync(await BalancedRecordingAsync(result));
         }
         catch (Exception)
         {
@@ -2456,7 +2458,15 @@ public sealed class CaptureController : IDisposable
                 _hotkeys.Unregister(HotkeyStopRecording);
             }
 
-            CollectWhenIdle("a recording");
+            // Not when the editor is opening: this is no idle moment, and the collection
+            // would race the editor's load and then empty the working set of a window the
+            // user is about to play — measured on the Win10 VDI, 213.7MB -> 2.4MB 130ms
+            // after it opened, all faulted back within two seconds. The editor's close
+            // collects instead, which is when the process really does go quiet.
+            if (!editorOpens)
+            {
+                CollectWhenIdle("a recording");
+            }
         }
     }
 
@@ -2476,7 +2486,8 @@ public sealed class CaptureController : IDisposable
     /// says so, and interrupting the user to report that the folder would not open would
     /// be reporting a problem they do not have.
     /// </remarks>
-    private async Task DeliverRecordingAsync(string path)
+    /// <returns>Whether the video editor is on its way, which collects once it closes.</returns>
+    private async Task<bool> DeliverRecordingAsync(string path)
     {
         try
         {
@@ -2498,8 +2509,7 @@ public sealed class CaptureController : IDisposable
                 case RecordingOnStop.OpenEditor:
                     // On the dispatcher, because a window is being made: the recording
                     // stops on whichever thread the encoder finished on.
-                    _dispatcher.TryEnqueue(() => ShowVideoEditor(path));
-                    break;
+                    return _dispatcher.TryEnqueue(() => ShowVideoEditor(path));
 
                 default:
                     break;
@@ -2509,6 +2519,8 @@ public sealed class CaptureController : IDisposable
         {
             DiagnosticLog.Write($"Could not deliver the recording at '{path}': {exception.Message}");
         }
+
+        return false;
     }
 
     /// <summary>
