@@ -3,6 +3,15 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.27] - 2026-10-05
+
+### Fixed
+
+- **The video editor that opens after a recording keeps its memory.** macshot tidies up
+  once a recording is finished, and that ran while the editor was opening, handing the
+  editor's memory back to Windows just as you started to use it, so it had to be read
+  back in. The tidy-up now waits until you close the editor.
+
 ## [0.8.26] - 2026-10-03
 
 ### Changed
