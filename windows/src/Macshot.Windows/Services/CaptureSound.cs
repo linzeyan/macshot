@@ -49,7 +49,7 @@ internal static class CaptureSound
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write($"Could not play the capture sound: {exception.Message}");
+            DiagnosticLog.Write("Could not play the capture sound", exception);
         }
     }
 

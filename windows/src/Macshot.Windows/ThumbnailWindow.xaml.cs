@@ -171,7 +171,7 @@ public sealed partial class ThumbnailWindow : Window
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Verbose($"Could not restack a thumbnail: {exception.Message}");
+            DiagnosticLog.Debug("Could not restack a thumbnail", exception);
         }
     }
 

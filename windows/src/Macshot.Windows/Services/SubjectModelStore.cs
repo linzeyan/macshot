@@ -149,7 +149,7 @@ internal static class SubjectModelStore
         {
             // A leftover .part costs 4 MB and is overwritten by the next attempt. Not worth
             // replacing the user's real error with this one.
-            DiagnosticLog.Write($"Could not clean up a partial model download: {exception.Message}");
+            DiagnosticLog.Write("Could not clean up a partial model download", exception);
         }
     }
 

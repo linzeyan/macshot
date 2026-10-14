@@ -41,6 +41,7 @@
 "Could not translate: {0}" = "Impossibile tradurre: {0}";
 "Custom file" = "File personalizzato";
 "Dark" = "Scuro";
+"Debug" = "Debug";
 "Diagnostics" = "Diagnostica";
 "Downloaded model" = "Modello scaricato";
 "Downloading macshot %@..." = "Download di macshot %@…";
@@ -79,6 +80,7 @@
 "Keystrokes:" = "Tasti premuti:";
 "Larger" = "Più grande";
 "Light" = "Chiaro";
+"Log level:" = "Livello di log:";
 "macshot cannot use the camera" = "macshot non può usare la fotocamera";
 "macshot cannot use the microphone" = "macshot non può usare il microfono";
 "macshot cannot write to its own folder, so it cannot update itself." = "macshot non può scrivere nella propria cartella, quindi non può aggiornarsi da solo.";
@@ -99,6 +101,8 @@
 "No personal data found in the image" = "Nessun dato personale trovato nell'immagine";
 "No personal data found in the selection" = "Nessun dato personale trovato nella selezione";
 "No text was recognized." = "Nessun testo riconosciuto.";
+"Normal" = "Normale";
+"Normal writes failures. Debug adds every step of a capture or recording and how long it took. Trace adds every frame, and every exception whether or not it was handled. Each line names the source file and line that wrote it." = "«Normale» registra gli errori. «Debug» aggiunge ogni passaggio di una cattura o registrazione e quanto è durato. «Traccia» aggiunge ogni fotogramma e ogni eccezione, gestita o meno. Ogni riga indica il file sorgente e la riga che l'ha scritta.";
 "Not a shortcut: {0}. Click it and press the keys — nothing is being kept until then." = "Non è una scorciatoia: {0}. Fai clic e premi i tasti — fino ad allora non viene salvato nulla.";
 "Off leaves the scrolling to you: scroll the window yourself and press Stop when you have reached the end. Turn it off for views that refuse synthetic wheel input, such as some remote desktops." = "Disattivato lascia lo scorrimento a te: scorri tu la finestra e premi Interrompi quando sei arrivato in fondo. Disattivalo per le viste che rifiutano la rotellina sintetica, come alcuni desktop remoti.";
 "Offer the last selection again" = "Riproponi l'ultima selezione";
@@ -146,6 +150,7 @@
 "There is no window behind that region to scroll" = "Dietro quella regione non c'è nessuna finestra da scorrere";
 "Took {0}" = "Preso {0}";
 "Took {0} • {1}" = "Preso {0} • {1}";
+"Trace" = "Traccia";
 "Translated into {0}." = "Tradotto in {0}.";
 "Translating..." = "Traduzione…";
 "Trigger macshot from PowerToys Run, a stream deck, a desktop shortcut, or any tool that opens URLs." = "Avvia macshot da PowerToys Run, uno stream deck, un collegamento sul desktop o qualsiasi strumento che apra URL.";
@@ -168,7 +173,6 @@
 "Windows would not capture that window." = "Windows ha rifiutato di acquisire quella finestra.";
 "Windows would not give macshot these shortcuts, so they are not active: {0}. Another program may already own them. The notification-area menu still works." = "Windows non ha concesso queste scorciatoie a macshot, quindi non sono attive: {0}. Potrebbero già appartenere a un altro programma. Il menu nell'area di notifica funziona ancora.";
 "Windows would not let macshot change its startup entry." = "Windows non ha consentito a macshot di modificare la voce di avvio.";
-"Write a detailed log" = "Scrivi un log dettagliato";
 "You're up to date!" = "Tutto aggiornato!";
 "Your own picture" = "Una tua immagine";
 "Zoom in" = "Ingrandisci";

@@ -126,7 +126,7 @@ internal static class MenuIcons
         {
             // A process with no view management to ask — rare, and not worth failing a
             // menu over. Light is Windows' own default.
-            DiagnosticLog.Write($"Could not read the system theme: {exception.Message}");
+            DiagnosticLog.Write("Could not read the system theme", exception);
             return false;
         }
     }
@@ -207,7 +207,7 @@ internal static class MenuIcons
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write($"Could not draw the menu icon '{glyph}': {exception.Message}");
+            DiagnosticLog.Write($"Could not draw the menu icon '{glyph}'", exception);
             return IntPtr.Zero;
         }
         finally

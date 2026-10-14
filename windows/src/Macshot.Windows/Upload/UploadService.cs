@@ -235,7 +235,7 @@ internal sealed class UploadService
         {
             // Another program holding the clipboard open. The link is still in the toast,
             // where it can be read — which is the reason the toast shows it at all.
-            DiagnosticLog.Write($"The upload link could not be put on the clipboard: {error.Message}");
+            DiagnosticLog.Write("The upload link could not be put on the clipboard", error);
         }
     }
 

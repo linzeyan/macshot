@@ -545,7 +545,7 @@ public sealed class TrayIconService : IDisposable
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write($"The macshot icon could not be loaded: {exception.Message}");
+            DiagnosticLog.Write("The macshot icon could not be loaded", exception);
         }
 
         // Shared and owned by the system: destroying this one is destroying every

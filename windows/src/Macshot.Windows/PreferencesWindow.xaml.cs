@@ -1375,7 +1375,8 @@ public sealed partial class PreferencesWindow : Window
         DoubleClickCopyCheck.IsChecked = settings.DoubleClickToCopy;
         HideInstructionsCheck.IsChecked = settings.HideCaptureInstructions;
         SelectionShadowCheck.IsChecked = settings.DisableSelectionShadow;
-        VerboseLoggingCheck.IsChecked = settings.VerboseLogging;
+        LogLevelBox.ItemsSource = new List<string> { L("Normal"), L("Debug"), L("Trace") };
+        LogLevelBox.SelectedIndex = (int)settings.LogLevel;
         AutomaticUpdatesCheck.IsChecked = settings.AutomaticUpdateChecks;
         BetaUpdatesCheck.IsChecked = settings.BetaUpdates;
 
@@ -1784,7 +1785,7 @@ public sealed partial class PreferencesWindow : Window
             // No PencilSmoothing here. It is set from the tool options row while drawing,
             // and this record is built with "with", so leaving it out carries the stored
             // choice through rather than overwriting it with a control that is gone.
-            VerboseLogging = VerboseLoggingCheck.IsChecked == true,
+            LogLevel = LogLevelBox.SelectedIndex >= 0 ? (LogLevel)LogLevelBox.SelectedIndex : LogLevel.Normal,
             AutomaticUpdateChecks = AutomaticUpdatesCheck.IsChecked == true,
             BetaUpdates = BetaUpdatesCheck.IsChecked == true,
             LaunchAtLogin = LaunchAtLoginCheck.IsChecked == true,

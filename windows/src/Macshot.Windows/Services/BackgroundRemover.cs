@@ -69,7 +69,7 @@ internal static class BackgroundRemover
             {
                 // No AI runtime to ask — which is the answer, not a fault to raise from a
                 // property. An unpackaged process lands here.
-                DiagnosticLog.Write($"Could not ask about Copilot+ support: {exception.Message}");
+                DiagnosticLog.Write("Could not ask about Copilot+ support", exception);
                 return false;
             }
         }

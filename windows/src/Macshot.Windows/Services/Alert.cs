@@ -124,7 +124,7 @@ internal static class Alert
             // TaskDialogIndirect is exported by comctl32 version 6 only, which the process
             // reaches through the dependency in app.manifest. If that ever stops resolving
             // the question still has to be asked, so fall back rather than propagate.
-            DiagnosticLog.Write($"Task dialog unavailable, asking with a message box: {exception.Message}");
+            DiagnosticLog.Write("Task dialog unavailable, asking with a message box", exception);
         }
 
         return WithMessageBox(owner, instruction, content, icon, labels);

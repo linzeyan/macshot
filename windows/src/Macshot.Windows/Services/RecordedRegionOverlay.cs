@@ -66,7 +66,7 @@ internal sealed class RecordedRegionOverlay : IDisposable
         catch (InvalidOperationException error)
         {
             // A window that cannot be made is a missing frame, not a failed recording.
-            DiagnosticLog.Verbose($"recorded region frame: {error.Message}");
+            DiagnosticLog.Trace("recorded region frame", error);
         }
     }
 

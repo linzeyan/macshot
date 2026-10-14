@@ -190,7 +190,7 @@ internal sealed class UrlSchemeHost : IDisposable
 
                     if (UrlSchemeCommands.Parse(url) is { } command)
                     {
-                        DiagnosticLog.Verbose($"macshot:// asked for {command.Action}");
+                        DiagnosticLog.Debug($"macshot:// asked for {command.Action}");
                         CommandReceived?.Invoke(this, command);
                     }
                     else
@@ -212,7 +212,7 @@ internal sealed class UrlSchemeHost : IDisposable
                     // back on. Neither is worth ending the loop over, but retrying at
                     // once would spin, so the next attempt waits out the same window a
                     // messenger is prepared to wait in.
-                    DiagnosticLog.Write($"A macshot:// URL could not be read: {error.Message}");
+                    DiagnosticLog.Write("A macshot:// URL could not be read", error);
                     await Task.Delay(ConnectMilliseconds, stopping).ConfigureAwait(false);
                 }
             }
@@ -268,7 +268,7 @@ internal sealed class UrlSchemeHost : IDisposable
             // Group policy can lock the key. Written down rather than shown: the user
             // ticked a box for something they intend to use later, and a message box
             // about the registry now is one they cannot act on and did not ask for.
-            DiagnosticLog.Write($"Windows refused the macshot:// registration: {error.Message}");
+            DiagnosticLog.Write("Windows refused the macshot:// registration", error);
         }
     }
 
@@ -285,7 +285,7 @@ internal sealed class UrlSchemeHost : IDisposable
         }
         catch (Exception error) when (error is System.Security.SecurityException or UnauthorizedAccessException or IOException)
         {
-            DiagnosticLog.Write($"Windows refused to give up the macshot:// registration: {error.Message}");
+            DiagnosticLog.Write("Windows refused to give up the macshot:// registration", error);
         }
     }
 }

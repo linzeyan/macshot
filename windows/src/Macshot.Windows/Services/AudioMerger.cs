@@ -73,7 +73,7 @@ internal static class AudioMerger
                 // the panel was up, most likely. The merge is real and finished, so it is
                 // delivered under its own name rather than thrown away. macshot answers the
                 // same failure the same way, in AudioMergeController.swift:203-209.
-                DiagnosticLog.Write($"The merged recording could not replace '{recordingPath}': {error.Message}");
+                DiagnosticLog.Write($"The merged recording could not replace '{recordingPath}'", error);
                 return written.Path;
             }
         }
@@ -90,7 +90,7 @@ internal static class AudioMerger
                 }
                 catch (Exception error) when (error is IOException or UnauthorizedAccessException)
                 {
-                    DiagnosticLog.Write($"Could not delete '{written.Path}': {error.Message}");
+                    DiagnosticLog.Write($"Could not delete '{written.Path}'", error);
                 }
             }
         }

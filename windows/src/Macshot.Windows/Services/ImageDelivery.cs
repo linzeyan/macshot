@@ -73,8 +73,8 @@ public static class ImageDelivery
             // the flush, and the partial one would be a truncated file.
             var substitute = format.Fallback();
             DiagnosticLog.Write(
-                $"The {format.DisplayName()} encoder failed ({exception.Message}); "
-                + $"writing {substitute.DisplayName()} instead.");
+                $"The {format.DisplayName()} encoder failed; writing {substitute.DisplayName()} instead",
+                exception);
             return new EncodedCapture(await EncodeToBytesAsync(frame, substitute, quality), substitute);
         }
     }

@@ -99,7 +99,7 @@ internal sealed class ClickHighlightOverlay : IDisposable
 
         if (_hook == IntPtr.Zero)
         {
-            DiagnosticLog.Verbose(
+            DiagnosticLog.Debug(
                 $"click highlight: no mouse hook ({Marshal.GetLastWin32Error()}), clicks will not be marked");
             return false;
         }
@@ -169,7 +169,7 @@ internal sealed class ClickHighlightOverlay : IDisposable
         catch (InvalidOperationException error)
         {
             // A window that cannot be made is a missing ring, not a failed recording.
-            DiagnosticLog.Verbose($"click highlight: {error.Message}");
+            DiagnosticLog.Debug("click highlight", error);
             return;
         }
 

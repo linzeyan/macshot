@@ -35,6 +35,9 @@ public partial class App : Application
             args.Handled = true;
             FailureReport.Show(IntPtr.Zero, args.Exception);
         };
+
+        // Subscribed for the life of the process and silent below Trace. See the handler.
+        AppDomain.CurrentDomain.FirstChanceException += DiagnosticLog.OnFirstChanceException;
     }
 
     protected override void OnLaunched(LaunchActivatedEventArgs args)

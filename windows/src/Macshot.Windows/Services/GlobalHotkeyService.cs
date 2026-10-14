@@ -129,8 +129,19 @@ public sealed class GlobalHotkeyService : IDisposable
         }
 
         args.Handled = true;
+
+        // How long the press sat in the queue before this thread got to it — the one part
+        // of a slow capture no stopwatch inside macshot can see, because nothing of
+        // macshot's runs until it is over. A thread busy elsewhere, or a process whose pages
+        // have to be read back in before it can run at all, both show up here.
+        var queued = TimeSpan.FromMilliseconds(unchecked(Environment.TickCount - GetMessageTime()));
+        DiagnosticLog.Took(queued, $"hotkey {args.WParam} reached macshot {queued.TotalMilliseconds:0}ms after it was pressed");
+
         handler();
     }
+
+    [DllImport("user32.dll")]
+    private static extern int GetMessageTime();
 
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]

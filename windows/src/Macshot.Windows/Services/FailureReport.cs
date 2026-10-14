@@ -1,3 +1,4 @@
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace Macshot.Windows.Services;
@@ -24,10 +25,18 @@ public static class FailureReport
     /// <summary>Stack frames reported. An alert does not scroll.</summary>
     private const int StackFrames = 8;
 
-    public static void Show(nint owner, Exception exception)
+    public static void Show(
+        nint owner,
+        Exception exception,
+        [CallerFilePath] string file = "",
+        [CallerLineNumber] int line = 0)
     {
         ArgumentNullException.ThrowIfNull(exception);
-        Notice(owner, Describe(exception));
+
+        // The whole exception to the log, where the alert gets eight frames: an alert
+        // does not scroll, and the log is where the rest is read.
+        DiagnosticLog.Write("reported to the user", exception, file, line);
+        Alert.Show(owner, null, Describe(exception), Alert.Icon.Error, Localization.L("OK"));
     }
 
     /// <summary>
@@ -41,14 +50,24 @@ public static class FailureReport
     /// only evidence there is that the preferred backend broke. <see cref="Alert"/> is
     /// what asks again with no owner now.
     /// </remarks>
-    public static void Notice(nint owner, string text)
+    /// <param name="exception">
+    /// What the text was made from, when it was made from one: written to the log with its
+    /// stack, and never shown — the alert says it in the user's words.
+    /// </param>
+    public static void Notice(
+        nint owner,
+        string text,
+        Exception? exception = null,
+        [CallerFilePath] string file = "",
+        [CallerLineNumber] int line = 0)
     {
         ArgumentException.ThrowIfNullOrEmpty(text);
 
         // Written first, and unconditionally. Whether the box appears depends on the
         // owner still being a window that can own one; whether the failure is knowable
-        // afterwards must not.
-        DiagnosticLog.Write(text);
+        // afterwards must not. At the caller's line rather than this one, which every
+        // notice would otherwise share.
+        DiagnosticLog.Write(text, exception, file, line);
 
         Alert.Show(owner, null, text, Alert.Icon.Error, Localization.L("OK"));
     }

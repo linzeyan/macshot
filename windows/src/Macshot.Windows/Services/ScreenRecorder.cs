@@ -406,7 +406,7 @@ public sealed class ScreenRecorder : IDisposable
                 // same handler: nothing thrown from here reaches the recording. A
                 // recording that silently lost its sound is worth having; one that
                 // silently skipped the line below is not.
-                DiagnosticLog.Write($"The recording's audio would not start: {exception.Message}");
+                DiagnosticLog.Write("The recording's audio would not start", exception);
             }
 
             args.Request.SetActualStartPosition(TimeSpan.Zero);
@@ -680,7 +680,7 @@ public sealed class ScreenRecorder : IDisposable
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write($"Could not take the recording's first frame in advance: {exception.Message}");
+            DiagnosticLog.Write("Could not take the recording's first frame in advance", exception);
             return null;
         }
     }
@@ -714,9 +714,7 @@ public sealed class ScreenRecorder : IDisposable
             // With the code, because the message is in the machine's own language and a
             // report of one arrived in Chinese: 0x8001010E named the fault in a way that
             // "應用程式所呼叫了整理給不同執行緒的介面" needed translating to.
-            DiagnosticLog.Verbose(
-                $"a frame taken by hand failed: {exception.GetType().Name}"
-                    + $" 0x{exception.HResult:X8}: {exception.Message}");
+            DiagnosticLog.Trace("a frame taken by hand failed", exception);
             return null;
         }
     }
@@ -739,9 +737,7 @@ public sealed class ScreenRecorder : IDisposable
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Verbose(
-                $"a GIF frame taken by hand failed: {exception.GetType().Name}"
-                    + $" 0x{exception.HResult:X8}: {exception.Message}");
+            DiagnosticLog.Trace("a GIF frame taken by hand failed", exception);
             return null;
         }
     }
@@ -782,13 +778,13 @@ public sealed class ScreenRecorder : IDisposable
     {
         if (MonitorBounds(monitorHandle) is not { } bounds)
         {
-            DiagnosticLog.Verbose("a frame taken by hand failed: the display is no longer attached");
+            DiagnosticLog.Trace("a frame taken by hand failed: the display is no longer attached");
             return null;
         }
 
         if (bounds.Width != size.Width || bounds.Height != size.Height)
         {
-            DiagnosticLog.Verbose(
+            DiagnosticLog.Trace(
                 $"a frame taken by hand was skipped: the display is now {bounds.Width}x{bounds.Height},"
                     + $" not the {size.Width}x{size.Height} the recording is being written at");
             return null;
@@ -834,9 +830,7 @@ public sealed class ScreenRecorder : IDisposable
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Verbose(
-                $"a frame taken by hand failed: {exception.GetType().Name}"
-                    + $" 0x{exception.HResult:X8}: {exception.Message}");
+            DiagnosticLog.Trace("a frame taken by hand failed", exception);
             return null;
         }
     }
@@ -861,8 +855,7 @@ public sealed class ScreenRecorder : IDisposable
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Verbose(
-                $"a frame taken by hand failed: {exception.GetType().Name}: {exception.Message}");
+            DiagnosticLog.Trace("a frame taken by hand failed", exception);
             return null;
         }
     }
@@ -1534,7 +1527,7 @@ public sealed class ScreenRecorder : IDisposable
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            DiagnosticLog.Write($"Could not remove the failed recording at '{path}': {exception.Message}");
+            DiagnosticLog.Write($"Could not remove the failed recording at '{path}'", exception);
         }
     }
 
@@ -2061,7 +2054,7 @@ public sealed class ScreenRecorder : IDisposable
 
             _session = _pool.CreateCaptureSession(item);
 
-            DiagnosticLog.Verbose(
+            DiagnosticLog.Debug(
                 $"capture session opened on {item.Size.Width}x{item.Size.Height},"
                     + $" {BufferCount} buffers, a frame every {interval.TotalMilliseconds:0}ms");
 
@@ -2080,7 +2073,7 @@ public sealed class ScreenRecorder : IDisposable
             // another frame.
             item.Closed += (_, _) =>
             {
-                DiagnosticLog.Verbose("the capture item closed; the recording ends with what it has");
+                DiagnosticLog.Debug("the capture item closed; the recording ends with what it has");
                 _frames.Writer.TryComplete();
             };
         }
@@ -2144,7 +2137,7 @@ public sealed class ScreenRecorder : IDisposable
 
             if (_session is null)
             {
-                DiagnosticLog.Verbose("started with no capture session: every frame is copied off the screen");
+                DiagnosticLog.Debug("started with no capture session: every frame is copied off the screen");
                 return;
             }
 
@@ -2163,7 +2156,7 @@ public sealed class ScreenRecorder : IDisposable
             // frames at all, which is exactly when "did our own code even run" is the
             // question — and printed ahead of the call it reports, it answered that
             // question wrongly and looked like the platform refusing.
-            DiagnosticLog.Verbose("capture started");
+            DiagnosticLog.Debug("capture started");
         }
 
         /// <summary>
@@ -2277,7 +2270,7 @@ public sealed class ScreenRecorder : IDisposable
 
             if (arrival == 1)
             {
-                DiagnosticLog.Verbose($"the compositor's first frame arrived at {elapsed:mm\\:ss\\.fff}");
+                DiagnosticLog.Debug($"the compositor's first frame arrived at {elapsed:mm\\:ss\\.fff}");
             }
 
             if (_paused || !_cadence.ShouldKeep(elapsed) || !_frames.Writer.TryWrite(new TimedFrame(frame, elapsed)))

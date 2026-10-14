@@ -149,7 +149,7 @@ public sealed partial class TextRecognitionWindow : Window
         {
             // The text is the window's job; the picture beside it is context. Losing it
             // is worth a line in the log and nothing else.
-            DiagnosticLog.Write($"Could not show the recognized capture: {exception.Message}");
+            DiagnosticLog.Write("Could not show the recognized capture", exception);
             PreviewPane.Visibility = Visibility.Collapsed;
             PreviewSeparator.Visibility = Visibility.Collapsed;
         }
@@ -290,14 +290,14 @@ public sealed partial class TextRecognitionWindow : Window
             // The language and the length, never the text: a trace file is something a
             // user attaches to a bug report, and the text is theirs. The length is
             // enough to tell an empty box from a refused request.
-            DiagnosticLog.Verbose($"translating {RecognizedTextBox.Text.Length} characters into {target}");
+            DiagnosticLog.Debug($"translating {RecognizedTextBox.Text.Length} characters into {target}");
 
             var outcome = await TranslationService.TranslateAsync(
                 RecognizedTextBox.Text,
                 target,
                 _closing.Token);
 
-            DiagnosticLog.Verbose(
+            DiagnosticLog.Debug(
                 outcome.Succeeded ? "translation returned" : $"translation failed: {outcome.Failure}");
 
             if (_closing.IsCancellationRequested)
@@ -364,7 +364,7 @@ public sealed partial class TextRecognitionWindow : Window
         {
             // The chosen language still applies to this window; only remembering it
             // failed, and that is not worth taking over the status line for.
-            DiagnosticLog.Write($"Could not remember the translation language: {exception.Message}");
+            DiagnosticLog.Write("Could not remember the translation language", exception);
         }
 #endif
     }

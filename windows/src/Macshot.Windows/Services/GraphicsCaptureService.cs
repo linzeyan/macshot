@@ -132,9 +132,7 @@ public sealed class GraphicsCaptureService : IDisposable
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write(
-                $"Could not ask to capture without a border: {exception.GetType().Name}"
-                    + $" 0x{exception.HResult:X8}: {exception.Message}");
+            DiagnosticLog.Write("Could not ask to capture without a border", exception);
             return false;
         }
     }
@@ -157,9 +155,7 @@ public sealed class GraphicsCaptureService : IDisposable
         catch (Exception exception)
         {
             // A border the user can see is not worth losing the capture over.
-            DiagnosticLog.Write(
-                $"Could not switch the capture border off: {exception.GetType().Name}"
-                    + $" 0x{exception.HResult:X8}: {exception.Message}");
+            DiagnosticLog.Write("Could not switch the capture border off", exception);
         }
     }
 
@@ -433,7 +429,9 @@ public sealed class GraphicsCaptureService : IDisposable
         // thread and a session is not agile on every Windows. Where it is not — Windows 10 —
         // this has no await in it and completes where it was called; and after the first
         // capture it is a finished task everywhere.
+        var clock = System.Diagnostics.Stopwatch.StartNew();
         var borderless = await MayHideBorderAsync();
+        var asked = clock.ElapsedMilliseconds;
 
         var arrival = new TaskCompletionSource<Direct3D11CaptureFrame>(
             TaskCreationOptions.RunContinuationsAsynchronously);
@@ -468,10 +466,18 @@ public sealed class GraphicsCaptureService : IDisposable
         session.StartCapture();
 
         using var captured = await arrival.Task.WaitAsync(FrameTimeout);
+        var arrived = clock.ElapsedMilliseconds;
         using var bitmap = await SoftwareBitmap.CreateCopyFromSurfaceAsync(captured.Surface);
 
         var pixels = new byte[checked(bitmap.PixelWidth * bitmap.PixelHeight * 4)];
         bitmap.CopyToBuffer(pixels.AsBuffer());
+
+        // Split three ways because each has its own reason to stall: the border question
+        // is asked once a process, the frame is the compositor's to give, and the copy is
+        // memory that may have to be paged back in.
+        DiagnosticLog.Debug(
+            $"{bitmap.PixelWidth}x{bitmap.PixelHeight} frame: border asked by {asked}ms, "
+                + $"arrived by {arrived}ms, copied out by {clock.ElapsedMilliseconds}ms");
         return (bitmap.PixelWidth, bitmap.PixelHeight, pixels);
     }
 
@@ -533,7 +539,7 @@ public sealed class GraphicsCaptureService : IDisposable
         }
         else
         {
-            DiagnosticLog.Verbose($"graphics device for {forWhat} created on the hardware renderer");
+            DiagnosticLog.Debug($"graphics device for {forWhat} created on the hardware renderer");
         }
 
         Marshal.ThrowExceptionForHR(result);

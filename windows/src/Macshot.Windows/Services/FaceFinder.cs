@@ -67,7 +67,7 @@ internal static class FaceFinder
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write($"No face detector on this machine: {exception.Message}");
+            DiagnosticLog.Write("No face detector on this machine", exception);
             return [];
         }
 
@@ -100,7 +100,7 @@ internal static class FaceFinder
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write($"Looking for faces failed: {exception.Message}");
+            DiagnosticLog.Write("Looking for faces failed", exception);
             return [];
         }
 

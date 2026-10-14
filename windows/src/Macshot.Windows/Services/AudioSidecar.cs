@@ -31,7 +31,7 @@ public sealed record RecordedAudioTracks(string MicrophonePath, string SystemPat
             }
             catch (Exception error) when (error is IOException or UnauthorizedAccessException)
             {
-                DiagnosticLog.Write($"Could not delete the audio track at '{path}': {error.Message}");
+                DiagnosticLog.Write($"Could not delete the audio track at '{path}'", error);
             }
         }
     }
@@ -123,7 +123,7 @@ internal sealed class AudioSidecar : IDisposable
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
-            DiagnosticLog.Write($"Could not keep the recording's audio sources apart: {error.Message}");
+            DiagnosticLog.Write("Could not keep the recording's audio sources apart", error);
             microphone?.Dispose();
             return null;
         }
@@ -183,7 +183,7 @@ internal sealed class AudioSidecar : IDisposable
         catch (Exception error) when (error is IOException or UnauthorizedAccessException)
         {
             _abandoned = true;
-            DiagnosticLog.Write($"Could not finish the recording's audio sources: {error.Message}");
+            DiagnosticLog.Write("Could not finish the recording's audio sources", error);
         }
         finally
         {
@@ -220,6 +220,6 @@ internal sealed class AudioSidecar : IDisposable
     private void Abandon(string why)
     {
         _abandoned = true;
-        DiagnosticLog.Verbose($"the recording's audio sources are no longer being kept: {why}");
+        DiagnosticLog.Debug($"the recording's audio sources are no longer being kept: {why}");
     }
 }

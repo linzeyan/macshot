@@ -109,7 +109,7 @@ public static class Localization
         catch (Exception exception)
         {
             // A language that cannot be read shows English rather than stopping the app.
-            DiagnosticLog.Write($"could not load the {code} strings: {exception.Message}");
+            DiagnosticLog.Write($"could not load the {code} strings", exception);
             return StringTable.Empty;
         }
     }

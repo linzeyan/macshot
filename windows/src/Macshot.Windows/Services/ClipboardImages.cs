@@ -79,7 +79,7 @@ internal static class ClipboardImages
             // The clipboard is a shared, singly-owned resource: another program may hold
             // it open at the moment this asks. Nothing here is worth an error dialog —
             // the caller says "nothing to paste", which is what the user sees anyway.
-            DiagnosticLog.Write($"Could not read the clipboard: {exception.Message}");
+            DiagnosticLog.Write("Could not read the clipboard", exception);
             return null;
         }
 
@@ -119,7 +119,7 @@ internal static class ClipboardImages
         {
             // A clipboard entry that says it is a bitmap and then will not decode is the
             // copying program's fault, not something the user can act on.
-            DiagnosticLog.Write($"Could not read the image on the clipboard: {exception.Message}");
+            DiagnosticLog.Write("Could not read the image on the clipboard", exception);
         }
 
         return null;

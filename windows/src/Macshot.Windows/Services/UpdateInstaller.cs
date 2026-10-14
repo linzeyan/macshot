@@ -115,9 +115,7 @@ internal static class UpdateInstaller
         }
         catch (Exception exception) when (!token.IsCancellationRequested)
         {
-            DiagnosticLog.Write(
-                $"Could not fetch only what {tag} changed, so downloading all of it:"
-                    + $" {exception.GetType().Name}: {exception.Message}");
+            DiagnosticLog.Write($"Could not fetch only what {tag} changed, so downloading all of it", exception);
 
             Remove(payload);
 
@@ -171,7 +169,7 @@ internal static class UpdateInstaller
         }
         catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
-            DiagnosticLog.Write($"The downloaded macshot would not start: {exception.Message}");
+            DiagnosticLog.Write("The downloaded macshot would not start", exception);
             return false;
         }
     }
@@ -205,7 +203,7 @@ internal static class UpdateInstaller
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            DiagnosticLog.Write($"Could not clear '{folder}': {exception.Message}");
+            DiagnosticLog.Write($"Could not clear '{folder}'", exception);
         }
     }
 

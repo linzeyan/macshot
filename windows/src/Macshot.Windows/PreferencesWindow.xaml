@@ -1353,12 +1353,17 @@
 
                     <StackPanel Style="{StaticResource Section}">
                         <TextBlock Text="Diagnostics" Style="{StaticResource SectionHeading}" />
-                        <CheckBox
-                            x:Name="VerboseLoggingCheck"
-                            Content="Write a detailed log"
-                            Style="{StaticResource Unlabelled}"
-                            Checked="Setting_Toggled"
-                            Unchecked="Setting_Toggled" />
+                        <StackPanel Style="{StaticResource Row}">
+                            <TextBlock Text="Log level:" Style="{StaticResource RowLabel}" />
+                            <ComboBox
+                                x:Name="LogLevelBox"
+                                AutomationProperties.Name="Log level:"
+                                Width="240"
+                                SelectionChanged="Setting_SelectionChanged" />
+                        </StackPanel>
+                        <TextBlock
+                            Text="Normal writes failures. Debug adds every step of a capture or recording and how long it took. Trace adds every frame, and every exception whether or not it was handled. Each line names the source file and line that wrote it."
+                            Style="{StaticResource Caption}" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="" Style="{StaticResource RowLabel}" />
                             <Button Content="Open the log folder" FontSize="13" Click="OpenLogFolder_Click" />

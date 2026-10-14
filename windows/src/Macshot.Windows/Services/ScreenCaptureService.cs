@@ -81,6 +81,11 @@ public sealed class ScreenCaptureService : IDisposable
             // Deliberately broad. Everything from a missing d3d11 export to a display
             // that never delivers a frame ends up here, and every one of them has the
             // same right answer: take the screenshot the old way.
+            //
+            // Every time with its stack, where the user is told once and without one: a
+            // timeout here costs two seconds of every capture, and from the second on
+            // nothing else says why.
+            DiagnosticLog.Debug("Windows.Graphics.Capture failed, so this capture uses BitBlt", exception);
             FallbackReason = exception.Message;
             FellBackUnexpectedly = true;
             return UseBitBlt(includeCursor);

@@ -157,7 +157,7 @@ public sealed partial class WebcamWindow : Window
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write($"Could not start the camera: {exception.Message}");
+            DiagnosticLog.Write("Could not start the camera", exception);
             Access = DeviceAccess.Unusable;
             return false;
         }
@@ -239,7 +239,7 @@ public sealed partial class WebcamWindow : Window
             }
             catch (Exception exception)
             {
-                DiagnosticLog.Write($"Could not draw a camera frame: {exception.Message}");
+                DiagnosticLog.Write("Could not draw a camera frame", exception);
             }
             finally
             {
@@ -273,7 +273,7 @@ public sealed partial class WebcamWindow : Window
             }
             catch (Exception exception)
             {
-                DiagnosticLog.Write($"Could not stop the camera cleanly: {exception.Message}");
+                DiagnosticLog.Write("Could not stop the camera cleanly", exception);
             }
 
             reader.Dispose();

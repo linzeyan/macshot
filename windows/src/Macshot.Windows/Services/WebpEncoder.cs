@@ -123,7 +123,7 @@ internal static class WebpEncoder
         {
             // Written down because "why is WebP not in the format list on this machine"
             // is otherwise a question that needs a debugger on the user's machine.
-            DiagnosticLog.Write($"libwebp did not load, so WebP is not offered: {exception.Message}");
+            DiagnosticLog.Write("libwebp did not load, so WebP is not offered", exception);
             return false;
         }
     }

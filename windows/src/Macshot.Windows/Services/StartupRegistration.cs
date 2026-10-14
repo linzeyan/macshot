@@ -70,7 +70,7 @@ internal static class StartupRegistration
             or UnauthorizedAccessException
             or IOException)
         {
-            DiagnosticLog.Verbose($"launch at login: registry refused ({error.Message})");
+            DiagnosticLog.Debug("launch at login: registry refused", error);
             return false;
         }
     }

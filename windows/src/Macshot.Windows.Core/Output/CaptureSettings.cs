@@ -1051,14 +1051,14 @@ public sealed record CaptureSettings
         HotkeyBinding.ParseOptional(ClearHistoryHotkey, null);
 
     /// <summary>
-    /// Writes a step-by-step trace next to this file, for diagnosing a fault that
-    /// cannot be reproduced on the machine the code was written on.
+    /// How much goes into the log next to this file, for diagnosing a fault that cannot
+    /// be reproduced on the machine the code was written on.
     /// </summary>
     /// <remarks>
-    /// Off by default. Everything worth tracing sits on a path that runs at
+    /// Failures only by default. Everything worth tracing sits on a path that runs at
     /// pointer-move rates, and a log nobody asked for is a file growing on their disk.
     /// </remarks>
-    public bool VerboseLogging { get; init; }
+    public LogLevel LogLevel { get; init; }
 
     /// <summary>
     /// Whether macshot looks for a new version on its own.

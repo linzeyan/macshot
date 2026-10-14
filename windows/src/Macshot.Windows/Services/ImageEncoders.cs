@@ -84,7 +84,7 @@ internal static class ImageEncoders
             // An empty answer would take PNG away with it. The formats that need no
             // optional codec are part of WIC itself and cannot be absent on a machine
             // running this app at all.
-            DiagnosticLog.Write($"Could not enumerate the image encoders: {exception.Message}");
+            DiagnosticLog.Write("Could not enumerate the image encoders", exception);
             return [.. Enum.GetValues<CaptureImageFormat>().Where(format => CanWrite(format, null))];
         }
 

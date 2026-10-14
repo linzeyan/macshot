@@ -41,6 +41,7 @@
 "Could not translate: {0}" = "翻訳できませんでした：{0}";
 "Custom file" = "カスタムファイル";
 "Dark" = "ダーク";
+"Debug" = "デバッグ";
 "Diagnostics" = "診断";
 "Downloaded model" = "ダウンロードしたモデル";
 "Downloading macshot %@..." = "macshot %@ をダウンロード中…";
@@ -79,6 +80,7 @@
 "Keystrokes:" = "キー入力:";
 "Larger" = "大きく";
 "Light" = "ライト";
+"Log level:" = "ログレベル：";
 "macshot cannot use the camera" = "macshot はカメラを使用できません";
 "macshot cannot use the microphone" = "macshot はマイクを使用できません";
 "macshot cannot write to its own folder, so it cannot update itself." = "macshot は自身のフォルダーに書き込めないため、自動で更新できません。";
@@ -99,6 +101,8 @@
 "No personal data found in the image" = "画像から個人情報は見つかりませんでした";
 "No personal data found in the selection" = "選択範囲から個人情報は見つかりませんでした";
 "No text was recognized." = "テキストを認識できませんでした。";
+"Normal" = "標準";
+"Normal writes failures. Debug adds every step of a capture or recording and how long it took. Trace adds every frame, and every exception whether or not it was handled. Each line names the source file and line that wrote it." = "「標準」は失敗を記録します。「デバッグ」はキャプチャや録画の各ステップと所要時間を追加します。「トレース」はさらに各フレームと、処理されたかどうかにかかわらずすべての例外を追加します。各行には、それを書き込んだソースファイルと行番号が記載されます。";
 "Not a shortcut: {0}. Click it and press the keys — nothing is being kept until then." = "ショートカットではありません：{0}。クリックしてキーを押してください。それまで何も保存されません。";
 "Off leaves the scrolling to you: scroll the window yourself and press Stop when you have reached the end. Turn it off for views that refuse synthetic wheel input, such as some remote desktops." = "オフにするとスクロールはあなたが行います。自分でウインドウをスクロールし、末尾まで来たら「停止」を押してください。合成ホイール入力を受け付けないビュー（一部のリモートデスクトップなど）ではオフにします。";
 "Offer the last selection again" = "前回の選択範囲をもう一度提示";
@@ -146,6 +150,7 @@
 "There is no window behind that region to scroll" = "その範囲の後ろにスクロールできるウインドウがありません";
 "Took {0}" = "{0} を取得";
 "Took {0} • {1}" = "{0} を取得 • {1}";
+"Trace" = "トレース";
 "Translated into {0}." = "{0} に翻訳しました。";
 "Translating..." = "翻訳中…";
 "Trigger macshot from PowerToys Run, a stream deck, a desktop shortcut, or any tool that opens URLs." = "PowerToys Run、Stream Deck、デスクトップのショートカット、URL を開けるあらゆるツールから macshot を呼び出せます。";
@@ -168,7 +173,6 @@
 "Windows would not capture that window." = "Windows はそのウインドウをキャプチャできませんでした。";
 "Windows would not give macshot these shortcuts, so they are not active: {0}. Another program may already own them. The notification-area menu still works." = "Windows がこれらのショートカットを macshot に割り当てなかったため、有効になっていません：{0}。ほかのプログラムがすでに使用している可能性があります。通知領域のメニューは引き続き利用できます。";
 "Windows would not let macshot change its startup entry." = "Windows が macshot のスタートアップ登録の変更を許可しませんでした。";
-"Write a detailed log" = "詳細なログを記録";
 "You're up to date!" = "最新バージョンです！";
 "Your own picture" = "自分の画像";
 "Zoom in" = "拡大";

@@ -41,6 +41,7 @@
 "Could not translate: {0}" = "无法翻译：{0}";
 "Custom file" = "自定文件";
 "Dark" = "深色";
+"Debug" = "调试";
 "Diagnostics" = "诊断";
 "Downloaded model" = "下载的模型";
 "Downloading macshot %@..." = "正在下载 macshot %@…";
@@ -79,6 +80,7 @@
 "Keystrokes:" = "按键：";
 "Larger" = "放大";
 "Light" = "浅色";
+"Log level:" = "日志级别：";
 "macshot cannot use the camera" = "macshot 无法使用摄像头";
 "macshot cannot use the microphone" = "macshot 无法使用麦克风";
 "macshot cannot write to its own folder, so it cannot update itself." = "macshot 无法写入自己的文件夹，因此无法自行更新。";
@@ -99,6 +101,8 @@
 "No personal data found in the image" = "图像中找不到个人资料";
 "No personal data found in the selection" = "选取范围中找不到个人资料";
 "No text was recognized." = "未识别到文字。";
+"Normal" = "常规";
+"Normal writes failures. Debug adds every step of a capture or recording and how long it took. Trace adds every frame, and every exception whether or not it was handled. Each line names the source file and line that wrote it." = "“常规”记录失败。“调试”另外记录截图或录屏的每个步骤及耗时。“跟踪”再加上每一帧，以及每一个异常，无论是否已处理。每一行都会注明写下它的源文件和行号。";
 "Not a shortcut: {0}. Click it and press the keys — nothing is being kept until then." = "不是快捷键：{0}。点按它再按下按键——在那之前不会保存任何内容。";
 "Off leaves the scrolling to you: scroll the window yourself and press Stop when you have reached the end. Turn it off for views that refuse synthetic wheel input, such as some remote desktops." = "关闭后由你自己滚动：自行滚动窗口，到底部时按“停止”。对于拒绝合成滚轮输入的视图（例如某些远程桌面），请关闭它。";
 "Offer the last selection again" = "再次提供上次的选取范围";
@@ -146,6 +150,7 @@
 "There is no window behind that region to scroll" = "该范围后方没有可滚动的窗口";
 "Took {0}" = "已取得 {0}";
 "Took {0} • {1}" = "已取得 {0} • {1}";
+"Trace" = "跟踪";
 "Translated into {0}." = "已翻译为{0}。";
 "Translating..." = "正在翻译…";
 "Trigger macshot from PowerToys Run, a stream deck, a desktop shortcut, or any tool that opens URLs." = "可从 PowerToys Run、stream deck、桌面快捷方式，或任何能打开 URL 的工具触发 macshot。";
@@ -168,7 +173,6 @@
 "Windows would not capture that window." = "Windows 不允许截取该窗口。";
 "Windows would not give macshot these shortcuts, so they are not active: {0}. Another program may already own them. The notification-area menu still works." = "Windows 未将这些快捷键给 macshot，因此它们未生效：{0}。可能已被其他程序占用。通知区域的菜单仍可使用。";
 "Windows would not let macshot change its startup entry." = "Windows 不允许 macshot 更改其开机启动项。";
-"Write a detailed log" = "记录详细日志";
 "You're up to date!" = "已是最新版本！";
 "Your own picture" = "你自己的图像";
 "Zoom in" = "放大";

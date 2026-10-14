@@ -462,7 +462,7 @@ public sealed partial class HistoryWindow : Window
             // Recognition is the only thing here that can fail for a reason other than
             // the file going away — no language pack, no engine — and the panel it would
             // have been reported in has closed. The log is where that lands.
-            DiagnosticLog.Write($"Could not read the text in '{entry.Path}': {exception.Message}");
+            DiagnosticLog.Write($"Could not read the text in '{entry.Path}'", exception);
         }
     }
 
@@ -552,7 +552,7 @@ public sealed partial class HistoryWindow : Window
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write($"Could not save '{entry.Path}': {exception.Message}");
+            DiagnosticLog.Write($"Could not save '{entry.Path}'", exception);
         }
         finally
         {
@@ -596,7 +596,7 @@ public sealed partial class HistoryWindow : Window
         catch (Exception exception)
         {
             _holdOpen = false;
-            DiagnosticLog.Write($"Could not hand '{entry.Path}' to another program: {exception.Message}");
+            DiagnosticLog.Write($"Could not hand '{entry.Path}' to another program", exception);
         }
     }
 
@@ -613,7 +613,7 @@ public sealed partial class HistoryWindow : Window
         {
             // The panel drew this a moment ago, so a failure here is the file going away
             // underneath it — nothing the user did, and nothing they can answer.
-            DiagnosticLog.Write($"Could not read '{entry.Path}' back: {exception.Message}");
+            DiagnosticLog.Write($"Could not read '{entry.Path}' back", exception);
             return null;
         }
     }
@@ -655,7 +655,7 @@ public sealed partial class HistoryWindow : Window
             // A capture deleted behind macshot's back. Cancelled rather than reported:
             // the user is mid-gesture, and a dialog under their pointer is worse than a
             // drag that does nothing.
-            DiagnosticLog.Write($"Could not drag '{entry.Path}' out of history: {exception.Message}");
+            DiagnosticLog.Write($"Could not drag '{entry.Path}' out of history", exception);
             _holdOpen = false;
             e.Cancel = true;
         }
@@ -740,7 +740,7 @@ public sealed partial class HistoryWindow : Window
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write($"Could not show '{entry.Path}' in the history panel: {exception.Message}");
+            DiagnosticLog.Write($"Could not show '{entry.Path}' in the history panel", exception);
             return null;
         }
     }

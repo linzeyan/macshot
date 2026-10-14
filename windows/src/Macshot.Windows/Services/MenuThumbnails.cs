@@ -98,7 +98,7 @@ internal static class MenuThumbnails
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write($"Could not make a menu thumbnail of '{path}': {exception.Message}");
+            DiagnosticLog.Write($"Could not make a menu thumbnail of '{path}'", exception);
             return IntPtr.Zero;
         }
         finally

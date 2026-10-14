@@ -164,7 +164,7 @@ public static class ScreenshotHistory
             // Logged rather than shown. The capture itself has already been delivered
             // by the time this runs, so interrupting the user to say the copy of it
             // failed would report a problem they do not have.
-            DiagnosticLog.Write($"Could not add the capture to history: {exception.Message}");
+            DiagnosticLog.Write("Could not add the capture to history", exception);
             return null;
         }
     }
@@ -237,7 +237,7 @@ public static class ScreenshotHistory
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write($"Could not update the capture in history: {exception.Message}");
+            DiagnosticLog.Write("Could not update the capture in history", exception);
             return null;
         }
     }
@@ -299,7 +299,7 @@ public static class ScreenshotHistory
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write($"Could not remove the capture from history: {exception.Message}");
+            DiagnosticLog.Write("Could not remove the capture from history", exception);
         }
     }
 
@@ -328,7 +328,7 @@ public static class ScreenshotHistory
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write($"Could not read the capture history: {exception.Message}");
+            DiagnosticLog.Write("Could not read the capture history", exception);
             return [];
         }
     }
@@ -345,7 +345,7 @@ public static class ScreenshotHistory
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write($"Could not clear the capture history: {exception.Message}");
+            DiagnosticLog.Write("Could not clear the capture history", exception);
         }
     }
 

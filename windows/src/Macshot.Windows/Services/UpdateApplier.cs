@@ -170,7 +170,8 @@ internal static class UpdateApplier
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
             DiagnosticLog.Write(
-                $"The update failed and macshot could not be put back: it is at '{moved}'. {exception.Message}");
+                $"The update failed and macshot could not be put back: it is at '{moved}'",
+                exception);
         }
     }
 
@@ -213,7 +214,7 @@ internal static class UpdateApplier
         }
         catch (Exception exception) when (exception is System.ComponentModel.Win32Exception or InvalidOperationException)
         {
-            DiagnosticLog.Write($"macshot would not start after the update: {exception.Message}");
+            DiagnosticLog.Write("macshot would not start after the update", exception);
         }
     }
 
@@ -248,7 +249,7 @@ internal static class UpdateApplier
         }
         catch (Exception exception) when (exception is IOException or UnauthorizedAccessException)
         {
-            DiagnosticLog.Write($"Could not remove '{folder}': {exception.Message}");
+            DiagnosticLog.Write($"Could not remove '{folder}'", exception);
         }
     }
 }

@@ -253,8 +253,8 @@ public sealed class CaptureController : IDisposable
         // Before anything else that could be worth tracing, and re-read on every save
         // so turning it on does not need a restart — the fault being chased is often
         // one the user has just reproduced and does not want to lose.
-        DiagnosticLog.IsVerbose = _settings.Current.VerboseLogging;
-        _settings.Changed += (_, settings) => DiagnosticLog.IsVerbose = settings.VerboseLogging;
+        DiagnosticLog.Level = _settings.Current.LogLevel;
+        _settings.Changed += (_, settings) => DiagnosticLog.Level = settings.LogLevel;
 
         // Before the first string is asked for — the tray menu below is built from
         // literals that go through the lookup. Re-resolved on every save so choosing a
@@ -269,8 +269,8 @@ public sealed class CaptureController : IDisposable
         // point draws text: the tray menu is painted by Win32, not by XAML.
         AppFonts.Install(Application.Current.Resources);
 
-        DiagnosticLog.Verbose(
-            $"macshot starting: {BuildVariant.DisplayName}, settings at {_settings.Path}");
+        DiagnosticLog.Started(BuildVariant.DisplayName);
+        DiagnosticLog.Debug($"settings at {_settings.Path}");
 
         _messageWindow = new MessageWindow();
 
@@ -486,7 +486,8 @@ public sealed class CaptureController : IDisposable
         {
             FailureReport.Notice(
                 _messageWindow.Handle,
-                L("macshot could not open '{0}': {1}", path, exception.Message));
+                L("macshot could not open '{0}': {1}", path, exception.Message),
+                exception);
         }
     }
 
@@ -532,7 +533,8 @@ public sealed class CaptureController : IDisposable
         {
             FailureReport.Notice(
                 _messageWindow.Handle,
-                L("macshot could not open '{0}': {1}", entry.Path, exception.Message));
+                L("macshot could not open '{0}': {1}", entry.Path, exception.Message),
+                exception);
         }
     }
 
@@ -716,7 +718,7 @@ public sealed class CaptureController : IDisposable
             {
                 _bound[hotkey] = (binding, binding);
                 Name(binding);
-                DiagnosticLog.Verbose($"hotkey {binding} registered for {label}");
+                DiagnosticLog.Debug($"hotkey {binding} registered for {label}");
             }
             else
             {
@@ -728,7 +730,7 @@ public sealed class CaptureController : IDisposable
                 // Named without a shortcut rather than with one that does nothing.
                 Name(null);
                 refused.Add(binding);
-                DiagnosticLog.Verbose($"hotkey {binding} refused for {label}");
+                DiagnosticLog.Debug($"hotkey {binding} refused for {label}");
             }
         }
     }
@@ -775,11 +777,16 @@ public sealed class CaptureController : IDisposable
             return;
         }
 
+        // Every stage of the wait between the hotkey and a selection frame on screen, so a
+        // capture reported as slow says which stage it was slow in.
+        var clock = Stopwatch.StartNew();
+
         // One overlay per display: a single window spanning displays with different
         // DPI cannot map pointer input to pixels. See the architecture notes, D6.
         var displays = MonitorEnumerator.Enumerate();
         var layout = displays.Layout;
         var desktopFrame = await CaptureDesktopAsync(displays);
+        var captured = clock.ElapsedMilliseconds;
 
         // Taken once, next to the screenshot and before any overlay exists, so the
         // windows offered for snapping are the ones in the frozen pixels the user is
@@ -787,6 +794,7 @@ public sealed class CaptureController : IDisposable
         var snapCandidates = WindowEnumerator.EnumerateFrontToBack()
             .Select(window => window with { Bounds = layout.VirtualToFrame(window.Bounds) })
             .ToArray();
+        var enumerated = clock.ElapsedMilliseconds;
 
         // The facts a misplaced overlay is diagnosed from. Which display, at what scale,
         // in what part of the virtual desktop — all three have to be right for the
@@ -794,13 +802,13 @@ public sealed class CaptureController : IDisposable
         // screenshot of the result.
         foreach (var monitor in layout.Monitors)
         {
-            DiagnosticLog.Verbose(
+            DiagnosticLog.Debug(
                 $"overlay for {monitor.DeviceName} at {monitor.Bounds.X},{monitor.Bounds.Y} "
                     + $"{monitor.Bounds.Width}x{monitor.Bounds.Height} scale {monitor.Scale}"
                     + (monitor.IsPrimary ? " (primary)" : string.Empty));
         }
 
-        DiagnosticLog.Verbose($"{snapCandidates.Length} window(s) offered for snapping");
+        DiagnosticLog.Debug($"{snapCandidates.Length} window(s) offered for snapping");
 
         foreach (var monitor in layout.Monitors)
         {
@@ -834,12 +842,48 @@ public sealed class CaptureController : IDisposable
             _overlays.Add(overlay);
         }
 
+        var built = clock.ElapsedMilliseconds;
+        var shown = 0L;
+        var backend = _screenCapture.Backend;
+
+        // Timed to the first frame drawn once every overlay has been laid out, rather than
+        // to ShowAsync returning: what the user waits for is pixels, and WinUI's first
+        // layout and render of a window happen after the call that shows it has returned.
+        var loading = _overlays.Count;
+        void OnOverlayLoaded(object sender, RoutedEventArgs args)
+        {
+            ((FrameworkElement)sender).Loaded -= OnOverlayLoaded;
+            if (--loading == 0)
+            {
+                Microsoft.UI.Xaml.Media.CompositionTarget.Rendered += OnOverlayRendered;
+            }
+        }
+
+        // Off the static event at once: a handler left on it is a path from the thread to
+        // everything it closed over, which is how this app has leaked before.
+        void OnOverlayRendered(object? sender, Microsoft.UI.Xaml.Media.RenderedEventArgs args)
+        {
+            Microsoft.UI.Xaml.Media.CompositionTarget.Rendered -= OnOverlayRendered;
+            DiagnosticLog.Took(
+                clock.Elapsed,
+                $"selection overlay drawn {clock.ElapsedMilliseconds}ms after it was asked for: "
+                    + $"screens taken by {captured}ms via {backend}, windows listed by {enumerated}, "
+                    + $"overlays built by {built}, shown by {shown}");
+        }
+
+        foreach (var overlay in _overlays)
+        {
+            overlay.Loaded += OnOverlayLoaded;
+        }
+
         try
         {
             foreach (var overlay in _overlays)
             {
                 await overlay.ShowAsync(CaptureOverlayHost.For(overlay.Monitor));
             }
+
+            shown = clock.ElapsedMilliseconds;
         }
         catch
         {
@@ -903,9 +947,9 @@ public sealed class CaptureController : IDisposable
         try
         {
             var seconds = _settings.Current.DelaySeconds;
-            DiagnosticLog.Verbose($"countdown starting: {seconds}s, escape held: {holdsEscape}");
+            DiagnosticLog.Debug($"countdown starting: {seconds}s, escape held: {holdsEscape}");
             elapsed = await countdown.RunAsync(seconds, cancellation.Token);
-            DiagnosticLog.Verbose(elapsed ? "countdown elapsed" : "countdown cancelled");
+            DiagnosticLog.Debug(elapsed ? "countdown elapsed" : "countdown cancelled");
         }
         finally
         {
@@ -962,7 +1006,7 @@ public sealed class CaptureController : IDisposable
 
         // Which backend actually ran is otherwise only knowable from the absence of a
         // message box, which is the weakest kind of evidence there is.
-        DiagnosticLog.Verbose(
+        DiagnosticLog.Debug(
             $"desktop captured {frame.Width}x{frame.Height} at {frame.VirtualX},{frame.VirtualY} "
                 + $"via {_screenCapture.Backend}, "
                 + $"{frame.BgraPixels.Length / (1024.0 * 1024.0):0.#}MB a screen; "
@@ -1186,7 +1230,7 @@ public sealed class CaptureController : IDisposable
             return;
         }
 
-        DiagnosticLog.Verbose(
+        DiagnosticLog.Debug(
             $"delivering {frame.Width}x{frame.Height} to {completion.Outcome}, asked for on the toolbar");
 
         var settings = _settings.Current;
@@ -1306,7 +1350,7 @@ public sealed class CaptureController : IDisposable
         // A capture that appears to vanish is the hardest failure to place: it could be
         // the crop, the encoder, the clipboard, or a preference nobody remembers
         // setting. This line says which of those was even attempted.
-        DiagnosticLog.Verbose(
+        DiagnosticLog.Debug(
             $"delivering {frame.Width}x{frame.Height} as {settings.Format}: "
                 + $"clipboard {settings.CopyToClipboard}, save {settings.AutoSave}, "
                 + $"thumbnail {settings.ShowThumbnail}, history {settings.HistorySize}");
@@ -1484,7 +1528,7 @@ public sealed class CaptureController : IDisposable
             {
                 // One capture that could not be written must not stop the other five, and
                 // the panels are about to go away — the log is where this can be read.
-                DiagnosticLog.Write($"Could not save a capture into '{folder.Path}': {exception.Message}");
+                DiagnosticLog.Write($"Could not save a capture into '{folder.Path}'", exception);
             }
         }
     }
@@ -1627,7 +1671,7 @@ public sealed class CaptureController : IDisposable
             }
             catch (Exception exception)
             {
-                DiagnosticLog.Write($"Could not copy '{entry.Path}': {exception.Message}");
+                DiagnosticLog.Write($"Could not copy '{entry.Path}'", exception);
             }
         });
     }
@@ -1681,7 +1725,7 @@ public sealed class CaptureController : IDisposable
                 // Failing the whole reopen because the editable copy would not load —
                 // deleted by hand, half-written, decoded by a codec that has changed —
                 // would be losing the capture over the extra.
-                DiagnosticLog.Write($"Could not reopen '{raw}' for editing: {exception.Message}");
+                DiagnosticLog.Write($"Could not reopen '{raw}' for editing", exception);
             }
         }
 
@@ -1716,7 +1760,7 @@ public sealed class CaptureController : IDisposable
         {
             // The panel drew this capture a moment ago, so a failure here is the file
             // going away underneath it. Nothing to ask the user about.
-            DiagnosticLog.Write($"Could not reopen '{request.Entry.Path}': {exception.Message}");
+            DiagnosticLog.Write($"Could not reopen '{request.Entry.Path}'", exception);
         }
     }
 
@@ -1789,7 +1833,7 @@ public sealed class CaptureController : IDisposable
         {
             // Silent unless the user asked: a check nobody asked for that could not be
             // made is not news, and the log is where it belongs.
-            DiagnosticLog.Write($"The update check failed: {exception.Message}");
+            DiagnosticLog.Write("The update check failed", exception);
 
             // The page as well as the reason: a check that cannot get through is often a
             // network that lets a browser through and not an app — a proxy, a filter — and
@@ -1906,7 +1950,7 @@ public sealed class CaptureController : IDisposable
             // account for.
             UpdateInstaller.ClearStaging();
 
-            DiagnosticLog.Write($"The update to {tag} was not installed: {exception.Message}");
+            DiagnosticLog.Write($"The update to {tag} was not installed", exception);
             FailureReport.Notice(
                 _messageWindow.Handle,
                 L("The update could not be installed.") + Environment.NewLine + WhyGitHubFailed(exception));
@@ -1928,7 +1972,7 @@ public sealed class CaptureController : IDisposable
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write($"Could not open the past capture '{path}': {exception.Message}");
+            DiagnosticLog.Write($"Could not open the past capture '{path}'", exception);
         }
     }
 
@@ -2144,7 +2188,7 @@ public sealed class CaptureController : IDisposable
         }
         catch (OperationCanceledException)
         {
-            DiagnosticLog.Verbose("scroll capture cancelled");
+            DiagnosticLog.Debug("scroll capture cancelled");
             return;
         }
         finally
@@ -2160,7 +2204,7 @@ public sealed class CaptureController : IDisposable
             preview.Close();
         }
 
-        DiagnosticLog.Verbose(
+        DiagnosticLog.Debug(
             $"scroll capture ended as {result.Stop}: {result.Frame.Width}x{result.Frame.Height}");
 
         if (result.Stop == ScrollCaptureStop.HeightLimit)
@@ -2392,7 +2436,7 @@ public sealed class CaptureController : IDisposable
         try
         {
             var path = ResolveRecordingPath(format);
-            DiagnosticLog.Verbose(
+            DiagnosticLog.Debug(
                 (followed is { } target
                     ? $"recording the window '{target.Title}' ({target.Id:X}), "
                         + "so no region frame, click ring, keystroke pill or webcam — "
@@ -2414,7 +2458,7 @@ public sealed class CaptureController : IDisposable
                     frameRate,
                     audio);
 
-            DiagnosticLog.Verbose($"recording finished: {result.Path}");
+            DiagnosticLog.Debug($"recording finished: {result.Path}");
 
             // The panel outlives the recording by a few seconds to say where the file
             // went. Video has no thumbnail and no clipboard to land in, so this is
@@ -2517,7 +2561,7 @@ public sealed class CaptureController : IDisposable
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write($"Could not deliver the recording at '{path}': {exception.Message}");
+            DiagnosticLog.Write($"Could not deliver the recording at '{path}'", exception);
         }
 
         return false;
@@ -2610,7 +2654,7 @@ public sealed class CaptureController : IDisposable
         {
             // A shell that will not open ms-settings: leaves the user where they were,
             // which is why the message says what is wrong rather than only where to go.
-            DiagnosticLog.Write($"Could not open {page}: {exception.Message}");
+            DiagnosticLog.Write($"Could not open {page}", exception);
         }
     }
 
@@ -2633,7 +2677,7 @@ public sealed class CaptureController : IDisposable
                 return result.Path;
             }
 
-            DiagnosticLog.Verbose(
+            DiagnosticLog.Debug(
                 $"merging the recording's audio: microphone at {answer.MicrophoneVolume:0.00}, "
                     + $"system at {answer.SystemVolume:0.00}");
 
@@ -2643,7 +2687,7 @@ public sealed class CaptureController : IDisposable
         {
             // The recording is on disk and plays; only the balancing failed. Delivering it
             // as it was recorded beats putting a message box between the user and it.
-            DiagnosticLog.Write($"Could not merge the recording's audio: {exception.Message}");
+            DiagnosticLog.Write("Could not merge the recording's audio", exception);
             return result.Path;
         }
         finally
@@ -2775,7 +2819,8 @@ public sealed class CaptureController : IDisposable
             // the file, so they are told why nothing opened.
             FailureReport.Notice(
                 _messageWindow.Handle,
-                L("macshot could not open that image: {0}", exception.Message));
+                L("macshot could not open that image: {0}", exception.Message),
+                exception);
         }
     }
 
@@ -3056,7 +3101,7 @@ public sealed class CaptureController : IDisposable
         // private bytes that do not are something still being held. Which way the
         // compaction went is written down beside them because it is now a judgement made
         // from a number, and the number it was made from is in the same line.
-        DiagnosticLog.Verbose(
+        DiagnosticLog.Debug(
             $"collected after {after}{(compacting ? "" : ", large objects left where they lie")}: "
                 + MemorySnapshot.Take().Since(before));
 
@@ -3076,7 +3121,7 @@ public sealed class CaptureController : IDisposable
             Collect();
         }
 
-        DiagnosticLog.Verbose($"collected again once finalized, {rounds} rounds: {MemorySnapshot.Take().Since(survived)}");
+        DiagnosticLog.Debug($"collected again once finalized, {rounds} rounds: {MemorySnapshot.Take().Since(survived)}");
 
         // Then the pages. Most of what an idle macshot holds is loaded once and kept for the
         // life of the process — WinUI's first window and d3d11 are about 60MB of it — and
@@ -3086,14 +3131,14 @@ public sealed class CaptureController : IDisposable
         // it is the right way round.
         var resident = Environment.WorkingSet;
         EmptyWorkingSet(CurrentProcess);
-        DiagnosticLog.Verbose(
+        DiagnosticLog.Debug(
             $"working set handed back: {resident / 1048576.0:0.#}MB -> {Environment.WorkingSet / 1048576.0:0.#}MB");
 
         // Only meaningful here, straight after a blocking gen-2: an idle tray app never
         // collects, so anywhere else every surface ever made is still alive and the count
         // says nothing. A number that does not fall back towards zero is the signature of
         // the leak this app has already had once. See LiveSurfaces.
-        DiagnosticLog.Verbose($"still alive: {LiveSurfaces.Shared.Census()}");
+        DiagnosticLog.Debug($"still alive: {LiveSurfaces.Shared.Census()}");
     });
 
     private void Post(Func<Task> action)

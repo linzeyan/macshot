@@ -78,7 +78,7 @@ internal static class MenuTheme
             exception is EntryPointNotFoundException or DllNotFoundException)
         {
             _unavailable = true;
-            DiagnosticLog.Write($"Menu theming unavailable: {exception.Message}");
+            DiagnosticLog.Write("Menu theming unavailable", exception);
         }
     }
 

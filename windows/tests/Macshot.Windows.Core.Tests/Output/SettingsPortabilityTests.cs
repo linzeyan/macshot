@@ -151,7 +151,7 @@ public sealed class SettingsPortabilityTests
             RememberLastSelection = true,
             WindowSnapEnabled = false,
             HideCaptureInstructions = true,
-            VerboseLogging = true,
+            LogLevel = LogLevel.Trace,
             TranslateTargetLanguage = "ja",
             HiddenTools = ["Loupe", "Measure"],
             ToolShortcuts = new Dictionary<string, string> { ["pencil"] = "k", ["arrow"] = "" },

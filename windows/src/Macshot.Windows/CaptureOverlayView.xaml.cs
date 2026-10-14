@@ -545,7 +545,9 @@ public sealed partial class CaptureOverlayView : UserControl
         ArgumentNullException.ThrowIfNull(host);
 
         _host = host;
+        var clock = System.Diagnostics.Stopwatch.StartNew();
         await PreviewImage.ShowAsync(_monitorFrame);
+        var previewed = clock.ElapsedMilliseconds;
         BuildGrips();
         WireZoom();
         WireToolbar();
@@ -555,7 +557,12 @@ public sealed partial class CaptureOverlayView : UserControl
         WireCanvas();
         WireFrameAnchor();
 
+        var wired = clock.ElapsedMilliseconds;
         host.Present(this, _monitor);
+        DiagnosticLog.Debug(
+            $"overlay for {_monitor.DeviceName}: frame handed to XAML by {previewed}ms, "
+                + $"wired by {wired}ms, presented by {clock.ElapsedMilliseconds}ms");
+
         // Once it is in the tree, not here: the view has no XamlRoot until the shell has
         // laid it out, and Focus on an element without one answers false and does nothing.
         OverlayRoot.Loaded += TakeKeyboardFocus;
@@ -813,7 +820,7 @@ public sealed partial class CaptureOverlayView : UserControl
         UpdateDim(ToLayout(_remembered.Value));
         ShowIdleInstruction();
 
-        DiagnosticLog.Verbose(
+        DiagnosticLog.Debug(
             $"offering last selection on {_monitor.DeviceName}: stored {local.X},{local.Y} "
                 + $"{local.Width}x{local.Height} placed at {_remembered.Value.X},{_remembered.Value.Y}");
     }
@@ -848,7 +855,7 @@ public sealed partial class CaptureOverlayView : UserControl
         {
             // The capture is already made and about to be delivered. Failing to write
             // a convenience for the next one is not a reason to interrupt this one.
-            DiagnosticLog.Write($"Could not remember the selection: {exception.Message}");
+            DiagnosticLog.Write("Could not remember the selection", exception);
         }
     }
 
@@ -1396,7 +1403,7 @@ public sealed partial class CaptureOverlayView : UserControl
         // Where the annotation phase's pixels came from, which is the difference between
         // "the window itself" and "the screenshot with whatever was over it". The two
         // look identical unless something was covering the window.
-        DiagnosticLog.Verbose(
+        DiagnosticLog.Debug(
             $"annotating {region.Width}x{region.Height} at {region.X},{region.Y} on {_monitor.DeviceName}, "
                 + (capturedWindow is { } window
                     ? $"from the window's own pixels ({window.Width}x{window.Height})"
@@ -1970,7 +1977,7 @@ public sealed partial class CaptureOverlayView : UserControl
         // what says where the edges are on the way there.
         ShowFrame();
 
-        DiagnosticLog.Verbose(
+        DiagnosticLog.Debug(
             $"region adjusted to {taken.Width}x{taken.Height} at {taken.X},{taken.Y} on {_monitor.DeviceName}");
     }
 
@@ -2432,7 +2439,7 @@ public sealed partial class CaptureOverlayView : UserControl
             // This capture still honours the choice — only the next one loses it. Said out
             // loud rather than swallowed, because the button goes on showing the shape and
             // would otherwise be the only thing that knew.
-            DiagnosticLog.Write($"Could not remember the pre-selection preset: {exception.Message}");
+            DiagnosticLog.Write("Could not remember the pre-selection preset", exception);
         }
     }
 
@@ -3044,7 +3051,7 @@ public sealed partial class CaptureOverlayView : UserControl
         // The framework keeps the window itself, so none of the above would ever be
         // collected on its own. Whether this ran, and what it was worth, is otherwise
         // only knowable by attaching a debugger to the machine having the problem.
-        DiagnosticLog.Verbose(
+        DiagnosticLog.Debug(
             $"overlay for {_monitor.DeviceName} handed back "
                 + $"{handedBack / (1024.0 * 1024.0):0.#}MB of pixels it was holding");
     }
@@ -3694,7 +3701,7 @@ public sealed partial class CaptureOverlayView : UserControl
         {
             // A file that will not decode is the file's fault, and the row is where the
             // press was: the capture carries on with whatever stamp it already had.
-            DiagnosticLog.Write($"Could not load the stamp image: {exception}");
+            DiagnosticLog.Write("Could not load the stamp image", exception);
             Hint(exception.Message);
         }
     }
@@ -3779,7 +3786,7 @@ public sealed partial class CaptureOverlayView : UserControl
             // still annotated, so the answer to "there is no subject here" is to drag a
             // different one — which needs the capture not to have ended. The old hint is
             // not put back over it for the same reason: it would erase the answer.
-            DiagnosticLog.Write($"Background removal failed: {exception}");
+            DiagnosticLog.Write("Background removal failed", exception);
             Hint(exception.Message);
         }
     }
@@ -3988,7 +3995,7 @@ public sealed partial class CaptureOverlayView : UserControl
 
         // The point as well as the colour: a sampler reading the wrong pixel is a
         // coordinate fault, and the colour alone cannot tell one from a channel swap.
-        DiagnosticLog.Verbose($"sampled {sampled.ToHex()} at frame {point.X},{point.Y}");
+        DiagnosticLog.Debug($"sampled {sampled.ToHex()} at frame {point.X},{point.Y}");
     }
 
     /// <summary>
@@ -4486,7 +4493,7 @@ public sealed partial class CaptureOverlayView : UserControl
             // disk, so a failed write leaves window snap exactly as it was. Said out loud
             // rather than swallowed — the user pressed a key and is owed an answer, and
             // the alternative is a pill that goes on claiming the state they just changed.
-            DiagnosticLog.Write($"Could not change the window snap state: {exception.Message}");
+            DiagnosticLog.Write("Could not change the window snap state", exception);
             Hint(exception.Message);
             return;
         }

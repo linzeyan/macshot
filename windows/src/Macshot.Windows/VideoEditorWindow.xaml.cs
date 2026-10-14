@@ -482,7 +482,7 @@ public sealed partial class VideoEditorWindow : Window
             // What opening this costs, because most of it is a MediaPlayer's and the
             // collector cannot see the size of that -- so the managed figure alone would
             // report the largest window macshot opens as nearly free.
-            DiagnosticLog.Verbose(
+            DiagnosticLog.Debug(
                 $"video editor opened on {_sourceWidth}x{_sourceHeight}, {_duration:0.#}s at "
                     + $"{FrameRate}fps{(_sourceHasAudio ? " with sound" : string.Empty)}, "
                     + $"{Bytes(_sourceBytes)} on disk; "
@@ -2193,7 +2193,7 @@ public sealed partial class VideoEditorWindow : Window
             // The whole exception to the log, one line of it to the window: an HRESULT is
             // what a report of this has to carry, and the call it came out of is what
             // makes it findable.
-            DiagnosticLog.Write($"Export failed: {error}");
+            DiagnosticLog.Write("Export failed", error);
             StatusText.Text = L("Export failed") + ": " + reason;
             return false;
         }
@@ -2535,7 +2535,7 @@ public sealed partial class VideoEditorWindow : Window
         // only shows as private bytes. The managed half of this window survives until the
         // collection CaptureController asks for once the window is gone, which is the
         // line that follows this one in the log.
-        DiagnosticLog.Verbose($"video editor closed; {MemorySnapshot.Take().Since(before)}");
+        DiagnosticLog.Debug($"video editor closed; {MemorySnapshot.Take().Since(before)}");
     }
 
     /// <summary>

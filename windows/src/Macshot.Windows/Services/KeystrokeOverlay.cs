@@ -127,7 +127,7 @@ internal sealed class KeystrokeOverlay : IDisposable
 
         if (_hook == IntPtr.Zero)
         {
-            DiagnosticLog.Verbose(
+            DiagnosticLog.Debug(
                 $"keystroke overlay: no keyboard hook ({Marshal.GetLastWin32Error()}), "
                     + "keystrokes will not be shown");
             return false;
@@ -347,7 +347,7 @@ internal sealed class KeystrokeOverlay : IDisposable
         catch (InvalidOperationException error)
         {
             // A window that cannot be made is a missing pill, not a failed recording.
-            DiagnosticLog.Verbose($"keystroke overlay: {error.Message}");
+            DiagnosticLog.Debug("keystroke overlay", error);
             _timer?.Stop();
             return;
         }

@@ -71,7 +71,7 @@ internal static class CameraDevices
             // A machine that will not say what cameras it has offers none, which is the
             // same answer as a machine with none — and is what Windows' camera privacy
             // setting looks like from here.
-            DiagnosticLog.Write($"Could not list the cameras: {exception.Message}");
+            DiagnosticLog.Write("Could not list the cameras", exception);
             return [];
         }
     }

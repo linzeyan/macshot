@@ -1639,7 +1639,7 @@ public sealed partial class AnnotationToolbarView : UserControl
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write($"The beautify background could not be kept: {exception.Message}");
+            DiagnosticLog.Write("The beautify background could not be kept", exception);
             return;
         }
 

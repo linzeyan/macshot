@@ -587,7 +587,7 @@ public sealed partial class EditorWindow : Window
             // this window — which WinUI never collects anyway — reachable from the thread.
             _hold.Release();
 
-            DiagnosticLog.Verbose(
+            DiagnosticLog.Debug(
                 $"editor handed back {handedBack / (1024.0 * 1024.0):0.#}MB of pixels it was "
                     + $"holding, {undoSteps} of them image undo steps");
         };
@@ -1484,7 +1484,7 @@ public sealed partial class EditorWindow : Window
         {
             // The capture is already framed. Failing to remember which style is not worth
             // interrupting that.
-            DiagnosticLog.Write($"Could not remember the frame style: {exception.Message}");
+            DiagnosticLog.Write("Could not remember the frame style", exception);
         }
     }
 
@@ -1513,7 +1513,7 @@ public sealed partial class EditorWindow : Window
             ShowSize();
             HintText.Text = done;
 
-            DiagnosticLog.Verbose($"editor image now {_frame.Width}x{_frame.Height}: {done}");
+            DiagnosticLog.Debug($"editor image now {_frame.Width}x{_frame.Height}: {done}");
         }
         catch (Exception exception)
         {
@@ -1538,7 +1538,7 @@ public sealed partial class EditorWindow : Window
         }
 
         _imageUndo.RemoveRange(0, dropped);
-        DiagnosticLog.Verbose(
+        DiagnosticLog.Debug(
             $"let go of {dropped} image undo step(s): the history was over {ImageUndoBudget.Bytes / (1024 * 1024)}MB");
     }
 
@@ -1704,7 +1704,7 @@ public sealed partial class EditorWindow : Window
         {
             // A file that will not decode is the file's fault: the editor carries on with
             // whatever stamp it already had.
-            DiagnosticLog.Write($"Could not load the stamp image: {exception}");
+            DiagnosticLog.Write("Could not load the stamp image", exception);
             HintText.Text = exception.Message;
         }
     }
@@ -1827,7 +1827,7 @@ public sealed partial class EditorWindow : Window
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write($"Background removal failed: {exception}");
+            DiagnosticLog.Write("Background removal failed", exception);
             HintText.Text = exception.Message;
         }
     }

@@ -102,7 +102,7 @@ internal static class BeautifyBackgroundStore
         // 12.9MB and nothing, and it is decided by a setting rather than by anything the
         // user does — so without this line the saving is invisible on the only machines
         // that matter.
-        DiagnosticLog.Verbose(bytes is null
+        DiagnosticLog.Debug(bytes is null
             ? "no beautify background is stored"
             : $"beautify background {bytes.Length / 1024}KB on disk, decoded "
                 + (Current is { } full
@@ -132,7 +132,7 @@ internal static class BeautifyBackgroundStore
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write($"The beautify background could not be read: {exception.Message}");
+            DiagnosticLog.Write("The beautify background could not be read", exception);
             return null;
         }
     }
@@ -149,7 +149,7 @@ internal static class BeautifyBackgroundStore
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write($"The beautify background could not be read: {exception.Message}");
+            DiagnosticLog.Write("The beautify background could not be read", exception);
             return null;
         }
     }
@@ -189,7 +189,7 @@ internal static class BeautifyBackgroundStore
         }
         catch (Exception exception)
         {
-            DiagnosticLog.Write($"The beautify background could not be read: {exception.Message}");
+            DiagnosticLog.Write("The beautify background could not be read", exception);
             return null;
         }
     }

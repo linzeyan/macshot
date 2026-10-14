@@ -138,7 +138,7 @@ internal static class AvifEncoder
             // otherwise a question that needs a debugger on the user's machine. A missing
             // file arrives as DllNotFoundException and one built for the other
             // architecture as BadImageFormatException.
-            DiagnosticLog.Write($"macshot_avif did not load, so AVIF is not offered: {exception.Message}");
+            DiagnosticLog.Write("macshot_avif did not load, so AVIF is not offered", exception);
             return false;
         }
     }
