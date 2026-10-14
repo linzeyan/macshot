@@ -3,6 +3,22 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.28] - 2026-10-14
+
+### Changed
+
+- **The detailed log is now a choice of three levels.** Settings → About → Diagnostics has
+  a Log level menu where the "Write a detailed log" checkbox was. Normal writes failures,
+  Debug adds every step of a capture or recording and how long it took, and Trace adds
+  every frame and every error, including the ones macshot recovers from on its own. If you
+  had the checkbox on, choose Debug.
+- **Every line in the log names the line of macshot's source that wrote it**, and every
+  error is written with the full detail of where it happened, so a log you send in points
+  at the fault instead of only describing it.
+- **A capture that takes a second or more to appear is written to the log**, with how long
+  each step took, even at the Normal level. A slow capture can now be explained after the
+  fact, without having to turn anything on before it happens.
+
 ## [0.8.27] - 2026-10-05
 
 ### Fixed
