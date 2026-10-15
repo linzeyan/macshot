@@ -3,6 +3,16 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.29] - 2026-10-15
+
+### Changed
+
+- **The log line written for a slow capture also says whether Windows had to read macshot
+  back into memory first**: how much of macshot was in memory when you pressed the
+  shortcut, and how many times it then had to be read back in, counting the ones that came
+  from the disk apart. A capture that is slow because macshot sat idle for hours can now be
+  told apart from one that is slow for any other reason.
+
 ## [0.8.28] - 2026-10-14
 
 ### Changed
