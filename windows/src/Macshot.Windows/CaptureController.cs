@@ -778,7 +778,10 @@ public sealed class CaptureController : IDisposable
         }
 
         // Every stage of the wait between the hotkey and a selection frame on screen, so a
-        // capture reported as slow says which stage it was slow in.
+        // capture reported as slow says which stage it was slow in. The faults are read
+        // before the clock starts, so that reading them is not part of what is timed.
+        var faults = ReadPageFaults();
+        var resident = Environment.WorkingSet;
         var clock = Stopwatch.StartNew();
 
         // One overlay per display: a single window spanning displays with different
@@ -868,7 +871,8 @@ public sealed class CaptureController : IDisposable
                 clock.Elapsed,
                 $"selection overlay drawn {clock.ElapsedMilliseconds}ms after it was asked for: "
                     + $"screens taken by {captured}ms via {backend}, windows listed by {enumerated}, "
-                    + $"overlays built by {built}, shown by {shown}");
+                    + $"overlays built by {built}, shown by {shown}; "
+                    + DescribePageFaults(faults, resident));
         }
 
         foreach (var overlay in _overlays)
@@ -3173,6 +3177,96 @@ public sealed class CaptureController : IDisposable
     [DllImport("psapi.dll")]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool EmptyWorkingSet(IntPtr process);
+
+    /// <summary>
+    /// How much of a capture's wait was memory being read back in, for the line that times it.
+    /// </summary>
+    private static string DescribePageFaults((long All, long FromDisk)? before, long resident)
+    {
+        var asked = $"working set {resident / 1048576.0:0.#}MB when asked";
+        return before is { } then && ReadPageFaults() is { } now
+            ? $"{asked}, {now.All - then.All} page faults since, {now.FromDisk - then.FromDisk} of them read from disk"
+            : asked;
+    }
+
+    /// <summary>
+    /// Every page fault this process has taken, and how many of them had to read from disk.
+    /// Null when Windows will not say.
+    /// </summary>
+    /// <remarks>
+    /// <para>
+    /// For the second a field machine's first capture took over its later ones: 1747ms six
+    /// hours after launch, against 705 and 902 for the next two. JIT was measured and is not
+    /// it — precompiling took 44ms off the VM's first capture, and there the hotkey reached
+    /// the capture in 2-4ms on every run, against 83ms on that machine. What the slow stages
+    /// do look like is the VM's first launch after a boot, when nothing is in memory yet. A
+    /// fault on a page Windows still holds costs microseconds; one it has to read back from a
+    /// VDI's disk costs milliseconds, and only the second kind can add up to a second. So the
+    /// two are counted apart.
+    /// </para>
+    /// <para>
+    /// No documented call counts one process's hard faults. SystemProcessInformation does,
+    /// for every process, in what winternl.h leaves as <c>Reserved1</c>: offset 16, beside the
+    /// process id at 80 and the total at 128. Those are the 64-bit layout, which is the only
+    /// one this app ships.
+    /// </para>
+    /// </remarks>
+    private static (long All, long FromDisk)? ReadPageFaults()
+    {
+        if (IntPtr.Size != 8)
+        {
+            return null;
+        }
+
+        var self = (nint)Environment.ProcessId;
+        var length = 512 * 1024;
+        for (var attempt = 0; attempt < 3; attempt++)
+        {
+            var buffer = Marshal.AllocHGlobal(length);
+            try
+            {
+                var status = NtQuerySystemInformation(SystemProcessInformation, buffer, length, out var needed);
+                if (status == StatusInfoLengthMismatch)
+                {
+                    // Room to spare, because processes start between this call and the next.
+                    length = needed + 64 * 1024;
+                    continue;
+                }
+
+                if (status < 0)
+                {
+                    return null;
+                }
+
+                var entry = buffer;
+                while (Marshal.ReadIntPtr(entry, 80) != self)
+                {
+                    var next = Marshal.ReadInt32(entry);
+                    if (next == 0)
+                    {
+                        return null;
+                    }
+
+                    entry += next;
+                }
+
+                return ((uint)Marshal.ReadInt32(entry, 128), (uint)Marshal.ReadInt32(entry, 16));
+            }
+            finally
+            {
+                Marshal.FreeHGlobal(buffer);
+            }
+        }
+
+        return null;
+    }
+
+    private const int SystemProcessInformation = 5;
+
+    private const int StatusInfoLengthMismatch = unchecked((int)0xC0000004);
+
+    [DllImport("ntdll.dll")]
+    private static extern int NtQuerySystemInformation(int informationClass, IntPtr buffer, int length, out int returnLength);
 
     [StructLayout(LayoutKind.Sequential)]
     private struct CursorLocation

@@ -27,6 +27,17 @@
          and a fixed value would silently win over it. -->
     <RuntimeIdentifier Condition="'$(RuntimeIdentifier)' == ''">win-x64</RuntimeIdentifier>
 
+    <!-- No PublishReadyToRun, although the WinUI template turns it on for Release. It was
+         measured on 2026-10-15, looking for the second a field machine's first capture took
+         over its later ones. On the VM a fresh process's first capture went from 414ms to
+         370ms, the median of seven runs each, nearly all of it in building the overlay. The
+         price was the zip going from 71.6MB to 83.9MB and the install from 210MB to 269MB -
+         Microsoft.Windows.SDK.NET.dll alone grows from 26MB to 66MB - with the app's own
+         assemblies twice the size in every update, and the precompiled projections
+         downloaded again each time the .NET patch changes. Nor was JIT the missing second:
+         the hotkey reached the capture in 2-4ms on every run there, compiled or not, against
+         83ms on the field machine. -->
+
     <!-- What the About page shows and what the update check compares against a release
          tag. The release workflow passes the tag's version; this is what a build off a
          working tree calls itself, and it is deliberately below any published version so
