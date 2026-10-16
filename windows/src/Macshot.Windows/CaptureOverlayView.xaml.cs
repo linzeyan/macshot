@@ -466,6 +466,12 @@ public sealed partial class CaptureOverlayView : UserControl
 
         // After the markup has run: the canvas it redraws is a field the markup creates.
         _hold = new PressHold(DispatcherQueue, _editor, RenderAnnotations);
+
+        // What UpdateCursor answers before a region exists, given now rather than on the
+        // first PointerMoved: a pointer that has not moved since the hotkey would otherwise
+        // get no cursor from the overlay at all, and after a long idle that first move waits
+        // behind the pages being read back in.
+        SelectionCanvas.UseCursor(InputSystemCursorShape.Cross);
     }
 
     /// <summary>

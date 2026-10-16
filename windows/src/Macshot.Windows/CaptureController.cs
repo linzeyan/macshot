@@ -867,6 +867,15 @@ public sealed class CaptureController : IDisposable
         void OnOverlayRendered(object? sender, Microsoft.UI.Xaml.Media.RenderedEventArgs args)
         {
             Microsoft.UI.Xaml.Media.CompositionTarget.Rendered -= OnOverlayRendered;
+
+            // The overlay's window comes up under the pointer wearing the busy cursor, and
+            // nothing replaces it until the pointer moves: the canvas's own cursor is only
+            // asked for on a WM_SETCURSOR, and a pointer that is held still sends none.
+            // Measured on the VM: IDC_WAIT for as long as the pointer stayed put, the
+            // crosshair 23ms after it moved. Every overlay is new and starts on the
+            // crosshair, and the first move hands the shape back to UpdateCursor.
+            SetCursor(LoadCursor(IntPtr.Zero, IdcCross));
+
             DiagnosticLog.Took(
                 clock.Elapsed,
                 $"selection overlay drawn {clock.ElapsedMilliseconds}ms after it was asked for: "
@@ -3170,6 +3179,14 @@ public sealed class CaptureController : IDisposable
     [DllImport("user32.dll", SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     private static extern bool GetCursorPos(out CursorLocation point);
+
+    private const int IdcCross = 32515;
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr LoadCursor(IntPtr instance, int name);
+
+    [DllImport("user32.dll")]
+    private static extern IntPtr SetCursor(IntPtr cursor);
 
     /// <summary>GetCurrentProcess()'s pseudo-handle, which is documented as -1.</summary>
     private static readonly IntPtr CurrentProcess = new(-1);
