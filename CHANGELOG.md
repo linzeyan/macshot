@@ -3,6 +3,14 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.30] - 2026-10-16
+
+### Fixed
+
+- **The capture screen shows the crosshair as soon as it appears.** It used to come up
+  with the spinning busy pointer and keep it until you moved the mouse, which made a
+  capture after a long idle feel slower than it was.
+
 ## [0.8.29] - 2026-10-15
 
 ### Changed
