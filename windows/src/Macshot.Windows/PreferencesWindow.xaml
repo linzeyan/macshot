@@ -508,14 +508,21 @@
                             Unchecked="Setting_Toggled" />
                         <StackPanel Style="{StaticResource Row}">
                             <TextBlock Text="  Dismiss after:" Style="{StaticResource RowLabel}" />
+                            <!-- Inline, as all four steppers on these pages are: macshot's
+                                 NSStepper is always beside its field. Compact put the arrows in
+                                 a popup that closed only when the box lost focus, and a click on
+                                 the empty page takes no focus, so it stayed open and scrolled
+                                 with the page. 170 because a focused box also shows its clear
+                                 button, and the three buttons are ~106 of it: at 120 a
+                                 six-digit maximum height had no room left to be seen. -->
                             <NumberBox
                                 x:Name="ThumbnailSecondsBox"
                                 AutomationProperties.Name="  Dismiss after:"
-                                Width="120"
+                                Width="170"
                                 FontSize="13"
                                 Minimum="1"
                                 Maximum="60"
-                                SpinButtonPlacementMode="Compact"
+                                SpinButtonPlacementMode="Inline"
                                 ValueChanged="Setting_NumberChanged" />
                             <TextBlock Text="seconds" Style="{StaticResource RowText}" />
                         </StackPanel>
@@ -729,11 +736,11 @@
                             <NumberBox
                                 x:Name="HistorySizeBox"
                                 AutomationProperties.Name="History size:"
-                                Width="120"
+                                Width="170"
                                 FontSize="13"
                                 Minimum="0"
                                 Maximum="200"
-                                SpinButtonPlacementMode="Compact"
+                                SpinButtonPlacementMode="Inline"
                                 ValueChanged="Setting_NumberChanged" />
                             <TextBlock Text="captures" Style="{StaticResource RowText}" />
                         </StackPanel>
@@ -906,11 +913,11 @@
                             <NumberBox
                                 x:Name="GifFrameRateBox"
                                 AutomationProperties.Name="GIF:"
-                                Width="120"
+                                Width="170"
                                 FontSize="13"
                                 Minimum="2"
                                 Maximum="30"
-                                SpinButtonPlacementMode="Compact"
+                                SpinButtonPlacementMode="Inline"
                                 ValueChanged="Setting_NumberChanged" />
                             <TextBlock Text="fps" Style="{StaticResource RowText}" />
                         </StackPanel>
@@ -1092,13 +1099,13 @@
                             <NumberBox
                                 x:Name="ScrollMaxHeightBox"
                                 AutomationProperties.Name="Max height:"
-                                Width="120"
+                                Width="170"
                                 FontSize="13"
                                 Minimum="0"
                                 Maximum="100000"
                                 SmallChange="5000"
                                 LargeChange="5000"
-                                SpinButtonPlacementMode="Compact"
+                                SpinButtonPlacementMode="Inline"
                                 ValueChanged="Setting_NumberChanged" />
                             <TextBlock Text="px" Style="{StaticResource RowText}" />
                         </StackPanel>
