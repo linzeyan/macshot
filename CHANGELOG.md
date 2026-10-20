@@ -3,6 +3,21 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.31] - 2026-10-20
+
+### Fixed
+
+- **The up and down arrows on number settings stay inside their box.** Settings such as
+  Dismiss after and History size used to show their arrows in a pop-up that stayed open
+  after you clicked elsewhere on the page and moved along with the page as you scrolled.
+  The arrows are now always shown in the box, as on macOS.
+- **Closing the settings window gives its memory back.** macshot used to keep the memory
+  the open window had used until your next capture.
+
+### Changed
+
+- **The settings footer credits linzeyan and links to github.com/linzeyan/macshot.**
+
 ## [0.8.30] - 2026-10-16
 
 ### Fixed
