@@ -2063,7 +2063,15 @@ public sealed class CaptureController : IDisposable
         if (_preferences is null)
         {
             var preferences = new PreferencesWindow(_settings);
-            preferences.Closed += (_, _) => _preferences = null;
+            // Collected on the way out for the reason the video editor is: seven pages of
+            // controls become rubbish in a process that then sits in the tray and never
+            // collects on its own, and the log line is the only way to see from a machine
+            // nobody can reach what the window cost.
+            preferences.Closed += (_, _) =>
+            {
+                _preferences = null;
+                CollectWhenIdle("the settings window");
+            };
             _preferences = preferences;
         }
 
