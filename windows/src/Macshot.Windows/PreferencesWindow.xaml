@@ -1409,8 +1409,8 @@
                 Foreground="{ThemeResource TextFillColorSecondaryBrush}" />
             <HyperlinkButton
                 Grid.Column="2"
-                Content="github.com/sw33tLie/macshot"
-                NavigateUri="https://github.com/sw33tLie/macshot"
+                Content="github.com/linzeyan/macshot"
+                NavigateUri="https://github.com/linzeyan/macshot"
                 FontSize="11"
                 Padding="4,0" />
         </Grid>

@@ -2233,7 +2233,7 @@ public sealed partial class PreferencesWindow : Window
     private void ShowAbout()
     {
         AboutNameText.Text = BuildVariant.DisplayName;
-        MadeByText.Text = $"{L("Made by")} sw33tLie";
+        MadeByText.Text = $"{L("Made by")} linzeyan";
 
         // macshot's own format string, filled in here rather than with string.Format:
         // the placeholders are Cocoa's %@, which .NET has no idea what to do with.
