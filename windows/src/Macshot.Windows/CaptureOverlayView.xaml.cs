@@ -2059,6 +2059,11 @@ public sealed partial class CaptureOverlayView : UserControl
 
         switch (e.Key)
         {
+            case VirtualKey.C when control && IsAnnotating:
+                e.Handled = true;
+                _ = CompleteAsync(CaptureOutcome.Copy);
+                return;
+
             case VirtualKey.Escape:
                 e.Handled = true;
 
