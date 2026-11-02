@@ -3,6 +3,15 @@
 macshot for Windows. The macOS app's changelog is on the `main` branch — the two ship
 separately and their version numbers are not related.
 
+## [0.8.32] - 2026-11-02
+
+### Fixed
+
+- **Ctrl+C copies the capture.** Once a region was chosen, pressing Ctrl+C used to do
+  nothing; it now copies the region with its annotations to the clipboard and closes the
+  capture screen, the same as the Copy button on the toolbar and ⌘C on macOS. Thanks to
+  Demohu.
+
 ## [0.8.31] - 2026-10-20
 
 ### Fixed
